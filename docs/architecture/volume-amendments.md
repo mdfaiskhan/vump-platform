@@ -386,7 +386,43 @@ The chapter's **purpose is met**: enforcement fails CI rather than depending on 
 
 Revisit if boundary rules grow beyond what a grep can express — per-layer import direction, for instance, rather than per-package confinement.
 
----
+### A-027 — `golden_toolkit` is discontinued
+
+| | |
+|---|---|
+| **Volume** | 3 — Technical Architecture, Chapter 3.1; Volume 9, Chapter 9.5 §1 |
+| **Says** | Golden testing uses `golden_toolkit` ("visual regression"), listed as project tooling |
+| **Should say** | The golden-testing *requirement* stands unchanged (V9.7 §2). The named package does not — a maintained mechanism must be chosen, most likely Flutter's built-in `matchesGoldenFile` |
+| **Authority** | — decision required |
+| **Class** | **Architecture decision — unresolved** |
+| **Status** | Open — no action possible yet |
+
+Verified 2026-08-09: `flutter pub add --dev golden_toolkit --dry-run` resolves **`golden_toolkit 0.15.0 (discontinued)`**. pub.dev marks the package discontinued.
+
+Nothing about V9.7 §2's requirement changes — every Design System component still needs a golden test in both themes, and an unintentional pixel diff must remain a hard CI gate. Only the tool must be reselected.
+
+Not urgent: **no Design System component exists yet.** `lib/shared/` is empty and the only screen renders two `Text` widgets, so there is nothing to capture. The decision belongs to the mission that builds the first component.
+
+### A-028 — Required test tooling is not installed
+
+| | |
+|---|---|
+| **Volume** | 3 — Chapter 3.1; Volume 9, Chapter 9.5 §1 |
+| **Says** | The test toolchain is `flutter_test`, `mocktail`, `integration_test`, `golden_toolkit` |
+| **Should say** | Unchanged — the volumes are correct |
+| **Authority** | Volume 3 Chapter 3.1 |
+| **Class** | **Infrastructure update** |
+| **Status** | Open — deferred until each has a consumer |
+
+Verified 2026-08-09: only `flutter_test` is declared. `mocktail 1.0.5` resolves cleanly; `integration_test` ships with the SDK; `golden_toolkit` is discontinued (A-027).
+
+Deliberately not installed in Mission 0.18.6, because **each would be an unused dependency today**:
+
+- **`mocktail`** — V9.6 §1 requires mocked repositories and Riverpod notifiers. Neither exists; `lib/features/` is empty. The current suite uses hand-written fakes, which is appropriate at this size.
+- **`integration_test`** — all five flows in V9.7 §1 (login, checklist, record, admin assignment, retry) depend on features that do not exist.
+- **`golden_toolkit`** — no Design System component exists, and the package is discontinued.
+
+Each should be added by the mission that creates its first consumer, not before. An installed-but-unused test dependency is weight in the lockfile and an invitation to use the wrong tool for the current problem.
 
 ## Confirmed correct — no amendment
 

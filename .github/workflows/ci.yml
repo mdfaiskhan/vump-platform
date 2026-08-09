@@ -127,7 +127,29 @@ jobs:
         run: flutter pub get
 
       - name: Test
-        run: flutter test --reporter expanded
+        # --coverage writes coverage/lcov.info. Volume 9, Chapter 9.5 §2 sets
+        # per-layer targets (domain 90%+, data 80%+), and a target nothing
+        # measures is a target nobody meets.
+        #
+        # No threshold is enforced yet, deliberately: `lib/features/` is empty,
+        # so domain/ and data/ do not exist and any gate would be vacuous.
+        # Enforcement belongs to the mission that creates the first use-case.
+        run: flutter test --coverage --reporter expanded
+
+      - name: Report coverage
+        run: |
+          if [ ! -f coverage/lcov.info ]; then
+            echo "::error::coverage/lcov.info was not produced"
+            exit 1
+          fi
+          hit=$(grep -c '^DA:.*,[1-9]' coverage/lcov.info || true)
+          total=$(grep -c '^DA:' coverage/lcov.info || true)
+          files=$(grep -c '^SF:' coverage/lcov.info || true)
+          if [ "$total" -gt 0 ]; then
+            echo "coverage: $hit/$total lines across $files files ($((hit * 100 / total))%)"
+          else
+            echo "coverage: no instrumented lines"
+          fi
 
   codegen-drift:
     name: Generated code drift
