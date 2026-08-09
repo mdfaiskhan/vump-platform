@@ -10,7 +10,10 @@ class HomeScreen extends StatelessWidget {
       body: Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
-          children: [Text('Vump Technologies'), Text('Mission 0.6 Complete')],
+          children: <Widget>[
+            Text('Vump Technologies'),
+            Text('Mission 0.6 Complete'),
+          ],
         ),
       ),
     );

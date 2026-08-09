@@ -1,11 +1,11 @@
 import 'package:isar/isar.dart';
 
-import 'package:mobile/core/errors/error_codes.dart';
-import 'package:mobile/core/errors/exceptions/storage_exception.dart';
-import 'package:mobile/core/logging/app_logger.dart';
 import 'package:mobile/core/database/database_config.dart';
 import 'package:mobile/core/database/migrations/migration.dart';
 import 'package:mobile/core/database/migrations/migration_runner.dart';
+import 'package:mobile/core/errors/error_codes.dart';
+import 'package:mobile/core/errors/exceptions/storage_exception.dart';
+import 'package:mobile/core/logging/app_logger.dart';
 
 /// Sole owner of the Isar instance.
 ///

@@ -25,7 +25,7 @@ abstract final class AppConfig {
   ///
   /// Resolved from `--dart-define=APP_ENV` per ADR-007:
   ///
-  /// ```
+  /// ```shell
   /// flutter run --dart-define-from-file=.env.dev
   /// flutter build appbundle --dart-define-from-file=.env.prod
   /// ```

@@ -102,7 +102,7 @@ class SecureStorageService implements SecureStorageRepository {
     return _guard(
       errorCode: ErrorCode.storageDeleteFailed,
       description: 'delete all entries',
-      action: () => _storage.deleteAll(),
+      action: _storage.deleteAll,
     );
   }
 

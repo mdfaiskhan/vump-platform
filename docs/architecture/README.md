@@ -207,7 +207,7 @@ forecloses, and what must now be maintained.
 
 ## Current State
 
-`decisions/` holds ADR-001 through ADR-020.
+`decisions/` holds ADR-001 through ADR-021.
 
 All are Accepted and therefore binding.
 
@@ -233,6 +233,7 @@ All are Accepted and therefore binding.
 | ADR-018 | Environment profile as the single read surface |
 | ADR-019 | Branching strategy |
 | ADR-020 | Commit convention |
+| ADR-021 | Static analysis configuration |
 
 ADR-007 supersedes the networking assumptions of ADR-006 in part. ADR-006 remains Accepted and binding in every other respect.
 

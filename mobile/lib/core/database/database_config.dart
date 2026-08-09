@@ -68,9 +68,9 @@ class DatabaseConfig {
   ///
   /// ```dart
   /// databaseConfigProvider.overrideWith(
-  ///   (ref) => DatabaseConfig(directory: path).withSchemas(<CollectionSchema<dynamic>>[
-  ///     RecordingSchema,
-  ///   ]),
+  ///   (Ref<DatabaseConfig> ref) => DatabaseConfig(
+  ///     directory: path,
+  ///   ).withSchemas(<CollectionSchema<dynamic>>[RecordingSchema]),
   /// )
   /// ```
   DatabaseConfig withSchemas(List<CollectionSchema<dynamic>> schemas) {

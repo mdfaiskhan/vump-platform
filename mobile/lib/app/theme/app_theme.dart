@@ -26,7 +26,7 @@ abstract final class AppTheme {
     ColorScheme colorScheme,
     AppSemanticColors semanticColors,
   ) {
-    final TextTheme textTheme = AppTextTheme.textTheme;
+    const TextTheme textTheme = AppTextTheme.textTheme;
 
     return ThemeData(
       colorScheme: colorScheme,

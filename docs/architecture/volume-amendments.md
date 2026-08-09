@@ -492,6 +492,25 @@ The accepted ADRs took a different route deliberately: one build artifact whose 
 
 Mitigations available without adopting flavors: assert `APP_ENV=production` in the release pipeline before upload, and surface the resolved environment in the app's about screen. Neither is implemented.
 
+### A-031 — Chapter 3.7 §2's lint set is a floor, not the whole configuration
+
+| | |
+|---|---|
+| **Volume** | 3 — Technical Architecture, Chapter 3.7 §2 |
+| **Says** | A six-rule lint set, chosen "to enforce the layer and module boundaries fixed in Chapters 3.4 and 3.5" |
+| **Should say** | Those six rules are the boundary-enforcement floor and are all retained. The project's full static-analysis configuration is fixed by ADR-021 — 176 explicit lint rules, three type-system strictness flags, and a severity promotion map — recorded in `mobile/analysis_options.yaml` |
+| **Authority** | ADR-021 |
+| **Class** | **Architecture decision** |
+| **Status** | Open |
+
+Nothing in §2 is weakened. All six rules remain enabled, and the chapter's stated purpose — boundary enforcement the analyzer performs rather than a reviewer — is unchanged.
+
+The correction is one of scope. §2's list was written for a single purpose and does that job; it was never a claim that nothing else matters. Read as exhaustive — which is how Mission 0.18.5 correctly read it, given the governance rule — it left `strict-casts` off, `dynamic` flowing through every JSON boundary, unawaited futures silent, and `BuildContext` usable across an `await`. Six rules is a boundary check, not a production configuration.
+
+`public_member_api_docs`, the seventh rule §2 names, is still unimplementable from the root config and remains scoped as A-025 describes. ADR-021 does not change that; it documents the nested-config recipe alongside it.
+
+Timing is part of the decision. `lib/features/` is empty and the codebase is 63 files of consistently written infrastructure, so adopting the strict set surfaced 22 findings, 18 of them fixed in a single pass. The same adoption after twenty features would be a mechanical rewrite of thousands of lines — the point at which a team concludes the rules are not worth it.
+
 ---
 
 ## Confirmed correct — no amendment
