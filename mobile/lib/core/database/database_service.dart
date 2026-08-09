@@ -58,7 +58,8 @@ class DatabaseService {
     if (isar == null || !isar.isOpen) {
       throw StorageException(
         errorCode: ErrorCode.storageUnavailable,
-        message: 'The database has not been opened. Await open() before '
+        message:
+            'The database has not been opened. Await open() before '
             'reading instance.',
       );
     }
@@ -143,7 +144,8 @@ class DatabaseService {
       _opening = null;
       final StorageException exception = StorageException(
         errorCode: ErrorCode.storageUnavailable,
-        message: 'Could not open database "${config.name}" in '
+        message:
+            'Could not open database "${config.name}" in '
             '${config.directory}.',
         cause: error,
         stackTrace: stackTrace,

@@ -36,9 +36,9 @@ class LogFormatter extends LogPrinter {
 
   @override
   List<String> log(LogEvent event) {
-    final String label = LogLevel.fromLevel(event.level).label.padRight(
-      _labelWidth,
-    );
+    final String label = LogLevel.fromLevel(
+      event.level,
+    ).label.padRight(_labelWidth);
     final String timestamp = event.time.toIso8601String();
 
     final List<String> lines = <String>['$timestamp [$label] ${event.message}'];

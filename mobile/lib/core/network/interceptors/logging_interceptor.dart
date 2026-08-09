@@ -102,10 +102,11 @@ class LoggingInterceptor extends Interceptor {
       return '';
     }
 
-    final bool isTruncated = rendered.length > NetworkConstants.maxLoggedBodyLength;
+    final bool isTruncated =
+        rendered.length > NetworkConstants.maxLoggedBodyLength;
     final String shown = isTruncated
         ? '${rendered.substring(0, NetworkConstants.maxLoggedBodyLength)}'
-            '… (${rendered.length} chars)'
+              '… (${rendered.length} chars)'
         : rendered;
 
     return '\n  $label: $shown';

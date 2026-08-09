@@ -52,15 +52,15 @@ class AppLogger {
   /// [output] is an injection point for tests and for future log destinations.
   /// When null, the underlying package writes to the console.
   AppLogger({required AppEnvironment environment, LogOutput? output})
-      : this._(minimumLevelFor(environment), output);
+    : this._(minimumLevelFor(environment), output);
 
   AppLogger._(LogLevel minimum, LogOutput? output)
-      : minimumLevel = minimum,
-        _logger = Logger(
-          filter: _ThresholdFilter(minimum),
-          printer: LogFormatter(),
-          output: output,
-        );
+    : minimumLevel = minimum,
+      _logger = Logger(
+        filter: _ThresholdFilter(minimum),
+        printer: LogFormatter(),
+        output: output,
+      );
 
   final Logger _logger;
 

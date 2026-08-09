@@ -43,11 +43,12 @@ class SecureStorageService implements SecureStorageRepository {
   /// The parameter exists so tests can substitute a fake without reaching the
   /// platform channels, which are unavailable under `flutter test`.
   SecureStorageService({FlutterSecureStorage? storage})
-      : _storage = storage ??
-            const FlutterSecureStorage(
-              aOptions: defaultAndroidOptions,
-              iOptions: defaultIosOptions,
-            );
+    : _storage =
+          storage ??
+          const FlutterSecureStorage(
+            aOptions: defaultAndroidOptions,
+            iOptions: defaultIosOptions,
+          );
 
   final FlutterSecureStorage _storage;
 
@@ -130,7 +131,8 @@ class SecureStorageService implements SecureStorageRepository {
     } on MissingPluginException catch (error, stackTrace) {
       throw StorageException(
         errorCode: ErrorCode.storageUnavailable,
-        message: 'Secure storage is unavailable on this platform; '
+        message:
+            'Secure storage is unavailable on this platform; '
             'could not $description.',
         cause: error,
         stackTrace: stackTrace,
@@ -138,7 +140,8 @@ class SecureStorageService implements SecureStorageRepository {
     } on PlatformException catch (error, stackTrace) {
       throw StorageException(
         errorCode: errorCode,
-        message: 'Secure storage failed to $description '
+        message:
+            'Secure storage failed to $description '
             '(platform code: ${error.code}).',
         cause: error,
         stackTrace: stackTrace,

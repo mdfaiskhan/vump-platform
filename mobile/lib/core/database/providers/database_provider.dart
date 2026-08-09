@@ -57,8 +57,9 @@ final Provider<List<Migration>> databaseMigrationsProvider =
 /// ```
 final Provider<DatabaseConfig> databaseConfigProvider =
     Provider<DatabaseConfig>(
-  (Ref ref) => DatabaseConfig(directory: ref.watch(databaseDirectoryProvider)),
-);
+      (Ref ref) =>
+          DatabaseConfig(directory: ref.watch(databaseDirectoryProvider)),
+    );
 
 /// Owner of the database lifecycle.
 ///
@@ -68,16 +69,16 @@ final Provider<DatabaseConfig> databaseConfigProvider =
 /// first in tests.
 final Provider<DatabaseService> databaseServiceProvider =
     Provider<DatabaseService>((Ref ref) {
-  final DatabaseService service = DatabaseService(
-    config: ref.watch(databaseConfigProvider),
-    logger: ref.watch(loggerProvider),
-    migrations: ref.watch(databaseMigrationsProvider),
-  );
+      final DatabaseService service = DatabaseService(
+        config: ref.watch(databaseConfigProvider),
+        logger: ref.watch(loggerProvider),
+        migrations: ref.watch(databaseMigrationsProvider),
+      );
 
-  ref.onDispose(() => unawaited(service.close()));
+      ref.onDispose(() => unawaited(service.close()));
 
-  return service;
-});
+      return service;
+    });
 
 /// The open Isar instance.
 ///

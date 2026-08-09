@@ -12,10 +12,7 @@ import 'migration.dart';
 /// Implements the strategy in ADR-009. Runs once, immediately after open,
 /// before any caller is handed the instance.
 class MigrationRunner {
-  const MigrationRunner({
-    required this.migrations,
-    required this.logger,
-  });
+  const MigrationRunner({required this.migrations, required this.logger});
 
   /// Available upgrade steps, in any order — the runner selects and sequences
   /// the ones it needs.
@@ -36,13 +33,12 @@ class MigrationRunner {
   /// 4. **Stored below target** — applies each step in sequence inside a
   ///    single write transaction, then records the new version.
   Future<void> run(Isar isar, {required int targetVersion}) async {
-    final DatabaseMetadata? metadata =
-        await isar.databaseMetadatas.get(DatabaseConstants.metadataId);
+    final DatabaseMetadata? metadata = await isar.databaseMetadatas.get(
+      DatabaseConstants.metadataId,
+    );
 
     if (metadata == null) {
-      logger.info(
-        'Database initialised at schema version $targetVersion.',
-      );
+      logger.info('Database initialised at schema version $targetVersion.');
       await _writeVersion(isar, targetVersion);
       return;
     }
@@ -56,7 +52,8 @@ class MigrationRunner {
     if (current > targetVersion) {
       throw StorageException(
         errorCode: ErrorCode.storageCorrupted,
-        message: 'Database is at schema version $current but this build '
+        message:
+            'Database is at schema version $current but this build '
             'expects $targetVersion. The application appears to have been '
             'downgraded; refusing to interpret newer data.',
       );
@@ -65,11 +62,7 @@ class MigrationRunner {
     await _upgrade(isar, from: current, to: targetVersion);
   }
 
-  Future<void> _upgrade(
-    Isar isar, {
-    required int from,
-    required int to,
-  }) async {
+  Future<void> _upgrade(Isar isar, {required int from, required int to}) async {
     final List<Migration> path = _pathBetween(from: from, to: to);
 
     logger.info(
@@ -94,7 +87,8 @@ class MigrationRunner {
     } catch (error, stackTrace) {
       throw StorageException(
         errorCode: ErrorCode.storageCorrupted,
-        message: 'Migration from schema version $from to $to failed. '
+        message:
+            'Migration from schema version $from to $to failed. '
             'The database remains at version $from.',
         cause: error,
         stackTrace: stackTrace,
@@ -118,7 +112,8 @@ class MigrationRunner {
       if (step == null) {
         throw StorageException(
           errorCode: ErrorCode.storageCorrupted,
-          message: 'No migration is registered from schema version $version. '
+          message:
+              'No migration is registered from schema version $version. '
               'Upgrading from $from to $to is not possible.',
         );
       }

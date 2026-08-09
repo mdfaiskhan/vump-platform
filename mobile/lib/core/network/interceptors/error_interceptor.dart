@@ -43,33 +43,34 @@ class ErrorInterceptor extends Interceptor {
       DioExceptionType.connectionTimeout ||
       DioExceptionType.sendTimeout ||
       DioExceptionType.receiveTimeout ||
-      DioExceptionType.transformTimeout =>
-        NetworkException(
-          errorCode: ErrorCode.networkTimeout,
-          message: 'Request to ${err.requestOptions.uri} timed out '
-              '(${err.type.name}).',
-          cause: err,
-          stackTrace: err.stackTrace,
-        ),
+      DioExceptionType.transformTimeout => NetworkException(
+        errorCode: ErrorCode.networkTimeout,
+        message:
+            'Request to ${err.requestOptions.uri} timed out '
+            '(${err.type.name}).',
+        cause: err,
+        stackTrace: err.stackTrace,
+      ),
       DioExceptionType.cancel => NetworkException(
-          errorCode: ErrorCode.networkCancelled,
-          message: 'Request to ${err.requestOptions.uri} was cancelled.',
-          cause: err,
-          stackTrace: err.stackTrace,
-        ),
+        errorCode: ErrorCode.networkCancelled,
+        message: 'Request to ${err.requestOptions.uri} was cancelled.',
+        cause: err,
+        stackTrace: err.stackTrace,
+      ),
       DioExceptionType.connectionError => NetworkException(
-          errorCode: ErrorCode.networkUnavailable,
-          message: 'Could not reach ${err.requestOptions.uri}.',
-          cause: err,
-          stackTrace: err.stackTrace,
-        ),
+        errorCode: ErrorCode.networkUnavailable,
+        message: 'Could not reach ${err.requestOptions.uri}.',
+        cause: err,
+        stackTrace: err.stackTrace,
+      ),
       DioExceptionType.badCertificate => NetworkException(
-          errorCode: ErrorCode.networkUnavailable,
-          message: 'Rejected the TLS certificate presented by '
-              '${err.requestOptions.uri}.',
-          cause: err,
-          stackTrace: err.stackTrace,
-        ),
+        errorCode: ErrorCode.networkUnavailable,
+        message:
+            'Rejected the TLS certificate presented by '
+            '${err.requestOptions.uri}.',
+        cause: err,
+        stackTrace: err.stackTrace,
+      ),
       DioExceptionType.badResponse => _mapStatus(err, status),
       DioExceptionType.unknown => _mapUnknown(err),
     };
@@ -92,7 +93,8 @@ class ErrorInterceptor extends Interceptor {
 
     return NetworkException(
       errorCode: code,
-      message: 'Server returned ${status ?? 'no status'} for '
+      message:
+          'Server returned ${status ?? 'no status'} for '
           '${err.requestOptions.method} ${err.requestOptions.uri}.',
       statusCode: status,
       cause: err,
@@ -120,7 +122,8 @@ class ErrorInterceptor extends Interceptor {
     if (cause is FormatException) {
       return NetworkException(
         errorCode: ErrorCode.networkSerialization,
-        message: 'Could not decode the response from '
+        message:
+            'Could not decode the response from '
             '${err.requestOptions.uri}.',
         cause: err,
         stackTrace: err.stackTrace,
@@ -129,7 +132,8 @@ class ErrorInterceptor extends Interceptor {
 
     return NetworkException(
       errorCode: ErrorCode.unknown,
-      message: 'Unclassified network failure for '
+      message:
+          'Unclassified network failure for '
           '${err.requestOptions.method} ${err.requestOptions.uri}.',
       cause: err,
       stackTrace: err.stackTrace,

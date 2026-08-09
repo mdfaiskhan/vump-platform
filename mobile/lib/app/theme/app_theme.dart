@@ -16,7 +16,8 @@ import 'app_text_theme.dart';
 /// construction and cannot drift.
 abstract final class AppTheme {
   /// Theme applied when the resolved brightness is light.
-  static ThemeData get light => _build(AppColors.light, AppSemanticColors.light);
+  static ThemeData get light =>
+      _build(AppColors.light, AppSemanticColors.light);
 
   /// Theme applied when the resolved brightness is dark.
   static ThemeData get dark => _build(AppColors.dark, AppSemanticColors.dark);
@@ -55,9 +56,7 @@ abstract final class AppTheme {
         elevation: AppElevation.none,
         margin: EdgeInsets.zero,
         clipBehavior: Clip.antiAlias,
-        shape: const RoundedRectangleBorder(
-          borderRadius: AppRadius.borderLg,
-        ),
+        shape: const RoundedRectangleBorder(borderRadius: AppRadius.borderLg),
       ),
 
       dividerTheme: DividerThemeData(
@@ -112,9 +111,7 @@ abstract final class AppTheme {
         contentTextStyle: textTheme.bodyMedium?.copyWith(
           color: colorScheme.onInverseSurface,
         ),
-        shape: const RoundedRectangleBorder(
-          borderRadius: AppRadius.borderSm,
-        ),
+        shape: const RoundedRectangleBorder(borderRadius: AppRadius.borderSm),
       ),
     );
   }

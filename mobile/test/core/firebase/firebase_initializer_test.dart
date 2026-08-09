@@ -23,9 +23,9 @@ void main() {
   });
 
   FirebaseInitializer buildInitializer() => FirebaseInitializer(
-        logger: logger,
-        environment: AppEnvironment.development,
-      );
+    logger: logger,
+    environment: AppEnvironment.development,
+  );
 
   // Firebase is configured now — `firebase_options.dart` holds real project
   // values. These tests still exercise the failure path, because the platform
@@ -54,10 +54,7 @@ void main() {
       expect(
         buildInitializer().initialize(),
         throwsA(
-          allOf(
-            isA<FirebaseInitializationException>(),
-            isA<AppException>(),
-          ),
+          allOf(isA<FirebaseInitializationException>(), isA<AppException>()),
         ),
       );
     });
@@ -86,10 +83,7 @@ void main() {
 
       expect(identical(first, second), isTrue);
 
-      await expectLater(
-        first,
-        throwsA(isA<FirebaseInitializationException>()),
-      );
+      await expectLater(first, throwsA(isA<FirebaseInitializationException>()));
       await expectLater(
         second,
         throwsA(isA<FirebaseInitializationException>()),

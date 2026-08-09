@@ -45,9 +45,9 @@ class NetworkConfig {
   /// by `AuthInterceptor`, never configured statically — a token has a
   /// lifetime, and configuration does not.
   Map<String, String> get defaultHeaders => const <String, String>{
-        NetworkConstants.contentTypeHeader: NetworkConstants.jsonContentType,
-        NetworkConstants.acceptHeader: NetworkConstants.jsonContentType,
-      };
+    NetworkConstants.contentTypeHeader: NetworkConstants.jsonContentType,
+    NetworkConstants.acceptHeader: NetworkConstants.jsonContentType,
+  };
 
   /// Base URL for each environment.
   ///

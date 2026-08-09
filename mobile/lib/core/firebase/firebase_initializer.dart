@@ -67,7 +67,8 @@ class FirebaseInitializer {
     final FirebaseApp? app = _app;
     if (app == null) {
       throw const FirebaseInitializationException(
-        message: 'Firebase has not been initialised. Await initialize() '
+        message:
+            'Firebase has not been initialised. Await initialize() '
             'before reading app.',
       );
     }
@@ -107,9 +108,7 @@ class FirebaseInitializer {
       // rather than fail. This happens on hot restart, where Dart state is
       // discarded but the native SDK is not.
       if (error.code == 'duplicate-app') {
-        final FirebaseApp app = Firebase.app(
-          FirebaseConstants.defaultAppName,
-        );
+        final FirebaseApp app = Firebase.app(FirebaseConstants.defaultAppName);
         _app = app;
         logger.debug('Firebase was already initialised; adopted it.');
         return app;
@@ -139,10 +138,10 @@ class FirebaseInitializer {
   ) {
     final FirebaseInitializationException exception =
         FirebaseInitializationException(
-      message: message,
-      cause: cause,
-      stackTrace: stackTrace,
-    );
+          message: message,
+          cause: cause,
+          stackTrace: stackTrace,
+        );
     logger.error('Firebase initialisation failed.', error: exception);
     return exception;
   }

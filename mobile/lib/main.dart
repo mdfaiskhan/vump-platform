@@ -18,10 +18,7 @@ Future<void> main() async {
   await _initializeFirebase(container);
 
   runApp(
-    UncontrolledProviderScope(
-      container: container,
-      child: const VumpApp(),
-    ),
+    UncontrolledProviderScope(container: container, child: const VumpApp()),
   );
 }
 
@@ -51,7 +48,9 @@ Future<void> _initializeFirebase(ProviderContainer container) async {
   try {
     await container.read(firebaseAppProvider.future);
   } on AppException catch (error) {
-    container.read(loggerProvider).error(
+    container
+        .read(loggerProvider)
+        .error(
           'Starting without Firebase. Products that depend on it will fail.',
           error: error,
         );

@@ -60,5 +60,6 @@ final class Failure {
   int get hashCode => Object.hash(code, message);
 
   @override
-  String toString() => 'Failure(${code.code})${message == null ? '' : ': $message'}';
+  String toString() =>
+      'Failure(${code.code})${message == null ? '' : ': $message'}';
 }

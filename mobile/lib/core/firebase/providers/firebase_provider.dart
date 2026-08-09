@@ -11,11 +11,11 @@ import '../firebase_initializer.dart';
 /// starts the platform.
 final Provider<FirebaseInitializer> firebaseInitializerProvider =
     Provider<FirebaseInitializer>(
-  (Ref ref) => FirebaseInitializer(
-    logger: ref.watch(loggerProvider),
-    environment: AppConfig.environment,
-  ),
-);
+      (Ref ref) => FirebaseInitializer(
+        logger: ref.watch(loggerProvider),
+        environment: AppConfig.environment,
+      ),
+    );
 
 /// The initialised Firebase application.
 ///
@@ -62,5 +62,5 @@ final Provider<FirebaseInitializer> firebaseInitializerProvider =
 /// No change to the initialiser is needed for any product.
 final FutureProvider<FirebaseApp> firebaseAppProvider =
     FutureProvider<FirebaseApp>(
-  (Ref ref) => ref.watch(firebaseInitializerProvider).initialize(),
-);
+      (Ref ref) => ref.watch(firebaseInitializerProvider).initialize(),
+    );

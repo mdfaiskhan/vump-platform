@@ -5,9 +5,6 @@ import 'home_screen.dart';
 /// Application route configuration.
 final GoRouter appRouter = GoRouter(
   routes: <RouteBase>[
-    GoRoute(
-      path: '/',
-      builder: (context, state) => const HomeScreen(),
-    ),
+    GoRoute(path: '/', builder: (context, state) => const HomeScreen()),
   ],
 );

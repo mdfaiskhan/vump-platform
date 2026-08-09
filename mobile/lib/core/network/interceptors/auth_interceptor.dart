@@ -31,10 +31,7 @@ import 'package:dio/dio.dart';
 /// Those require their own ADR. Until it is taken, this class stays inert.
 class AuthInterceptor extends Interceptor {
   @override
-  void onRequest(
-    RequestOptions options,
-    RequestInterceptorHandler handler,
-  ) {
+  void onRequest(RequestOptions options, RequestInterceptorHandler handler) {
     // No credential is attached yet. See the class documentation.
     handler.next(options);
   }

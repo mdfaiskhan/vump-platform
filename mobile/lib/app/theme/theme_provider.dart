@@ -5,5 +5,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 ///
 /// Follows the operating system setting. Overriding this from a settings
 /// surface is out of scope for this step.
-final Provider<ThemeMode> themeModeProvider =
-    Provider<ThemeMode>((ref) => ThemeMode.system);
+final Provider<ThemeMode> themeModeProvider = Provider<ThemeMode>(
+  (ref) => ThemeMode.system,
+);

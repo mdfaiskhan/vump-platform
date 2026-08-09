@@ -33,17 +33,17 @@ import 'network_config.dart';
 /// and losing Dio's own classification.
 class DioClient {
   DioClient({required NetworkConfig config, required AppLogger logger})
-      : dio = Dio(
-          BaseOptions(
-            baseUrl: config.baseUrl,
-            connectTimeout: config.connectTimeout,
-            receiveTimeout: config.receiveTimeout,
-            sendTimeout: config.sendTimeout,
-            headers: config.defaultHeaders,
-            contentType: config.defaultHeaders['Content-Type'],
-            responseType: ResponseType.json,
-          ),
-        ) {
+    : dio = Dio(
+        BaseOptions(
+          baseUrl: config.baseUrl,
+          connectTimeout: config.connectTimeout,
+          receiveTimeout: config.receiveTimeout,
+          sendTimeout: config.sendTimeout,
+          headers: config.defaultHeaders,
+          contentType: config.defaultHeaders['Content-Type'],
+          responseType: ResponseType.json,
+        ),
+      ) {
     dio.interceptors.addAll(<Interceptor>[
       AuthInterceptor(),
       LoggingInterceptor(logger: logger),
@@ -154,9 +154,7 @@ class DioClient {
   /// a `DioException` raised outside the interceptor chain — a malformed
   /// request rejected before dispatch, for instance — so the guarantee holds
   /// even for failures the chain never saw.
-  Future<Response<T>> _guard<T>(
-    Future<Response<T>> Function() send,
-  ) async {
+  Future<Response<T>> _guard<T>(Future<Response<T>> Function() send) async {
     try {
       return await send();
     } on DioException catch (error, stackTrace) {
@@ -166,7 +164,8 @@ class DioClient {
       }
       throw NetworkException(
         errorCode: ErrorCode.unknown,
-        message: 'Request to ${error.requestOptions.uri} failed before the '
+        message:
+            'Request to ${error.requestOptions.uri} failed before the '
             'interceptor chain could classify it.',
         statusCode: error.response?.statusCode,
         cause: error,
