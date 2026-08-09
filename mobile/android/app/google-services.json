@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "434336914712",
+    "project_id": "vump-platform-f86af",
+    "storage_bucket": "vump-platform-f86af.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:434336914712:android:354d893c347c13916cd26d",
+        "android_client_info": {
+          "package_name": "com.example.mobile"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAbtliU8Vv9TQXtTJBcyBpLDRu4eGmJyv0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

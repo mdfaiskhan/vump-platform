@@ -1,0 +1,11 @@
+| Workspace                          | Best AI     | Why                                                                                          |
+| ---------------------------------- | ----------- | -------------------------------------------------------------------------------------------- |
+| 🏗️ 01 - Master Architect          | **ChatGPT** | Reads all documents, plans features, generates Claude prompts, makes architecture decisions. |
+| 💻 02 - Flutter Development        | **Claude**  | Writes large Flutter modules and production code very well.                                  |
+| ☁️ 03 - Backend Development        | **Claude**  | Excellent for AWS, APIs, Lambda, PostgreSQL, and backend implementation.                     |
+| 📹 04 - Recording Engine           | **Claude**  | Large implementation with many files; Claude excels here.                                    |
+| 🐞 05 - Debug & Error Resolution   | **ChatGPT** | Better at reasoning through logs, root causes, and debugging across systems.                 |
+| 📖 06 - Learning & Doubts          | **ChatGPT** | Better teacher. Can explain concepts, compare approaches, and answer "why".                  |
+| 🔍 07 - Code Review & Optimization | **ChatGPT** | Acts as an independent reviewer to catch issues Claude may miss.                             |
+| 📋 08 - Product & Business         | **ChatGPT** | Strategy, roadmap, pricing, product decisions, documentation.                                |
+| 📝 09 - Development Journal        | **ChatGPT** | Tracks progress, decisions, blockers, and next steps.                                        |
