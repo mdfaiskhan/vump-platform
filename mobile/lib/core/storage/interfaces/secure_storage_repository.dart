@@ -1,4 +1,4 @@
-import '../storage_keys.dart';
+import 'package:mobile/core/storage/storage_keys.dart';
 
 /// Contract for reading and writing secrets.
 ///

@@ -3,11 +3,11 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:isar/isar.dart';
 
-import '../../../app/config/app_config.dart';
-import '../../logging/providers/logger_provider.dart';
-import '../database_config.dart';
-import '../database_service.dart';
-import '../migrations/migration.dart';
+import 'package:mobile/app/config/app_config.dart';
+import 'package:mobile/core/logging/providers/logger_provider.dart';
+import 'package:mobile/core/database/database_config.dart';
+import 'package:mobile/core/database/database_service.dart';
+import 'package:mobile/core/database/migrations/migration.dart';
 
 /// Writable directory the database file lives in.
 ///

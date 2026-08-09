@@ -1,10 +1,10 @@
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../app/config/app_config.dart';
-import '../../logging/providers/logger_provider.dart';
-import '../dio_client.dart';
-import '../network_config.dart';
+import 'package:mobile/app/config/app_config.dart';
+import 'package:mobile/core/logging/providers/logger_provider.dart';
+import 'package:mobile/core/network/dio_client.dart';
+import 'package:mobile/core/network/network_config.dart';
 
 /// Network configuration for the environment this build targets.
 ///

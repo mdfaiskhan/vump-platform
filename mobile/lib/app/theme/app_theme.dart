@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 
-import 'app_colors.dart';
-import 'app_elevation.dart';
-import 'app_radius.dart';
-import 'app_semantic_colors.dart';
-import 'app_sizes.dart';
-import 'app_spacing.dart';
-import 'app_text_theme.dart';
+import 'package:mobile/app/theme/app_colors.dart';
+import 'package:mobile/app/theme/app_elevation.dart';
+import 'package:mobile/app/theme/app_radius.dart';
+import 'package:mobile/app/theme/app_semantic_colors.dart';
+import 'package:mobile/app/theme/app_sizes.dart';
+import 'package:mobile/app/theme/app_spacing.dart';
+import 'package:mobile/app/theme/app_text_theme.dart';
 
 /// Material 3 [ThemeData] for each supported brightness.
 ///

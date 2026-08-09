@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'app/app.dart';
-import 'app/config/app_config.dart';
-import 'core/errors/app_exception.dart';
-import 'core/firebase/providers/firebase_provider.dart';
-import 'core/logging/app_logger.dart';
-import 'core/environment/environment_profile.dart';
-import 'core/logging/providers/logger_provider.dart';
+import 'package:mobile/app/app.dart';
+import 'package:mobile/app/config/app_config.dart';
+import 'package:mobile/core/errors/app_exception.dart';
+import 'package:mobile/core/firebase/providers/firebase_provider.dart';
+import 'package:mobile/core/logging/app_logger.dart';
+import 'package:mobile/core/environment/environment_profile.dart';
+import 'package:mobile/core/logging/providers/logger_provider.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();

@@ -1,9 +1,9 @@
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../app/config/app_config.dart';
-import '../../logging/providers/logger_provider.dart';
-import '../firebase_initializer.dart';
+import 'package:mobile/app/config/app_config.dart';
+import 'package:mobile/core/logging/providers/logger_provider.dart';
+import 'package:mobile/core/firebase/firebase_initializer.dart';
 
 /// Owner of Firebase initialisation.
 ///

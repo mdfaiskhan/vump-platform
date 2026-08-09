@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import 'app_colors.dart';
+import 'package:mobile/app/theme/app_colors.dart';
 
 /// Status colours that Material 3's [ColorScheme] does not model.
 ///

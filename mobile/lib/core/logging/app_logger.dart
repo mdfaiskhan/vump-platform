@@ -1,8 +1,8 @@
 import 'package:logger/logger.dart';
 
-import '../../app/config/app_environment.dart';
-import 'log_formatter.dart';
-import 'log_level.dart';
+import 'package:mobile/app/config/app_environment.dart';
+import 'package:mobile/core/logging/log_formatter.dart';
+import 'package:mobile/core/logging/log_level.dart';
 
 /// The application's only logging mechanism.
 ///

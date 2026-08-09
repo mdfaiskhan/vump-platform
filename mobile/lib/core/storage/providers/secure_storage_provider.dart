@@ -1,7 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../interfaces/secure_storage_repository.dart';
-import '../secure_storage_service.dart';
+import 'package:mobile/core/storage/interfaces/secure_storage_repository.dart';
+import 'package:mobile/core/storage/secure_storage_service.dart';
 
 /// The application's secure storage.
 ///

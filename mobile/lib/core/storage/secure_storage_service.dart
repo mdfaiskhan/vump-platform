@@ -1,10 +1,10 @@
 import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
-import '../errors/error_codes.dart';
-import '../errors/exceptions/storage_exception.dart';
-import 'interfaces/secure_storage_repository.dart';
-import 'storage_keys.dart';
+import 'package:mobile/core/errors/error_codes.dart';
+import 'package:mobile/core/errors/exceptions/storage_exception.dart';
+import 'package:mobile/core/storage/interfaces/secure_storage_repository.dart';
+import 'package:mobile/core/storage/storage_keys.dart';
 
 /// Platform-backed implementation of [SecureStorageRepository].
 ///

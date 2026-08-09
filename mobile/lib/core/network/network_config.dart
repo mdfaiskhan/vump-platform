@@ -1,5 +1,5 @@
-import '../../app/config/app_environment.dart';
-import 'network_constants.dart';
+import 'package:mobile/app/config/app_environment.dart';
+import 'package:mobile/core/network/network_constants.dart';
 
 /// What the application talks to, resolved for one environment.
 ///

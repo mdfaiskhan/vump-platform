@@ -1,9 +1,9 @@
-import 'app_environment.dart';
+import 'package:mobile/app/config/app_environment.dart';
 
-export 'app_constants.dart';
-export 'app_environment.dart';
-export 'app_feature_flags.dart';
-export 'app_info.dart';
+export 'package:mobile/app/config/app_constants.dart';
+export 'package:mobile/app/config/app_environment.dart';
+export 'package:mobile/app/config/app_feature_flags.dart';
+export 'package:mobile/app/config/app_info.dart';
 
 /// The `APP_ENV` value this build was compiled with.
 ///

@@ -1,8 +1,8 @@
-import '../../app/config/app_config.dart';
-import '../firebase/firebase_options.dart';
-import '../logging/app_logger.dart';
-import '../logging/log_level.dart';
-import '../network/network_config.dart';
+import 'package:mobile/app/config/app_config.dart';
+import 'package:mobile/core/firebase/firebase_options.dart';
+import 'package:mobile/core/logging/app_logger.dart';
+import 'package:mobile/core/logging/log_level.dart';
+import 'package:mobile/core/network/network_config.dart';
 
 /// Everything that varies by environment, in one place to read.
 ///
@@ -81,7 +81,8 @@ class EnvironmentProfile {
   ///
   /// Platform-dependent, so it is a getter rather than a constant — reading it
   /// requires a platform the Firebase options were generated for.
-  String get firebaseProjectId => DefaultFirebaseOptions.currentPlatform.projectId;
+  String get firebaseProjectId =>
+      DefaultFirebaseOptions.currentPlatform.projectId;
 
   /// Least severe level this environment emits.
   LogLevel get logLevel => AppLogger.minimumLevelFor(environment);

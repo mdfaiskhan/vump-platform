@@ -1,5 +1,5 @@
-import '../errors/app_exception.dart';
-import '../errors/error_codes.dart';
+import 'package:mobile/core/errors/app_exception.dart';
+import 'package:mobile/core/errors/error_codes.dart';
 
 /// Raised when the Firebase platform cannot be initialised.
 ///

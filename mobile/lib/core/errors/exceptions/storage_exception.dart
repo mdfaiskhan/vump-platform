@@ -1,4 +1,4 @@
-import '../app_exception.dart';
+import 'package:mobile/core/errors/app_exception.dart';
 
 /// Raised when a local persistence operation fails.
 ///

@@ -2,9 +2,9 @@ import 'dart:io';
 
 import 'package:dio/dio.dart';
 
-import '../../errors/error_codes.dart';
-import '../../errors/exceptions/network_exception.dart';
-import '../network_constants.dart';
+import 'package:mobile/core/errors/error_codes.dart';
+import 'package:mobile/core/errors/exceptions/network_exception.dart';
+import 'package:mobile/core/network/network_constants.dart';
 
 /// Translates every `DioException` into a [NetworkException].
 ///

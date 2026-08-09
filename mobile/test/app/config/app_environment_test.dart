@@ -54,7 +54,8 @@ void main() {
       expect(
         urls,
         hasLength(AppEnvironment.values.length),
-        reason: 'two environments sharing a base URL would let one write to '
+        reason:
+            'two environments sharing a base URL would let one write to '
             'the other',
       );
     });
@@ -79,14 +80,11 @@ void main() {
     test('bucket slugs match the buckets that actually exist', () {
       // S3 bucket names are immutable. If these drift from AWS, uploads break
       // in a way that is invisible until runtime.
-      expect(
-        AppEnvironment.values.map(NetworkConfig.chunkBucketFor),
-        <String>[
-          'vump-platform-dev',
-          'vump-platform-staging',
-          'vump-platform-prod',
-        ],
-      );
+      expect(AppEnvironment.values.map(NetworkConfig.chunkBucketFor), <String>[
+        'vump-platform-dev',
+        'vump-platform-staging',
+        'vump-platform-prod',
+      ]);
     });
 
     test('logging verbosity narrows as the environment gets more real', () {
@@ -145,7 +143,10 @@ void main() {
 
     test('flags resolve for every environment without throwing', () {
       for (final AppEnvironment environment in AppEnvironment.values) {
-        expect(() => AppFeatureFlags.forEnvironment(environment), returnsNormally);
+        expect(
+          () => AppFeatureFlags.forEnvironment(environment),
+          returnsNormally,
+        );
       }
     });
   });

@@ -1,28 +1,75 @@
-# This file configures the analyzer, which statically analyzes Dart code to
-# check for errors, warnings, and lints.
+# Static analysis configuration.
 #
-# The issues identified by the analyzer are surfaced in the UI of Dart-enabled
-# IDEs (https://dart.dev/tools#ides-and-editors). The analyzer can also be
-# invoked from the command line by running `flutter analyze`.
+# Governed by Volume 3, Chapter 3.7 Section 2, which fixes the lint set "chosen
+# to enforce the layer and module boundaries fixed in Chapters 3.4 and 3.5".
+# Every rule below is required by that chapter. None was added for taste.
+#
+# Adding a rule that Chapter 3.7 does not require is an architecture change and
+# needs an ADR — the lint set is a documented decision, not a preference.
 
-# The following line activates a set of recommended lints for Flutter apps,
-# packages, and plugins designed to encourage good coding practices.
 include: package:flutter_lints/flutter.yaml
 
 linter:
-  # The lint rules applied to this project can be customized in the
-  # section below to disable rules from the `package:flutter_lints/flutter.yaml`
-  # included above or to enable additional rules. A list of all available lints
-  # and their documentation is published at https://dart.dev/lints.
-  #
-  # Instead of disabling a lint rule for the entire project in the
-  # section below, it can also be suppressed for a single line of code
-  # or a specific dart file by using the `// ignore: name_of_lint` and
-  # `// ignore_for_file: name_of_lint` syntax on the line or in the file
-  # producing the lint.
   rules:
-    # avoid_print: false  # Uncomment to disable the `avoid_print` rule
-    # prefer_single_quotes: true  # Uncomment to enable the `prefer_single_quotes` rule
+    # V3.7 §2. Relative imports make a file's position in the tree part of its
+    # meaning, so moving a file rewrites unrelated files and two paths can
+    # resolve to the same library.
+    - always_use_package_imports
 
-# Additional information about this file can be found at
-# https://dart.dev/guides/language/analysis-options
+    # V3.7 §2, cross-referenced to §6: use the logger. `print` bypasses
+    # AppLogger, so it escapes the level filtering of ADR-016 and the
+    # redaction obligations of ADR-007 — a printed token is a leaked token.
+    - avoid_print
+
+    # V3.7 §2.
+    - prefer_const_constructors
+
+    # V3.7 §2. A local that is never reassigned should say so.
+    - prefer_final_locals
+
+    # V3.7 §2. `return await` inside a non-try block adds a microtask hop and
+    # obscures the stack trace.
+    - unnecessary_await_in_return
+
+    # V3.7 §2. `dynamic` defeats the type checking the layer boundaries rely
+    # on; a dynamic call crosses a boundary the analyzer cannot see.
+    - avoid_dynamic_calls
+
+    # NOT enabled globally — deliberately.
+    #
+    #   - public_member_api_docs
+    #
+    # V3.7 §2 scopes this to "domain/ and data/ layers only (Section 5)".
+    # The Dart analyzer cannot scope a lint to a subdirectory from here; that
+    # needs an analysis_options.yaml inside the directory itself.
+    #
+    # Neither layer exists yet — `lib/features/` is empty (ADR-001), and per
+    # ADR-001 the layers live inside each feature. Enabling it here would
+    # apply it to `core/` and `app/`, which V3.7 §2 does not ask for, and
+    # would report 122 issues against code the chapter deliberately exempts.
+    #
+    # The first feature must carry its own analysis_options.yaml:
+    #
+    #   lib/features/<feature>/domain/analysis_options.yaml
+    #   lib/features/<feature>/data/analysis_options.yaml
+    #
+    #     include: ../../../../../analysis_options.yaml
+    #     linter:
+    #       rules:
+    #         - public_member_api_docs
+    #
+    # Registered as amendment A-025.
+
+# Generated files are NOT excluded from analysis, deliberately.
+#
+# They are committed (V6.2 §3, V3.6 §5) so a fresh clone builds before anyone
+# runs build_runner, which means they ship — and code that ships should be
+# analysed. Excluding them would hide genuine errors in generator output.
+# Verified: they produce zero issues under the rules above.
+#
+# This is the opposite of the CI *format* check, which does exclude them:
+# generators do not emit formatter-clean output, and reformatting generated
+# files makes them diverge from what the generator produces, which is what the
+# `Generated code drift` job would then fail on.
+#
+# Analysed but not formatted. The asymmetry is intentional.

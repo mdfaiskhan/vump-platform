@@ -1,12 +1,12 @@
 import 'package:dio/dio.dart';
 
-import '../errors/error_codes.dart';
-import '../errors/exceptions/network_exception.dart';
-import '../logging/app_logger.dart';
-import 'interceptors/auth_interceptor.dart';
-import 'interceptors/error_interceptor.dart';
-import 'interceptors/logging_interceptor.dart';
-import 'network_config.dart';
+import 'package:mobile/core/errors/error_codes.dart';
+import 'package:mobile/core/errors/exceptions/network_exception.dart';
+import 'package:mobile/core/logging/app_logger.dart';
+import 'package:mobile/core/network/interceptors/auth_interceptor.dart';
+import 'package:mobile/core/network/interceptors/error_interceptor.dart';
+import 'package:mobile/core/network/interceptors/logging_interceptor.dart';
+import 'package:mobile/core/network/network_config.dart';
 
 /// The application's HTTP client.
 ///

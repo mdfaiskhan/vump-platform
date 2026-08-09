@@ -354,6 +354,38 @@ Mission 0.18.4 addressed the half of §7.13 §2 that CI controls — the workflo
 
 Adopting fvm would close it properly and is deliberately not done here — introducing a toolchain manager is a decision with its own cost, not a side effect of a CI audit.
 
+### A-025 — `public_member_api_docs` cannot be scoped from the root config
+
+| | |
+|---|---|
+| **Volume** | 3 — Technical Architecture, Chapter 3.7 §2 |
+| **Says** | `public_member_api_docs` is required, annotated "domain/ and data/ layers only (Section 5)" |
+| **Should say** | The scoping mechanism — a nested `analysis_options.yaml` inside each feature's `domain/` and `data/` directory, since the Dart analyzer cannot restrict a lint to a subdirectory from the root file |
+| **Authority** | Volume 3, Chapter 3.7 §2 |
+| **Class** | Documentation update (gap) |
+| **Status** | Open — no action possible yet |
+
+Verified in Mission 0.18.5: enabling the rule at the root produces **122 issues** in `core/` and `app/` — layers the chapter deliberately exempts. The requirement is correct; only the mechanism is unstated.
+
+`lib/features/` is empty (ADR-001), so neither `domain/` nor `data/` exists. The rule must be enabled by the first feature, via a nested config; `mobile/analysis_options.yaml` documents the exact form.
+
+### A-026 — import-boundary enforcement uses CI, not `custom_lint`
+
+| | |
+|---|---|
+| **Volume** | 3 — Technical Architecture, Chapter 3.7 §2 |
+| **Says** | "This project addresses it with a `custom_lint` / `import_lint` rule set, configured to fail CI (Volume 7) rather than relying on reviewer memory alone" |
+| **Should say** | Boundary enforcement is implemented by the `Architecture boundaries` CI job, which fails the build if a package is imported outside the layer that owns it |
+| **Authority** | ADR-019 (required status checks) |
+| **Class** | Documentation update |
+| **Status** | Open |
+
+The chapter's **purpose is met**: enforcement fails CI rather than depending on review. Only the mechanism differs.
+
+`custom_lint` was checked and **does resolve** against the current pinned toolchain, so this is not an infeasibility. It is declined because the `Architecture boundaries` job already enforces the same four rules; adopting `custom_lint` would add seven dependencies and a second mechanism for one outcome. The CI job additionally covers `isar`, which the chapter still names as Drift (ADR-009).
+
+Revisit if boundary rules grow beyond what a grep can express — per-layer import direction, for instance, rather than per-package confinement.
+
 ---
 
 ## Confirmed correct — no amendment

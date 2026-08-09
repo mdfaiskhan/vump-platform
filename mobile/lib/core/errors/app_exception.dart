@@ -1,4 +1,4 @@
-import 'error_codes.dart';
+import 'package:mobile/core/errors/error_codes.dart';
 
 /// The base type for every exception the application raises.
 ///

@@ -1,7 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../app/config/app_config.dart';
-import '../app_logger.dart';
+import 'package:mobile/app/config/app_config.dart';
+import 'package:mobile/core/logging/app_logger.dart';
 
 /// The application's logger.
 ///

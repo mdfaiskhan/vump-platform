@@ -1,6 +1,6 @@
 import 'package:logger/logger.dart';
 
-import 'log_level.dart';
+import 'package:mobile/core/logging/log_level.dart';
 
 /// Renders a log event as plain, readable lines.
 ///

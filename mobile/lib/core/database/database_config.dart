@@ -1,7 +1,7 @@
 import 'package:isar/isar.dart';
 
-import 'collections/database_metadata.dart';
-import 'database_constants.dart';
+import 'package:mobile/core/database/collections/database_metadata.dart';
+import 'package:mobile/core/database/database_constants.dart';
 
 /// How the database is opened.
 ///

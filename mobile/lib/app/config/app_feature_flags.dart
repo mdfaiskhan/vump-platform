@@ -1,4 +1,4 @@
-import 'app_environment.dart';
+import 'package:mobile/app/config/app_environment.dart';
 
 /// Behaviour that differs between environments.
 ///

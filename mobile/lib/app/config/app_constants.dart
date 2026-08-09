@@ -1,8 +1,8 @@
 import 'package:flutter/widgets.dart';
 
-import '../theme/app_duration.dart';
-import '../theme/app_radius.dart';
-import '../theme/app_spacing.dart';
+import 'package:mobile/app/theme/app_duration.dart';
+import 'package:mobile/app/theme/app_radius.dart';
+import 'package:mobile/app/theme/app_spacing.dart';
 
 /// Application-wide defaults for motion, shape and layout.
 ///
