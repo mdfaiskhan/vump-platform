@@ -1,0 +1,31 @@
+{
+  "Rules": [
+    {
+      "ID": "chunk-storage-class-ladder",
+      "Status": "Enabled",
+      "Filter": {},
+      "Transitions": [
+        { "Days": 30, "StorageClass": "STANDARD_IA" },
+        { "Days": 180, "StorageClass": "GLACIER_IR" }
+      ]
+    },
+    {
+      "ID": "abort-incomplete-multipart-uploads",
+      "Status": "Enabled",
+      "Filter": {},
+      "AbortIncompleteMultipartUpload": { "DaysAfterInitiation": 14 }
+    },
+    {
+      "ID": "expire-noncurrent-versions",
+      "Status": "Enabled",
+      "Filter": {},
+      "NoncurrentVersionExpiration": { "NoncurrentDays": 90 }
+    },
+    {
+      "ID": "clean-expired-delete-markers",
+      "Status": "Enabled",
+      "Filter": {},
+      "Expiration": { "ExpiredObjectDeleteMarker": true }
+    }
+  ]
+}

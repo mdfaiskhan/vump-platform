@@ -1,0 +1,7 @@
+{
+  "Name": "vump-platform-prod-oac",
+  "Description": "Origin Access Control for vump-platform-prod. CloudFront signs origin requests with SigV4; the bucket grants only this distribution.",
+  "SigningProtocol": "sigv4",
+  "SigningBehavior": "always",
+  "OriginAccessControlOriginType": "s3"
+}

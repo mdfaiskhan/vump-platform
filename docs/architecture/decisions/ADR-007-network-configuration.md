@@ -119,8 +119,10 @@ An unrecognised value falls back to `development` rather than failing the build,
 
 ## Implementation Status
 
-**Not implemented.** This ADR is a decision, not a description.
+**Implemented.**
 
-Mission 0.11 produced no code — it halted at the conflict this record resolves. `mobile/lib/core/network/` does not exist. `AppConfig.environment` is still the hardcoded constant `AppEnvironment.development`, and `--dart-define` resolution is not yet wired.
+`mobile/lib/core/network/` holds `NetworkConfig`, which derives the base URL and timeouts from `AppEnvironment`.
 
-Implementing this decision requires changes in two places: `core/network/` for `NetworkConfig`, and `app/config/` for the environment lookup.
+`--dart-define=APP_ENV` resolution was completed in Mission 0.17.17. `AppConfig.environment` is a compile-time constant resolved from `String.fromEnvironment`, with an unrecognised value falling back to `development` and reporting that fallback through `AppConfig.environmentWasRecognised`, which the composition root logs as ADR-007 requires. Verified against all three environments plus a typo case.
+
+The base URLs remain IANA-reserved `.example` placeholders and must be replaced before any build ships.

@@ -1,0 +1,16 @@
+{
+  "Version": "2012-10-17",
+  "Id": "chunk-verification-s3-__ENV__",
+  "Statement": [
+    {
+      "Sid": "ReadObjectForIntegrityCheck",
+      "Effect": "Allow",
+      "Action": [
+        "s3:GetObject",
+        "s3:GetObjectAttributes",
+        "s3:GetObjectVersionAttributes"
+      ],
+      "Resource": "arn:aws:s3:::__BUCKET__/*"
+    }
+  ]
+}

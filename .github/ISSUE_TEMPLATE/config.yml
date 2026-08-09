@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Architecture decisions
+    url: https://github.com/mdfaiskhan/vump-platform/tree/main/docs/architecture
+    about: Read the accepted ADRs before proposing an architectural change. Architecture documentation is the single source of truth.
+  - name: Contributing conventions
+    url: https://github.com/mdfaiskhan/vump-platform/tree/main/docs/git
+    about: Branching strategy and commit message conventions.

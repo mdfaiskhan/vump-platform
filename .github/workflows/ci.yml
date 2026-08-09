@@ -1,0 +1,437 @@
+name: CI
+
+# Runs on every pull request and on the protected branches.
+#
+# No secrets are used by this workflow. Nothing here needs credentials —
+# `flutter pub get` fetches only public packages — and per ADR-007 a workflow
+# is as public as the repository. If a future job needs a secret, it must come
+# from GitHub Actions secrets and never from a file in the repository.
+
+on:
+  push:
+    # ADR-019 requires release/* and hotfix/* to run on push, not only when a
+    # pull request opens. Both accumulate commits while stabilising, and a
+    # hotfix is the worst possible place to first discover a failure.
+    branches:
+      - main
+      - develop
+      - 'release/**'
+      - 'hotfix/**'
+  pull_request:
+    branches: [main, develop]
+  workflow_dispatch:
+
+# A new push to the same branch cancels the previous run. Reviewers should see
+# the result for the current head, not for a commit already replaced.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# Read-only. This workflow publishes nothing and needs no write access.
+permissions:
+  contents: read
+
+defaults:
+  run:
+    working-directory: mobile
+
+env:
+  # Volume 7, Chapter 7.13 §2: CI must use "the same pinned Flutter version
+  # as local development -- CI and a developer's machine are never running two
+  # different SDK versions". `channel: stable` breaks that the moment stable
+  # moves, and it moves without anyone changing this file.
+  #
+  # Bump deliberately, in a `build:` commit, alongside the local toolchain.
+  FLUTTER_VERSION: 3.44.9
+
+jobs:
+  # The three checks run as separate jobs rather than as steps in one, so a
+  # failure in any of them still reports the results of the others. Sequential
+  # steps would stop at the first failure and hide the rest.
+
+  format:
+    name: Format
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - name: Check formatting
+        run: |
+          # Generated sources are excluded. The generators do not emit
+          # formatter-clean output, and reformatting them would be undone by
+          # the next build_runner run.
+          files=$(git ls-files '*.dart' \
+            | grep -v '\.g\.dart$' \
+            | grep -v '\.freezed\.dart$' \
+            || true)
+
+          if [ -z "$files" ]; then
+            echo "No hand-written Dart files to check."
+            exit 0
+          fi
+
+          echo "$files" | wc -l | xargs echo "Checking files:"
+          dart format --output=none --set-exit-if-changed $files
+
+  analyze:
+    name: Analyze
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - name: Report Flutter version
+        run: flutter --version
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      # Generated sources are committed, so no build_runner step is needed.
+      # If that policy changes, generation must run here before analysis.
+      - name: Analyze
+        run: flutter analyze
+
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Test
+        run: flutter test --reporter expanded
+
+  codegen-drift:
+    name: Generated code drift
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Regenerate and compare
+        run: |
+          # Volume 7, Chapter 7.13 §2 requires this check by name: "a generated
+          # code drift check (re-running build_runner and diffing against
+          # committed *.g.dart files) fails the build if a contributor forgot
+          # to regenerate and commit".
+          #
+          # Generated files are committed deliberately (Volume 6 §6.2, Volume 3
+          # §3.6 §5) so a fresh clone builds before anyone runs build_runner.
+          # That only holds while what is committed matches what the generator
+          # produces — which nothing else verifies.
+          dart run build_runner build --delete-conflicting-outputs
+
+          if git diff --quiet -- '*.g.dart' '*.freezed.dart'; then
+            echo "ok  generated files match the committed output"
+            exit 0
+          fi
+
+          echo "::error::Committed generated files are stale. Run:"
+          echo "  cd mobile && dart run build_runner build --delete-conflicting-outputs"
+          echo "  then commit the result."
+          echo ""
+          git diff --stat -- '*.g.dart' '*.freezed.dart'
+          exit 1
+
+  architecture:
+    name: Architecture boundaries
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Verify layer boundaries
+        run: |
+          # Each third-party package is confined to the layer that owns it, so
+          # that layer stays replaceable. These rules come from the accepted
+          # ADRs; a violation is a defect, not a style preference.
+          #
+          #   dio                    → core/network    (ADR-007)
+          #   isar                   → core/database   (ADR-009)
+          #   flutter_secure_storage → core/storage    (ADR-008)
+          #   firebase_core          → core/firebase   (ADR-010)
+
+          status=0
+
+          check() {
+            package="$1"
+            owner="$2"
+            hits=$(grep -rl "package:${package}" lib/ --include='*.dart' 2>/dev/null \
+              | grep -v "^${owner}" || true)
+            if [ -n "$hits" ]; then
+              echo "::error::${package} is imported outside ${owner}:"
+              echo "$hits" | sed 's/^/  /'
+              status=1
+            else
+              echo "ok  ${package} confined to ${owner}"
+            fi
+          }
+
+          check dio                    lib/core/network/
+          check isar                   lib/core/database/
+          check flutter_secure_storage lib/core/storage/
+          check firebase_core          lib/core/firebase/
+
+          exit $status
+
+  commit-convention:
+    name: Commit convention
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    # Reads only the pull request title from the event payload — it never
+    # checks out the repository, so it needs no access to its contents.
+    permissions: {}
+    # Only on pull requests: the thing being validated is the PR title, which
+    # ADR-019 makes the squash-merge commit message — the message that actually
+    # lands in develop's history.
+    if: github.event_name == 'pull_request'
+    steps:
+      - name: Validate the pull request title
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          python3 - <<'PY'
+          import os, re, sys
+
+          TYPES = ["feat", "fix", "docs", "refactor", "test", "chore",
+                   "perf", "style", "ci", "build", "revert"]
+
+          HEADER = re.compile(
+              r'^(?P<type>' + "|".join(TYPES) + r')'
+              r'(?:\((?P<scope>[a-z0-9\-/]+)\))?'
+              r'(?P<bang>!)?: (?P<subject>.+)$'
+          )
+          # Git generates these; they are not authored messages.
+          EXEMPT = re.compile(r'^(Merge |Revert ")')
+
+          title = os.environ["PR_TITLE"].strip()
+          if EXEMPT.match(title):
+              print(f"ok  git-generated message, exempt: {title}")
+              sys.exit(0)
+
+          errors = []
+          m = HEADER.match(title)
+          if not m:
+              errors.append(
+                  "must match 'type(scope): subject'. "
+                  f"Allowed types: {', '.join(TYPES)}"
+              )
+          else:
+              subject = m.group("subject")
+              if len(title) > 72:
+                  errors.append(f"header is {len(title)} characters; the limit is 72")
+              if subject[0].isupper():
+                  errors.append("subject must start with a lowercase letter")
+              if subject.endswith("."):
+                  errors.append("subject must not end with a full stop")
+              if re.match(r'^(added|fixed|updated|changed|removed|adds|fixes)\b',
+                          subject, re.I):
+                  errors.append("subject must be imperative mood — 'add', not 'added'")
+
+          if errors:
+              print(f"::error::Pull request title does not follow ADR-020: {title}")
+              for e in errors:
+                  print(f"  - {e}")
+              print("")
+              print("  This title becomes the squash commit in develop (ADR-019),")
+              print("  so it is the message that survives. See")
+              print("  docs/git/commit-conventions.md")
+              sys.exit(1)
+
+          print(f"ok  {title}")
+          PY
+
+  environment-consistency:
+    name: Environment consistency
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Verify Dart, infrastructure config and shell agree
+        run: |
+          # The environment model is expressed in three languages: Dart
+          # (app_environment.dart), JSON (environments.json) and shell
+          # (env.sh). No compiler checks across that boundary, so this does.
+          #
+          # Drift here is not cosmetic — a staging build pointed at the
+          # production bucket is exactly this class of defect.
+          python3 - <<'PY'
+          import json, io, re, sys
+          status = 0
+          def fail(m):
+              global status
+              print(f"::error::{m}")
+              status = 1
+
+          cfg = json.load(io.open('infrastructure/aws/config/environments.json', encoding='utf-8'))
+          dart = io.open('mobile/lib/app/config/app_environment.dart', encoding='utf-8').read()
+          sh = io.open('infrastructure/aws/env.sh', encoding='utf-8').read()
+
+          pairs = re.findall(r"\w+\('[^']*',\s*'([^']+)',\s*'([^']+)'\)", dart)
+          dart_map = {k: s for k, s in pairs}
+          if len(dart_map) != 3:
+              fail(f"expected 3 environments in Dart, found {sorted(dart_map)}")
+
+          if set(cfg['environments']) != set(dart_map):
+              fail(f"environments.json {sorted(cfg['environments'])} != Dart {sorted(dart_map)}")
+          else:
+              print(f"ok  environment sets agree: {sorted(dart_map)}")
+
+          for env, slug in dart_map.items():
+              want = f"vump-platform-{slug}"
+              got = cfg['environments'].get(env, {}).get('chunkBucket')
+              if got != want:
+                  fail(f"{env}: environments.json bucket '{got}' breaks the ADR-011 rule '{want}'")
+              if f'VUMP_SLUG="{slug}"' not in sh or env not in sh:
+                  fail(f"{env}/{slug} missing from infrastructure/aws/env.sh")
+          if not status:
+              print("ok  bucket names derive from the ADR-011 slug rule in all three")
+
+          if cfg['region'] != 'ap-south-1':
+              fail(f"environments.json region is {cfg['region']}, expected ap-south-1 (ADR-011)")
+          if 'VUMP_REGION="ap-south-1"' not in sh:
+              fail("env.sh region is not ap-south-1 (ADR-011)")
+          if not status:
+              print("ok  region is ap-south-1 everywhere")
+
+          sys.exit(status)
+          PY
+
+  secret-scan:
+    name: Secret scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Scan tracked files for committed credentials
+        run: |
+          # A committed credential is disclosed permanently — deleting it in a
+          # later commit does not remove it from history. ADR-016 requires
+          # rotation as the first response, not history rewriting.
+          #
+          # Deliberately narrow: high-confidence patterns only, so a failure
+          # here always means something real. GitHub secret scanning with push
+          # protection is the broader net and should also be enabled — see
+          # docs/development/secrets-management.md.
+
+          status=0
+          fail() { echo "::error::$1"; echo "$2" | sed 's/^/  /'; status=1; }
+
+          hits=$(git ls-files | grep -Ei '(^|/)\.env$|\.(pem|key|p12|pfx|keystore|jks)$|service-account.*\.json$|firebase-adminsdk.*\.json$' || true)
+          [ -n "$hits" ] \
+            && fail "A credential-bearing file is tracked by git. Rotate the credential first, then remove it from history." "$hits" \
+            || echo "ok  no credential-bearing filenames tracked"
+
+          hits=$(git grep -nIE '\b(AKIA|ASIA)[0-9A-Z]{16}\b' -- . || true)
+          [ -n "$hits" ] \
+            && fail "An AWS access key ID is committed. Treat it as compromised and rotate it now." "$hits" \
+            || echo "ok  no AWS access key IDs"
+
+          hits=$(git grep -nIE 'BEGIN (RSA |EC |OPENSSH |PGP )?PRIVATE KEY' -- . || true)
+          [ -n "$hits" ] \
+            && fail "A private key block is committed." "$hits" \
+            || echo "ok  no private key blocks"
+
+          hits=$(git grep -nIE 'aws_secret_access_key[[:space:]]*[=:][[:space:]]*["'"'"'][A-Za-z0-9/+=]{40}' -- . || true)
+          [ -n "$hits" ] \
+            && fail "A hardcoded AWS secret access key is committed." "$hits" \
+            || echo "ok  no hardcoded AWS secret keys"
+
+          hits=$(git grep -nIE '"type"[[:space:]]*:[[:space:]]*"service_account"' -- . || true)
+          [ -n "$hits" ] \
+            && fail "A Google service-account key is committed. Rotate it in the Firebase console immediately." "$hits" \
+            || echo "ok  no service-account keys"
+
+          exit $status
+
+  aws-credential-isolation:
+    name: AWS credential isolation
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Verify the mobile app holds no AWS credential
+        run: |
+          # The mobile app must never hold an AWS credential of any kind.
+          # Volume 4, Chapter 4.10 §2: "the mobile app never holds a raw AWS
+          # credential". A Flutter binary is distributed to devices outside our
+          # control and can be decompiled, so a credential compiled into it is
+          # a credential published.
+          #
+          # Uploads reach S3 through presigned URLs issued by the backend —
+          # a capability scoped to one object and one operation, not an
+          # identity. See docs/architecture/aws-sdk-integration.md.
+
+          status=0
+
+          fail() { echo "::error::$1"; echo "$2" | sed 's/^/  /'; status=1; }
+
+          hits=$(grep -nE '^\s+(aws[_-]|amplify[_-]|minio|s3_)' pubspec.yaml || true)
+          [ -n "$hits" ] \
+            && fail "An AWS SDK package is declared in mobile/pubspec.yaml. The app must reach S3 only via backend-issued presigned URLs." "$hits" \
+            || echo "ok  no AWS SDK dependency"
+
+          hits=$(grep -rnE '\b(AKIA|ASIA)[0-9A-Z]{16}\b' lib test 2>/dev/null || true)
+          [ -n "$hits" ] \
+            && fail "An AWS access key ID appears in the mobile source. Treat it as compromised and rotate it." "$hits" \
+            || echo "ok  no access key literal"
+
+          hits=$(grep -rniE 'aws_secret_access_key|aws_access_key_id|aws_session_token' lib test 2>/dev/null || true)
+          [ -n "$hits" ] \
+            && fail "AWS credential identifiers referenced in the mobile source." "$hits" \
+            || echo "ok  no credential references"
+
+          hits=$(grep -rn 'amazonaws\.com' lib test 2>/dev/null || true)
+          [ -n "$hits" ] \
+            && fail "A hardcoded AWS endpoint appears in the mobile source. S3 URLs arrive at runtime from the backend, presigned." "$hits" \
+            || echo "ok  no hardcoded AWS endpoint"
+
+          exit $status

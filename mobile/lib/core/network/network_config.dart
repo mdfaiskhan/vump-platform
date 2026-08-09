@@ -49,6 +49,21 @@ class NetworkConfig {
     NetworkConstants.acceptHeader: NetworkConstants.jsonContentType,
   };
 
+  /// Chunk storage bucket for [environment].
+  ///
+  /// **Derived, not listed.** ADR-011 fixes the naming rule as
+  /// `vump-platform-{slug}`, so the name is computed from
+  /// [AppEnvironment.slug] rather than restated in a table. A second table
+  /// would be a second source of truth, and `infrastructure/aws/config/
+  /// environments.json` already holds the backend's copy.
+  ///
+  /// Informational only, per Volume 7, Chapter 7.10 §2. The application never
+  /// addresses S3 by bucket — it uploads to presigned URLs the backend
+  /// returns (Volume 4, Chapter 4.10 §2). This exists for diagnostics and
+  /// support reports, never to construct a request.
+  static String chunkBucketFor(AppEnvironment environment) =>
+      'vump-platform-${environment.slug}';
+
   /// Base URL for each environment.
   ///
   /// **These are placeholders.** The `.example` top-level domain is reserved

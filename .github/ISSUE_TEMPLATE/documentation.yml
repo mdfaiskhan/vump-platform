@@ -1,0 +1,65 @@
+name: Documentation
+description: Documentation is missing, wrong or unclear.
+title: "docs: "
+labels: ["documentation", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Architecture documentation is the single source of truth. A document
+        that is wrong is a defect in its own right, not a cosmetic issue.
+
+  - type: dropdown
+    id: kind
+    attributes:
+      label: What kind of problem
+      options:
+        - Wrong — states something that is not true
+        - Missing — something undocumented that should be documented
+        - Unclear — correct but hard to follow
+        - Outdated — was true, no longer is
+        - Contradiction — two documents disagree
+    validations:
+      required: true
+
+  - type: input
+    id: location
+    attributes:
+      label: Where
+      description: File path, and section or line if you have it.
+      placeholder: docs/architecture/decisions/ADR-009-local-database.md — Consequences
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: Quote the passage where possible, and say what is wrong with it.
+    validations:
+      required: true
+
+  - type: textarea
+    id: correction
+    attributes:
+      label: What it should say
+      description: A suggested correction, if you have one.
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: adr
+    attributes:
+      label: Does this concern an ADR?
+      options:
+        - label: This affects an accepted ADR's stated decision.
+          required: false
+
+  - type: markdown
+    attributes:
+      value: |
+        **If you ticked the box above**, note that an accepted ADR is never
+        edited to change its decision — it is superseded by a new one. Only
+        typos, formatting, broken links and status transitions may be corrected
+        in place. An ADR that disagrees with the code is not automatically
+        wrong: the code may be the defect.

@@ -51,6 +51,8 @@ docs/
 
 `README.md` describes the process. It never records a decision.
 
+`volume-amendments.md` records corrections to the Volume 1–12 PDFs. Those are distributed as PDFs and cannot be edited here, so an ADR that supersedes a volume section registers the correction there. Where a volume and an accepted ADR disagree, the ADR governs.
+
 `decisions/` holds the decisions themselves. It is a flat directory — no subfolders, no grouping by domain. Ordering is chronological by number, not thematic.
 
 ---
@@ -205,7 +207,9 @@ forecloses, and what must now be maintained.
 
 ## Current State
 
-`decisions/` holds ADR-001 through ADR-010. All are Accepted and therefore binding.
+`decisions/` holds ADR-001 through ADR-020.
+
+All are Accepted and therefore binding.
 
 | ADR | Decision |
 |---|---|
@@ -219,6 +223,16 @@ forecloses, and what must now be maintained.
 | ADR-008 | Secure storage for secrets |
 | ADR-009 | Local database architecture |
 | ADR-010 | Firebase platform integration |
+| ADR-011 | S3 storage architecture |
+| ADR-012 | S3 lifecycle and retention |
+| ADR-013 | Legal hold enforcement |
+| ADR-014 | Environment strategy |
+| ADR-015 | Backend runtime |
+| ADR-016 | Secrets management |
+| ADR-017 | Environment-driven startup failure |
+| ADR-018 | Environment profile as the single read surface |
+| ADR-019 | Branching strategy |
+| ADR-020 | Commit convention |
 
 ADR-007 supersedes the networking assumptions of ADR-006 in part. ADR-006 remains Accepted and binding in every other respect.
 

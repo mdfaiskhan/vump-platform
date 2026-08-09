@@ -1,0 +1,127 @@
+# Vump Technologies — repository-wide ignores
+#
+# Per-package ignores live alongside their package; mobile/.gitignore covers
+# the Flutter build outputs. This file covers the repository root and the
+# non-Flutter directories.
+
+# ---------------------------------------------------------------------------
+# Secrets — see ADR-007 and ADR-008
+# ---------------------------------------------------------------------------
+# A committed credential is disclosed permanently: deleting it later does not
+# remove it from history, and history is public to everyone with repository
+# access. Nothing matching these patterns may ever be committed.
+
+.env
+.env.*
+!.env.example
+
+*.pem
+*.p12
+*.pfx
+*.key
+*.keystore
+*.jks
+
+# Google and Firebase service accounts — backend credentials, never client
+# config. Distinct from the client identifiers described below.
+service-account*.json
+*-service-account.json
+serviceAccountKey.json
+firebase-adminsdk*.json
+
+# Cloud provider credentials
+.aws/
+aws-credentials*
+*.credentials
+
+# Signing configuration
+key.properties
+android/key.properties
+mobile/android/key.properties
+
+# NOT ignored, deliberately:
+#   mobile/android/app/google-services.json
+#   mobile/ios/Runner/GoogleService-Info.plist
+#   mobile/lib/core/firebase/firebase_options.dart
+#
+# These hold client identifiers — API key, app ID, project ID — not
+# credentials. ADR-010 records the reasoning: Firebase protects projects with
+# Security Rules and App Check, not by concealing values that are extractable
+# from any shipped binary. Ignoring them would break every clean checkout and
+# every CI run to protect nothing.
+
+# ---------------------------------------------------------------------------
+# Build output
+# ---------------------------------------------------------------------------
+build/
+dist/
+out/
+target/
+*.o
+*.a
+
+# ---------------------------------------------------------------------------
+# Dependencies
+# ---------------------------------------------------------------------------
+node_modules/
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# ---------------------------------------------------------------------------
+# Dart and Flutter, at the repository root
+# ---------------------------------------------------------------------------
+.dart_tool/
+.packages
+.pub-cache/
+.pub/
+.flutter-plugins
+.flutter-plugins-dependencies
+
+# ---------------------------------------------------------------------------
+# Test and coverage output
+# ---------------------------------------------------------------------------
+coverage/
+*.lcov
+test-results/
+failures/
+
+# ---------------------------------------------------------------------------
+# Editors and IDEs
+# ---------------------------------------------------------------------------
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+!.vscode/launch.json
+*.swp
+*.swo
+*~
+
+# ---------------------------------------------------------------------------
+# Operating system
+# ---------------------------------------------------------------------------
+.DS_Store
+.DS_Store?
+._*
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# ---------------------------------------------------------------------------
+# Logs and temporary files
+# ---------------------------------------------------------------------------
+*.log
+logs/
+tmp/
+temp/
+*.tmp
+*.bak
+
+# Rendered infrastructure templates (contain no secrets, but are generated)
+infrastructure/aws/cloudfront/.rendered-*.json
