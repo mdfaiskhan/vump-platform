@@ -424,6 +424,62 @@ Deliberately not installed in Mission 0.18.6, because **each would be an unused 
 
 Each should be added by the mission that creates its first consumer, not before. An installed-but-unused test dependency is weight in the lockfile and an invitation to use the wrong tool for the current problem.
 
+### A-029 — Android build is broken: `isar_flutter_libs` is incompatible with the current toolchain
+
+| | |
+|---|---|
+| **Volume** | 3 — Chapter 3.1 (Isar as local persistence); ADR-009 |
+| **Says** | Isar is the local database engine |
+| **Should say** | Either that Isar is replaced, or that a supported version exists for the current Android Gradle Plugin |
+| **Authority** | — decision required; **ADR-009 anticipated this exact failure** |
+| **Class** | **Architecture decision — unresolved. BUILD BLOCKER.** |
+| **Status** | **Open — the Android application cannot be built at all** |
+
+Verified 2026-08-10 by `flutter build apk --debug`:
+
+```
+A problem occurred configuring project ':isar_flutter_libs'.
+> Namespace not specified. Specify a namespace in the module's build file:
+  .../isar_flutter_libs-3.1.0+1/android/build.gradle
+BUILD FAILED
+```
+
+Android Gradle Plugin 8+ requires every module to declare a `namespace`. `isar_flutter_libs 3.1.0+1` was published in 2023, before that requirement, and has not been updated.
+
+**This is not a new risk.** ADR-009's Consequences recorded it verbatim: *"Compatibility with Flutter 3.44 and Dart 3.12, including the Android Gradle and NDK toolchain, given the gap between the package's release and the current SDK"* — listed as unverified and requiring settlement before implementation. It has now been verified, and it fails.
+
+ADR-009 also stated the consequence: *"If either fails, the engine choice must be revisited — which contradicts `CLAUDE.md` and would require both a new ADR and an amendment to the constitution."*
+
+Scope: **Android only.** Web builds successfully in all three environments. The pure-Dart `isar` package compiles; only the Android native module fails.
+
+Options, none taken here because the engine choice is an accepted decision:
+
+1. **Adopt Drift**, which Volume 3's own ADR-002 originally chose and ADR-009 recorded as "the strongest alternative". Requires a superseding ADR and a `CLAUDE.md` amendment.
+2. **Inject the namespace from the app's Gradle build** — a community workaround. Unblocks the build without changing architecture, but pins the project to patching a third-party module it does not control.
+3. **Move to an Isar fork or v4 pre-release** — trades an unmaintained release for an unreleased one.
+
+The second Android risk ADR-009 recorded — **16 KB page size support**, required by Google Play — remains unverified and would be the next blocker even if this one were patched.
+
+### A-030 — Build flavors are not configured
+
+| | |
+|---|---|
+| **Volume** | 7 — Chapter 7.11 §2; Volume 10, Chapter 10.1 §4 |
+| **Says** | "dev / staging / prod flavors are configured in `android/app/build.gradle` and iOS's scheme configuration, each pointing at the matching Firebase project and API base URL — selecting a flavor is enough". V10.1 §4: only the `prod` flavor is ever built for Play Store upload, and "dev/staging flavors are never accidentally shippable since they use entirely separate Firebase projects and app IDs" |
+| **Should say** | Environment selection uses `--dart-define=APP_ENV` (ADR-007, ADR-016, ADR-018), not Gradle product flavors and Xcode schemes |
+| **Authority** | ADR-007, ADR-016, ADR-018 |
+| **Class** | **Architecture decision** |
+| **Status** | Open |
+
+Verified 2026-08-10: `android/app/build.gradle.kts` contains **no `productFlavors` block**, and `ios/Runner.xcodeproj` has a **single scheme** (`Runner.xcscheme`). `flutter run --flavor dev`, which V7.11 §3's first-run checklist requires, cannot work.
+
+The accepted ADRs took a different route deliberately: one build artifact whose behaviour is fixed at compile time by `APP_ENV`. ADR-014 requires that the artifact promoted to production be **the same artifact verified in staging**, which flavors would break by producing three distinct binaries.
+
+**One protection is genuinely lost, and it should be recorded rather than glossed.** V10.1 §4 relies on separate Firebase projects and application IDs to make a wrong-flavor upload "immediately obvious in the Play Console". With a single `applicationId` and a single Firebase project (A-014), **a build made with the wrong `APP_ENV` is indistinguishable in the Play Console.** The safeguard V10.1 §4 depends on does not exist.
+
+Mitigations available without adopting flavors: assert `APP_ENV=production` in the release pipeline before upload, and surface the resolved environment in the app's about screen. Neither is implemented.
+
+---
 ## Confirmed correct — no amendment
 
 Recorded so they are not re-litigated.
