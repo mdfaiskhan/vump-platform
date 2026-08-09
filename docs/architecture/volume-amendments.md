@@ -433,7 +433,7 @@ Each should be added by the mission that creates its first consumer, not before.
 | **Should say** | Either that Isar is replaced, or that a supported version exists for the current Android Gradle Plugin |
 | **Authority** | — decision required; **ADR-009 anticipated this exact failure** |
 | **Class** | **Architecture decision — unresolved. BUILD BLOCKER.** |
-| **Status** | **Open — the Android application cannot be built at all** |
+| **Status** | **Partially resolved (Mission 0.18.8A)** — Android builds again via a scoped Gradle shim. The engine decision remains open |
 
 Verified 2026-08-10 by `flutter build apk --debug`:
 
@@ -452,13 +452,26 @@ ADR-009 also stated the consequence: *"If either fails, the engine choice must b
 
 Scope: **Android only.** Web builds successfully in all three environments. The pure-Dart `isar` package compiles; only the Android native module fails.
 
-Options, none taken here because the engine choice is an accepted decision:
+### Resolution applied — Mission 0.18.8A
 
-1. **Adopt Drift**, which Volume 3's own ADR-002 originally chose and ADR-009 recorded as "the strongest alternative". Requires a superseding ADR and a `CLAUDE.md` amendment.
-2. **Inject the namespace from the app's Gradle build** — a community workaround. Unblocks the build without changing architecture, but pins the project to patching a third-party module it does not control.
-3. **Move to an Isar fork or v4 pre-release** — trades an unmaintained release for an unreleased one.
+A scoped Gradle shim in `mobile/android/build.gradle.kts` patches **two** properties of `isar_flutter_libs`, and nothing else:
 
-The second Android risk ADR-009 recorded — **16 KB page size support**, required by Google Play — remains unverified and would be the next blocker even if this one were patched.
+1. `namespace`, absent because the module predates AGP 8.
+2. `compileSdk` 30 → 36. Namespace injection alone was **not sufficient**: it produced 21 AAR-metadata errors, because the module's own transitive dependencies (for example `androidx.fragment 1.7.1`) require compileSdk 34 or later.
+
+Verified from a clean tree: `flutter build apk --debug` and `flutter build apk --release` both succeed.
+
+The shim is scoped to that one module **by name**. A blanket patch across all subprojects would silently absorb the next incompatible plugin rather than failing loudly.
+
+**This is a bridge, not a cure.** It keeps the documented engine building; it does not make Isar maintained. `compileSdk 36` is forced on code written for API 30 — it compiles, but that combination was never tested by the package author.
+
+**ADR-009's other Android risk is untouched: 16 KB page size support**, which Google Play requires and which these prebuilt native libraries predate. It remains unverified and is the next likely release blocker.
+
+### Options still open for the engine decision
+
+1. **Keep Isar with the shim** — current state. Zero architectural change, ongoing patching of a package nobody maintains.
+2. **Move to `isar_community`** — verified to resolve at **3.3.2**, a maintained fork of the same engine with the same API and generated-code format. Changes import URIs in `core/database/` and the package name in ADR-009 and the CI boundary check. Needs authorisation.
+3. **Adopt Drift**, which Volume 3's own ADR-002 originally chose and ADR-009 called "the strongest alternative". Requires a superseding ADR and a `CLAUDE.md` amendment.
 
 ### A-030 — Build flavors are not configured
 
@@ -480,6 +493,7 @@ The accepted ADRs took a different route deliberately: one build artifact whose 
 Mitigations available without adopting flavors: assert `APP_ENV=production` in the release pipeline before upload, and surface the resolved environment in the app's about screen. Neither is implemented.
 
 ---
+
 ## Confirmed correct — no amendment
 
 Recorded so they are not re-litigated.
