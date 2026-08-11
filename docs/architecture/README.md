@@ -46,6 +46,7 @@ docs/
     ├── architecture-guardrails.md # Every invariant, its authority, its enforcement.
     ├── error-handling.md         # The error model and its boundary contract.
     ├── folder-structure.md       # The repository's folder and import rules.
+    ├── logging-standards.md      # Levels, sinks, redaction, what never gets logged.
     ├── naming-conventions.md     # The canonical naming standard.
     └── decisions/                # One file per decision.
         ├── ADR-001-<title>.md
@@ -62,6 +63,8 @@ How documents themselves are written — the hierarchy, what belongs in each typ
 `naming-conventions.md` is the canonical naming standard — the closed suffix vocabulary, every naming category from folders to JSON fields, and an audited register of known deviations. It specifies what ADR-023 decides, and cites rather than restates the conventions already fixed by `CLAUDE.md`, ADR-021 and the individual domain ADRs.
 
 `architecture-guardrails.md` is the invariant register: every architectural invariant in force, with the ADR or Volume it derives from, whether CI, the analyzer or a reviewer enforces it, and the command that verifies it. It duplicates no rule — each invariant is one line plus a citation. It specifies what ADR-026 decides.
+
+`logging-standards.md` is the canonical logging standard — the five levels and the environment that selects them, the sinks that exist and the ones that do not, where redaction happens and why `AppLogger` cannot do it, and the boundary between diagnostic and audit logging. It specifies what ADR-027 decides.
 
 `error-handling.md` is the canonical error handling standard — the two error representations, the exception hierarchy, the `ErrorCode` taxonomy, logging and redaction, propagation by layer, and an audited register of known gaps. It specifies what ADR-025 decides.
 
@@ -221,7 +224,7 @@ forecloses, and what must now be maintained.
 
 ## Current State
 
-`decisions/` holds ADR-001 through ADR-026.
+`decisions/` holds ADR-001 through ADR-027.
 
 All are Accepted and therefore binding.
 
@@ -253,9 +256,12 @@ All are Accepted and therefore binding.
 | ADR-024 | Documentation standards |
 | ADR-025 | Error handling model |
 | ADR-026 | Architecture guardrails |
+| ADR-027 | Logging architecture |
 
 ADR-007 supersedes the networking assumptions of ADR-006 in part. ADR-006 remains Accepted and binding in every other respect.
 
 ADR-022 refines ADR-002 in one respect: `app/router.dart` is the single file in `app/` permitted to import from `features/`, because ADR-004 requires one route table and a route table must name its screens. ADR-002 remains Accepted and binding in every other respect.
 
-Decisions still to be recorded: logging infrastructure, the HTTP client boundary, and runtime provisioning of build-time secrets. The logging and networking layers are implemented but undocumented.
+Decisions still to be recorded: the HTTP client boundary, and runtime provisioning of build-time secrets. The networking layer is implemented but its client boundary is undocumented — ADR-007 fixes its configuration, and `error-handling.md` §8 fixes its error conversion, but the interceptor chain and `DioClient`'s contract have no record of their own.
+
+Logging was on this list until Mission 0.19.7 and is now recorded by **ADR-027**.

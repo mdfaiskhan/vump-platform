@@ -730,6 +730,50 @@ ADR-023 governs, and no code is affected: no notifier or controller exists yet, 
 
 **Revisit before the first controller is written.** That is the last moment the choice is free; afterwards it is a rename across every feature. Resolving it means either a superseding ADR adopting `Notifier`, or ADR-023 §4.2's reasoning being restated on a ground that holds — a deliberate divergence from the framework's vocabulary is defensible, but it should be argued as one.
 
+### A-042 — Chapter 3.7 §6's log levels are a floor; `fatal` is the fifth
+
+| | |
+|---|---|
+| **Volume** | 3 — Technical Architecture, Chapter 3.7 §6 |
+| **Says** | *"all diagnostic output goes through a single project-wide logger, with log levels (debug/info/warn/error) so Volume 7's CI and Volume 9's testing tooling can filter noise from signal"* |
+| **Should say** | Those four are the floor. Five levels exist — `debug`, `info`, `warning`, `error`, `fatal` — as `LogLevel` in `core/logging/`. `fatal` is required by ADR-017's abort path. The third is spelled `warning`, matching the `logger` package's `Level.warning` |
+| **Authority** | ADR-027, ADR-017 |
+| **Class** | Documentation update (gap) |
+| **Status** | Open |
+
+**Nothing in §6 is weakened.** `print()` is banned and enforced as an analyzer error (ADR-021); all diagnostic output goes through one project-wide logger; levels exist and filter. The correction is one of completeness.
+
+**`fatal` is not decoration.** ADR-017 makes a Firebase initialisation failure fatal in staging and production, and the implementation logs at `fatal` before rethrowing — *"so it surfaces as a crash with a cause rather than as an application that runs strangely."* Without a fifth level, aborting startup and failing an operation would log identically, which is the distinction the ADR exists to make.
+
+**Why five and not more.** `LogLevel` records the bound: the `logger` package also offers `trace`, `all` and `off`, *"which are either redundant with [debug] or a filter setting rather than a severity."*
+
+This is the same pattern as **A-031** for §2 of the same chapter: Chapter 3.7 states minimums that a reader can mistake for closed sets. `warn` versus `warning` is a spelling, recorded only so the difference is not read as a second level.
+
+### A-043 — No log leaves the device, so §6's stated payoff is not achieved
+
+| | |
+|---|---|
+| **Volume** | 3 — Technical Architecture, Chapter 3.7 §6 |
+| **Says** | *"as much debugging as possible should be diagnosable from structured logs rather than requiring a physical device in hand"* — the justification given for the whole logging rule, chosen for a Windows-first workflow |
+| **Should say** | Unchanged — the Volume is correct, and this is the requirement |
+| **Authority** | Volume 3, Chapter 3.7 §6 |
+| **Class** | **Implementation update** |
+| **Status** | **Open — implementation gap, not a documentation error** |
+
+Verified 2026-08-11. Three findings, compounding:
+
+**The console is the only sink, in every environment.** `AppLogger` accepts an optional `LogOutput`, documented as *"an injection point for tests and for future log destinations. When null, the underlying package writes to the console."* `loggerProvider` supplies none. No file sink, no remote aggregator, no crash reporter.
+
+**Production emits `warning` and above only**, per `AppLogger.minimumLevelFor`. Correct in itself — *"logs record what went wrong rather than what happened"* — but combined with a console-only sink it means a production failure on a Collector's device leaves **no durable record anywhere**. The device is not merely convenient for diagnosis; it is required, and even then only while a console is attached.
+
+**No contextual metadata is attached.** A log event carries a timestamp, a level, a message, an optional error and an optional stack trace. There is no correlation, request, session, Collector, device or app-version identifier on any line, so lines from one recording `Session` — the Glossary's central unit — could not be grouped even if a sink existed.
+
+**On the word "structured".** The format is line-oriented and deliberately aggregator-friendly: ISO-8601 timestamps chosen because *"they sort lexicographically and parse without a format string"*, one event per line, and `PrettyPrinter` rejected because its *"boxes and colour codes are pleasant in a terminal and unreadable in a log aggregator."* It is **not** key-value structured — no JSON, no parseable field separation beyond the timestamp and level prefix. Whether §6's *"structured"* requires machine-parseable records or simply well-organised output is genuinely ambiguous in the text, and this entry does not resolve it by assertion: the sink gap defeats §6's purpose either way.
+
+**Sequenced with A-036 and A-037.** Volume 6 §6.9 §2's global handlers must funnel into one `ErrorReportingService`, and §6.9 §3 selects Firebase Crashlytics — so the sink decision, the handler decision and this entry are one piece of work. Closing A-043 alone would produce a second logging path, which §6.9 §2 forbids by name.
+
+**Not closed by anything already decided.** No Volume specifies a mobile log destination or a required log field, so the mechanism is an open decision needing its own ADR rather than an unimplemented specification.
+
 ---
 
 ## Confirmed correct — no amendment
@@ -744,6 +788,8 @@ Recorded so they are not re-litigated.
 | V3, Ch. 3.6 §4 | Every test file at the identical path under `test/` as the file it tests under `lib/` | **Correct and implemented.** Also fixed by ADR-022 §6.1. |
 | V3, Ch. 3.6 §5 | Folders `snake_case`; files suffixed by role — `_screen.dart`, `_use_case.dart`, `_repository.dart`, `_service.dart` | **Correct** and consistent with ADR-023 §1.1 and §3. Only `_notifier.dart` diverges — see A-041. |
 | V3, Ch. 3.6 §5 | Generated files never hand-edited, committed per Volume 7 | **Correct and implemented.** Enforced by the CI `Generated code drift` job. |
+| V3, Ch. 3.7 §6 | `print()` banned; all diagnostic output through a single project-wide logger | **Correct and implemented.** `avoid_print` is an analyzer error (ADR-021); `AppLogger` via `loggerProvider` is the only mechanism, and `package:logger` is confined to `core/logging/`. Only the level list (A-042) and the sink (A-043) diverge. |
+| V4, Ch. 4.1 | Backend monitoring and logging is Amazon CloudWatch | **Correct.** `backend/` is empty (ADR-015), so nothing implements it yet. A separate sink from mobile logging, deliberately. |
 | V5, Ch. 5.14 §1 | S3 object key schema | **Authoritative and implemented.** Unchanged by any ADR in this cycle. |
 | V4, Ch. 4.10 §4 | Standard → Standard-IA → Glacier IR ladder | Correct. Adopted verbatim by ADR-012. |
 | V8, Ch. 8.4 | SSE-S3, upgradeable to SSE-KMS only on contractual trigger | Correct and implemented. Not a placeholder — do not "upgrade" without the trigger. |
