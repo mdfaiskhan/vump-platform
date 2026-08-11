@@ -928,6 +928,46 @@ Resolved consequences: `analyzer 5.13.0` against a current 14.1.0, `source_gen 1
 
 **Not urgent, and it compounds.** No feature depends on `freezed 3` or `riverpod 3` today, so nothing is blocked in practice. The cost grows with every release of the four packages held back, and with every model written against `freezed 2`'s API.
 
+### A-049 — Chapter 9.4 omits Volume 1's `NFR-PERF` and `NFR-SCL` targets
+
+| | |
+|---|---|
+| **Volume** | 9 — Quality Assurance, Chapter 9.4, against Volume 1's NFR table |
+| **Says** | Chapter 9.4 is subtitled *"Measurable Targets, Not Just Volume 1's Prose"* and declares it *"Expands NFR-META-01, NFR-AVL-02"*. Its table carries six targets |
+| **Should say** | The table should also carry Volume 1's remaining numeric performance and scalability requirements, each with a measurement method: **`NFR-PERF-01`** — recording preview starts *"< 1.5 seconds on a mid-range device"*; **`NFR-PERF-02`** — chunking begins *"< 2 seconds"* after Stop; **`NFR-SCL-01`** — *"Queue depth of 50+ pending"* chunks without degrading device performance; **`NFR-SCL-02`** — backend scales to a concurrent fleet, *"Verified under load during Volume 9 — Testing"* |
+| **Authority** | Volume 1, NFR table |
+| **Class** | Documentation update (gap) |
+| **Status** | Open |
+
+Verified 2026-08-11 by substring search over the extracted text of Volume 9: **`PERF` occurs 0 times and `SCL` occurs 0 times** in the entire volume. `META` occurs twice and `AVL` three times, both in Chapter 9.4's table and its header.
+
+So the chapter whose stated purpose is turning Volume 1's prose into measurable targets covers two of Volume 1's numeric requirements and silently omits four. Three of the four carry a concrete number in Volume 1 already — 1.5 seconds, 2 seconds, 50 chunks — so they are not prose awaiting quantification; they are quantified requirements with no assigned method.
+
+**`NFR-SCL-02` is the mildest case:** Volume 1 assigns it to Volume 9 by name (*"Verified under load during Volume 9 — Testing"*), and no chapter of Volume 9 defines a load test. So the reference exists and its destination does not — the same shape as A-047's deferral to Volume 7.
+
+**`NFR-PERF-01` and `NFR-PERF-02` are the substantive omissions.** Both are Recording Screen latencies on the Collector's critical path, both have a number, and neither appears in the chapter that assigns measurement methods. Chapter 9.4 §1's own methods column shows what they would need: a stopwatch during Chapter 9.9's device testing, or an instrumented timestamp diff of the kind it specifies for metadata generation.
+
+**Nothing is violated today.** No preview, no chunking and no upload queue exists, so all four are unmeasurable in practice as well as in specification. The gap matters at the moment the Recording Screen is built, which is when someone will ask what "fast enough" means and find that two of the four answers have no method attached.
+
+### A-050 — A 429 is retryable, which Chapter 5.13's blanket 4xx rule would forbid
+
+| | |
+|---|---|
+| **Volume** | 5 — Recording Engine, Chapter 5.13 §1 |
+| **Says** | Failure classification: *"Terminal (server-side) — Backend rejects with a 4xx (e.g. auth/permission error) — Not retried automatically; a repeated identical request would fail identically; surfaces as Failed"* |
+| **Should say** | HTTP **429 Too Many Requests** is a 4xx that is explicitly a "try later", and is retryable with backoff, honouring `Retry-After`. Every other 4xx is terminal as the chapter states |
+| **Authority** | ADR-025 |
+| **Class** | Documentation update |
+| **Status** | Open |
+
+`error-handling.md` §16 classifies `NETWORK_RATE_LIMITED` — the code `ErrorInterceptor` maps HTTP 429 to — as **retryable**, on the ground that a 429 is *"explicitly a 'try later'"*. Chapter 5.13 §1's rule is written as a blanket statement about 4xx and would make it terminal.
+
+**The chapter's reasoning does not apply to a 429.** Its justification is that *"a repeated identical request would fail identically"*, which is true of 400, 401, 403, 404 and 409 and false of 429 — the whole point of a 429 is that the identical request succeeds later. The examples it gives are *"auth/permission error"*, so 429 is very likely outside what the chapter meant; only the wording covers it.
+
+**The divergence is small and worth registering because retry is safety-critical here.** Treating a 429 as terminal would surface a rate limit to the Collector as a permanently failed chunk requiring manual retry, when Chapter 5.13 §2's backoff — 5 s, 10 s, 20 s, 40 s, capped at 5 minutes, with ±20 % jitter — is exactly the correct response and already specified. Treating it as retryable costs nothing that the attempt cap does not already bound.
+
+**Nothing implements retry yet** (ADR-025 §16, `AuthInterceptor`), so no behaviour is affected today. This entry exists so the retry ADR resolves it deliberately rather than inheriting whichever of the two documents its author happened to read.
+
 ---
 
 ## Confirmed correct — no amendment
@@ -944,6 +984,10 @@ Recorded so they are not re-litigated.
 | V3, Ch. 3.6 §5 | Generated files never hand-edited, committed per Volume 7 | **Correct and implemented.** Enforced by the CI `Generated code drift` job. |
 | V3, Ch. 3.7 §6 | `print()` banned; all diagnostic output through a single project-wide logger | **Correct and implemented.** `avoid_print` is an analyzer error (ADR-021); `AppLogger` via `loggerProvider` is the only mechanism, and `package:logger` is confined to `core/logging/`. Only the level list (A-042) and the sink (A-043) diverge. |
 | V3, Ch. 3.7 §9 | The six-item code review checklist | **Correct and binding**, via ADR-019. Implemented by `docs/development/review-checklist.md` §3. Two items need reading against amendments taken since — item 2 against A-039, item 5 against A-025 and A-034. |
+| V5, Ch. 5.2 §1–2 | Fixed capture parameters, and device-tier degradation that steps down bitrate *"never resolution or frame rate"* | **Correct and authoritative.** Adopted verbatim by ADR-031; the rationale is dataset comparability across the fleet, not device sympathy. |
+| V5, Ch. 5.13 §2 | Backoff of 5 s / 10 s / 20 s / 40 s capped at 5 minutes, 6 attempts, ±20 % jitter | **Correct and authoritative.** The jitter's stated purpose — avoiding a thundering herd when a batch regains connectivity — is the specification ADR-025 §16 was missing. |
+| V5, Ch. 5.13 §4 | Retry reuses the same `chunk_id`, deterministic key and multipart upload ID | **Correct.** *"Safe by construction rather than by discipline"* — consistent with ADR-011's key schema. |
+| V9, Ch. 9.4 §1 | The six targets it does carry, and the method assigned to each | **Correct.** Four are manual by design; the omissions are A-049. |
 | V3, Ch. 3.8 §2 | Single Flutter package, not a Melos-managed monorepo; module boundaries by folder convention and lint rules | **Correct and implemented.** No `melos.yaml` exists. The trigger it names for revisiting — a genuinely separate Admin web app — has not occurred. |
 | V3, Ch. 3.8 §4 item 6 | Every dependency carries an explicit version constraint, *"never a bare, unconstrained dependency"* | **Correct and implemented.** All 16 pub packages are caret-constrained; the only unconstrained entries are the two SDK-provided ones. |
 | V3, Ch. 3.8 §4 item 4 | MIT, BSD and Apache 2.0 pre-approved | **Correct and satisfied today** — 8 MIT, 5 BSD-3-Clause, 3 Apache-2.0. Nothing re-checks (A-047). |

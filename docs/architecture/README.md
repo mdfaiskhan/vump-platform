@@ -66,6 +66,8 @@ How anything is tested — the pyramid, substitution with fakes, determinism, er
 
 How a package enters the project and is kept under control — pinning tiers, the admission checklist, review cadence, and the toolchain constraint one unmaintained generator imposes — is fixed by ADR-030 and specified in [`../development/dependency-management-standards.md`](../development/dependency-management-standards.md).
 
+What "fast enough" means — the ten numeric targets from Volumes 1, 4, 5 and 9, what measures each, and why the capture and UI frame rates are deliberately different numbers — is fixed by ADR-031 and specified in [`../development/performance-standards.md`](../development/performance-standards.md).
+
 `naming-conventions.md` is the canonical naming standard — the closed suffix vocabulary, every naming category from folders to JSON fields, and an audited register of known deviations. It specifies what ADR-023 decides, and cites rather than restates the conventions already fixed by `CLAUDE.md`, ADR-021 and the individual domain ADRs.
 
 `architecture-guardrails.md` is the invariant register: every architectural invariant in force, with the ADR or Volume it derives from, whether CI, the analyzer or a reviewer enforces it, and the command that verifies it. It duplicates no rule — each invariant is one line plus a citation. It specifies what ADR-026 decides.
@@ -230,7 +232,7 @@ forecloses, and what must now be maintained.
 
 ## Current State
 
-`decisions/` holds ADR-001 through ADR-030.
+`decisions/` holds ADR-001 through ADR-031.
 
 All are Accepted and therefore binding.
 
@@ -266,6 +268,7 @@ All are Accepted and therefore binding.
 | ADR-028 | Review checklist |
 | ADR-029 | Testing standards |
 | ADR-030 | Dependency management |
+| ADR-031 | Performance standards |
 
 ADR-007 supersedes the networking assumptions of ADR-006 in part. ADR-006 remains Accepted and binding in every other respect.
 
