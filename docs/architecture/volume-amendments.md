@@ -852,6 +852,82 @@ So the reported figure is computed over **29% of the source files**. It is not w
 
 **A gate on the current metric would be actively harmful**, which is the sharpest point in this entry: because the denominator counts only imported files, the percentage *rises* as fewer files are imported. Gating on it would reward not writing tests. Closing this needs per-layer computation and a denominator that includes every source file, not a threshold on what is reported today.
 
+### A-047 — Chapter 3.8 §5's review cadence has no mechanism, and the tree has aged
+
+| | |
+|---|---|
+| **Volume** | 3 — Technical Architecture, Chapter 3.8 §5; deferral in §3.8 §7 |
+| **Says** | *"`flutter pub outdated` is run and reviewed at the start of each development phase boundary… not continuously — batching upgrades avoids constant churn while still preventing the dependency tree from silently aging for a year or more."* And: *"Any dependency with a published security advisory is patched immediately, outside the normal cadence."* §3.8 §7 defers *"the exact CI step that runs `flutter pub outdated` / security scanning"* to Volume 7 |
+| **Should say** | Unchanged — the Volume is correct, and this is the requirement |
+| **Authority** | Volume 3, Chapter 3.8 §5 |
+| **Class** | **Implementation update** |
+| **Status** | **Open — implementation gap, not a documentation error** |
+
+**Nothing implements either rule.** Verified 2026-08-11: no CI step runs `flutter pub outdated`, no Dependabot configuration, no Renovate configuration, and no advisory scanning of any kind. `dart pub audit` does not exist as a subcommand in this SDK, so there is no first-party command to run even if a job wanted to. Volume 7 does not specify the step §3.8 §7 defers to it, so the deferral has no destination.
+
+**The predicted outcome has occurred.** §3.8 §5's stated purpose is preventing the tree from *"silently aging for a year or more"*. Measured from `flutter pub outdated`:
+
+| Finding | Count |
+|---|---|
+| Direct dependencies constrained below a resolvable version | **7** |
+| Discontinued packages in the tree | **4** |
+| Packages with newer versions blocked by constraints | **26** |
+
+| Package | Current | Latest | Note |
+|---|---|---|---|
+| `go_router` | 14.8.1 | 17.5.0 | 3 majors behind — **resolvable today, nothing blocks it** |
+| `flutter_secure_storage` | 9.2.4 | 11.0.0 | 2 majors behind — **resolvable today** |
+| `flutter_riverpod` | 2.6.1 | 3.4.2 | blocked, see A-048 |
+| `freezed` | 2.5.2 | 3.2.5 | blocked, see A-048 |
+| `freezed_annotation` | 2.4.4 | 3.1.0 | blocked |
+| `build_runner` | 2.4.13 | 2.16.0 | blocked |
+| `json_serializable` | 6.8.0 | 6.14.1 | blocked |
+
+Discontinued, all transitive: `flutter_secure_storage_macos`, `js`, `build_resolvers`, `build_runner_core`. Three clear on upgrading `flutter_secure_storage` and `build_runner`.
+
+**The two unblocked upgrades are the cheapest available improvement** and are the correct first action on this entry.
+
+**Two further verification rules from §3.8 §4 also have no mechanism.** Licence compatibility (item 4) — all 16 pub packages are compliant today, checked by hand for ADR-030, but nothing re-checks, so a transitive arrival under a copyleft licence would pass unnoticed. And Windows buildability (item 2), which §3.8 §1 calls the constraint *"this project cares about more than most"* — CI runs `ubuntu-latest` only, so a native plugin that breaks the Windows build passes every check.
+
+**Dependabot and Renovate are the wrong fix**, and ADR-030 declines them on the Volume's own terms: §3.8 §5 requires batching *"not continuously"*, and §3.8 §3 forbids bumping core packages *"on an automated schedule alone"*. What is missing is a **phase-boundary trigger**, not a bot.
+
+### A-048 — `isar_generator` caps the code-generation toolchain
+
+| | |
+|---|---|
+| **Volume** | 3 — Chapter 3.8 §4 item 3, and §3.8 §3's Flutter-SDK-support requirement |
+| **Says** | A dependency must be *"actively maintained (a commit or release within the last 6–12 months, no unresolved critical issues)"* and must *"support the currently-pinned Flutter SDK version"* |
+| **Should say** | `isar_generator 3.1.0+1` satisfies neither. It was published in 2023, declares `environment: sdk: ">=2.17.0 <3.0.0"` — **no Dart 3 support** — and caps `analyzer` below 6.0.0 and `source_gen` at 1.x, which blocks `freezed` past 2.5.7 and `flutter_riverpod` past 2.x |
+| **Authority** | — decision required; **resolved by A-029's engine decision, not by a version bump** |
+| **Class** | **Architecture decision — unresolved** |
+| **Status** | Open — a new consequence of A-029 |
+
+Verified 2026-08-11 by reading the published `pubspec.yaml` of `isar_generator 3.1.0+1` from the pub cache:
+
+```yaml
+environment:
+  sdk: ">=2.17.0 <3.0.0"
+
+dependencies:
+  analyzer: ">=4.6.0 <6.0.0"
+  source_gen: ^1.2.2
+  dart_style: ^2.2.3
+```
+
+**It declares no support for Dart 3 and the project runs Dart 3.12.2.** It resolves only because pub relaxes the upper SDK bound of packages published before Dart 3. The generator that produces committed, shipped code is running outside its own declared support range.
+
+**The caps propagate, and the resolver says so.** Asked to add `flutter_riverpod ^3.4.2`, pub reports: *"because `freezed >=2.5.8` depends on `source_gen ^2.0.0` and `isar_generator >=3.0.1` depends on `analyzer >=4.6.0 <6.0.0`… version solving failed"*, concluding *"because mobile depends on both `freezed ^2.5.2` and `isar_generator ^3.1.0+1`, version solving failed."*
+
+Resolved consequences: `analyzer 5.13.0` against a current 14.1.0, `source_gen 1.5.0` against 4.2.4, `_fe_analyzer_shared 61.0.0` against 105.0.0. `freezed` cannot pass 2.5.7. `flutter_riverpod` cannot reach 3.x.
+
+**This is a new consequence of A-029, not a restatement of it.** A-029 concerns `isar_flutter_libs` — a runtime package, an Android Gradle Plugin incompatibility, fixed by a scoped Gradle shim. This is `isar_generator` — a dev dependency, a version-solving cap, and the shim does nothing for it. A-029's status is *"partially resolved"*; on this axis nothing is resolved at all.
+
+**`dependency_overrides` is the wrong fix.** Forcing `analyzer 6+` would run a 2023 generator against an analyzer nine majors newer than anything it was built for, and the failure would surface as subtly wrong generated code rather than as a resolution error — which the `Generated code drift` job detects as a difference, not as a wrongness. ADR-030 rejects it explicitly.
+
+**The real fix is A-029's open engine decision.** Of the three options recorded there, moving to `isar_community 3.3.2` — verified to resolve, same API, same generated-code format — is the one that addresses this axis as well as the Android one.
+
+**Not urgent, and it compounds.** No feature depends on `freezed 3` or `riverpod 3` today, so nothing is blocked in practice. The cost grows with every release of the four packages held back, and with every model written against `freezed 2`'s API.
+
 ---
 
 ## Confirmed correct — no amendment
@@ -868,6 +944,10 @@ Recorded so they are not re-litigated.
 | V3, Ch. 3.6 §5 | Generated files never hand-edited, committed per Volume 7 | **Correct and implemented.** Enforced by the CI `Generated code drift` job. |
 | V3, Ch. 3.7 §6 | `print()` banned; all diagnostic output through a single project-wide logger | **Correct and implemented.** `avoid_print` is an analyzer error (ADR-021); `AppLogger` via `loggerProvider` is the only mechanism, and `package:logger` is confined to `core/logging/`. Only the level list (A-042) and the sink (A-043) diverge. |
 | V3, Ch. 3.7 §9 | The six-item code review checklist | **Correct and binding**, via ADR-019. Implemented by `docs/development/review-checklist.md` §3. Two items need reading against amendments taken since — item 2 against A-039, item 5 against A-025 and A-034. |
+| V3, Ch. 3.8 §2 | Single Flutter package, not a Melos-managed monorepo; module boundaries by folder convention and lint rules | **Correct and implemented.** No `melos.yaml` exists. The trigger it names for revisiting — a genuinely separate Admin web app — has not occurred. |
+| V3, Ch. 3.8 §4 item 6 | Every dependency carries an explicit version constraint, *"never a bare, unconstrained dependency"* | **Correct and implemented.** All 16 pub packages are caret-constrained; the only unconstrained entries are the two SDK-provided ones. |
+| V3, Ch. 3.8 §4 item 4 | MIT, BSD and Apache 2.0 pre-approved | **Correct and satisfied today** — 8 MIT, 5 BSD-3-Clause, 3 Apache-2.0. Nothing re-checks (A-047). |
+| V3, Ch. 3.8 §6 | Minimal-surface principle — one package per real need | **Correct and implemented.** One state management library, one HTTP client, one router, one logger, one local database. |
 | V9, Ch. 9.4 | Six measurable performance targets, four measured manually and two by in-app instrumentation | **Correct.** The absence of an automated performance test is therefore by design, not a gap; the instrumentation and the manual procedures are what is owed (ADR-029). |
 | V9, Ch. 9.6 §1 | What gets a unit test — every use case, every repository's error paths, every notifier's state transitions via `ProviderContainer` overrides | **Correct**, and unexercised: `lib/features/` is empty, so no use case or notifier exists. |
 | V9, Ch. 9.7 §1 | Five end-to-end flows, each against a fake backend rather than staging | **Correct.** All five depend on features that do not exist; `integration_test` is not installed (A-028). |

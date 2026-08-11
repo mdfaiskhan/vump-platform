@@ -30,7 +30,8 @@ There is no `scripts/` or `assets/` directory. Both are reserved with a defined 
 | Path | Contents |
 |---|---|
 | [`docs/architecture/README.md`](docs/architecture/README.md) | **Start here.** How architectural decisions are recorded, changed and retired |
-| [`docs/architecture/decisions/`](docs/architecture/decisions/) | ADR-001 to ADR-029 — every binding decision |
+| [`docs/architecture/decisions/`](docs/architecture/decisions/) | ADR-001 to ADR-030 — every binding decision |
+| [`docs/development/dependency-management-standards.md`](docs/development/dependency-management-standards.md) | Pinning tiers, adding a package, review cadence, current staleness (ADR-030) |
 | [`docs/development/testing-standards.md`](docs/development/testing-standards.md) | The testing pyramid, fakes, determinism, coverage, and what is absent (ADR-029) |
 | [`docs/development/review-checklist.md`](docs/development/review-checklist.md) | How every change is reviewed, and what CI already gates (ADR-028) |
 | [`docs/architecture/logging-standards.md`](docs/architecture/logging-standards.md) | Log levels, sinks, redaction, and what must never be logged (ADR-027) |

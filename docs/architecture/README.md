@@ -64,6 +64,8 @@ How any change is reviewed — which criteria CI gates, which the analyzer gates
 
 How anything is tested — the pyramid, substitution with fakes, determinism, error-path coverage, and what Volume 9 requires that the repository does not yet have — is fixed by ADR-029 and specified in [`../development/testing-standards.md`](../development/testing-standards.md).
 
+How a package enters the project and is kept under control — pinning tiers, the admission checklist, review cadence, and the toolchain constraint one unmaintained generator imposes — is fixed by ADR-030 and specified in [`../development/dependency-management-standards.md`](../development/dependency-management-standards.md).
+
 `naming-conventions.md` is the canonical naming standard — the closed suffix vocabulary, every naming category from folders to JSON fields, and an audited register of known deviations. It specifies what ADR-023 decides, and cites rather than restates the conventions already fixed by `CLAUDE.md`, ADR-021 and the individual domain ADRs.
 
 `architecture-guardrails.md` is the invariant register: every architectural invariant in force, with the ADR or Volume it derives from, whether CI, the analyzer or a reviewer enforces it, and the command that verifies it. It duplicates no rule — each invariant is one line plus a citation. It specifies what ADR-026 decides.
@@ -228,7 +230,7 @@ forecloses, and what must now be maintained.
 
 ## Current State
 
-`decisions/` holds ADR-001 through ADR-029.
+`decisions/` holds ADR-001 through ADR-030.
 
 All are Accepted and therefore binding.
 
@@ -263,6 +265,7 @@ All are Accepted and therefore binding.
 | ADR-027 | Logging architecture |
 | ADR-028 | Review checklist |
 | ADR-029 | Testing standards |
+| ADR-030 | Dependency management |
 
 ADR-007 supersedes the networking assumptions of ADR-006 in part. ADR-006 remains Accepted and binding in every other respect.
 
