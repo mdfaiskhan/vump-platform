@@ -6,7 +6,7 @@ Governed by **ADR-024**. Where this document and the ADR disagree, the ADR gover
 
 Every rule below was derived from an audit of every tracked markdown file, not chosen from preference. Where the repository was already consistent, the existing practice is the rule. Where it was not, the deviation is recorded in §30 rather than resolved by a rewrite.
 
-Counts in this document are re-verified when it is edited, per §30. They were last verified at **40 markdown files and 25 ADRs**.
+Counts in this document are re-verified when it is edited, per §30. They were last verified at **42 markdown files and 26 ADRs**.
 
 **Nothing already governed is restated.** Cited, not duplicated:
 
@@ -94,7 +94,7 @@ A README is a **map, not a manual**. It answers "what is this and where do I go 
 
 Fixed by `docs/architecture/README.md`: one decision, the context that forced it, the alternatives rejected and why, and the consequences accepted. Four required sections — `Context`, `Decision`, `Alternatives Considered`, `Consequences` — plus a `Status`/`Date` block.
 
-Two sections are not in that template but have been used by every ADR since ADR-001 and are now equally expected: **`Related Missions`** and **`Implementation Status`**. All 25 ADRs carry `Related Missions`; 24 carry `Implementation Status` — ADR-002 is the sole exception, recorded in §30.
+Two sections are not in that template but have been used by every ADR since ADR-001 and are now equally expected: **`Related Missions`** and **`Implementation Status`**. All 26 ADRs carry `Related Missions`; 25 carry `Implementation Status` — ADR-002 is the sole exception, recorded in §30.
 
 **Belongs:** the decision, stated plainly in the active voice. The forces that made a decision necessary. Every alternative evaluated, each with the specific reason it was rejected — including the ones that were close calls. What this costs, what it makes harder, and what must now be maintained.
 
@@ -150,7 +150,7 @@ Every rule in this section was measured across every tracked markdown file. Wher
 
 **`---` separates top-level sections in prose documents. ADRs never use it.**
 
-Verified, and unanimous: **all 25 ADRs contain zero horizontal rules**, while every prose document uses between 3 and 11. The ADR template's headings carry the structure by themselves; a rule between `## Decision` and `## Alternatives Considered` adds a line and no information.
+Verified, and unanimous: **all 26 ADRs contain zero horizontal rules**, while every prose document uses between 3 and 11. The ADR template's headings carry the structure by themselves; a rule between `## Decision` and `## Alternatives Considered` adds a line and no information.
 
 Use one `---` between top-level (`##`) sections of a reference, guide or runbook. Never inside a section, never before the first heading, never two in a row.
 

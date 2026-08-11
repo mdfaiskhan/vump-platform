@@ -30,7 +30,8 @@ There is no `scripts/` or `assets/` directory. Both are reserved with a defined 
 | Path | Contents |
 |---|---|
 | [`docs/architecture/README.md`](docs/architecture/README.md) | **Start here.** How architectural decisions are recorded, changed and retired |
-| [`docs/architecture/decisions/`](docs/architecture/decisions/) | ADR-001 to ADR-025 — every binding decision |
+| [`docs/architecture/decisions/`](docs/architecture/decisions/) | ADR-001 to ADR-026 — every binding decision |
+| [`docs/architecture/architecture-guardrails.md`](docs/architecture/architecture-guardrails.md) | Every architectural invariant, its authority, and what enforces it (ADR-026) |
 | [`docs/architecture/folder-structure.md`](docs/architecture/folder-structure.md) | Folder architecture, import rules, and how to add a feature (ADR-022) |
 | [`docs/architecture/error-handling.md`](docs/architecture/error-handling.md) | The error model — exceptions, failures, codes, logging, propagation (ADR-025) |
 | [`docs/architecture/naming-conventions.md`](docs/architecture/naming-conventions.md) | The naming standard — suffix vocabulary, every category, known deviations (ADR-023) |

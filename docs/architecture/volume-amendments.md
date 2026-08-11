@@ -650,6 +650,86 @@ A reader who follows "ADR-010" from Volume 6 into `docs/architecture/decisions/`
 
 **No renumbering is proposed.** ADR numbers in this register are permanent (`docs/architecture/README.md`), and the volumes are PDFs that cannot be edited. Naming the register at the point of citation is the only fix available, and it is sufficient.
 
+### A-038 — Five layers with an uninverted arrow, against four with dependency inversion
+
+| | |
+|---|---|
+| **Volume** | 3 — Technical Architecture, Chapter 3.4 §2 and §3 |
+| **Says** | Five layers — Presentation, State, Domain, Data/Repositories, Platform Services — with the dependency arrow running **downward**: *"Presentation depends on State, State depends on Domain, Domain depends on Data"*, and *"an arrow only ever points downward"* |
+| **Should say** | Four layers per feature — `domain/`, `data/`, `application/`, `presentation/` — with the dependency **inverted**: `domain/` declares repository interfaces and depends on nothing; `data/` implements them. Riverpod state lives in `presentation/`; platform services are `core/`. Per ADR-001 and ADR-022 |
+| **Authority** | ADR-001, ADR-022 |
+| **Class** | **Architecture decision** |
+| **Status** | Open |
+
+Two differences, and the second is the one that matters.
+
+**Layer count and naming.** V3.4's five layers map onto the implemented four plus `core/`: its *Domain* (use-case classes) is `application/`; its *Data/Repositories* splits into `domain/`'s interfaces and `data/`'s implementations; its *State* is `presentation/`'s controllers; its *Platform Services* is `core/`. The same system, differently cut.
+
+**Dependency direction, which is opposite.** V3.4 §3 has `Domain → Data/Repositories`. ADR-001 has `data/ → domain/`, stating that *"the direction of the dependency is the opposite of the direction of control"*. Under V3.4 a use case depends on a repository; under ADR-001 a use case depends on an interface its own layer declares, and the implementation depends inward.
+
+**ADR-001 governs, and V3.4's own stated goal is better served by it.** V3.4 §5 claims testability as the reason for the shape — *"Domain use-cases and Repositories are pure Dart with no widget tree dependency, so Volume 9's testing strategy can unit-test every business rule without ever booting the Flutter engine."* Dependency inversion is what delivers that: `core/errors/failure.dart` is pure Dart **by necessity** precisely because `domain` consumes it and may depend on nothing outward.
+
+**Cost of the divergence.** Two readable descriptions of the layer architecture are in circulation, and a reader who consults Volume 3 alone will build the wrong arrow. ADR-001 cites no Volume, so nothing in either document points at the other. This entry is that pointer.
+
+### A-039 — Chapter 3.5 §4 contradicts itself on cross-feature dependency
+
+| | |
+|---|---|
+| **Volume** | 3 — Technical Architecture, Chapter 3.5 §4 |
+| **Says** | Both of these, in the same section: *"recording depends on core and projects_tasks"*, *"upload depends on core and recording"*, *"onboarding and settings depend on core and auth"*, *"admin_shared depends on core, auth, and projects_tasks"* — **and** *"no two feature modules depend on each other directly without going through core"* |
+| **Should say** | The closing rule governs. No feature module imports another, at any layer, in either direction (ADR-022 R3). The listed inter-module dependencies are **conceptual ordering**, not permitted imports, and are expressed through `core/`, a shared abstraction, or state |
+| **Authority** | ADR-022 |
+| **Class** | Documentation update — **the chapter is internally inconsistent** |
+| **Status** | Open |
+
+The bullets name direct feature-to-feature dependencies; the sentence closing the same section forbids them. Both cannot hold.
+
+**Two of Volume 3's three statements agree with ADR-022 R3.** Chapter 3.4 §1 independently requires *"never sideways across features without going through a shared layer"*, and §3.5 §4's own closing sentence calls its rule *"the same inward-only dependency rule from Chapter 3.4, applied across features instead of across layers."* The bullet list is the outlier within Volume 3, not ADR-022.
+
+**The conceptual dependencies are real and the reasons given are good** — a recording session is tied to an assigned Task; a chunk exists only once recording produces it. What ADR-022 R3 forbids is expressing that relationship as an import, because one cross-feature import makes two features a single deployable unit while the folder tree still shows two. `folder-structure.md` R3 gives four ordered resolutions.
+
+**Note on `metadata`.** §3.5 §4 already models this correctly: *"metadata depends on core, and is read by recording… and by upload/admin_shared… but metadata itself depends on nothing outside core, keeping its integrity rules isolated from both."* That is the pattern the other modules should follow, stated by the Volume itself.
+
+**ADR-022 §6.2 predicted this exact case** — `recording` and `upload` were named as R3's test — without knowing §3.5 §4 existed on both sides of it.
+
+### A-040 — The `core` module's scope includes composition and routing
+
+| | |
+|---|---|
+| **Volume** | 3 — Technical Architecture, Chapter 3.5 §2; Chapter 3.6 §5 |
+| **Says** | The `core` module owns *"the app's Riverpod `ProviderScope` setup, `go_router` configuration"* and the five-layer base classes; §3.6 §5 adds *"`core/router/` for go_router config"* |
+| **Should say** | Composition — the `ProviderScope` and startup sequence — is `main.dart`'s (ADR-002). The route table is `app/router.dart`'s (ADR-004). `core/` is cross-cutting **infrastructure** only: network, database, storage, logging, errors, firebase, environment |
+| **Authority** | ADR-002, ADR-004 |
+| **Class** | **Architecture decision** |
+| **Status** | Open |
+
+Volume 3's `core` module is broader than this repository's `core/` directory: it covers what ADR-002 splits into `app/` and `core/`. ADR-002 rejected the merged form deliberately, recording that *"infrastructure (networking, storage, logging) and presentation helpers (widgets, formatters) have different dependency profiles and different reviewers"* — and the same argument separates configuration and routing from infrastructure.
+
+The separation is load-bearing rather than cosmetic: it is what makes ADR-022 §5.2's rule expressible at all. `core/` may read `app/config/` and must not import `app/theme/`, and `app/config/` must never import `core/`. Under a merged `core` module none of those directions exists, and `DioClient` could reach a colour token.
+
+**Volume 3 §3.6 §5's related instruction is correct and is implemented:** *"`core/` internally follows the same … shape where relevant (e.g. `core/theme/` … `core/router/`), rather than becoming an unstructured dumping ground."* The intent — `core/` is structured by concern, not a dumping ground — holds exactly; `core/` has seven concern-named modules. Only the placement of `theme/` and `router/` differs, and ADR-002 puts both in `app/`.
+
+### A-041 — The State layer's suffix: `Notifier` or `Controller`
+
+| | |
+|---|---|
+| **Volume** | 3 — Chapter 3.4 §2 (the State layer's `RecordingNotifier`); Chapter 3.6 §5 (files suffixed `_notifier.dart`) |
+| **Says** | Riverpod state classes are `Notifier`s, in files named `*_notifier.dart` |
+| **Should say** | ADR-023 §4.2 requires `<Subject>Controller`, with the provider `<subject>ControllerProvider` — so `RecordingController` in `recording_controller.dart` |
+| **Authority** | ADR-023 |
+| **Class** | Documentation update |
+| **Status** | Open — **registered with a caveat against ADR-023, see below** |
+
+ADR-023 governs, and no code is affected: no notifier or controller exists yet, because `lib/features/` is empty.
+
+**The caveat, recorded rather than glossed.** ADR-023 §4.2 rejected `Notifier` on the grounds that *"`RecordingNotifier`/`RecordingViewModel`/`RecordingBloc` … ADR-003 makes Riverpod the sole mechanism; borrowing another framework's vocabulary implies a second one is in play."*
+
+**That reason does not hold for `Notifier`.** `Notifier`, `AsyncNotifier` and `StreamNotifier` are Riverpod's own class names — the very API ADR-003 adopts. Under ADR-003, `Notifier` is *native* vocabulary, not foreign. The argument is sound for `ViewModel` (MVVM) and `Bloc` (flutter_bloc) and was over-applied to a third term that does not belong with them. Volume 3 uses `Notifier` consistently for precisely the right reason: it is what the framework calls the thing.
+
+**ADR-023 remains binding until superseded** — an accepted ADR is not edited to change its meaning. But the divergence from Volume 3 rests on a justification that does not survive scrutiny, and `Controller` also loses the information `Notifier` carries: which of `Notifier`, `AsyncNotifier` or `StreamNotifier` a class extends, which Volume 3 §3.9 §3 makes a per-feature decision.
+
+**Revisit before the first controller is written.** That is the last moment the choice is free; afterwards it is a rename across every feature. Resolving it means either a superseding ADR adopting `Notifier`, or ADR-023 §4.2's reasoning being restated on a ground that holds — a deliberate divergence from the framework's vocabulary is defensible, but it should be argued as one.
+
 ---
 
 ## Confirmed correct — no amendment
@@ -658,6 +738,12 @@ Recorded so they are not re-litigated.
 
 | Volume | Subject | Verdict |
 |---|---|---|
+| V3, Ch. 3.4 §1 | *"never sideways across features without going through a shared layer"* | **Correct**, and exactly ADR-022 R3. It is §3.5 §4's bullet list that conflicts, not this — see A-039. |
+| V3, Ch. 3.4 §5 | Domain and repositories are pure Dart, unit-testable without booting the Flutter engine | **Correct and implemented.** `core/errors/failure.dart` is pure Dart by necessity for this reason. The dependency inversion of ADR-001 is what delivers it (A-038). |
+| V3, Ch. 3.5 §3 | `metadata` as its own module rather than part of `recording` or `upload` | **Correct**, and justified in the chapter: BR-21–23 stay testable and auditable as a unit. |
+| V3, Ch. 3.6 §4 | Every test file at the identical path under `test/` as the file it tests under `lib/` | **Correct and implemented.** Also fixed by ADR-022 §6.1. |
+| V3, Ch. 3.6 §5 | Folders `snake_case`; files suffixed by role — `_screen.dart`, `_use_case.dart`, `_repository.dart`, `_service.dart` | **Correct** and consistent with ADR-023 §1.1 and §3. Only `_notifier.dart` diverges — see A-041. |
+| V3, Ch. 3.6 §5 | Generated files never hand-edited, committed per Volume 7 | **Correct and implemented.** Enforced by the CI `Generated code drift` job. |
 | V5, Ch. 5.14 §1 | S3 object key schema | **Authoritative and implemented.** Unchanged by any ADR in this cycle. |
 | V4, Ch. 4.10 §4 | Standard → Standard-IA → Glacier IR ladder | Correct. Adopted verbatim by ADR-012. |
 | V8, Ch. 8.4 | SSE-S3, upgradeable to SSE-KMS only on contractual trigger | Correct and implemented. Not a placeholder — do not "upgrade" without the trigger. |
