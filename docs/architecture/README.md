@@ -43,6 +43,7 @@ An ADR is not a design document, a specification, a tutorial or a task list.
 docs/
 └── architecture/
     ├── README.md                 # This guide. Governs the process.
+    ├── folder-structure.md       # The repository's folder and import rules.
     └── decisions/                # One file per decision.
         ├── ADR-001-<title>.md
         ├── ADR-002-<title>.md
@@ -50,6 +51,8 @@ docs/
 ```
 
 `README.md` describes the process. It never records a decision.
+
+`folder-structure.md` is the canonical folder architecture reference — root directory ownership, `lib/` responsibilities, feature layers, the import matrix, and the procedure for adding a feature. It specifies what ADR-022 decides; where the two disagree, the ADR governs.
 
 `volume-amendments.md` records corrections to the Volume 1–12 PDFs. Those are distributed as PDFs and cannot be edited here, so an ADR that supersedes a volume section registers the correction there. Where a volume and an accepted ADR disagree, the ADR governs.
 
@@ -207,7 +210,7 @@ forecloses, and what must now be maintained.
 
 ## Current State
 
-`decisions/` holds ADR-001 through ADR-021.
+`decisions/` holds ADR-001 through ADR-022.
 
 All are Accepted and therefore binding.
 
@@ -234,7 +237,10 @@ All are Accepted and therefore binding.
 | ADR-019 | Branching strategy |
 | ADR-020 | Commit convention |
 | ADR-021 | Static analysis configuration |
+| ADR-022 | Folder architecture and import rules |
 
 ADR-007 supersedes the networking assumptions of ADR-006 in part. ADR-006 remains Accepted and binding in every other respect.
+
+ADR-022 refines ADR-002 in one respect: `app/router.dart` is the single file in `app/` permitted to import from `features/`, because ADR-004 requires one route table and a route table must name its screens. ADR-002 remains Accepted and binding in every other respect.
 
 Decisions still to be recorded: logging infrastructure, the HTTP client boundary, and runtime provisioning of build-time secrets. The logging and networking layers are implemented but undocumented.

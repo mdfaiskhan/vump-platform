@@ -19,7 +19,9 @@ A production-grade platform for large-scale egocentric video data collection —
 └── LICENSE
 ```
 
-Each top-level directory has one job. `infrastructure/` holds declared AWS state and no application code; `mobile/` holds the Flutter app and no infrastructure; `docs/` holds decisions and never code.
+Each top-level directory is a deployment or governance boundary, not a grouping of convenience. `infrastructure/` holds declared AWS state and no application code; `backend/` holds code that runs and no AWS state; `mobile/` holds the Flutter app and no infrastructure; `docs/` holds decisions and never code.
+
+There is no `scripts/` or `assets/` directory. Both are reserved with a defined purpose and trigger — and a root `assets/` can never hold the app's runtime assets, since Flutter resolves `pubspec.yaml` asset paths relative to `mobile/`. See [`docs/architecture/folder-structure.md`](docs/architecture/folder-structure.md) for the full rules, the import matrix, and how to add a feature.
 
 ---
 
@@ -28,7 +30,8 @@ Each top-level directory has one job. `infrastructure/` holds declared AWS state
 | Path | Contents |
 |---|---|
 | [`docs/architecture/README.md`](docs/architecture/README.md) | **Start here.** How architectural decisions are recorded, changed and retired |
-| [`docs/architecture/decisions/`](docs/architecture/decisions/) | ADR-001 to ADR-018 — every binding decision |
+| [`docs/architecture/decisions/`](docs/architecture/decisions/) | ADR-001 to ADR-022 — every binding decision |
+| [`docs/architecture/folder-structure.md`](docs/architecture/folder-structure.md) | Folder architecture, import rules, and how to add a feature (ADR-022) |
 | [`docs/architecture/volume-amendments.md`](docs/architecture/volume-amendments.md) | Corrections to the source volumes, with the ADR that supersedes each |
 | [`docs/volumes/`](docs/volumes/) | Source specification volumes 1–12 (PDF) |
 | [`docs/git/`](docs/git/) | Branching strategy and commit conventions |
