@@ -577,6 +577,79 @@ A-025's figure of 122 is confirmed correct for hand-written code. It did not sta
 
 Resolving it means either enabling `public_member_api_docs` repository-wide — closing the 122 hand-written findings and deciding what to do about the 45 generated ones — or a new ADR that narrows the Constitution's §4 deliberately and says why.
 
+### A-035 — Failure modelling: one code-bearing type, not sealed per-feature unions
+
+| | |
+|---|---|
+| **Volume** | 3 — Technical Architecture, Chapter 3.9 §5 (Error Modeling); Volume 6 — Chapter 6.9 §1 |
+| **Says** | "Each feature that can fail defines its own sealed error type (a freezed union) rather than throwing a bare Exception", with the example `sealed class ChecklistFailure` / `InsufficientStorage { final int freeBytes; }` / `BatteryTooLow { final int percent; }`. V6.9 §1 refers to "the sealed failure types from Volume 3, Chapter 3.9, Section 5" by name |
+| **Should say** | Failures crossing out of infrastructure are represented by a single `final class Failure` carrying an `ErrorCode`, per ADR-025. Presentation pattern-matches on the code, not on a subtype. **The requirement §5 exists to serve is unchanged: every failure names a specific cause and fix, and a generic "Something went wrong" remains forbidden** |
+| **Authority** | ADR-025 |
+| **Class** | **Architecture decision** |
+| **Status** | Open — **one capability is genuinely lost, see below** |
+
+The implementation was built in Mission 0.10 and `failure.dart` states the reasoning: *"A hierarchy of failure subclasses would push infrastructure concerns back into the shape of the type."* A per-feature sealed union also has to be constructed somewhere, and the only place that knows the failure is the infrastructure boundary — which would then need to know about every feature's union.
+
+**§5's purpose is met.** 28 distinct `ErrorCode` cases give presentation more to pattern-match on than a four-case union does, and the compiler still forces exhaustiveness over a Dart enum switch. "Never a single generic string" holds.
+
+**One capability is lost, and it should be recorded rather than glossed.** The volume's model carries **typed payload data** — `InsufficientStorage { freeBytes }`, `BatteryTooLow { percent }` — and `Failure` has only a code and an optional `String?`. So copy of the form *"You need 2.3 GB free; you have 400 MB"* can currently only be produced by interpolating numbers into a message string, which is **not localisable** and defeats §21's rule that display text is resolved from the code.
+
+This is not hypothetical: Volume 3's own example is the checklist, and Volume 2 §2.9's copy table is where the numbers would appear.
+
+**Two options, both needing their own ADR:**
+
+1. **Give `Failure` a typed payload.** A sealed payload type per code group, or a small generic parameter. Keeps one failure type and one conversion point; adds shape to the thing deliberately kept shapeless.
+2. **Allow feature-level sealed unions in `domain/` alongside the core `Failure`.** Closer to §5 as written. Costs a second failure representation, and `domain/` may then need a mapper from `Failure` to its own union — which is the coupling ADR-025 avoided.
+
+Deliberately unresolved while `lib/features/` is empty. **The cost of deferring is not zero:** it grows with each feature written against the current model, and the first feature needing a number in its copy will force the decision.
+
+### A-036 — Global error handlers and the error reporting service do not exist
+
+| | |
+|---|---|
+| **Volume** | 6 — Mobile App Architecture, Chapter 6.9 §2 |
+| **Says** | "`FlutterError.onError` — catches framework/widget-layer errors… `PlatformDispatcher.instance.onError` — catches errors outside the Flutter framework's own zone… Both handlers funnel into one `ErrorReportingService`… so there is exactly one place that decides what happens next, not two independent logging paths" |
+| **Should say** | Unchanged — the volume is correct |
+| **Authority** | Volume 6, Chapter 6.9 §2 |
+| **Class** | **Implementation update** |
+| **Status** | **Open — implementation gap, not a documentation error** |
+
+Verified 2026-08-11: `main.dart` installs neither handler, and no `ErrorReportingService` exists anywhere in `lib/`.
+
+The **modelled** error path is complete and well covered — five exception types, 28 codes, five conversion boundaries, and `Failure` as the only thing crossing outward. The **unmodelled** path has nothing at all. An unanticipated platform exception on a Collector's device is handled by Flutter's default handler, printed to a console nobody is attached to, and reported nowhere.
+
+Volume 6 §6.9 §1 is explicit that these are two different jobs: modelled failures *"never reach a global handler at all"*, and the global handlers exist precisely for *"anything a layer didn't anticipate"*. Having built the first and not the second leaves the class of error that is hardest to reproduce entirely invisible.
+
+**Sequenced after A-037.** The handlers must funnel into one service, and what that service does depends on whether a crash reporter is adopted. Installing handlers that only log would satisfy the letter of §2 and none of its purpose — the point is field visibility, and `AppLogger` output does not leave the device.
+
+### A-037 — Crash reporting is not adopted, and the volumes' ADR numbering collides with this register
+
+| | |
+|---|---|
+| **Volume** | 6 — Chapter 6.9 §3; also Volume 3, Chapter 3.9 §1 |
+| **Says** | V6.9 §3 presents "**ADR-010** — Crash Reporting / Diagnostics Tool", Status Accepted, Decision: **Firebase Crashlytics**, chosen because Firebase is already in the stack for Auth and FCM. V3.9 §1 refers to "**ADR-001** (Chapter 3.2) chose Riverpod" |
+| **Should say** | Two separate corrections. **(a)** Crash reporting is not implemented: `firebase_crashlytics` is not a dependency. **(b)** The volumes' ADRs are numbered within Volume 3 Chapter 3.2 and that sequence is **independent of `docs/architecture/decisions/`**. A citation must name its register |
+| **Authority** | ADR-010, ADR-003, ADR-025 |
+| **Class** | **Implementation update** and **Documentation update** |
+| **Status** | Open |
+
+**(a) The tool.** Verified 2026-08-11: `pubspec.yaml` declares `firebase_core` and no Crashlytics. The volume's reasoning is sound and still holds — Firebase is already in the stack, so this adds no vendor relationship — and this repository's ADR-010 anticipates it, listing Crashlytics among the products that *"resolve the already-initialised default app through the SDK's own registry, so adding a product means adding a dependency and a provider for it."* Adopting it is therefore cheap and unblocks A-036.
+
+Volume 6 §6.9 §3 also fixes a use that is easy to miss: Crashlytics' **non-fatal** logging is for *"the modeled-but-still-noteworthy cases (e.g. a chunk hitting its final retry attempt, Volume 5, Chapter 5.13)"* — so field patterns are visible even when nothing crashed. That is a requirement on the retry work, not only on crash reporting.
+
+**(b) The numbering collision, which is the more insidious half.** Two concrete instances:
+
+| Citation in a volume | Volume means | This register's ADR of that number |
+|---|---|---|
+| "ADR-010" (V6.9 §3) | Crash reporting — Firebase Crashlytics | **Firebase Platform Integration** |
+| "ADR-001" (V3.9 §1) | Riverpod for state management | **Adopt Clean Architecture** (Riverpod is **ADR-003** here) |
+
+A reader who follows "ADR-010" from Volume 6 into `docs/architecture/decisions/` arrives at a different decision and has no signal that anything is wrong — both numbers exist, both are Accepted, and the subjects are adjacent enough to seem plausible.
+
+**Correction:** `docs/architecture/decisions/` is the authoritative register for this repository, and its numbering is not the volumes'. A citation of a volume's internal ADR must say so — "Volume 3 Chapter 3.2's ADR-010", never a bare "ADR-010". The volumes' Chapter 3.2 ADRs are historical proposals; where one has been re-decided here, this register governs and the numbers are unrelated.
+
+**No renumbering is proposed.** ADR numbers in this register are permanent (`docs/architecture/README.md`), and the volumes are PDFs that cannot be edited. Naming the register at the point of citation is the only fix available, and it is sufficient.
+
 ---
 
 ## Confirmed correct — no amendment

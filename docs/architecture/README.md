@@ -43,6 +43,7 @@ An ADR is not a design document, a specification, a tutorial or a task list.
 docs/
 └── architecture/
     ├── README.md                 # This guide. Governs the process.
+    ├── error-handling.md         # The error model and its boundary contract.
     ├── folder-structure.md       # The repository's folder and import rules.
     ├── naming-conventions.md     # The canonical naming standard.
     └── decisions/                # One file per decision.
@@ -58,6 +59,8 @@ docs/
 How documents themselves are written — the hierarchy, what belongs in each type, markdown conventions, terminology, RFC 2119 usage and the review checklist — is fixed by ADR-024 and specified in [`../development/documentation-standards.md`](../development/documentation-standards.md). Anyone adding or editing a document in this repository reads that first.
 
 `naming-conventions.md` is the canonical naming standard — the closed suffix vocabulary, every naming category from folders to JSON fields, and an audited register of known deviations. It specifies what ADR-023 decides, and cites rather than restates the conventions already fixed by `CLAUDE.md`, ADR-021 and the individual domain ADRs.
+
+`error-handling.md` is the canonical error handling standard — the two error representations, the exception hierarchy, the `ErrorCode` taxonomy, logging and redaction, propagation by layer, and an audited register of known gaps. It specifies what ADR-025 decides.
 
 `volume-amendments.md` records corrections to the Volume 1–12 PDFs. Those are distributed as PDFs and cannot be edited here, so an ADR that supersedes a volume section registers the correction there. Where a volume and an accepted ADR disagree, the ADR governs.
 
@@ -215,7 +218,7 @@ forecloses, and what must now be maintained.
 
 ## Current State
 
-`decisions/` holds ADR-001 through ADR-024.
+`decisions/` holds ADR-001 through ADR-025.
 
 All are Accepted and therefore binding.
 
@@ -245,6 +248,7 @@ All are Accepted and therefore binding.
 | ADR-022 | Folder architecture and import rules |
 | ADR-023 | Naming conventions |
 | ADR-024 | Documentation standards |
+| ADR-025 | Error handling model |
 
 ADR-007 supersedes the networking assumptions of ADR-006 in part. ADR-006 remains Accepted and binding in every other respect.
 

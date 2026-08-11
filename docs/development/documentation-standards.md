@@ -4,7 +4,9 @@ The canonical documentation standard for the Vump Technologies repository.
 
 Governed by **ADR-024**. Where this document and the ADR disagree, the ADR governs.
 
-Every rule below was derived from an audit of all 38 tracked markdown files, not chosen from preference. Where the repository was already consistent, the existing practice is the rule. Where it was not, the deviation is recorded in §30 rather than resolved by a rewrite.
+Every rule below was derived from an audit of every tracked markdown file, not chosen from preference. Where the repository was already consistent, the existing practice is the rule. Where it was not, the deviation is recorded in §30 rather than resolved by a rewrite.
+
+Counts in this document are re-verified when it is edited, per §30. They were last verified at **40 markdown files and 25 ADRs**.
 
 **Nothing already governed is restated.** Cited, not duplicated:
 
@@ -92,7 +94,7 @@ A README is a **map, not a manual**. It answers "what is this and where do I go 
 
 Fixed by `docs/architecture/README.md`: one decision, the context that forced it, the alternatives rejected and why, and the consequences accepted. Four required sections — `Context`, `Decision`, `Alternatives Considered`, `Consequences` — plus a `Status`/`Date` block.
 
-Two sections are not in that template but have been used by every ADR since ADR-001 and are now equally expected: **`Related Missions`** and **`Implementation Status`**. All 23 ADRs carry `Related Missions`; 22 carry `Implementation Status`.
+Two sections are not in that template but have been used by every ADR since ADR-001 and are now equally expected: **`Related Missions`** and **`Implementation Status`**. All 25 ADRs carry `Related Missions`; 24 carry `Implementation Status` — ADR-002 is the sole exception, recorded in §30.
 
 **Belongs:** the decision, stated plainly in the active voice. The forces that made a decision necessary. Every alternative evaluated, each with the specific reason it was rejected — including the ones that were close calls. What this costs, what it makes harder, and what must now be maintained.
 
@@ -126,7 +128,7 @@ One exists — `docs/architecture/aws-sdk-integration.md` — and it declares it
 
 ## Markdown conventions
 
-Every rule in this section was measured across the 38 tracked markdown files. Where the corpus was already unanimous, the count is given.
+Every rule in this section was measured across every tracked markdown file. Where the corpus was already unanimous, the count is given.
 
 ### 8. General markdown
 
@@ -148,7 +150,7 @@ Every rule in this section was measured across the 38 tracked markdown files. Wh
 
 **`---` separates top-level sections in prose documents. ADRs never use it.**
 
-Verified, and unanimous: **all 23 ADRs contain zero horizontal rules**, while every prose document uses between 3 and 11. The ADR template's headings carry the structure by themselves; a rule between `## Decision` and `## Alternatives Considered` adds a line and no information.
+Verified, and unanimous: **all 25 ADRs contain zero horizontal rules**, while every prose document uses between 3 and 11. The ADR template's headings carry the structure by themselves; a rule between `## Decision` and `## Alternatives Considered` adds a line and no information.
 
 Use one `---` between top-level (`##`) sections of a reference, guide or runbook. Never inside a section, never before the first heading, never two in a row.
 
@@ -241,7 +243,14 @@ The repository already does this correctly. It is recorded because it is invisib
 ### 17. Internal links
 
 - **Relative paths**, always. Never a `github.com` URL to a file in this repository — it breaks on a fork, in a clone, and in any editor preview.
-- **Link text is the document's name or its path**, not "here" or "this document". `[ADR-011](…)` and `` [`docs/architecture/README.md`](…) `` are both correct forms; "click [here]" is not.
+- **Link text is the document's name or its path**, not "here" or "this document". Both of these are correct forms — the title, and the path in backticks:
+
+  ```markdown
+  [ADR-011](../architecture/decisions/ADR-011-s3-storage-architecture.md)
+  [`docs/architecture/README.md`](../architecture/README.md)
+  ```
+
+  "Click here" is not. Note that the example above is a fenced block rather than inline: a link-shaped placeholder in prose is indistinguishable from a real link to the checker in §30, and a standard should not break the tool it recommends.
 - **Path in backticks when it is a path**, plain when it is a title.
 - **Every internal link resolves.** Verified: **zero broken internal links across all 38 files.** This is the single easiest documentation invariant to hold and the easiest to lose — a moved file breaks silently, because nothing fails.
 
@@ -428,7 +437,7 @@ Deciding which of the two you are looking at is a governance judgement, not a pr
 - **Counts and audit results are re-verified, not copied.** Every number in this document and in ADR-024 was produced by a command against the repository. A stale count is worse than no count because it is quoted.
 - **The mechanical rules here are checkable and should become a CI job**: exactly one H1, no skipped heading levels, no fence without a language, no broken internal link, no trailing whitespace, file ends with a newline. All six are a short script over `git ls-files '*.md'`. Not implemented — see the risks in ADR-024.
 
-**Known deviations.** Audited across all 38 tracked markdown files. Recorded rather than fixed: this mission does not rewrite existing documents, and modifying accepted ADRs is forbidden.
+**Known deviations.** Audited across every tracked markdown file. Recorded rather than fixed by the mission that found them: existing documents are not rewritten wholesale, and accepted ADRs are not modified.
 
 | Deviation | Detail | Disposition |
 |---|---|---|
