@@ -44,6 +44,7 @@ docs/
 └── architecture/
     ├── README.md                 # This guide. Governs the process.
     ├── folder-structure.md       # The repository's folder and import rules.
+    ├── naming-conventions.md     # The canonical naming standard.
     └── decisions/                # One file per decision.
         ├── ADR-001-<title>.md
         ├── ADR-002-<title>.md
@@ -53,6 +54,8 @@ docs/
 `README.md` describes the process. It never records a decision.
 
 `folder-structure.md` is the canonical folder architecture reference — root directory ownership, `lib/` responsibilities, feature layers, the import matrix, and the procedure for adding a feature. It specifies what ADR-022 decides; where the two disagree, the ADR governs.
+
+`naming-conventions.md` is the canonical naming standard — the closed suffix vocabulary, every naming category from folders to JSON fields, and an audited register of known deviations. It specifies what ADR-023 decides, and cites rather than restates the conventions already fixed by `CLAUDE.md`, ADR-021 and the individual domain ADRs.
 
 `volume-amendments.md` records corrections to the Volume 1–12 PDFs. Those are distributed as PDFs and cannot be edited here, so an ADR that supersedes a volume section registers the correction there. Where a volume and an accepted ADR disagree, the ADR governs.
 
@@ -210,7 +213,7 @@ forecloses, and what must now be maintained.
 
 ## Current State
 
-`decisions/` holds ADR-001 through ADR-022.
+`decisions/` holds ADR-001 through ADR-023.
 
 All are Accepted and therefore binding.
 
@@ -238,6 +241,7 @@ All are Accepted and therefore binding.
 | ADR-020 | Commit convention |
 | ADR-021 | Static analysis configuration |
 | ADR-022 | Folder architecture and import rules |
+| ADR-023 | Naming conventions |
 
 ADR-007 supersedes the networking assumptions of ADR-006 in part. ADR-006 remains Accepted and binding in every other respect.
 

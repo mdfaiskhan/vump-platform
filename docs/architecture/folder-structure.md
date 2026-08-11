@@ -194,7 +194,7 @@ Enforced by the `Architecture boundaries` CI job. A violation is a defect, not a
 
 One directory per capability, each owning a complete vertical slice per ADR-001. **Currently empty** — no feature has been built.
 
-The name is the capability as a user would describe it — `authentication`, `recording`, `upload`, `tasks`, `settings` — in `snake_case`. Not a layer, not a technology, not a screen.
+The name is the capability as a user would describe it — `authentication`, `recording`, `upload`, `tasks`, `settings` — in `snake_case`. Not a layer, not a technology, not a screen. The naming of everything inside it is fixed by ADR-023 (`naming-conventions.md`).
 
 ### 2.5 `shared/`
 
@@ -356,6 +356,8 @@ A feature directory holds everything that feature owns, and deleting it leaves t
 ### R7 — One public class per file, `snake_case` filenames
 
 **Prevents:** a file whose name does not predict its contents, and a symbol that cannot be found from its name. Enforced by `file_names` and checked by `flutter analyze` (ADR-021). `CLAUDE.md` states both as coding standards.
+
+The names themselves — the suffix vocabulary that makes an import line tell you which layer it crosses — are fixed by ADR-023 and specified in `naming-conventions.md`.
 
 ### R8 — No layer directories at the root of `features/`
 
