@@ -30,22 +30,27 @@ There is no `scripts/` or `assets/` directory. Both are reserved with a defined 
 | Path | Contents |
 |---|---|
 | [`docs/architecture/README.md`](docs/architecture/README.md) | **Start here.** How architectural decisions are recorded, changed and retired |
-| [`docs/architecture/decisions/`](docs/architecture/decisions/) | ADR-001 to ADR-031 — every binding decision |
-| [`docs/development/performance-standards.md`](docs/development/performance-standards.md) | The ten performance targets, what measures each, and what is unmeasured (ADR-031) |
-| [`docs/development/dependency-management-standards.md`](docs/development/dependency-management-standards.md) | Pinning tiers, adding a package, review cadence, current staleness (ADR-030) |
-| [`docs/development/testing-standards.md`](docs/development/testing-standards.md) | The testing pyramid, fakes, determinism, coverage, and what is absent (ADR-029) |
-| [`docs/development/review-checklist.md`](docs/development/review-checklist.md) | How every change is reviewed, and what CI already gates (ADR-028) |
-| [`docs/architecture/logging-standards.md`](docs/architecture/logging-standards.md) | Log levels, sinks, redaction, and what must never be logged (ADR-027) |
-| [`docs/architecture/architecture-guardrails.md`](docs/architecture/architecture-guardrails.md) | Every architectural invariant, its authority, and what enforces it (ADR-026) |
-| [`docs/architecture/folder-structure.md`](docs/architecture/folder-structure.md) | Folder architecture, import rules, and how to add a feature (ADR-022) |
-| [`docs/architecture/error-handling.md`](docs/architecture/error-handling.md) | The error model — exceptions, failures, codes, logging, propagation (ADR-025) |
-| [`docs/architecture/naming-conventions.md`](docs/architecture/naming-conventions.md) | The naming standard — suffix vocabulary, every category, known deviations (ADR-023) |
-| [`docs/architecture/volume-amendments.md`](docs/architecture/volume-amendments.md) | Corrections to the source volumes, with the ADR that supersedes each |
-| [`docs/volumes/`](docs/volumes/) | Source specification volumes 1–12 (PDF) |
-| [`docs/git/`](docs/git/) | Branching strategy and commit conventions |
-| [`docs/development/documentation-standards.md`](docs/development/documentation-standards.md) | How every document here is written (ADR-024) — read before adding one |
-| [`docs/development/`](docs/development/) | Secrets management |
-| [`docs/operations/`](docs/operations/) | Disaster recovery |
+| [`docs/architecture/decisions/`](docs/architecture/decisions/) | ADR-001 to ADR-032 — every binding decision |
+| [`docs/architecture/volume-amendments.md`](docs/architecture/volume-amendments.md) | A-001 to A-050 — corrections to the source volumes, with the ADR that supersedes each |
+| [`docs/volumes/`](docs/volumes/) | Source specification volumes 0–12 (PDF) |
+| **Architecture references** | |
+| [`folder-structure.md`](docs/architecture/folder-structure.md) | Folder architecture, import rules, and how to add a feature (ADR-022) |
+| [`naming-conventions.md`](docs/architecture/naming-conventions.md) | The naming standard — suffix vocabulary, every category, known deviations (ADR-023) |
+| [`error-handling.md`](docs/architecture/error-handling.md) | The error model — exceptions, failures, codes, propagation (ADR-025) |
+| [`architecture-guardrails.md`](docs/architecture/architecture-guardrails.md) | Every architectural invariant, its authority, and what enforces it (ADR-026) |
+| [`logging-standards.md`](docs/architecture/logging-standards.md) | Log levels, sinks, redaction, and what must never be logged (ADR-027) |
+| [`aws-sdk-integration.md`](docs/architecture/aws-sdk-integration.md) | How the backend reaches AWS, and why the app never holds a credential |
+| **Practice standards** | |
+| [`documentation-standards.md`](docs/development/documentation-standards.md) | How every document here is written (ADR-024) — read before adding one |
+| [`review-checklist.md`](docs/development/review-checklist.md) | How every change is reviewed, and what CI already gates (ADR-028) |
+| [`testing-standards.md`](docs/development/testing-standards.md) | The testing pyramid, fakes, determinism, coverage, and what is absent (ADR-029) |
+| [`dependency-management-standards.md`](docs/development/dependency-management-standards.md) | Pinning tiers, adding a package, review cadence, current staleness (ADR-030) |
+| [`performance-standards.md`](docs/development/performance-standards.md) | The ten performance targets, what measures each, and what is unmeasured (ADR-031) |
+| [`mission-review.md`](docs/development/mission-review.md) | Audit of missions 0.19.1–0.19.11 — integrity, inconsistencies, missing governance (ADR-032) |
+| **Operational** | |
+| [`docs/development/secrets-management.md`](docs/development/secrets-management.md) | Where every value lives, and what to do when one leaks |
+| [`docs/git/`](docs/git/) | Branching strategy (ADR-019) and commit conventions (ADR-020) |
+| [`docs/operations/disaster-recovery.md`](docs/operations/disaster-recovery.md) | What can be recovered, how long it takes, and what cannot |
 
 **Architecture documentation is the single source of truth.** Where code and an accepted ADR disagree, the ADR is correct and the code is a defect. Where a source volume and an accepted ADR disagree, the ADR governs and the amendment register records why.
 

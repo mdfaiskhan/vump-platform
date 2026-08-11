@@ -39,16 +39,18 @@ An ADR is not a design document, a specification, a tutorial or a task list.
 
 ## Folder Structure
 
-```
+```text
 docs/
 └── architecture/
-    ├── README.md                 # This guide. Governs the process.
+    ├── README.md                  # This guide. Governs the process.
     ├── architecture-guardrails.md # Every invariant, its authority, its enforcement.
-    ├── error-handling.md         # The error model and its boundary contract.
-    ├── folder-structure.md       # The repository's folder and import rules.
-    ├── logging-standards.md      # Levels, sinks, redaction, what never gets logged.
-    ├── naming-conventions.md     # The canonical naming standard.
-    └── decisions/                # One file per decision.
+    ├── aws-sdk-integration.md     # Implementation spec: how the app reaches AWS.
+    ├── error-handling.md          # The error model and its boundary contract.
+    ├── folder-structure.md        # The repository's folder and import rules.
+    ├── logging-standards.md       # Levels, sinks, redaction, what never gets logged.
+    ├── naming-conventions.md      # The canonical naming standard.
+    ├── volume-amendments.md       # Corrections to the source volumes.
+    └── decisions/                 # One file per decision.
         ├── ADR-001-<title>.md
         ├── ADR-002-<title>.md
         └── ...
@@ -56,27 +58,32 @@ docs/
 
 `README.md` describes the process. It never records a decision.
 
-`folder-structure.md` is the canonical folder architecture reference — root directory ownership, `lib/` responsibilities, feature layers, the import matrix, and the procedure for adding a feature. It specifies what ADR-022 decides; where the two disagree, the ADR governs.
+Each reference document below specifies what an ADR decides; where the two disagree, the ADR governs. **Listed in ADR order.**
 
-How documents themselves are written — the hierarchy, what belongs in each type, markdown conventions, terminology and RFC 2119 usage — is fixed by ADR-024 and specified in [`../development/documentation-standards.md`](../development/documentation-standards.md). Anyone adding or editing a document in this repository reads that first.
+`folder-structure.md` (**ADR-022**) — root directory ownership, `lib/` responsibilities, feature layers, the import matrix, and the procedure for adding a feature.
 
-How any change is reviewed — which criteria CI gates, which the analyzer gates, and which remain for a human — is fixed by ADR-028 and specified in [`../development/review-checklist.md`](../development/review-checklist.md). It implements Volume 3 Chapter 3.7 §9, which ADR-019 makes a merge condition.
+`naming-conventions.md` (**ADR-023**) — the closed suffix vocabulary, every naming category from folders to JSON fields, and an audited register of known deviations. Cites rather than restates the conventions already fixed by `CLAUDE.md`, ADR-021 and the domain ADRs.
 
-How anything is tested — the pyramid, substitution with fakes, determinism, error-path coverage, and what Volume 9 requires that the repository does not yet have — is fixed by ADR-029 and specified in [`../development/testing-standards.md`](../development/testing-standards.md).
+`error-handling.md` (**ADR-025**) — the two error representations, the exception hierarchy, the `ErrorCode` taxonomy, redaction, propagation by layer, and an audited register of known gaps.
 
-How a package enters the project and is kept under control — pinning tiers, the admission checklist, review cadence, and the toolchain constraint one unmaintained generator imposes — is fixed by ADR-030 and specified in [`../development/dependency-management-standards.md`](../development/dependency-management-standards.md).
+`architecture-guardrails.md` (**ADR-026**) — the invariant register: every architectural invariant in force, the ADR or Volume it derives from, whether CI, the analyzer or a reviewer enforces it, and the command that verifies it. It duplicates no rule.
 
-What "fast enough" means — the ten numeric targets from Volumes 1, 4, 5 and 9, what measures each, and why the capture and UI frame rates are deliberately different numbers — is fixed by ADR-031 and specified in [`../development/performance-standards.md`](../development/performance-standards.md).
+`logging-standards.md` (**ADR-027**) — the five levels and the environment that selects them, the sinks that exist and those that do not, where redaction happens and why `AppLogger` cannot do it, and the boundary between diagnostic and audit logging.
 
-`naming-conventions.md` is the canonical naming standard — the closed suffix vocabulary, every naming category from folders to JSON fields, and an audited register of known deviations. It specifies what ADR-023 decides, and cites rather than restates the conventions already fixed by `CLAUDE.md`, ADR-021 and the individual domain ADRs.
-
-`architecture-guardrails.md` is the invariant register: every architectural invariant in force, with the ADR or Volume it derives from, whether CI, the analyzer or a reviewer enforces it, and the command that verifies it. It duplicates no rule — each invariant is one line plus a citation. It specifies what ADR-026 decides.
-
-`logging-standards.md` is the canonical logging standard — the five levels and the environment that selects them, the sinks that exist and the ones that do not, where redaction happens and why `AppLogger` cannot do it, and the boundary between diagnostic and audit logging. It specifies what ADR-027 decides.
-
-`error-handling.md` is the canonical error handling standard — the two error representations, the exception hierarchy, the `ErrorCode` taxonomy, logging and redaction, propagation by layer, and an audited register of known gaps. It specifies what ADR-025 decides.
+`aws-sdk-integration.md` — an implementation specification rather than a reference standard, and the only document here with no governing ADR. It describes how the backend reaches AWS and why the mobile app never holds a credential. Where it and an accepted ADR disagree, the ADR governs.
 
 `volume-amendments.md` records corrections to the Volume 1–12 PDFs. Those are distributed as PDFs and cannot be edited here, so an ADR that supersedes a volume section registers the correction there. Where a volume and an accepted ADR disagree, the ADR governs.
+
+Six further standards live in [`../development/`](../development/) because their reader is a contributor rather than an architect (ADR-024 §20), also in ADR order:
+
+| Document | Fixes |
+|---|---|
+| [`documentation-standards.md`](../development/documentation-standards.md) (**ADR-024**) | How every document here is written — hierarchy, markdown conventions, terminology, RFC 2119 usage. Read before adding one |
+| [`review-checklist.md`](../development/review-checklist.md) (**ADR-028**) | How any change is reviewed — which criteria CI gates, which the analyzer gates, which remain for a human. Implements Volume 3 Chapter 3.7 §9, which ADR-019 makes a merge condition |
+| [`testing-standards.md`](../development/testing-standards.md) (**ADR-029**) | The pyramid, substitution with fakes, determinism, error-path coverage, and what Volume 9 requires that the repository does not have |
+| [`dependency-management-standards.md`](../development/dependency-management-standards.md) (**ADR-030**) | Pinning tiers, the admission checklist, review cadence, and the toolchain constraint one unmaintained generator imposes |
+| [`performance-standards.md`](../development/performance-standards.md) (**ADR-031**) | The ten numeric targets from Volumes 1, 4, 5 and 9, what measures each, and why the capture and UI frame rates are deliberately different |
+| [`mission-review.md`](../development/mission-review.md) (**ADR-032**) | The audit of missions 0.19.1–0.19.11: structural integrity, inconsistencies found, missing governance, and next actions |
 
 `decisions/` holds the decisions themselves. It is a flat directory — no subfolders, no grouping by domain. Ordering is chronological by number, not thematic.
 
@@ -232,7 +239,7 @@ forecloses, and what must now be maintained.
 
 ## Current State
 
-`decisions/` holds ADR-001 through ADR-031.
+`decisions/` holds ADR-001 through ADR-032.
 
 All are Accepted and therefore binding.
 
@@ -269,8 +276,11 @@ All are Accepted and therefore binding.
 | ADR-029 | Testing standards |
 | ADR-030 | Dependency management |
 | ADR-031 | Performance standards |
+| ADR-032 | Mission review and documentation maintenance rules |
 
 ADR-007 supersedes the networking assumptions of ADR-006 in part. ADR-006 remains Accepted and binding in every other respect.
+
+ADR-032 refines ADR-024 in three respects — counts are measured after staging, templates are exempt from the precedence rule, and a terminology check must exclude backticked and quoted spans. ADR-024 remains Accepted and binding in every other respect.
 
 ADR-022 refines ADR-002 in one respect: `app/router.dart` is the single file in `app/` permitted to import from `features/`, because ADR-004 requires one route table and a route table must name its screens. ADR-002 remains Accepted and binding in every other respect.
 
