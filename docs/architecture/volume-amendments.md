@@ -801,6 +801,57 @@ Verified 2026-08-11. Three findings, compounding:
 
 **§5 — retention is not a new number.** *"Log retention (90 days) already matches Volume 8, Chapter 8.7 §1's table."* It describes a CloudWatch log-group policy on the backend, so it is out of scope for the mobile layer and creates no mobile obligation.
 
+### A-045 — The injectable-clock rule is cited to a chapter that does not contain it
+
+| | |
+|---|---|
+| **Volume** | 9 — Quality Assurance, Chapter 9.6 §2, citing Volume 3, Chapter 3.7 |
+| **Says** | *"A fake, injectable clock (never `DateTime.now()` called directly inside a use-case) is what makes a 10-minute business rule testable in milliseconds rather than requiring an actual 10-minute test run — this pattern is itself a Chapter 3.7 coding-standard requirement, not just a testing convenience."* |
+| **Should say** | The requirement stands, but **Volume 3 Chapter 3.7 does not contain it.** Either §3.7 gains a section fixing time injection as a coding standard, or §9.6 §2 drops the cross-reference and owns the rule as a testing requirement |
+| **Authority** | Volume 9, Chapter 9.6 §2 for the rule; ADR-029 records where it is enforceable |
+| **Class** | Documentation update |
+| **Status** | Open |
+
+Verified 2026-08-11. Volume 3 Chapter 3.7 has nine sections — Static Analysis Configuration, Naming Conventions, Traceability Comments, Documentation Comments, Logging, Immutability & Null Safety, Widget & State Conventions, Code Review Checklist — and **none mentions a clock, `DateTime.now()`, time injection or determinism.** A full-text search of Volume 3 finds no clock rule in any chapter.
+
+**The mis-citation is load-bearing, which is why it is registered rather than treated as a slip.** Calling it *"a Chapter 3.7 coding-standard requirement"* would make it binding on all production code, not merely on code that happens to be tested — a much stronger claim, and one that would be enforced by the §3.7 §9 review checklist. As things stand, nothing binding requires it: no accepted ADR and no Volume section carries the rule, so it rests on ADR-029's testing standard alone.
+
+**Audit finding.** `DateTime.now()` is called directly in three files today — `LoggingInterceptor` (request elapsed time), `DatabaseService` and `FirebaseInitializer` (operation duration). **None is a use case**, so none violates §9.6 §2 as written, and all three produce a duration for a log line rather than a decision. No clock abstraction exists.
+
+**The cost is narrow now and grows.** Those durations cannot be asserted, which is part of why `LogFormatter` and the network interceptors have no tests. It stops being cosmetic when Volume 9 §9.4's *metadata generation < 500ms* target — which §9.4 §1 says is measured by an *"instrumented timestamp diff"* — depends on exactly this kind of value being both produced and verifiable.
+
+### A-046 — Coverage as measured cannot express Chapter 9.5 §2's targets
+
+| | |
+|---|---|
+| **Volume** | 9 — Quality Assurance, Chapter 9.5 §2 |
+| **Says** | Coverage targets per layer: *"Domain layer (use-cases): 90%+ line coverage… Data layer (repositories): 80%+, focused on error-path coverage… Presentation layer (widgets): golden tests for every Design System component rather than a blanket coverage percentage"* |
+| **Should say** | Unchanged — the Volume is correct, and these are the targets |
+| **Authority** | Volume 9, Chapter 9.5 §2 |
+| **Class** | **Implementation update** |
+| **Status** | **Open — measurement gap, not a documentation error** |
+
+The targets are per-layer and error-path-weighted. **What CI measures is a single repository-wide line percentage**, computed in the `Test` job as `grep -c '^DA:.*,[1-9]'` over `grep -c '^DA:'`. Two consequences:
+
+**No layer breakdown exists**, so neither the 90% nor the 80% target is computable from what CI reports. The presentation target is not a percentage at all, so it cannot be expressed this way even in principle — golden tests are the measure there (A-027 for the missing tool).
+
+**The metric is blind to files no test imports.** `lcov.info` lists only files loaded during the run, so a file with no test does not appear as 0% — it does not appear. Measured against the committed `coverage/lcov.info` on 2026-08-11:
+
+| | |
+|---|---|
+| Reported by CI | **146 / 224 lines = 65%** |
+| Files that figure covers | **16** |
+| Hand-written source files in `lib/` | **55** |
+| **Files never loaded by any test** | **39** |
+
+So the reported figure is computed over **29% of the source files**. It is not wrong; it answers a narrower question than it appears to.
+
+**Modules with no test contact at all:** `app/theme` (8 files), `core/database` (7), `core/errors` (6), `core/network` (6), `app/config` (4), `core/storage` (4), `core/firebase` (2), `core/logging` (1), and `main.dart`. Four of those — `database`, `errors`, `network`, `storage` — are every module that converts a third-party error into the taxonomy ADR-025 governs.
+
+**Why the gate is off, and where that reasoning stops.** The CI job states it: *"No threshold is enforced yet, deliberately: `lib/features/` is empty, so `domain/` and `data/` do not exist and any gate would be vacuous."* That is sound for the **layer** targets. It does not extend to the six `core/` modules above, which exist, ship, and are untested.
+
+**A gate on the current metric would be actively harmful**, which is the sharpest point in this entry: because the denominator counts only imported files, the percentage *rises* as fewer files are imported. Gating on it would reward not writing tests. Closing this needs per-layer computation and a denominator that includes every source file, not a threshold on what is reported today.
+
 ---
 
 ## Confirmed correct — no amendment
@@ -817,6 +868,10 @@ Recorded so they are not re-litigated.
 | V3, Ch. 3.6 §5 | Generated files never hand-edited, committed per Volume 7 | **Correct and implemented.** Enforced by the CI `Generated code drift` job. |
 | V3, Ch. 3.7 §6 | `print()` banned; all diagnostic output through a single project-wide logger | **Correct and implemented.** `avoid_print` is an analyzer error (ADR-021); `AppLogger` via `loggerProvider` is the only mechanism, and `package:logger` is confined to `core/logging/`. Only the level list (A-042) and the sink (A-043) diverge. |
 | V3, Ch. 3.7 §9 | The six-item code review checklist | **Correct and binding**, via ADR-019. Implemented by `docs/development/review-checklist.md` §3. Two items need reading against amendments taken since — item 2 against A-039, item 5 against A-025 and A-034. |
+| V9, Ch. 9.4 | Six measurable performance targets, four measured manually and two by in-app instrumentation | **Correct.** The absence of an automated performance test is therefore by design, not a gap; the instrumentation and the manual procedures are what is owed (ADR-029). |
+| V9, Ch. 9.6 §1 | What gets a unit test — every use case, every repository's error paths, every notifier's state transitions via `ProviderContainer` overrides | **Correct**, and unexercised: `lib/features/` is empty, so no use case or notifier exists. |
+| V9, Ch. 9.7 §1 | Five end-to-end flows, each against a fake backend rather than staging | **Correct.** All five depend on features that do not exist; `integration_test` is not installed (A-028). |
+| V6, Ch. 6.4 §4 | Repository providers are designed to be overridden with a fake in tests | **Correct and adopted** as the default substitution mechanism by ADR-029. |
 | V9, Ch. 9.1 §3 | *"No untested error path ships"* — a new failure mode adds its test in the same pull request | **Correct.** Enforced by review (`review-checklist.md` §4.4); no mechanism can detect a new failure mode automatically. |
 | V9, Ch. 9.2 §5 | Log retention of 90 days matching Volume 8 Ch. 8.7 §1 | **Correct.** A backend CloudWatch log-group policy; creates no mobile obligation. |
 | V4, Ch. 4.1 | Backend monitoring and logging is Amazon CloudWatch | **Correct.** `backend/` is empty (ADR-015), so nothing implements it yet. A separate sink from mobile logging, deliberately. |
