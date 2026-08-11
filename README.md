@@ -30,12 +30,13 @@ There is no `scripts/` or `assets/` directory. Both are reserved with a defined 
 | Path | Contents |
 |---|---|
 | [`docs/architecture/README.md`](docs/architecture/README.md) | **Start here.** How architectural decisions are recorded, changed and retired |
-| [`docs/architecture/decisions/`](docs/architecture/decisions/) | ADR-001 to ADR-023 — every binding decision |
+| [`docs/architecture/decisions/`](docs/architecture/decisions/) | ADR-001 to ADR-024 — every binding decision |
 | [`docs/architecture/folder-structure.md`](docs/architecture/folder-structure.md) | Folder architecture, import rules, and how to add a feature (ADR-022) |
 | [`docs/architecture/naming-conventions.md`](docs/architecture/naming-conventions.md) | The naming standard — suffix vocabulary, every category, known deviations (ADR-023) |
 | [`docs/architecture/volume-amendments.md`](docs/architecture/volume-amendments.md) | Corrections to the source volumes, with the ADR that supersedes each |
 | [`docs/volumes/`](docs/volumes/) | Source specification volumes 1–12 (PDF) |
 | [`docs/git/`](docs/git/) | Branching strategy and commit conventions |
+| [`docs/development/documentation-standards.md`](docs/development/documentation-standards.md) | How every document here is written (ADR-024) — read before adding one |
 | [`docs/development/`](docs/development/) | Secrets management |
 | [`docs/operations/`](docs/operations/) | Disaster recovery |
 

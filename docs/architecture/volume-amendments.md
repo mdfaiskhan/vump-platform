@@ -511,6 +511,72 @@ The correction is one of scope. §2's list was written for a single purpose and 
 
 Timing is part of the decision. `lib/features/` is empty and the codebase is 63 files of consistently written infrastructure, so adopting the strict set surfaced 22 findings, 18 of them fixed in a single pass. The same adoption after twenty features would be a mechanical rewrite of thousands of lines — the point at which a team concludes the rules are not worth it.
 
+### A-032 — Documentation-file naming does not cover in-repository markdown
+
+| | |
+|---|---|
+| **Volume** | 0 — Project Foundation, Chapter 0.2 (Project Constitution) §5 |
+| **Says** | Documentation files: `Chapter_<volume>.<chapter>_<Title>.docx`, "matching this document's own naming" |
+| **Should say** | That convention governs the **volume deliverables** — the `.docx`/`.pdf` chapters. Markdown documents inside the repository are a different artifact class and are named `kebab-case.md` per ADR-023 §1.4, with `ADR-NNN-kebab-case-title.md` for decision records per `docs/architecture/README.md` |
+| **Authority** | ADR-023, ADR-024 |
+| **Class** | Documentation update (gap) |
+| **Status** | Open |
+
+Not a contradiction so much as a scope the Constitution never contemplated: Volume 0 was written before the repository existed, and every documentation artifact it had in view was a Word chapter. `Chapter_0.2_Project_Constitution.docx` is correct for that class and unusable for a file that lives beside code, is linked by relative path and is read in a diff.
+
+Registered because §5 reads as universal. ADR-023 fixed repository documentation filenames in Mission 0.19.3 **without recording the divergence**, which is precisely the latent disagreement this register exists to make explicit.
+
+The volumes' own naming is unaffected and unchallenged.
+
+### A-033 — Document Control blocks do not transfer to version-controlled markdown
+
+| | |
+|---|---|
+| **Volume** | 0 — Project Foundation, Chapter 0.2 (Project Constitution) §8 |
+| **Says** | "Every document carries a version number and status (Draft / Approved / Superseded) in its Document Control block, so the current source of truth is always identifiable at a glance" |
+| **Should say** | For the volume deliverables, unchanged and correct. For markdown in this repository, git is the version record: `git log --follow` gives every revision with its author, date, reason and diff. ADRs carry `Status` and `Date` because status is a binding-or-not lifecycle state, not a version. Reference documents carry neither and name their governing ADR instead |
+| **Authority** | ADR-024 |
+| **Class** | Documentation update (gap) |
+| **Status** | Open |
+
+The requirement is right for its subject. A `.docx` circulated by email has no history of its own, so a Document Control block is the only way to tell which copy is current.
+
+A file in git has that history exactly, and a hand-maintained version field beside it is a second source of truth that goes stale the first time someone edits without bumping it — at which point the block is confidently wrong, which is worse than absent.
+
+**§8's substance is preserved and is not weakened.** "The documentation set is the single source of truth", "if code and documentation diverge the documentation governs", and "superseded documents are retained, not deleted, with a pointer to the replacement" are all in force — the last is implemented by the ADR lifecycle in `docs/architecture/README.md` and by this register's rule that an entry is never deleted. Only the mechanism for identifying the current version differs.
+
+### A-034 — Doc-comment coverage: the Constitution is broader than Volume 3, and outranks it
+
+| | |
+|---|---|
+| **Volume** | 0 — Chapter 0.2 (Project Constitution) §4, against Volume 3 — Chapter 3.7 §2 |
+| **Says** | **V0 §4:** "Every public class, method, and non-trivial function carries a documentation comment explaining intent, not just mechanics." **V3.7 §2:** `public_member_api_docs`, annotated "domain/ and data/ layers only (Section 5)" |
+| **Should say** | The Constitution's requirement is repository-wide and governs. Chapter 0.2's Precedence clause states it *"overrides any conflicting instruction in later volumes unless formally amended under Section 9"*, and Volume 3 is a later volume. `public_member_api_docs` therefore belongs in `core/` and `app/` as well as `domain/` and `data/` |
+| **Authority** | Volume 0, Chapter 0.2 (Precedence clause and §4) |
+| **Class** | **Architecture decision — unresolved** |
+| **Status** | Open — supersedes the framing of A-025 |
+
+**A-025 was written on the wrong assumption.** It recorded Volume 3 §3.7 §2's `domain/`-and-`data/` scoping as the binding requirement, and treated the issues the rule produces in `core/` and `app/` as evidence that those layers are "deliberately exempt". They are not exempt: the Constitution requires the comments everywhere, and it outranks Volume 3.
+
+A-025's *mechanical* finding stands unchanged and is still correct — the Dart analyzer cannot scope a lint to a subdirectory from the root config, so a nested `analysis_options.yaml` is still how per-layer scoping would be done. What changes is the target: scoping the rule to two layers is not the goal, it is a narrowing the Constitution does not permit.
+
+**Re-measured for this amendment**, on Flutter 3.44.9 with the ADR-021 configuration. Enabling `public_member_api_docs` at the root produces **167 findings**:
+
+| Where | Count |
+|---|---|
+| Hand-written `lib/app/` and `lib/core/` | **122** |
+| `lib/core/database/collections/database_metadata.g.dart` | **45** |
+
+A-025's figure of 122 is confirmed correct for hand-written code. It did not state that it excluded generated output, and the generated 45 are the more awkward half.
+
+**A second obstacle, not previously recorded.** `isar_generator`'s `ignore_for_file` header does not cover `public_member_api_docs`, so 45 findings land in a file nobody wrote and nobody may edit. ADR-021 analyses generated code deliberately — it ships, so it is analysed — and those 45 cannot be fixed at source. Enabling the rule repository-wide therefore requires an upstream `ignore_for_file` addition, a narrow per-file exclude, or accepting an `ignore_for_file` line that the generator would overwrite on the next build. This is exactly the trade-off ADR-021 refused for `cascade_invocations`, and it must be resolved before the rule can be enabled.
+
+**Mitigating facts, which is why this is not a blocker.** The 122 hand-written findings are missing `///` comments on individual public members, not missing documentation in substance: `core/` is heavily commented, and files such as `dio_client.dart`, `app_exception.dart` and `failure.dart` carry class-level documentation well beyond what the lint asks for. The gap is member-level coverage, not absence of intent.
+
+**Two caveats on this entry itself.** Chapter 0.2 carries `Status: Draft — Pending Approval`, as do Chapters 0.1 and 0.3, so a strict reading makes none of Volume 0 formally binding yet — which is part of why `CLAUDE.md` plus the accepted ADRs are the repository's operative governance. And enabling the rule is a code change across 167 findings, so it belongs to a mission of its own rather than to a documentation mission.
+
+Resolving it means either enabling `public_member_api_docs` repository-wide — closing the 122 hand-written findings and deciding what to do about the 45 generated ones — or a new ADR that narrows the Constitution's §4 deliberately and says why.
+
 ---
 
 ## Confirmed correct — no amendment
