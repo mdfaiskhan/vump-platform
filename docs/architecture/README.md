@@ -58,7 +58,9 @@ docs/
 
 `folder-structure.md` is the canonical folder architecture reference — root directory ownership, `lib/` responsibilities, feature layers, the import matrix, and the procedure for adding a feature. It specifies what ADR-022 decides; where the two disagree, the ADR governs.
 
-How documents themselves are written — the hierarchy, what belongs in each type, markdown conventions, terminology, RFC 2119 usage and the review checklist — is fixed by ADR-024 and specified in [`../development/documentation-standards.md`](../development/documentation-standards.md). Anyone adding or editing a document in this repository reads that first.
+How documents themselves are written — the hierarchy, what belongs in each type, markdown conventions, terminology and RFC 2119 usage — is fixed by ADR-024 and specified in [`../development/documentation-standards.md`](../development/documentation-standards.md). Anyone adding or editing a document in this repository reads that first.
+
+How any change is reviewed — which criteria CI gates, which the analyzer gates, and which remain for a human — is fixed by ADR-028 and specified in [`../development/review-checklist.md`](../development/review-checklist.md). It implements Volume 3 Chapter 3.7 §9, which ADR-019 makes a merge condition.
 
 `naming-conventions.md` is the canonical naming standard — the closed suffix vocabulary, every naming category from folders to JSON fields, and an audited register of known deviations. It specifies what ADR-023 decides, and cites rather than restates the conventions already fixed by `CLAUDE.md`, ADR-021 and the individual domain ADRs.
 
@@ -224,7 +226,7 @@ forecloses, and what must now be maintained.
 
 ## Current State
 
-`decisions/` holds ADR-001 through ADR-027.
+`decisions/` holds ADR-001 through ADR-028.
 
 All are Accepted and therefore binding.
 
@@ -257,6 +259,7 @@ All are Accepted and therefore binding.
 | ADR-025 | Error handling model |
 | ADR-026 | Architecture guardrails |
 | ADR-027 | Logging architecture |
+| ADR-028 | Review checklist |
 
 ADR-007 supersedes the networking assumptions of ADR-006 in part. ADR-006 remains Accepted and binding in every other respect.
 

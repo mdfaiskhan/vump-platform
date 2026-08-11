@@ -11,6 +11,7 @@ Every rule below was derived from `mobile/lib/core/logging/`, the one intercepto
 | Already fixed by | What it fixes |
 |---|---|
 | Volume 3 Ch. 3.7 §6 | `print()` banned; one project-wide logger; log levels so CI and test tooling can filter noise from signal |
+| Volume 9 Ch. 9.2 | Level semantics, `chunk_id`/`session_id` correlation, the ring-buffer and Crashlytics sink, personal-data redaction, 90-day retention — **partly unmet, see A-044** |
 | Volume 4 Ch. 4.1 | Backend monitoring and logging is Amazon CloudWatch |
 | ADR-007, ADR-016 | Credentials never in source; a secret must never be logged |
 | ADR-017 | A fatal startup failure is logged at `fatal` and rethrown |
@@ -93,17 +94,20 @@ final Provider<AppLogger> loggerProvider = Provider<AppLogger>(
 
 **The seam is real and exercised** — `test/core/firebase/firebase_initializer_test.dart` defines a `_SilentOutput extends LogOutput` that discards output, *"so a failing-by-design test does not print noise."* That is the only supplied `LogOutput` in the repository.
 
-**This is the largest gap in the logging architecture**, and it is what Volume 3 §3.7 §6 asks for and does not get. Registered as **A-043**:
+**Volume 9 Chapter 9.2 §3 specifies the sink, and it is not a remote aggregator.** Mobile logs are *"kept in a local ring buffer (last N entries) attached automatically to a Crashlytics report if a crash occurs, and are **not otherwise transmitted off-device** — logging is for local debugging and crash context, not a telemetry pipeline in itself (that's Chapter 9.3, Analytics, a deliberately separate concern)."*
 
-| Sink | Status |
-|---|---|
-| Console | The default, in all three environments |
-| A file on the device | Does not exist |
-| A remote aggregator | Does not exist |
-| A crash reporter | Does not exist — Volume 6 §6.9 §3 selects Crashlytics; not adopted (**A-037**) |
-| Global handlers feeding a sink | Do not exist (**A-036**) |
+| Sink | Specified by | Status |
+|---|---|---|
+| Console | — | Exists. The default, in all three environments |
+| **Local ring buffer, last N entries** | **V9.2 §3** | **Does not exist** |
+| **Attached to a Crashlytics report on crash** | **V9.2 §3** | **Does not exist** — Crashlytics not adopted (**A-037**) |
+| Global handlers feeding it | V6.9 §2 | Do not exist (**A-036**) |
+| A remote log aggregator | — | **Deliberately not wanted.** V9.2 §3 forbids off-device transmission; telemetry is Chapter 9.3's separate concern |
+| Backend logs to CloudWatch | V4 §4.1 | `backend/` is empty (ADR-015) |
 
-**The practical effect, compounded by §5's level policy:** in production the logger emits `warning` and above, and those lines go to a console nobody is attached to. A production failure on a Collector's device today produces no durable record anywhere.
+> **Corrected in Mission 0.19.8.** This section previously framed the gap as *"no log leaves the device, so Volume 3 §3.7 §6's payoff is not achieved"*, and implied a remote aggregator was missing. Volume 9 Chapter 9.2 §3 — not consulted when this document was written — makes off-device transmission **explicitly unwanted**. The real gap is narrower and different: the **ring buffer and the crash-report attachment** are specified and absent. Registered as **A-044**, which corrects **A-043**.
+
+**The practical effect, compounded by §5's level policy:** in production the logger emits `warning` and above to a console nobody is attached to, and nothing retains those lines for a crash report to carry. A production failure on a Collector's device today produces no record that survives the process — which is what V9.2 §3's ring buffer exists to prevent.
 
 **The backend's sink is decided and is not this one.** Volume 4 Chapter 4.1 fixes *"Monitoring/Logging: Amazon CloudWatch (Lambda + RDS metrics/logs)"*. `backend/` is empty (ADR-015), so nothing implements it. Mobile logging and backend logging are separate concerns with separate sinks and must not be conflated.
 
@@ -130,6 +134,8 @@ Five levels. `LogLevel`'s doc comment explains the count: *"`logger` also offers
 | `development` | `debug` | Everything, including every HTTP request |
 | `staging` | `info` | *"Enough to trace a session without the volume of development logging"* |
 | `production` | `warning` | *"Logs record what went wrong rather than what happened"* |
+
+**Volume 9 Chapter 9.2 §1 disagrees with the production row.** It defines `info` as *"Normal lifecycle events worth seeing **in production logs** — Session started, chunk finalized, upload complete."* A production minimum of `warning` filters exactly those events out. Registered as **A-044**, found in Mission 0.19.8 — Volume 9 Chapter 9.2 was not consulted when this document was first written.
 
 **There is no `kDebugMode` check anywhere in this layer, deliberately.** `AppLogger` states why: *"build mode and environment are different questions, and a staging build is a release build."* A `kDebugMode` gate would silence staging, which exists to rehearse production (ADR-014).
 
@@ -178,7 +184,9 @@ Whether §6's *"structured"* means machine-parseable records or simply well-orga
 
 **There is no correlation ID, request ID, session ID, Collector ID, device ID or app version attached to any log line.** Verified: no such identifier appears anywhere in `core/logging/` or the interceptors.
 
-**No Volume requires specific contextual fields**, so this is recorded as an **absence, not a violation**. It is stated because it is the first thing an aggregator needs: without a shared identifier, lines from one recording session cannot be grouped, and the Glossary makes `Session` a first-class concept precisely because it is the unit people reason about.
+> **Corrected in Mission 0.19.8.** This section previously stated that *"no Volume requires specific contextual fields"*, and that was wrong. **Volume 9 Chapter 9.2 §2 requires them by name:** *"Every log line touching a chunk or session includes its `chunk_id`/`session_id`… this is what makes it possible to reconstruct one Collector's one session's full journey."* The absence is therefore a **deviation from an approved Volume**, not a neutral gap. Registered as **A-044**. Volume 9 Chapter 9.2 was not consulted when this document was first written, which is the single largest miss in Mission 0.19.7.
+
+The requirement is narrower and more useful than a general correlation ID: it applies to lines *touching a chunk or session*, and the identifiers are Volume 4 Chapter 4.4's, so a mobile log line and a backend CloudWatch line can be joined on the same value. Volume 9 §9.2 §4 pairs it with a redaction rule that depends on it — logs *"reference a `chunk_id` and let a developer join against the metadata store if genuinely needed, rather than duplicating sensitive fields into logs by default."*
 
 What exists instead, and is worth preserving:
 
@@ -219,6 +227,12 @@ Each is replaced with `[REDACTED]`. **The header's presence is still recorded**,
 **Interceptor order is what makes redaction work**, and it is fixed by ADR-007: `AuthInterceptor` → `LoggingInterceptor` → `ErrorInterceptor`. Auth runs first so anything it adds is subject to redaction. An interceptor added after logging would write its credential to the log.
 
 **Volume 6 §6.9 §4 extends the same obligation to crash reports** — scrubbed of secure-storage contents and raw GPS or device fields beyond what is needed to reproduce the bug, *before* being sent. No reporter exists (A-037), so the rule is recorded ahead of the mechanism.
+
+**Volume 9 §9.2 §4 adds a second class of forbidden value, and it is not a credential.** *"GPS coordinates, device identifiers, and any field Volume 8, Chapter 8.6 classifies as personal data are never logged at `info`/`debug` level in a form that would leak them into a general-purpose log stream — logs reference a `chunk_id` and let a developer join against the metadata store if genuinely needed, rather than duplicating sensitive fields into logs by default."*
+
+Two things follow. **Personal data is as forbidden as a secret**, and it is easier to log by accident because it is not obviously sensitive — a GPS coordinate looks like diagnostic detail. And **the correct substitute is an identifier, not omission**: log the `chunk_id` and join against the metadata store. That is why §7's missing `chunk_id` is not merely a convenience gap — it is the mechanism this rule depends on.
+
+V9.2 §4 states its own enforcement: *"This mirrors, and is enforced by the same **review discipline** as, Volume 6 Chapter 6.9's crash-report scrubbing rule."* No analyzer or CI check exists for it, which is why it appears in the review checklist (`docs/development/review-checklist.md`) rather than here alone.
 
 **`avoid_print` is an analyzer error** (ADR-021, guardrail I17) for this reason: `print` bypasses both the level filter and every redaction boundary. A printed token is a leaked token.
 
@@ -312,12 +326,12 @@ Audited across `mobile/lib/` and `mobile/test/`. Recorded rather than fixed — 
 
 | Gap | Evidence | Disposition |
 |---|---|---|
-| **No sink leaves the device** | `loggerProvider` supplies no `LogOutput`; console only, all three environments | **A-043.** The largest gap. Volume 3 §3.7 §6 asks for remote diagnosability and does not get it |
-| **Production logging is effectively invisible** | `warning`+ only, to a console nobody is attached to | Closes with A-043 |
+| **No ring buffer, no crash-report attachment** | V9.2 §3 specifies both; `loggerProvider` supplies no `LogOutput` at all | **A-044.** The largest gap. Off-device transmission is *not* wanted (V9.2 §3) — the missing piece is local retention that a crash report can carry |
+| **Production suppresses `info`** | `minimumLevelFor(production)` = `warning`; V9.2 §1 wants lifecycle events *"worth seeing in production logs"* | **A-044.** A direct contradiction with an approved Volume |
+| **No `chunk_id`/`session_id` on log lines** | V9.2 §2 requires them on *"every log line touching a chunk or session"* | **A-044.** No chunk or session exists yet, so unexercised rather than violated in practice |
 | **No global handlers** | Volume 6 §6.9 §2 requires two; neither installed | **A-036** (ADR-025). Unmodelled exceptions never reach `AppLogger` |
 | **No crash reporting** | Volume 6 §6.9 §3 selects Crashlytics; not a dependency | **A-037** (ADR-025) |
-| **No contextual metadata** | No correlation, session, device or version identifier on any line | Recorded as an **absence**; no Volume requires specific fields, so nothing is invented here |
-| **Not key-value structured** | Line-oriented text; no JSON, no parseable field separation | Part of **A-043**; §6 records that V3.7 §6's *"structured"* is ambiguous |
+| **Not key-value structured** | Line-oriented text; no JSON, no parseable field separation | Part of **A-043**; §6 records that V3.7 §6's *"structured"* is ambiguous. V9.2 §2's join-on-`chunk_id` requirement makes parseability more valuable than §6 alone implied |
 | **`fatal` is undocumented in the Volumes** | V3.7 §6 names four levels; five exist | **A-042.** The list is a floor, as A-031 established for the same chapter |
 | **`logger` confinement is unchecked** | The CI job covers four packages; `logger` is a fifth with a documented owner and no check (§2) | Add `check logger lib/core/logging/` to the `Architecture boundaries` job. One line, and it closes an ADR-026-shaped gap that ADR-026 did not list |
 | **No test for redaction, format or filtering** | `LogFormatter`, `_ThresholdFilter`, `_redactHeaders` untested | The highest-value missing test in this layer (§13) |

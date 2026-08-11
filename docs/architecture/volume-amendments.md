@@ -751,6 +751,8 @@ This is the same pattern as **A-031** for §2 of the same chapter: Chapter 3.7 s
 
 ### A-043 — No log leaves the device, so §6's stated payoff is not achieved
 
+> **Partly corrected by A-044.** This entry was written in Mission 0.19.7 without Volume 9 Chapter 9.2, which specifies the mobile log sink and **forbids off-device transmission**. The finding that no log is retained anywhere stands; the framing that a *remote aggregator* is missing does not. Read this entry together with A-044.
+
 | | |
 |---|---|
 | **Volume** | 3 — Technical Architecture, Chapter 3.7 §6 |
@@ -774,6 +776,31 @@ Verified 2026-08-11. Three findings, compounding:
 
 **Not closed by anything already decided.** No Volume specifies a mobile log destination or a required log field, so the mechanism is an open decision needing its own ADR rather than an unimplemented specification.
 
+### A-044 — Volume 9 Chapter 9.2 governs logging and was not consulted
+
+| | |
+|---|---|
+| **Volume** | 9 — Quality Assurance, Chapter 9.2 (Logging), §1–§4. Extends Volume 3, Chapter 3.7 §6 |
+| **Says** | Four things, none of which ADR-027 was written against. **§1:** `info` is for *"Normal lifecycle events worth seeing **in production logs** — Session started, chunk finalized, upload complete"*; `debug` is *"stripped from release builds"*. **§2:** *"Every log line touching a chunk or session includes its `chunk_id`/`session_id`… this is what makes it possible to reconstruct one Collector's one session's full journey"*. **§3:** mobile logs are *"kept in a local ring buffer (last N entries) attached automatically to a Crashlytics report if a crash occurs, and are **not otherwise transmitted off-device**"*. **§4:** GPS coordinates, device identifiers and Volume 8 §8.6 personal data are *"never logged at `info`/`debug` level"*, substituting a `chunk_id` the developer can join on |
+| **Should say** | §1's production expectation, §2's correlation requirement and §3's sink are **not implemented**. §1's *"stripped from release builds"* is superseded by ADR-027's environment-based filtering. §4 is unimplementable until §2 is, and is enforced by review (`review-checklist.md` §4.6) |
+| **Authority** | Volume 9, Chapter 9.2; ADR-027 for the build-mode point only |
+| **Class** | **Implementation update**, and one **architecture decision** |
+| **Status** | Open |
+
+**This entry exists because Mission 0.19.7 did not read Volume 9.** That mission's brief named Volumes 3, 4 and 6; the chapter that governs logging in detail is in Volume 9, and it declares itself an extension of the chapter that mission did read. The four findings below were all missed, and `logging-standards.md` has been corrected in place with each correction marked.
+
+**§1 — production suppresses the level the Volume wants visible.** `AppLogger.minimumLevelFor(production)` returns `warning`, so `info` never emits in production. §9.2 §1's examples of `info` — *session started, chunk finalized, upload complete* — are exactly the lifecycle events a Collector's session would need to reconstruct. **This is a direct contradiction, not a gap**, and resolving it is a decision: either production moves to `info`, accepting the volume, or a new ADR narrows §9.2 §1 and says why. It interacts with §3: a ring buffer of the last N entries makes `info` in production far cheaper than a console would, because nothing is transmitted.
+
+**§1's other half is already superseded.** *"`debug` … stripped from release builds"* is build-mode gating, which ADR-027 rejects deliberately: *"build mode and environment are different questions, and a staging build is a release build."* Environment-based filtering achieves the same outcome for development while keeping staging honest. **ADR-027 governs this half**; §9.2 §1 is out of date on the mechanism, not the intent.
+
+**§2 — the correlation requirement was recorded as a non-requirement.** `logging-standards.md` §7 previously stated that *"no Volume requires specific contextual fields"*, and that was **false**. The requirement is narrower and more useful than a general correlation ID: it applies to lines touching a chunk or session, and the identifiers are Volume 4 Chapter 4.4's, so a mobile line and a backend CloudWatch line join on the same value. Nothing implements it, and nothing can yet — no chunk or session exists.
+
+**§3 — the sink is specified, and it is not a remote aggregator.** A-043 framed the gap as *"no log leaves the device"*, implying remote shipping was missing. §9.2 §3 **forbids** off-device transmission and separates telemetry into Chapter 9.3 as *"a deliberately separate concern"*. The real gap is narrower: **the local ring buffer and the crash-report attachment do not exist.** Sequenced behind A-037, since the attachment target is Crashlytics.
+
+**§4 — a second class of forbidden value, enforced by review.** Personal data is as forbidden as a credential and easier to log by accident, because a GPS coordinate reads as diagnostic detail. §9.2 §4 names its own enforcement — *"the same review discipline as Volume 6 Chapter 6.9's crash-report scrubbing rule"* — so it appears in `review-checklist.md` §4.6. Note the dependency: the sanctioned substitute is logging a `chunk_id` and joining against the metadata store, which requires §2.
+
+**§5 — retention is not a new number.** *"Log retention (90 days) already matches Volume 8, Chapter 8.7 §1's table."* It describes a CloudWatch log-group policy on the backend, so it is out of scope for the mobile layer and creates no mobile obligation.
+
 ---
 
 ## Confirmed correct — no amendment
@@ -789,6 +816,9 @@ Recorded so they are not re-litigated.
 | V3, Ch. 3.6 §5 | Folders `snake_case`; files suffixed by role — `_screen.dart`, `_use_case.dart`, `_repository.dart`, `_service.dart` | **Correct** and consistent with ADR-023 §1.1 and §3. Only `_notifier.dart` diverges — see A-041. |
 | V3, Ch. 3.6 §5 | Generated files never hand-edited, committed per Volume 7 | **Correct and implemented.** Enforced by the CI `Generated code drift` job. |
 | V3, Ch. 3.7 §6 | `print()` banned; all diagnostic output through a single project-wide logger | **Correct and implemented.** `avoid_print` is an analyzer error (ADR-021); `AppLogger` via `loggerProvider` is the only mechanism, and `package:logger` is confined to `core/logging/`. Only the level list (A-042) and the sink (A-043) diverge. |
+| V3, Ch. 3.7 §9 | The six-item code review checklist | **Correct and binding**, via ADR-019. Implemented by `docs/development/review-checklist.md` §3. Two items need reading against amendments taken since — item 2 against A-039, item 5 against A-025 and A-034. |
+| V9, Ch. 9.1 §3 | *"No untested error path ships"* — a new failure mode adds its test in the same pull request | **Correct.** Enforced by review (`review-checklist.md` §4.4); no mechanism can detect a new failure mode automatically. |
+| V9, Ch. 9.2 §5 | Log retention of 90 days matching Volume 8 Ch. 8.7 §1 | **Correct.** A backend CloudWatch log-group policy; creates no mobile obligation. |
 | V4, Ch. 4.1 | Backend monitoring and logging is Amazon CloudWatch | **Correct.** `backend/` is empty (ADR-015), so nothing implements it yet. A separate sink from mobile logging, deliberately. |
 | V5, Ch. 5.14 §1 | S3 object key schema | **Authoritative and implemented.** Unchanged by any ADR in this cycle. |
 | V4, Ch. 4.10 §4 | Standard → Standard-IA → Glacier IR ladder | Correct. Adopted verbatim by ADR-012. |
