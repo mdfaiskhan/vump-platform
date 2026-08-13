@@ -63,7 +63,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   /// guard will redirect here without going through a caller that could carry
   /// a flag.
   bool get _sessionExpired =>
-      ref.watch(authNotifierProvider).value is AuthStateExpired;
+      ref.watch(authNotifierProvider).valueOrNull is AuthStateExpired;
 
   @override
   Widget build(BuildContext context) {

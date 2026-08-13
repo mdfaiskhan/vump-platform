@@ -63,7 +63,9 @@ class _AdminInviteCodesScreenState
 
   @override
   Widget build(BuildContext context) {
-    final User? admin = ref.watch(authNotifierProvider).value?.user;
+    // `valueOrNull`: `value` rethrows on an AsyncError, which would turn a
+    // refused session into an uncaught exception during build.
+    final User? admin = ref.watch(authNotifierProvider).valueOrNull?.user;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Invite codes')),

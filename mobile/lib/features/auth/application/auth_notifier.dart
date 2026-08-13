@@ -70,6 +70,9 @@ class AuthNotifier extends AsyncNotifier<AuthState> {
   /// mistaken for a session that lapsed on its own.
   bool _signingOut = false;
 
+  /// Guards against re-entering the discard while its own sign-out emits.
+  bool _discardingSession = false;
+
   @override
   Future<AuthState> build() {
     // The stream is the source of truth, not the restore call: Firebase emits
@@ -80,6 +83,7 @@ class AuthNotifier extends AsyncNotifier<AuthState> {
           _onSession,
           onError: (Object error, StackTrace stackTrace) {
             state = AsyncError<AuthState>(error, stackTrace);
+            _discardUnusableSession();
           },
         );
     ref.onDispose(subscription.cancel);
@@ -141,8 +145,37 @@ class AuthNotifier extends AsyncNotifier<AuthState> {
       // signed in as far as this launch is concerned. Mission 2.5 owns
       // distinguishing a lapsed session, which is what AuthState.expired is
       // for.
+      _discardUnusableSession();
       return const AuthState.unauthenticated();
     }
+  }
+
+  /// Signs out a persisted session the application cannot use.
+  ///
+  /// Firebase persists its own credential, so an account that authenticates
+  /// but carries no `role` claim — one created outside the invite flow, or
+  /// left behind by an earlier test — comes back on *every* cold start. The
+  /// application would refuse it every time, and the person would have no way
+  /// to reach Login and sign in as somebody else short of clearing the app's
+  /// storage by hand.
+  ///
+  /// Refusing the session is correct; keeping it is not. Signing out ends the
+  /// loop and leaves the next launch clean.
+  ///
+  /// Best-effort and deliberately unawaited: the caller is deciding what state
+  /// to report right now, and the sign-out is housekeeping behind that
+  /// decision. A failure here leaves the stale session in place, which is the
+  /// situation that already existed.
+  void _discardUnusableSession() {
+    if (_discardingSession) {
+      return;
+    }
+    _discardingSession = true;
+    unawaited(
+      _repository.signOut().catchError((Object _) {}).whenComplete(() {
+        _discardingSession = false;
+      }),
+    );
   }
 
   /// Signs in with an email address and password.

@@ -80,7 +80,21 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((Ref ref) {
       // `read`, not `watch`: this runs during navigation rather than a build,
       // and watching would rebuild the provider that owns this router.
       // Freshness comes from refreshListenable instead.
-      final AuthState? auth = ref.read(authNotifierProvider).value;
+      final AsyncValue<AuthState> session = ref.read(authNotifierProvider);
+
+      // `valueOrNull`, never `value`. `AsyncValue.value` *rethrows* on an
+      // AsyncError rather than returning null, and this callback runs during
+      // `MaterialApp.router`'s build — so a refused session surfaced here as
+      // an uncaught exception before any screen was drawn, instead of the
+      // fallback to Login it was supposed to produce.
+      //
+      // An error is treated as "no session": the app could not establish who
+      // this is, and Login is where that lands. Distinct from `null`, which
+      // means "not yet known" and correctly declines to move anyone.
+      final AuthState? auth = session.hasError
+          ? const AuthState.unauthenticated()
+          : session.valueOrNull;
+
       return AuthGuard.redirect(auth: auth, location: state.matchedLocation);
     },
     routes: <RouteBase>[
