@@ -1,0 +1,17 @@
+# Scopes `public_member_api_docs` to this layer.
+#
+# ADR-022 §6.1 step 7 requires this file for every feature's `domain/` and
+# `data/`, and the root `analysis_options.yaml` (lines 513-535) explains why
+# it cannot live there: the Dart analyzer cannot scope a lint to a
+# subdirectory from the root file. Volume 3 §3.7 §2 scopes the rule to
+# "domain/ and data/ layers only". Registered as amendment A-025.
+#
+# The root file's worked example writes the include path with five `../`
+# segments. Four is correct from `lib/features/<feature>/data/`:
+# data -> auth -> features -> lib -> mobile. Noted rather than silently
+# diverged from.
+include: ../../../../analysis_options.yaml
+
+linter:
+  rules:
+    - public_member_api_docs

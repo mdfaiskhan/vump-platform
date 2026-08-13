@@ -36,7 +36,9 @@ Volume 3 §3.8 §2 fixes this and states the trade: *"Chapter 3.5's module bound
 
 ## 2. What is depended on
 
-**12 direct, 6 dev, 97 transitive — 115 packages resolved.** Two of the 18 direct entries are SDK-provided (`flutter`, `flutter_test`), so 16 come from pub.
+**15 direct, 6 dev, 105 transitive — 126 packages resolved.** Two of the 21 direct entries are SDK-provided (`flutter`, `flutter_test`), so 19 come from pub.
+
+**Re-derived from `pubspec.lock` on 2026-08-13**, per §11's standing obligation rather than trusted from the previous revision. Mission 2.2 added `firebase_auth` and `google_sign_in`, which brought eight transitive packages with them. The figures this section previously carried — "12 direct … 115 resolved" — did not reconcile against the lockfile even before that change; the numbers below were counted, not adjusted.
 
 | Package | Constraint | Tier (§3) | Owning module | Governed by |
 |---|---|---|---|---|
@@ -47,6 +49,8 @@ Volume 3 §3.8 §2 fixes this and states the trade: *"Chapter 3.5's module bound
 | `isar_flutter_libs` | `^3.1.0+1` | Core | `core/database/` | ADR-009, **A-029** |
 | `flutter_secure_storage` | `^9.2.2` | Core | `core/storage/` | ADR-008 |
 | `firebase_core` | `^4.13.0` | Core | `core/firebase/` | ADR-010 |
+| `firebase_auth` | `^6.5.7` | Core | `features/auth/data/` | ADR-034 |
+| `google_sign_in` | `^7.2.0` | Core | `features/auth/data/` | ADR-034, **A-053** |
 | `logger` | `^2.5.0` | Leaf | `core/logging/` | ADR-027 |
 | `freezed_annotation` | `^2.4.4` | Leaf | — (annotations) | — |
 | `json_annotation` | `^4.9.0` | Leaf | — (annotations) | — |
@@ -59,7 +63,9 @@ Volume 3 §3.8 §2 fixes this and states the trade: *"Chapter 3.5's module bound
 
 **Every non-SDK dependency carries an explicit caret constraint.** Verified: no bare, unconstrained dependency exists, which satisfies §3.8 §4 item 6.
 
-**Every package has a documented reason.** Seven of the eleven runtime packages are named by an accepted ADR; the rest are annotations, icons or lint rules. Nothing is present without a decision behind it, which is Volume 0 §2's requirement.
+**Every package has a documented reason.** Nine of the thirteen runtime packages are named by an accepted ADR; the rest are annotations, icons or lint rules. Nothing is present without a decision behind it, which is Volume 0 §2's requirement.
+
+**The two newest entries are the first packages owned by a feature rather than by `core/`.** ADR-010 keeps the Firebase *platform* in `core/firebase/`; a Firebase *product* is owned by the module that consumes it, so `features/auth/` rather than `core/` is the unit that stays replaceable. Both carry a confinement line in the `Architecture boundaries` job, so this is an enforced rule and not documentation only.
 
 **`pubspec.yaml` is grouped by purpose, not alphabetised** — state management, navigation, networking, logging, secure storage, Firebase, database, code generation — each group carrying a comment. ADR-023 §11 records why `sort_pub_dependencies` is deliberately excluded from the lint set: alphabetical order would destroy the grouping, which is the more useful organisation of about a dozen entries.
 

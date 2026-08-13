@@ -53,6 +53,18 @@ dependencies:
   # Firebase platform
   firebase_core: ^4.13.0
 
+  # Firebase Authentication — the identity provider Volume 4 Chapter 4.1
+  # confirms and Chapter 4.7 designs the flow against. Confined to
+  # `features/auth/data/` by the `Architecture boundaries` CI job.
+  firebase_auth: ^6.5.7
+
+  # The native Google account picker behind SH-02's SSO entry point.
+  # FR-AUTH-02 words that entry point as enterprise SSO (SAML/OAuth); this
+  # reads it more narrowly than written, and volume-amendments.md A-053
+  # records the divergence. Confined to `features/auth/data/` with
+  # `firebase_auth`.
+  google_sign_in: ^7.2.0
+
   # Local database
   isar: ^3.1.0+1
   isar_flutter_libs: ^3.1.0+1

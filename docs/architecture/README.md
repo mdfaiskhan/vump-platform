@@ -245,7 +245,7 @@ forecloses, and what must now be maintained.
 
 ## Current State
 
-`decisions/` holds ADR-001 through ADR-033.
+`decisions/` holds ADR-001 through ADR-034.
 
 All are Accepted and therefore binding.
 
@@ -284,6 +284,7 @@ All are Accepted and therefore binding.
 | ADR-031 | Performance standards |
 | ADR-032 | Mission review and documentation maintenance rules |
 | ADR-033 | Database startup failure policy |
+| ADR-034 | Firebase Authentication integration |
 
 ADR-007 supersedes the networking assumptions of ADR-006 in part. ADR-006 remains Accepted and binding in every other respect.
 
@@ -292,6 +293,8 @@ ADR-032 refines ADR-024 in three respects — counts are measured after staging,
 ADR-033 departs from ADR-017's Consequences in one respect. ADR-017 recommends that any future startup prerequisite — naming the database and secure storage — use its environment-driven shape. ADR-033 declines that for the database and makes an open failure fatal in every environment, because ADR-017's development tolerance exists to absorb a missing network and a missing configuration, and a local database needs neither. ADR-017 remains Accepted and binding for Firebase and in every other respect; secure storage is still undecided.
 
 ADR-022 refines ADR-002 in one respect: `app/router.dart` is the single file in `app/` permitted to import from `features/`, because ADR-004 requires one route table and a route table must name its screens. ADR-002 remains Accepted and binding in every other respect.
+
+ADR-034 extends ADR-010 to the first Firebase product. ADR-010 confines the Firebase *platform* to `core/firebase/` and declines to decide anything about products until one has a consumer; ADR-034 confines `firebase_auth` and `google_sign_in` to `features/auth/data/` instead, because a product has one consumer and putting it in `core/` would place feature code there. ADR-010 remains Accepted and binding in every respect, including for `firebase_core`.
 
 Decisions still to be recorded: the HTTP client boundary, and runtime provisioning of build-time secrets. The networking layer is implemented but its client boundary is undocumented — ADR-007 fixes its configuration, and `error-handling.md` §8 fixes its error conversion, but the interceptor chain and `DioClient`'s contract have no record of their own.
 

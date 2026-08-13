@@ -120,6 +120,12 @@ Every architectural invariant in force, with its authority and how it is checked
 | **I36** | A third-party error is converted at the module that owns the package | ADR-025 §7 | Not mechanically checkable |
 | **I37** | No `Failure` subclass | ADR-025, ADR-023 §3 | A grep — **checkable now** |
 | **I38** | Every non-ADR document states its precedence; markdown mechanics hold | ADR-024 §3, §30 | A markdown-lint job |
+| **I39** | `firebase_auth` only in `features/auth/data/` | ADR-034, ADR-022 §2.3 | CI `Architecture boundaries` |
+| **I40** | `google_sign_in` only in `features/auth/data/` | ADR-034, A-053 | CI `Architecture boundaries` |
+
+**I39 and I40 belong to the I1–I4 family and are numbered at the end** because the register's numbers are cited from elsewhere — A-026 and ADR-026 both reference `I25`–`I33` by number — and renumbering would silently invalidate those citations.
+
+**They are the first confinement rules owned by a feature rather than by a `core/` module.** ADR-010 keeps the Firebase *platform* in `core/firebase/` (I4); a Firebase *product* has one consumer, so `features/auth/` is the unit that stays replaceable. Placing `firebase_auth` in `core/` for symmetry with I4 would put feature code in `core/`, which ADR-022 defines against.
 
 **Five of these are checkable against code that exists today** — I30, I31, I32, I33, I35, I37 — and are the natural first extension of the `Architecture boundaries` job. The rest need `lib/features/` to have contents before they can be tested at all, which is the honest reason they are unenforced rather than an oversight.
 
@@ -172,7 +178,7 @@ Verified by running each check against the working tree, not asserted. Commands 
 
 | Checked | Result |
 |---|---|
-| Package confinement (I1–I4) | 4 of 4 pass |
+| Package confinement (I1–I4, I39–I40) | 6 of 6 pass |
 | AWS SDK dependency, credential references, hardcoded endpoints (I5–I6) | none present |
 | Credential-bearing files, AWS keys, private keys, service-account keys (I7) | none tracked |
 | Environment sets across Dart / JSON / shell (I8) | agree — `development`/`staging`/`production` |
@@ -238,9 +244,11 @@ check() {  # check <label> <grep output>
   fi
 }
 
-# I1–I4 · each third-party package confined to the module that owns it
+# I1–I4, I39–I40 · each third-party package confined to the module that owns it
 for p in "dio core/network" "isar core/database" \
-         "flutter_secure_storage core/storage" "firebase_core core/firebase"; do
+         "flutter_secure_storage core/storage" "firebase_core core/firebase" \
+         "firebase_auth features/auth/data" \
+         "google_sign_in features/auth/data"; do
   set -- $p
   check "$1 confined to lib/$2/" \
     "$(grep -rl "package:$1" lib --include='*.dart' | grep -v "^lib/$2/" || true)"

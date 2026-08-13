@@ -968,6 +968,63 @@ So the chapter whose stated purpose is turning Volume 1's prose into measurable 
 
 **Nothing implements retry yet** (ADR-025 §16, `AuthInterceptor`), so no behaviour is affected today. This entry exists so the retry ADR resolves it deliberately rather than inheriting whichever of the two documents its author happened to read.
 
+### A-051 — Self-service sign-up with organisation invite codes, which the volumes say deliberately does not exist
+
+| | |
+|---|---|
+| **Volume** | 10 — Deployment, Chapter 10.4 §4; and Volume 1 Chapter 1.6 `FR-AUTH-01`–`06`; and Volume 2 Chapter 2.4 `SH-02` |
+| **Says** | Accounts are *"provisioned by the client organization, not public self-signup"*, and the login flow is not *"a consumer app missing a 'Sign Up' option, since there deliberately isn't one (FR-ADM-07)"*. `SH-02` is specified as *"Email/password fields, SSO entry point, error states"*. No `FR-AUTH` requirement covers registration |
+| **Should say** | A Collector or Admin may register themselves by presenting an organisation invite code, which is validated and consumed server-side before the account is created |
+| **Authority** | ADR-034 |
+| **Class** | Requirement change |
+| **Status** | Open — **blocking** |
+
+**This is a product change, not a documentation correction, and it is registered as the project owner's decision rather than as a defect in the volumes.** The volumes are internally consistent on this point across three separate chapters, and Chapter 10.4 §4 does not merely omit sign-up — it names the omission as deliberate and plans to explain it to Apple's reviewer.
+
+**What is now inconsistent is the code, not the volumes.** Mission 2.1 added `signUpWithEmailPassword`, `signUpWithGoogle`, an `inviteCode` parameter and an `OrgInviteCode` entity to `features/auth/domain/`. None of the four traces to a requirement, a screen or an endpoint. This entry is what gives them one.
+
+**Three things are unspecified and must be before the flow can be built:**
+
+1. **A redemption endpoint.** Volume 4 Chapter 4.6 §2 defines exactly two auth routes — `POST /v1/auth/verify` and `GET /v1/users/me` — and neither validates or consumes a code. `backend/` is empty (ADR-015), so there is nothing to call.
+2. **Who issues a code, and against what lifecycle.** `OrgInviteCode` carries `expiresAt` and a nullable `remainingUses`, which implies both an issuing surface and a consumption record. No Admin screen in Volume 2 creates one.
+3. **How role and `org_id` are set for an account nobody provisioned.** Volume 4 Chapter 4.7 §2 sets them *"at account provisioning time"* precisely so *"a client can never claim its own role"*. Self-registration has to answer where they come from without reintroducing that hole. See A-052.
+
+**Until the endpoint exists, `AuthRepositoryImpl._redeemInviteCode` throws an `UnimplementedError`** and both sign-up methods are unreachable. It deliberately does not throw an `AuthenticationException`: that would be caught by `application/` and shown to a user as "that code is not valid", which is a false statement about a code nothing checked. A permissive stub would be worse still — it would open registration to anyone who can type a string.
+
+### A-052 — `org_id` is carried as a Firebase custom claim, which Chapter 4.7 assigns to the backend
+
+| | |
+|---|---|
+| **Volume** | 4 — Backend Architecture, Chapter 4.7 §2 and §4 |
+| **Says** | *"Role (admin/collector) is set as a Firebase custom claim at account provisioning time"* — only the role. §4's pseudocode sources the organisation from the database: `user = db.users.findByFirebaseUid(decoded.uid)`, after which *"role, org_id now available"*. Chapter 4.6 §2 has `POST /v1/auth/verify` *"exchange a Firebase ID token for the app's session context (role, org_id)"* |
+| **Should say** | `org_id` is also set as a Firebase custom claim at provisioning time, so the mobile app can build its `User` from the signed ID token alone |
+| **Authority** | ADR-034 |
+| **Class** | Design change |
+| **Status** | Open |
+
+**The mobile `User` entity requires `orgId` and the volumes give the app no way to obtain it.** `role` is a claim and readable from the token; `org_id` is specified as backend state reachable only through `/v1/auth/verify`, and `backend/` is empty. Without this change `AuthRepositoryImpl` cannot construct a `User` at all.
+
+**Carrying it in the token does not weaken the property Chapter 4.7 §2 was protecting.** That property is that *"a client can never claim its own role"* — it holds because the claim is set at provisioning and the token is signed by Firebase, not because the value is unavailable to the client. An `org_id` claim inherits both. The backend continues to re-derive role and scope from its own tables on every request (Chapter 4.8 §1), so nothing server-side starts trusting the client.
+
+**The cost is a second place the organisation is written.** A claim and a `users` row can disagree, and Chapter 4.7 §2 already names the resolution for exactly this case: *"falling back to the users table as the authoritative source if the claim and the table ever disagree."* This extends an existing rule rather than inventing one.
+
+**The alternative was rejected on scope, not on merit.** Injecting `DioClient` and calling `/v1/auth/verify` is what the volumes actually specify, and it remains the more correct answer once a backend exists. It was not taken here because it puts a network round trip, a response DTO and a second error-conversion boundary into a mission scoped to the Firebase boundary. **This entry should be revisited when `backend/` is implemented.**
+
+### A-053 — Google Sign-In as the `SH-02` SSO entry point, where `FR-AUTH-02` specifies enterprise SSO
+
+| | |
+|---|---|
+| **Volume** | 1 — Product Planning, Chapter 1.6 `FR-AUTH-02`; Volume 2 Chapter 2.4 `SH-02` |
+| **Says** | *"The system shall support enterprise SSO (SAML/OAuth) when enabled for a client organization"* — a per-organisation identity provider. `SH-02` calls it an *"SSO entry point"* |
+| **Should say** | The MVP SSO entry point is Google Sign-In — a consumer Google account picker, not a per-organisation IdP. Enterprise SAML/OIDC remains open |
+| **Authority** | ADR-034 |
+| **Class** | Requirement narrowing |
+| **Status** | Open |
+
+**These are different mechanisms with different infrastructure.** A per-org SAML or OIDC provider is configured per client organisation and needs Firebase Identity Platform, a paid tier; Google Sign-In authenticates an individual Google account against one Firebase project and needs only the `google_sign_in` package. Reading the second out of the first is a narrowing worth recording, because a client organisation that expects to plug in its own IdP will not be served by an account picker.
+
+**Registered so the choice is deliberate.** `google_sign_in ^7.2.0` is admitted on this basis and confined to `features/auth/data/`. If enterprise SSO returns as a requirement it is additive — `firebase_auth` reaches SAML and OIDC providers with no further package — and this entry marks where the narrowing was taken.
+
 ---
 
 ## Confirmed correct — no amendment
