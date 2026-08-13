@@ -360,22 +360,32 @@ So the honest coverage figure is 146 lines out of a codebase whose instrumented 
 
 ## 17. Gaps
 
-Recorded rather than fixed — this is a documentation and governance mission.
+Recorded rather than fixed — this was a documentation and governance mission.
+
+**Re-measured in Mission 2.8 (2026-08-13).** Three rows below were written before `features/auth/` existed and are corrected in place rather than left to mislead. The per-layer figures Volume 9 §9.5 §2 asks for were computed for the first time in that mission, from `lcov.info` grouped by layer:
+
+| Layer | Volume 9 target | Measured |
+|---|---|---|
+| `features/auth/domain` | 90% | **no instrumented lines** — freezed unions and interfaces generate none, and the only two hand-written lines were dead code, now deleted |
+| `features/auth/data` | 80% | **99.4%** — met |
+| `features/auth/application` | — | **93.8%** |
+| `features/auth/presentation` | — | **96.2%** |
 
 | Gap | Evidence | Disposition |
 |---|---|---|
-| **39 of 55 source files have no test contact** | §15, measured from `lcov.info` | **A-046.** The six `core/` modules are the priority: they exist, they ship, and the "features are empty" argument does not apply to them |
-| **Coverage cannot express Volume 9's per-layer targets** | One repository-wide percentage, no layer breakdown, blind to unimported files | **A-046.** Needs per-layer computation before any gate is meaningful |
+| ~~`features/auth/data` is 65.9% against an 80% target~~ | ~~Entirely one file: `auth_repository_impl.dart` at 47.5%~~ | **Closed, Mission 2.9.** The hand-rolled fakes were written rather than reopening **A-028**: `test/features/auth/data/fakes/google_sign_in_fakes.dart` models the Google and Cloud Functions surfaces by behaviour, not canned values. `auth_repository_impl.dart` went 47.5% → 99.0%, the layer 65.9% → **99.4%**. One line remains — the lazy `FirebaseFunctions.instanceFor` default, unreachable when an instance is injected |
+| ~~39 of 55 source files have no test contact~~ | Superseded — measured before `features/auth/` existed | **A-046** still stands for `core/`; the auth tree is now covered |
+| ~~Coverage cannot express Volume 9's per-layer targets~~ | Superseded | **Closed, Mission 2.8.** Per-layer computation exists and its numbers are above. A *gate* still does not, and the CI comment now states the real reason rather than the stale one |
 | **Three of four named test tools absent** | `mocktail`, `integration_test`, `golden_toolkit` | **A-028**, and **A-027** for the discontinued one |
 | **No integration test, no golden test** | No `integration_test/`, no golden files | Volume 9 §9.7's five flows all depend on features that do not exist |
-| **No error-boundary test outside Firebase** | `core/network`, `core/database`, `core/storage` all convert third-party errors and none is tested | Highest-value missing tests. ADR-025 §28 specifies exactly what each needs; ADR-027 §13 names the redaction test |
+| **No error-boundary test outside Firebase and `core/network`** | ~~`core/network`,~~ `core/database` and `core/storage` convert third-party errors and neither is tested | **`core/network` closed in Mission 2.8** — `error_interceptor_test.dart` covers all 13 mappings ADR-025 §8 documents. The other two remain; §28 specifies what each needs |
 | **No clock abstraction** | `DateTime.now()` called directly in three `core/` files (§9) | Not a violation — none is a use case — but those durations are unassertable |
 | **Volume 9 §9.6 §2 mis-cites Volume 3 §3.7** | V3.7 has nine sections; none mentions a clock | **A-045** |
 | **No fixtures, no `dart_test.yaml`, no shared helpers** | §14 | Correct at four test files; §14 records the rules for when they arrive |
 | **No manual test plan, no device matrix** | Volume 9 §9.8, §9.9 | ~10% of the pyramid by Volume 9's proportions, entirely absent |
 | **No automated performance test** | Verified: nothing measures frame time, memory or battery | **Correct by design.** Volume 9 §9.4 assigns four of its six targets to manual measurement and two to in-app instrumentation; no Volume asks for an automated performance test (§13) |
 | **No performance instrumentation or measurement procedure** | Volume 9 §9.4's six targets have no implementation and no runbook | All six depend on recording and upload, so correctly absent. The two in-app ones will need an injected clock (§9, §13) |
-| **Coverage gate is off** | Deliberate for layer targets; not justified for `core/` | Revisit once `core/` has tests |
+| **Coverage gate is off** | Deliberate; the CI comment justifying it was stale until Mission 2.8 corrected it | `features/auth/data` now clears 80% comfortably, so a gate is no longer blocked by the auth tree. `core/database` and `core/storage` still have no boundary test, so a repository-wide gate would fail on those |
 
 ---
 

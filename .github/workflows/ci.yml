@@ -131,9 +131,19 @@ jobs:
         # per-layer targets (domain 90%+, data 80%+), and a target nothing
         # measures is a target nobody meets.
         #
-        # No threshold is enforced yet, deliberately: `lib/features/` is empty,
-        # so domain/ and data/ do not exist and any gate would be vacuous.
-        # Enforcement belongs to the mission that creates the first use-case.
+        # No threshold is enforced yet — but the reason has changed, and the
+        # old one ("`lib/features/` is empty, so any gate would be vacuous")
+        # stopped being true at Mission 2.1.
+        #
+        # Mission 2.8 measured the layers for the first time; Mission 2.9
+        # closed the gap it found. features/auth/ now reads data 99.4%,
+        # presentation 96.2%, application 93.8% — all clear of Volume 9
+        # §9.5 §2's targets.
+        #
+        # What still blocks a repository-wide gate is core/: `core/database`
+        # and `core/storage` convert third-party errors and neither has a
+        # boundary test, so a gate set today would fail on those rather than
+        # on the auth tree.
         run: flutter test --coverage --reporter expanded
 
       - name: Report coverage
