@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:mobile/app/home_screen.dart';
 import 'package:mobile/app/navigation/tab_shell.dart';
+import 'package:mobile/features/auth/presentation/admin_invite_codes_screen.dart';
 import 'package:mobile/features/auth/presentation/login_screen.dart';
 import 'package:mobile/features/projects_tasks/presentation/admin_dashboard_screen.dart';
 import 'package:mobile/features/projects_tasks/presentation/admin_project_detail_screen.dart';
@@ -292,6 +293,19 @@ final GoRouter appRouter = GoRouter(
           ],
         ),
       ],
+    ),
+
+    // The Admin's invite-code surface (ADR-036). Outside the shell because it
+    // is reached from Settings rather than being a tab of its own, and
+    // TEMPORARY — it is retired with the rest of ADR-036 at Mission 6/7.
+    //
+    // Unguarded, like every other /admin route here: this table still has no
+    // redirect (Mission 2.7 owns that). Reaching the screen grants nothing,
+    // because firestore.rules checks the admin claim on every write.
+    GoRoute(
+      path: '/admin/invite-codes',
+      builder: (BuildContext context, GoRouterState state) =>
+          const AdminInviteCodesScreen(),
     ),
 
     // ---------------------------------------------------------------------

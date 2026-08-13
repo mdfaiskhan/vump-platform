@@ -1,9 +1,13 @@
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart' as fb;
 import 'package:google_sign_in/google_sign_in.dart';
 
+import 'package:mobile/core/errors/app_exception.dart';
 import 'package:mobile/core/errors/error_codes.dart';
 import 'package:mobile/core/errors/exceptions/authentication_exception.dart';
+import 'package:mobile/core/logging/app_logger.dart';
 import 'package:mobile/features/auth/data/firebase_auth_error_mapper.dart';
+import 'package:mobile/features/auth/data/firebase_functions_error_mapper.dart';
 import 'package:mobile/features/auth/domain/entities/role.dart';
 import 'package:mobile/features/auth/domain/entities/session.dart';
 import 'package:mobile/features/auth/domain/entities/user.dart';
@@ -34,10 +38,13 @@ import 'package:mobile/features/auth/domain/repositories/auth_repository.dart';
 /// Mission 2.3 (`application/`), which this mission may not touch. Until then a
 /// caller must construct this class only after `firebaseAppProvider` resolves.
 ///
-/// ## What is deliberately not implemented
+/// ## Sign-up works, and is still not reachable
 ///
-/// [signUpWithEmailPassword] and [signUpWithGoogle] are blocked, not omitted.
-/// See [_redeemInviteCode].
+/// [signUpWithEmailPassword] and [signUpWithGoogle] redeem a real invite code
+/// against the Cloud Function ADR-036 describes. `SignupScreen` remains
+/// unrouted regardless: Mission 2.7 owns the route guard, and linking sign-up
+/// before one exists would let an unauthenticated person reach it without
+/// passing the guard at all.
 class AuthRepositoryImpl implements AuthRepository {
   /// Creates a repository over [firebaseAuth] and [googleSignIn].
   ///
@@ -51,13 +58,28 @@ class AuthRepositoryImpl implements AuthRepository {
   /// because the boundary belongs in the signature regardless of what today's
   /// package permits.
   AuthRepositoryImpl({
+    required this.logger,
     fb.FirebaseAuth? firebaseAuth,
     GoogleSignIn? googleSignIn,
+    FirebaseFunctions? functions,
   }) : _injectedAuth = firebaseAuth,
-       _googleSignIn = googleSignIn ?? GoogleSignIn.instance;
+       _googleSignIn = googleSignIn ?? GoogleSignIn.instance,
+       _injectedFunctions = functions;
 
+  /// Destination for the one diagnostic this class writes — see `_discard`.
+  final AppLogger logger;
   final fb.FirebaseAuth? _injectedAuth;
   final GoogleSignIn _googleSignIn;
+  final FirebaseFunctions? _injectedFunctions;
+
+  /// Resolved lazily, and pinned to the region the function is deployed to.
+  ///
+  /// A callable defaults to `us-central1`; ADR-036 deploys to `asia-south1`
+  /// beside the Firestore database. A mismatch here fails at call time with a
+  /// not-found that looks like a missing function rather than a wrong region.
+  FirebaseFunctions get _functions =>
+      _injectedFunctions ??
+      FirebaseFunctions.instanceFor(region: 'asia-south1');
 
   /// Resolved on each use rather than in the constructor.
   ///
@@ -166,33 +188,81 @@ class AuthRepositoryImpl implements AuthRepository {
     required String email,
     required String password,
     required String inviteCode,
-  }) async {
-    // Redemption first, deliberately. Creating the Firebase account before the
-    // invite code is known good would leave an orphaned account behind every
-    // rejected sign-up, and nothing in this codebase deletes it.
-    await _redeemInviteCode(inviteCode);
-
+  }) {
     return _guard(
       description: 'create an account with an email address and password',
       action: () async {
         final fb.UserCredential credential = await _firebaseAuth
             .createUserWithEmailAndPassword(email: email, password: password);
-        return _toUser(_requireUser(credential));
+        return _provision(_requireUser(credential), inviteCode);
       },
     );
   }
 
   @override
-  Future<User> signUpWithGoogle({required String inviteCode}) async {
-    await _redeemInviteCode(inviteCode);
-
+  Future<User> signUpWithGoogle({required String inviteCode}) {
     return _guard(
       description: 'create an account with Google',
       action: () async {
         final fb.UserCredential credential = await _authenticateWithGoogle();
-        return _toUser(_requireUser(credential));
+        return _provision(_requireUser(credential), inviteCode);
       },
     );
+  }
+
+  /// Redeems the code for a freshly created account, or undoes the account.
+  ///
+  /// ## The account has to exist first, which reverses Mission 2.2's ordering
+  ///
+  /// That ordering redeemed before creating, so a rejected code left nothing
+  /// behind. It cannot survive contact with the real function: redemption sets
+  /// a custom claim, so it needs an authenticated caller to set it *on*, and
+  /// the uid comes from the verified auth context rather than the request body
+  /// (ADR-036). There is no account to name until one is created.
+  ///
+  /// The orphaned account that ordering was protecting against is therefore
+  /// real again, and is handled rather than accepted: a failed redemption
+  /// deletes the account it just created. The person can retry with a good
+  /// code instead of finding their address already taken by an account they
+  /// cannot use.
+  ///
+  /// ## The token must be refreshed before the claims are readable
+  ///
+  /// `setCustomUserClaims` writes on the server. The ID token this device is
+  /// holding was minted before that write and does not carry the new claims,
+  /// so `_toUser` would find no `role` and reject the account it just
+  /// provisioned. Forcing a refresh is what closes that window.
+  Future<User> _provision(fb.User user, String inviteCode) async {
+    try {
+      await _redeemInviteCode(inviteCode);
+    } on AppException {
+      await _discard(user);
+      rethrow;
+    }
+
+    await user.getIdToken(true);
+    return _toUser(user);
+  }
+
+  /// Deletes an account whose provisioning failed.
+  ///
+  /// A best-effort compensation, and its own failure is reported rather than
+  /// swallowed — `empty_catches` is an analyzer error under ADR-021 for
+  /// exactly this shape, and a leftover account is something support needs to
+  /// know about. The redemption failure is still what reaches the caller: it
+  /// is the one they can act on.
+  Future<void> _discard(fb.User user) async {
+    try {
+      await user.delete();
+    } on Object catch (error, stackTrace) {
+      logger.error(
+        'Could not remove the account created for a sign-up whose invite '
+        'code was rejected. It exists with no organisation and no role, and '
+        'the address it holds cannot be reused until it is deleted.',
+        error: error,
+        stackTrace: stackTrace,
+      );
+    }
   }
 
   @override
@@ -229,32 +299,32 @@ class AuthRepositoryImpl implements AuthRepository {
 
   /// Validates and consumes an organisation invite code.
   ///
-  /// **BLOCKED — there is nothing to validate against, and this throws.**
+  /// **TEMPORARY — calls the Cloud Function ADR-036 retires at Mission 6/7.**
+  /// When redemption becomes a `/v1/...` route this body changes to a Dio
+  /// call and `cloud_functions` leaves the project; the contract does not
+  /// change, which is why the seam is here rather than at the call sites.
   ///
-  /// Redeeming a code requires a server that owns the code's existence, its
-  /// expiry and its remaining uses; none of that can be decided on a device
-  /// the person holding the code controls. `backend/` is empty (ADR-015), and
-  /// Volume 4 Chapter 4.6 specifies exactly two auth endpoints —
-  /// `POST /v1/auth/verify` and `GET /v1/users/me` — neither of which redeems
-  /// anything.
+  /// The code is the only thing sent. The uid the claims are written to comes
+  /// from the caller's verified auth context on the server side, never from
+  /// this payload — a client that could name the account to provision could
+  /// provision somebody else's.
   ///
-  /// It throws rather than returning, and it throws an `UnimplementedError`
-  /// rather than an `AuthenticationException`, for one reason: an
-  /// `AuthenticationException` would be caught by `application/` and rendered
-  /// to a user as "that code is not valid", which is a lie about a code nobody
-  /// checked. An `Error` is not part of the failure taxonomy and is not
-  /// handled — it stops the program, which is the correct response to a path
-  /// that was never built.
-  ///
-  /// A no-op that returned normally would be worse than either: it would open
-  /// self-service registration to anyone who can type a string.
-  Future<void> _redeemInviteCode(String inviteCode) {
-    throw UnimplementedError(
-      'Organisation invite codes cannot be redeemed: no endpoint exists to '
-      'validate one against. Volume 4 Chapter 4.6 defines no redemption '
-      'route and backend/ is empty (ADR-015). See ADR-034 and amendment '
-      'A-051. Sign-up must stay unreachable in the UI until this is built.',
-    );
+  /// Throws an `AuthenticationException` carrying
+  /// `AUTH_INVITE_CODE_INVALID` or `AUTH_INVITE_CODE_EXPIRED`; the function
+  /// reports which in `details.errorCode` and
+  /// [FirebaseFunctionsErrorMapper] reads it.
+  Future<void> _redeemInviteCode(String inviteCode) async {
+    try {
+      await _functions.httpsCallable('redeemInviteCode').call<Object?>(
+        <String, Object?>{'code': inviteCode},
+      );
+    } on FirebaseFunctionsException catch (error, stackTrace) {
+      throw FirebaseFunctionsErrorMapper.toAuthenticationException(
+        error,
+        stackTrace,
+        description: 'redeem the invite code',
+      );
+    }
   }
 
   /// Reads the domain [User] out of the ID token's custom claims.

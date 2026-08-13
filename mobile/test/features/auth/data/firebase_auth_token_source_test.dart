@@ -1,6 +1,8 @@
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mobile/app/config/app_environment.dart';
 import 'package:mobile/core/errors/exceptions/authentication_exception.dart';
+import 'package:mobile/core/logging/app_logger.dart';
 import 'package:mobile/features/auth/data/firebase_auth_token_source.dart';
 import 'package:mobile/features/auth/data/repositories/auth_repository_impl.dart';
 
@@ -26,7 +28,7 @@ void main() {
     });
 
     test('AuthRepositoryImpl can be constructed', () {
-      expect(AuthRepositoryImpl.new, returnsNormally);
+      expect(_repository, returnsNormally);
     });
   });
 
@@ -76,7 +78,7 @@ void main() {
   group('the repository fails the same way', () {
     test('restoreSession throws AuthenticationException', () async {
       await expectLater(
-        AuthRepositoryImpl().restoreSession(),
+        _repository().restoreSession(),
         throwsA(isA<AuthenticationException>()),
       );
     });
@@ -89,7 +91,7 @@ void main() {
         // a stream error crosses the boundary just as a thrown one does, which
         // is why subscribing is guarded.
         await expectLater(
-          AuthRepositoryImpl().sessionChanges,
+          _repository().sessionChanges,
           emitsInOrder(<Matcher>[
             isA<Object>(),
             emitsError(isA<AuthenticationException>()),
@@ -99,3 +101,11 @@ void main() {
     );
   });
 }
+
+/// Builds a repository with a logger that writes nowhere.
+///
+/// The logger exists for one diagnostic on a compensating delete; these tests
+/// never reach it, and a real sink would print during the run.
+AuthRepositoryImpl _repository() => AuthRepositoryImpl(
+  logger: AppLogger(environment: AppEnvironment.production),
+);

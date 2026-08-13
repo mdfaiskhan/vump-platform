@@ -51,6 +51,8 @@ Volume 3 §3.8 §2 fixes this and states the trade: *"Chapter 3.5's module bound
 | `firebase_core` | `^4.13.0` | Core | `core/firebase/` | ADR-010 |
 | `firebase_auth` | `^6.5.7` | Core | `features/auth/data/` | ADR-034 |
 | `google_sign_in` | `^7.2.0` | Core | `features/auth/data/` | ADR-034, **A-053** |
+| `cloud_functions` | `^6.3.6` | Leaf | `features/auth/data/` | ADR-036 — **temporary** |
+| `cloud_firestore` | `^6.8.0` | Leaf | `features/auth/data/` | ADR-036 — **temporary** |
 | `logger` | `^2.5.0` | Leaf | `core/logging/` | ADR-027 |
 | `freezed_annotation` | `^2.4.4` | Leaf | — (annotations) | — |
 | `json_annotation` | `^4.9.0` | Leaf | — (annotations) | — |
@@ -65,7 +67,9 @@ Volume 3 §3.8 §2 fixes this and states the trade: *"Chapter 3.5's module bound
 
 **Every package has a documented reason.** Nine of the thirteen runtime packages are named by an accepted ADR; the rest are annotations, icons or lint rules. Nothing is present without a decision behind it, which is Volume 0 §2's requirement.
 
-**The two newest entries are the first packages owned by a feature rather than by `core/`.** ADR-010 keeps the Firebase *platform* in `core/firebase/`; a Firebase *product* is owned by the module that consumes it, so `features/auth/` rather than `core/` is the unit that stays replaceable. Both carry a confinement line in the `Architecture boundaries` job, so this is an enforced rule and not documentation only.
+**Two entries are marked temporary, and that is a tier of its own in practice.** `cloud_functions` and `cloud_firestore` exist only to reach the invite-code runtime ADR-036 stands up, and both leave the project when that runtime is retired at Mission 6/7 — redemption becomes a `/v1/...` route carried by `dio`, which is already here. They are classed Leaf rather than Core deliberately: nothing architectural depends on them, and their removal should be a deletion rather than a migration.
+
+**The two Firebase-product entries are the first packages owned by a feature rather than by `core/`.** ADR-010 keeps the Firebase *platform* in `core/firebase/`; a Firebase *product* is owned by the module that consumes it, so `features/auth/` rather than `core/` is the unit that stays replaceable. Both carry a confinement line in the `Architecture boundaries` job, so this is an enforced rule and not documentation only.
 
 **`pubspec.yaml` is grouped by purpose, not alphabetised** — state management, navigation, networking, logging, secure storage, Firebase, database, code generation — each group carrying a comment. ADR-023 §11 records why `sort_pub_dependencies` is deliberately excluded from the lint set: alphabetical order would destroy the grouping, which is the more useful organisation of about a dozen entries.
 

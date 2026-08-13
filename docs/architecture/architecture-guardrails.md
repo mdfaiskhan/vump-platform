@@ -123,6 +123,10 @@ Every architectural invariant in force, with its authority and how it is checked
 | **I39** | `firebase_auth` only in `features/auth/data/` | ADR-034, ADR-022 §2.3 | CI `Architecture boundaries` |
 | **I40** | `google_sign_in` only in `features/auth/data/` | ADR-034, A-053 | CI `Architecture boundaries` |
 | **I41** | `core/` never imports `features/` | ADR-022 §2, ADR-035 | A grep — **checkable now** |
+| **I42** | `cloud_functions` only in `features/auth/data/` | ADR-036 | CI `Architecture boundaries` |
+| **I43** | `cloud_firestore` only in `features/auth/data/` | ADR-036 | CI `Architecture boundaries` |
+
+**I42 and I43 are temporary**, and are the only invariants in this register with an expiry: both packages leave the project when ADR-036's runtime is retired at Mission 6/7. They are registered anyway — an unenforced boundary is not cheaper for being short-lived, and the confinement is what keeps the retirement a deletion of one directory rather than a hunt.
 
 **I41 was implicit until ADR-035 tested it.** ADR-022 states the rule; nothing checked it, because `core/` had no reason to want anything from a feature until `AuthInterceptor` needed a token. The resolution — `core/network/` declares `AuthTokenSource` and the composition root supplies the implementation — is the pattern every later `core/` module with the same problem should follow, and this invariant is what stops the shortcut being taken instead.
 
@@ -181,7 +185,7 @@ Verified by running each check against the working tree, not asserted. Commands 
 
 | Checked | Result |
 |---|---|
-| Package confinement (I1–I4, I39–I40) | 6 of 6 pass |
+| Package confinement (I1–I4, I39–I40, I42–I43) | 8 of 8 pass |
 | AWS SDK dependency, credential references, hardcoded endpoints (I5–I6) | none present |
 | Credential-bearing files, AWS keys, private keys, service-account keys (I7) | none tracked |
 | Environment sets across Dart / JSON / shell (I8) | agree — `development`/`staging`/`production` |
@@ -248,7 +252,7 @@ check() {  # check <label> <grep output>
   fi
 }
 
-# I1–I4, I39–I40 · each third-party package confined to the module that owns it
+# I1–I4, I39–I43 · each third-party package confined to the module that owns it
 for p in "dio core/network" "isar core/database" \
          "flutter_secure_storage core/storage" "firebase_core core/firebase" \
          "firebase_auth features/auth/data" \

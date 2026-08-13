@@ -214,6 +214,8 @@ jobs:
           #   firebase_core          → core/firebase           (ADR-010)
           #   firebase_auth          → features/auth/data      (ADR-034)
           #   google_sign_in         → features/auth/data      (ADR-034)
+          #   cloud_functions        → features/auth/data      (ADR-036)
+          #   cloud_firestore        → features/auth/data      (ADR-036)
           #
           # The last two are owned by a feature rather than by core/. ADR-010
           # keeps the Firebase *platform* in core/firebase/; a Firebase
@@ -242,6 +244,8 @@ jobs:
           check firebase_core          lib/core/firebase/
           check firebase_auth          lib/features/auth/data/
           check google_sign_in         lib/features/auth/data/
+          check cloud_functions        lib/features/auth/data/
+          check cloud_firestore        lib/features/auth/data/
 
           exit $status
 

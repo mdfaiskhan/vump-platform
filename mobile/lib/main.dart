@@ -15,6 +15,8 @@ import 'package:mobile/core/firebase/providers/firebase_provider.dart';
 import 'package:mobile/core/logging/app_logger.dart';
 import 'package:mobile/core/logging/providers/logger_provider.dart';
 import 'package:mobile/features/auth/application/auth_notifier.dart';
+import 'package:mobile/features/auth/application/invite_code_notifier.dart';
+import 'package:mobile/features/auth/data/invite_code_repository_impl.dart';
 import 'package:mobile/features/auth/data/repositories/auth_repository_impl.dart';
 import 'package:path_provider/path_provider.dart';
 
@@ -42,7 +44,13 @@ Future<void> main() async {
       // Constructing it is safe with Firebase down — ADR-035 made the SDK
       // resolution lazy precisely so this line cannot throw during startup
       // that ADR-017 has already decided to tolerate.
-      authRepositoryProvider.overrideWithValue(AuthRepositoryImpl()),
+      authRepositoryProvider.overrideWith(
+        (Ref ref) => AuthRepositoryImpl(logger: ref.watch(loggerProvider)),
+      ),
+      // TEMPORARY, retired with ADR-036 at Mission 6/7.
+      inviteCodeRepositoryProvider.overrideWithValue(
+        InviteCodeRepositoryImpl(),
+      ),
     ],
   );
   final AppLogger logger = container.read(loggerProvider);

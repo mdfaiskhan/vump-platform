@@ -1,0 +1,47 @@
+rules_version = '2';
+
+// Firestore security rules.
+//
+// TEMPORARY, alongside functions/ — retired at Mission 6/7 (ADR-036).
+//
+// Default deny is the posture: any path not matched below is denied, and no
+// catch-all allow exists. The only collection that exists today is
+// org_invite_codes; everything else the product needs lives behind the AWS
+// backend (ADR-015) and never touches Firestore.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Organisation invite codes. Document ID is the code itself, so a lookup
+    // is a get rather than a query and uniqueness is the database's guarantee
+    // rather than a rule someone has to remember.
+    match /org_invite_codes/{code} {
+
+      // Nobody reads, ever. A client that could read this collection could
+      // enumerate valid codes, which is the whole attack this design exists
+      // to prevent. The redemption function runs with Admin privileges, which
+      // bypass rules entirely, so it is the only reader.
+      allow read: if false;
+
+      // Writes require the admin custom claim. This — not the Admin UI — is
+      // the enforcement: the UI gate is a convenience, and this rule holds
+      // against anyone with the project's public config and an HTTP client.
+      //
+      // The claim is set at provisioning time and signed by Firebase, so a
+      // client cannot assert it (Volume 4 Chapter 4.7 §2).
+      //
+      // The org_id comparison is the clause that matters most and is the
+      // easiest to omit: without it any admin could mint codes for another
+      // organisation, defeating BR-20's org scoping (Volume 4 Chapter 4.8 §3)
+      // at the exact point where org membership is granted.
+      allow create, update: if request.auth != null
+        && request.auth.token.role == 'admin'
+        && request.auth.token.org_id == request.resource.data.orgId;
+
+      // Revocation. Compared against the stored document rather than the
+      // incoming one, because a delete carries no payload.
+      allow delete: if request.auth != null
+        && request.auth.token.role == 'admin'
+        && request.auth.token.org_id == resource.data.orgId;
+    }
+  }
+}

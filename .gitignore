@@ -127,6 +127,14 @@ temp/
 infrastructure/aws/cloudfront/.rendered-*.json
 
 # ---------------------------------------------------------------------------
+# Cloud Functions build output — see ADR-036
+# ---------------------------------------------------------------------------
+# `functions/lib/` is TypeScript compiled to JavaScript by the predeploy step.
+# Unlike the Dart generated code this repository commits deliberately, nothing
+# reads it from a clean checkout: `firebase deploy` rebuilds it every time.
+functions/lib/
+
+# ---------------------------------------------------------------------------
 # Session report artifacts
 # ---------------------------------------------------------------------------
 # Per-mission reports written by a Claude Code session. They are a working
