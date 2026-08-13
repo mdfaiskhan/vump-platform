@@ -122,7 +122,7 @@ Cloud Functions requires the **Blaze** plan. Its free tier is **2,000,000 invoca
 - **A retirement obligation exists with nothing to enforce it.** No CI check can detect that Mission 6/7 has happened. If the port is forgotten, a Cloud Function silently becomes permanent architecture — the failure mode this ADR's own existence is the only guard against.
 - **The project gains Firestore**, which no other part of the application uses. ADR-009 chose Isar for local persistence and that is untouched; this is a server-side store the mobile app reaches only through the Admin UI's writes.
 - **Two Flutter dependencies follow** — `cloud_functions` and `cloud_firestore` — each needing ADR-030's admission checklist, a confinement entry, and a conversion boundary. `FirebaseFunctionsException` is a distinct type from `FirebaseAuthException`, so whether `FirebaseAuthErrorMapper` extends or gains a sibling is an implementation decision this ADR does not pre-empt.
-- **Signup becomes reachable in principle, and must stay unreachable in fact.** Mission 2.7 owns the route guard, and linking sign-up before a guard exists would let an unauthenticated person reach it without passing one. The screen stays unrouted.
+- ~~Signup becomes reachable in principle, and must stay unreachable in fact.~~ **Overtaken.** Mission 2.7 routed it behind the guard, and amendment **A-056** links it from Login — the sign-up flow is now a first-class entry point.
 - **The Firestore location is a one-time, irreversible choice** made when the database is created. It is not a decision this ADR takes, and it should be made deliberately rather than accepted as a console default.
 
 ## Related Missions
@@ -151,7 +151,7 @@ No valid invite code was needed to run the probe. That defeats, on the sign-up p
 
 The original design took the uid from `request.auth`, on the reasoning that a client must never name the account to provision. That reasoning is unchanged and is now satisfied more strongly rather than less: there is no account yet, so there is no uid to assert. The function creates the user itself and sets the claims on the user it just created, so the identity is server-chosen end to end.
 
-Sign-up is therefore the one unauthenticated entry point in this runtime. The invite code is the credential that gates it, which is what it was always for.
+Sign-up is therefore the one unauthenticated entry point in this runtime. **Amendment A-056 (2026-08-14) made the invite code optional**, so it no longer gates that entry point: an account without a code joins a default organisation as a Collector. What bounds the exposure instead is that no self-signup path can produce an admin, and a new Collector has no Task assigned to them.
 
 ### The compensating delete is retired for this path
 
@@ -234,7 +234,7 @@ The orphaned account that ordering avoided is therefore real again, and is compe
 
 ### Deliberately not done
 
-**`SignupScreen` is still unrouted and unlinked.** Redemption works, so the screen would now function — which is exactly why it stays unreachable until Mission 2.7's guard exists. Linking it first would let an unauthenticated person reach a provisioning flow without passing a guard at all.
+~~**`SignupScreen` is still unrouted and unlinked.**~~ **Overtaken twice:** Mission 2.7 routed it once the guard existed, and A-056 linked it from Login. Both steps are recorded where they were taken.
 
 ### Cost, as deployed
 

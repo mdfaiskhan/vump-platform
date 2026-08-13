@@ -23,13 +23,20 @@ abstract interface class AuthRepository {
 
   Future<User> signInWithGoogle();
 
+  /// Creates an account.
+  ///
+  /// [inviteCode] is optional since amendment A-056. Without one the account
+  /// joins the default organisation; with one it joins that code's
+  /// organisation. The role is `collector` either way — no invite code grants
+  /// admin, and no self-signup path can.
   Future<User> signUpWithEmailPassword({
     required String email,
     required String password,
-    required String inviteCode,
+    String? inviteCode,
   });
 
-  Future<User> signUpWithGoogle({required String inviteCode});
+  /// Creates an account from a Google identity. [inviteCode] is optional.
+  Future<User> signUpWithGoogle({String? inviteCode});
 
   Future<void> signOut();
 }

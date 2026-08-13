@@ -42,9 +42,8 @@ import 'package:mobile/features/auth/domain/repositories/auth_repository.dart';
 ///
 /// [signUpWithEmailPassword] and [signUpWithGoogle] redeem a real invite code
 /// against the Cloud Function ADR-036 describes. `SignupScreen` remains
-/// unrouted regardless: Mission 2.7 owns the route guard, and linking sign-up
-/// before one exists would let an unauthenticated person reach it without
-/// passing the guard at all.
+/// routed and, since amendment A-056, linked from Login. The invite code is
+/// optional; the role is Collector on every path.
 class AuthRepositoryImpl implements AuthRepository {
   /// Creates a repository over [firebaseAuth] and [googleSignIn].
   ///
@@ -187,7 +186,7 @@ class AuthRepositoryImpl implements AuthRepository {
   Future<User> signUpWithEmailPassword({
     required String email,
     required String password,
-    required String inviteCode,
+    String? inviteCode,
   }) {
     return _guard(
       description: 'create an account with an email address and password',
@@ -229,7 +228,7 @@ class AuthRepositoryImpl implements AuthRepository {
   /// The compensating delete therefore stays on this path, where it still has
   /// something to compensate for.
   @override
-  Future<User> signUpWithGoogle({required String inviteCode}) {
+  Future<User> signUpWithGoogle({String? inviteCode}) {
     return _guard(
       description: 'create an account with Google',
       action: () async {
@@ -250,7 +249,7 @@ class AuthRepositoryImpl implements AuthRepository {
   /// holding was minted before that write and does not carry the new claims,
   /// so `_toUser` would find no `role` and reject the account it just
   /// provisioned. Forcing a refresh is what closes that window.
-  Future<User> _provisionFederated(fb.User user, String inviteCode) async {
+  Future<User> _provisionFederated(fb.User user, String? inviteCode) async {
     try {
       await _redeemInviteCode(
         inviteCode: inviteCode,
@@ -336,20 +335,28 @@ class AuthRepositoryImpl implements AuthRepository {
   /// address is reported as the former, not as its own condition — see
   /// ADR-036.
   Future<void> _redeemInviteCode({
-    required String inviteCode,
+    required String? inviteCode,
     required String email,
     required String? password,
   }) async {
     try {
-      await _functions.httpsCallable('redeemInviteCode').call<Object?>(
-        <String, Object?>{
-          'code': inviteCode,
-          'email': email,
-          // Omitted rather than sent as null on the federated path, where
-          // Google has already created the account.
-          'password': ?password,
-        },
-      );
+      // Built imperatively rather than as a literal with null-aware elements.
+      // `?value` is recent Dart syntax, and the code-generation chain runs
+      // analyzer 5.13.0 — capped below 6.0.0 by `isar_generator` (A-048) —
+      // which cannot parse it. `flutter analyze` accepts it and build_runner
+      // does not, so the literal form breaks codegen while looking clean.
+      final Map<String, Object?> payload = <String, Object?>{'email': email};
+      // Omitted when absent rather than sent empty or null: the function reads
+      // a missing code as "the default organisation" (A-056) and a missing
+      // password as "the account already exists" (the federated path).
+      if (inviteCode != null) {
+        payload['code'] = inviteCode;
+      }
+      if (password != null) {
+        payload['password'] = password;
+      }
+
+      await _functions.httpsCallable('redeemInviteCode').call<Object?>(payload);
     } on FirebaseFunctionsException catch (error, stackTrace) {
       throw FirebaseFunctionsErrorMapper.toAuthenticationException(
         error,

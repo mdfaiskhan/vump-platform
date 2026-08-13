@@ -116,11 +116,11 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((Ref ref) {
       ),
 
       // Reachable without a session, necessarily — the person has no account
-      // yet. Deliberately not linked from Login: Volume 2 SH-02 specifies
-      // email/password and an SSO entry point only, and Volume 10 Chapter
-      // 10.4 §4 records the absence of a Sign Up option as intentional. An
-      // admin sends the invite code out of band, and the code is what gates
-      // account creation (ADR-036).
+      // yet. Linked from Login since amendment A-056, which reversed
+      // Mission 2.7's unlinked route: Volume 10 Chapter 10.4 §4's framing
+      // exists for an App Store reviewer, and this build is shared as an
+      // APK among known people. The invite code is optional now, so what
+      // bounds this entry point is that it can only produce a Collector.
       GoRoute(
         path: '/signup',
         builder: (BuildContext context, GoRouterState state) =>

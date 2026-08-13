@@ -315,12 +315,11 @@ class _FakeAuthRepository implements AuthRepository {
   Future<User> signUpWithEmailPassword({
     required String email,
     required String password,
-    required String inviteCode,
+    String? inviteCode,
   }) async => _signIn();
 
   @override
-  Future<User> signUpWithGoogle({required String inviteCode}) async =>
-      _signIn();
+  Future<User> signUpWithGoogle({String? inviteCode}) async => _signIn();
 
   @override
   Future<void> signOut() async {

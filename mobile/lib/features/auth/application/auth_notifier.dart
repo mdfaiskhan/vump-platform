@@ -210,7 +210,7 @@ class AuthNotifier extends AsyncNotifier<AuthState> {
   Future<Failure?> signUpWithEmailPassword({
     required String email,
     required String password,
-    required String inviteCode,
+    String? inviteCode,
   }) {
     return _attempt(
       () => _repository.signUpWithEmailPassword(
@@ -222,7 +222,7 @@ class AuthNotifier extends AsyncNotifier<AuthState> {
   }
 
   /// Creates an account from a Google identity and an invite code.
-  Future<Failure?> signUpWithGoogle({required String inviteCode}) {
+  Future<Failure?> signUpWithGoogle({String? inviteCode}) {
     return _attempt(() => _repository.signUpWithGoogle(inviteCode: inviteCode));
   }
 

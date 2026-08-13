@@ -48,13 +48,15 @@ Mission 2.4 performed it imperatively with `context.go` after a successful sign-
 
 A null `auth` means the session is still resolving. Redirecting then would send a signed-in user to `/login` for the moment it takes to find out — the flash `Session.unknown` was originated to prevent (Mission 2.2). `main.dart` resolves the session before `runApp`, so this is a guard against a rebuild rather than a state a user normally reaches.
 
-### `/signup` is public and unlinked
+### `/signup` is public and unlinked — the second half superseded
 
 Public because a person creating an account has no session to be guarded by; there is no way to protect this route without making it unusable.
 
-Unlinked because Volume 2 SH-02 specifies Login as *"email/password fields, SSO entry point, error states"* and Volume 10 Chapter 10.4 §4 records the absence of a Sign Up option as deliberate. A-051 made self-service registration a product decision but said nothing about advertising it on Login, and reading it as licence to add a link would extend an amendment past what it says.
+~~Unlinked because Volume 2 SH-02 specifies Login as email/password fields, an SSO entry point and error states, and Volume 10 Chapter 10.4 §4 records the absence of a Sign Up option as deliberate.~~
 
-**The invite code is the gate, not the obscurity of the route.** An admin issues a code out of band (ADR-036) and sends the link with it. Reaching `/signup` without a code achieves nothing: the function rejects it and the account created a moment earlier is deleted again.
+**Superseded by A-056 (2026-08-14).** The reasoning was right on its own terms, and those terms changed: Volume 10's framing exists for an App Store reviewer, and this build is shared as an APK among a known group rather than submitted for review. A-056 is the amendment this section said would be needed, and Login now links here. **The public-route half stands unchanged** — it was never about obscurity.
+
+~~**The invite code is the gate, not the obscurity of the route.**~~ **Superseded by A-056 (2026-08-14):** the code is optional, so reaching `/signup` without one now creates a Collector in the default organisation. The route being public is unchanged and still correct — a person creating an account has no session to be guarded by.
 
 ### `/` is retired
 
@@ -74,7 +76,7 @@ It served Mission 0.6's `HomeScreen`, and ADR-022 §2.2 marked it as leaving *"w
 
 - **Redirect `expired` somewhere other than `/login`.** Rejected. There is nowhere else to go; the difference between expired and unauthenticated is what Login *says*, which Mission 2.5 already built.
 
-- **Link "Create account" from Login.** Rejected as not this decision's to make — see above. It contradicts Volume 10 Chapter 10.4 §4 on its face, and would need A-051 extended and that chapter's App Store reviewer note rewritten.
+- ~~**Link "Create account" from Login.** Rejected as not this decision's to make.~~ **Taken later, by A-056 (2026-08-14)** — the extension this entry said it would require. Left recorded rather than edited away: the rejection was correct when made, and what changed was the distribution model, not the argument.
 
 - **Keep `HomeScreen` behind the guard.** Rejected. It leaves a screen reading "Mission 0.19.1 Complete" reachable in a shipped build, and leaves ADR-022 §2.2's retirement condition unmet with nothing tracking it.
 

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:mobile/app/theme/app_sizes.dart';
 import 'package:mobile/app/theme/app_spacing.dart';
 import 'package:mobile/core/errors/failure.dart';
@@ -24,12 +25,14 @@ import 'package:mobile/features/auth/presentation/auth_error_copy.dart';
 /// signed-in user belongs — the duplication the previous version of this
 /// comment warned about, resolved in the direction it predicted.
 ///
-/// ## Sign-up is not linked from here
+/// ## Sign-up is linked from here
 ///
-/// Volume 10 Chapter 10.4 §4 records that the login screen has no Sign Up
-/// option *"since there deliberately isn't one"*, and amendment A-051 keeps
-/// self-service registration blocked until a redemption endpoint exists.
-/// `SignupScreen` is built but registered nowhere — see its documentation.
+/// Volume 10 Chapter 10.4 §4 records that this screen has no Sign Up option
+/// *"since there deliberately isn't one"*, and Mission 2.7 honoured that by
+/// routing `/signup` without advertising it. Amendment **A-056** reverses it:
+/// that framing exists for an App Store reviewer, and this build is shared as
+/// an APK among known people rather than submitted for review. If it is ever
+/// submitted, this link is the thing to reconsider.
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
 
@@ -143,6 +146,17 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       onPressed: _busy ? null : _submitGoogle,
                       icon: const Icon(Icons.account_circle_outlined),
                       label: const Text('Continue with Google'),
+                    ),
+                    const SizedBox(height: AppSpacing.lg),
+                    // Added by A-056, reversing Mission 2.7's unlinked route.
+                    // Navigated to by path rather than by importing the
+                    // screen: both live in this feature, but a route string
+                    // keeps the router the single place that maps paths to
+                    // screens (ADR-004).
+                    TextButton(
+                      key: const Key('login.createAccount'),
+                      onPressed: _busy ? null : () => context.go('/signup'),
+                      child: const Text('Create an account'),
                     ),
                   ],
                 ),

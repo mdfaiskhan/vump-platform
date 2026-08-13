@@ -1071,6 +1071,31 @@ So the chapter whose stated purpose is turning Volume 1's prose into measurable 
 
 ---
 
+### A-056 — The invite code becomes optional, and Login links to sign-up
+
+| | |
+|---|---|
+| **Volume** | 1 — Product Planning, Ch. 1.6 `FR-AUTH`; Volume 10 — Deployment, Ch. 10.4 §4; Volume 2 Ch. 2.4 `SH-02` |
+| **Says** | Accounts are *"provisioned by the client organization, not public self-signup"*, and the login screen has no Sign Up option *"since there deliberately isn't one (FR-ADM-07)"*. **A-051** then made self-signup a product decision, but kept an organisation invite code as the thing that admits a person |
+| **Should say** | Self-signup needs no invite code. Without one an account joins a single default organisation as a Collector; with one it joins that code's organisation, exactly as before. Login links to sign-up |
+| **Authority** | Project owner's decision, 2026-08-14 |
+| **Class** | Requirement change |
+| **Status** | Open |
+
+**The reason is distribution, and it is worth stating rather than implying.** Volume 1 specified enterprise onboarding for multiple client organisations, and A-051's invite code was the mechanism that made a person's organisation known at the moment they joined. The project's actual distribution today is informal APK sharing among a small trusted group — confirmed by the project owner. There is one organisation, everybody in it is trusted, and a code that everybody already has is a step that admits nobody it would otherwise exclude.
+
+**This supersedes the invite-code half of A-051, not the whole of it.** A-051 remains the record that self-signup exists at all against Volume 10's *"there deliberately isn't one"*. What changes is that the code stops being the gate and becomes an optional way to say which organisation.
+
+**Sign-up is now linked from Login, reversing Mission 2.7's decision** — and reversing it on its own terms rather than despite them. That decision routed `/signup` without a visible link because Volume 10 Ch. 10.4 §4 frames the absent Sign Up option as something to explain to an App Store reviewer, and an unadvertised route kept that framing literally true. A build shared as an APK among known people is not submitted to App Review, so the reasoning does not reach this distribution model. If the app is later submitted to a store, this entry is where to look: the link is the thing to reconsider, not the sign-up flow beneath it.
+
+**The role stays hard-locked to Collector, and this amendment does not touch it.** Stated explicitly because it is the one security property that has to survive the relaxation. Every self-signup path — code or no code — sets `role: 'collector'` at a single site in the redemption function. There is no request field, no branch and no configuration that can produce an admin, and no invite code grants one. **Admin remains a manual bootstrap performed outside the application**, exactly as before.
+
+**A default organisation needs no structure, and none is invented.** `org_id` is consumed in exactly two ways today: as an opaque string on the `User` entity, and as an equality comparison in `firestore.rules` (`request.auth.token.org_id == request.resource.data.orgId`). No `orgs` collection exists, nothing looks an organisation up, and no code reads it as a structured record. A literal constant is therefore sufficient, and creating a Firestore document to represent an organisation nothing queries would be structure ahead of need. When a real organisation model arrives — Volume 4 Ch. 4.4's `users` table is where it belongs — the constant becomes a row and this entry records what it stood in for.
+
+**What this costs, recorded rather than discovered later.** Anyone who obtains the APK can create a Collector account and reach the Collector experience. That is the intended consequence of the owner's decision, not an oversight: the backend re-derives authorization on every request (Volume 4 Ch. 4.8 §1), a Collector sees only their own assigned Tasks (BR-19), and no Task is assigned to a new account by default. The exposure is the Collector shell with nothing in it. It stops being acceptable the moment the app is distributed beyond a trusted group, which is the same trigger as the App Review point above.
+
+---
+
 ## Confirmed correct — no amendment
 
 Recorded so they are not re-litigated.

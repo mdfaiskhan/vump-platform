@@ -21,6 +21,18 @@
  * expired code creates nothing, so there is nothing to delete and nothing to
  * tell apart — the caller gets one error either way.
  *
+ * ## The invite code is optional
+ *
+ * Amendment A-056: without a code an account joins `DEFAULT_ORG_ID`; with one
+ * it joins that code's organisation and spends a use, exactly as before. The
+ * project's distribution is informal APK sharing among a trusted group, so a
+ * code everybody already has admits nobody it would otherwise exclude.
+ *
+ * **The role is `collector` on every path, and that is not negotiable here.**
+ * It is set at one site below, from a literal. No request field, no branch and
+ * no invite code can produce an admin; admin remains a manual bootstrap
+ * performed outside the application.
+ *
  * ## Unauthenticated, deliberately
  *
  * There is no `request.auth` here because there is no account yet. The
@@ -28,8 +40,10 @@
  * never name the account to provision; that property is stronger now rather
  * than weaker, because the function chooses the identity itself.
  *
- * The invite code is the credential gating this endpoint. It is what it was
- * always for.
+ * ~~The invite code is the credential gating this endpoint.~~ **A-056: the
+ * code is optional and no longer gates anything.** What limits exposure now
+ * is that self-signup can only ever produce a Collector in an organisation
+ * with no Tasks assigned to it.
  *
  * ## Passwords
  *
@@ -57,6 +71,21 @@ const REGION = "asia-south1";
 const MAX_CODE_LENGTH = 64;
 
 /**
+ * The organisation an account joins when no invite code is supplied.
+ *
+ * A literal, deliberately. `org_id` is consumed in exactly two ways today: as
+ * an opaque string on the mobile `User`, and as an equality comparison in
+ * `firestore.rules`. Nothing looks an organisation up, no `orgs` collection
+ * exists, and no code reads one as a structured record — so a Firestore
+ * document representing an organisation nothing queries would be structure
+ * ahead of need. See amendment A-056.
+ *
+ * When a real organisation model arrives (Volume 4 Ch. 4.4's `users` table),
+ * this constant becomes a row.
+ */
+const DEFAULT_ORG_ID = "vump-default";
+
+/**
  * `ErrorCode` values from `mobile/lib/core/errors/error_codes.dart`.
  *
  * Carried in `HttpsError.details` rather than in its `code`, because a
@@ -71,6 +100,7 @@ const ErrorCode = {
 } as const;
 
 interface RedeemRequest {
+  /** Optional since A-056. Absent means the default organisation. */
   code?: unknown;
   email?: unknown;
   password?: unknown;
@@ -94,25 +124,34 @@ export const redeemInviteCode = onCall(
   async (request) => {
     const body = request.data as RedeemRequest | undefined;
 
-    const code = normaliseCode(body?.code);
     const email = normaliseEmail(body?.email);
     const password = typeof body?.password === "string" ? body.password : null;
 
-    // Shape is checked before anything else, and reported as a validation
-    // failure rather than a bad code — a malformed request is the caller's
-    // mistake, not a statement about which codes exist.
-    if (code === null || email === null || password === null ||
-        password.length === 0) {
+    // Absent and blank both mean "no code". A caller that omits the field and
+    // one that sends an empty string are asking for the same thing, and
+    // treating them differently would be a distinction with no meaning.
+    const supplied = body?.code;
+    const hasCode = typeof supplied === "string" && supplied.trim().length > 0;
+    const code = hasCode ? normaliseCode(supplied) : null;
+
+    // Shape is checked before anything else. A code that was supplied but is
+    // malformed is still a validation failure — only an absent one is allowed
+    // through.
+    if (email === null || password === null || password.length === 0 ||
+        (hasCode && code === null)) {
       throw new HttpsError(
         "invalid-argument",
-        "An invite code, email address and password are all required.",
+        "An email address and password are required, and an invite code " +
+          "must be alphanumeric if supplied.",
         {errorCode: ErrorCode.validationInvalidInput},
       );
     }
 
-    // Validate first. Nothing below this line runs for a bad code, which is
-    // what closes F1: there is no account-creation attempt to observe.
-    const orgId = await readValidCode(code);
+    // Validate first when there is something to validate. Nothing below this
+    // line runs for a bad code, which is what closes F1: there is no
+    // account-creation attempt to observe. Without a code there is nothing to
+    // reject, so the default organisation is used and no use is spent.
+    const orgId = code === null ? DEFAULT_ORG_ID : await readValidCode(code);
 
     let uid: string;
     try {
@@ -123,11 +162,15 @@ export const redeemInviteCode = onCall(
     }
 
     try {
+      // The single site that assigns a role, and it is a literal. A-056
+      // relaxed the invite code; it did not relax this.
       await getAuth().setCustomUserClaims(uid, {
         role: "collector",
         org_id: orgId,
       });
-      await consumeOneUse(code);
+      if (code !== null) {
+        await consumeOneUse(code);
+      }
     } catch (error) {
       // The account exists but is not usable — no claims, or a use that was
       // not recorded. This is the one place a compensating delete still
@@ -137,7 +180,7 @@ export const redeemInviteCode = onCall(
       throw error;
     }
 
-    logger.info("Invite code redeemed", {uid, orgId});
+    logger.info("Account provisioned", {uid, orgId, usedCode: code !== null});
     return {uid, orgId};
   },
 );

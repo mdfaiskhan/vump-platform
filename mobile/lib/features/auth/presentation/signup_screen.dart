@@ -7,45 +7,30 @@ import 'package:mobile/core/errors/failure.dart';
 import 'package:mobile/features/auth/application/auth_notifier.dart';
 import 'package:mobile/features/auth/presentation/auth_error_copy.dart';
 
-/// The sign-up variant of SH-02 — **built, and deliberately unreachable.**
+/// The sign-up variant of SH-02 — routed at `/signup` and linked from Login.
 ///
-/// ## Why it is not registered
+/// ## Reachable, and now advertised
 ///
-/// This screen has no route in `app/router.dart`, no link from
-/// `LoginScreen`, and no other entry point. That is not an
-/// oversight and not a temporary state to be tidied up: reaching it would be a
-/// defect, because the flow behind it cannot work and, as specified, should
-/// not exist.
+/// Mission 2.7 routed this screen without a link, because Volume 10 Chapter
+/// 10.4 §4 frames the absent Sign Up option as something to explain to an App
+/// Store reviewer, and an unadvertised route kept that framing literally true.
+/// Amendment **A-056** reverses that on its own terms: a build shared as an
+/// APK among known people is not submitted to App Review, so the reasoning
+/// does not reach this distribution model. `LoginScreen` links here.
 ///
-/// Volume 10 Chapter 10.4 §4 records that accounts are *"provisioned by the
-/// client organization, not public self-signup"* and that the login screen
-/// deliberately has no Sign Up option. Amendment **A-051** registers
-/// self-service registration as a product change the project owner asked for,
-/// and it is still blocked on three unspecified things: a redemption endpoint
-/// (Volume 4 Chapter 4.6 defines none, and `backend/` is empty), an Admin
-/// surface that issues codes, and how role and `org_id` are set for an account
-/// nobody provisioned.
+/// ## The invite code is optional
 ///
-/// Beneath all of that, `AuthRepositoryImpl._redeemInviteCode` throws an
-/// `UnimplementedError`. **A reachable sign-up button would crash the app**,
-/// which is exactly what that throw is for — it is loud on purpose rather than
-/// a stub that quietly admits anyone who can type a string.
+/// Without one the account joins the default organisation; with one it joins
+/// that code's organisation and spends a use. **The role is Collector either
+/// way** — no invite code grants admin, and admin remains a manual bootstrap
+/// performed outside the application.
 ///
-/// ## Why it exists at all
+/// ## Where the navigation happens after this
 ///
-/// The mission asked for the surface so the shape of the flow is settled — the
-/// three inputs Mission 2.1's `signUpWithEmailPassword` requires, and the
-/// Google variant beside them. It is a form with no submit path, so nothing
-/// here can be called by accident.
-///
-/// ## What Mission 2.6 has to do
-///
-/// Register a route, add the entry point, and replace the blocked notice
-/// with a
-/// real submit that calls `signUpWithEmailPassword`. Until then it is
-/// the honest description of the screen's state, and it is rendered rather
-/// than commented out so that anyone who does reach it is told why nothing
-/// happens instead of tapping a dead button.
+/// Nowhere in this file. A successful sign-up leaves the account created with
+/// its claims already set, so the session stream reports an authenticated user
+/// and the route guard moves the person to their role's root. This screen
+/// never calls `go`.
 class SignupScreen extends ConsumerStatefulWidget {
   const SignupScreen({super.key});
 
@@ -92,10 +77,9 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                       enabled: !_busy,
                       textCapitalization: TextCapitalization.characters,
                       decoration: const InputDecoration(
-                        labelText: 'Organisation invite code',
-                        helperText: 'From the admin who invited you.',
+                        labelText: 'Invite code (optional)',
+                        helperText: 'Leave empty unless an admin gave you one.',
                       ),
-                      validator: _required('Enter your invite code.'),
                     ),
                     const SizedBox(height: AppSpacing.md),
                     TextFormField(
@@ -178,7 +162,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
           .signUpWithEmailPassword(
             email: _email.text.trim(),
             password: _password.text,
-            inviteCode: _inviteCode.text.trim(),
+            inviteCode: _codeOrNull(),
           ),
     );
   }
@@ -187,11 +171,21 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
     return _run(
       () => ref
           .read(authNotifierProvider.notifier)
-          .signUpWithGoogle(inviteCode: _inviteCode.text.trim()),
+          .signUpWithGoogle(inviteCode: _codeOrNull()),
       // The picker supplies the identity, so the email and password fields
       // are not filled in on this path and must not block it.
       validateAll: false,
     );
+  }
+
+  /// The typed code, or null when the field was left empty.
+  ///
+  /// Null and empty mean the same thing to the function — the default
+  /// organisation (A-056) — but sending null says so deliberately rather than
+  /// by coincidence.
+  String? _codeOrNull() {
+    final String code = _inviteCode.text.trim();
+    return code.isEmpty ? null : code;
   }
 
   /// Runs an attempt and shows the failure, if any.
@@ -208,9 +202,6 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
       if (!(_formKey.currentState?.validate() ?? false)) {
         return;
       }
-    } else if (_inviteCode.text.trim().isEmpty) {
-      setState(() => _error = 'Enter your invite code.');
-      return;
     }
 
     setState(() {

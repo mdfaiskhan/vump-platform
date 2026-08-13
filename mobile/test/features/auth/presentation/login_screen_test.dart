@@ -56,6 +56,10 @@ void main() {
       routes: <RouteBase>[
         GoRoute(path: '/login', builder: (_, _) => const LoginScreen()),
         GoRoute(
+          path: '/signup',
+          builder: (_, _) => const Scaffold(body: Text('signup screen')),
+        ),
+        GoRoute(
           path: '/collector/dashboard',
           builder: (_, _) => const Scaffold(body: Text('collector root')),
         ),
@@ -109,15 +113,25 @@ void main() {
       expect(find.byKey(const Key('login.submit')), findsOneWidget);
     });
 
-    testWidgets('no sign-up link, per Volume 10 Chapter 10.4 §4', (
+    testWidgets('a Create an account link, per A-056', (
       WidgetTester tester,
     ) async {
-      // "there deliberately isn't one". A link appearing here would make
-      // SignupScreen reachable and route into a throwing redemption step.
+      // Mission 2.7 deliberately had no link here, honouring Volume 10 Ch.
+      // 10.4 §4's App Store reviewer framing. A-056 reverses it for this
+      // distribution model — the assertion is inverted on purpose, and this
+      // is the test that would catch it being reverted by accident.
       await pumpLogin(tester, _FakeAuthRepository());
 
-      expect(find.textContaining('Sign up'), findsNothing);
-      expect(find.textContaining('Create an account'), findsNothing);
+      expect(find.byKey(const Key('login.createAccount')), findsOneWidget);
+    });
+
+    testWidgets('the link navigates to /signup', (WidgetTester tester) async {
+      final GoRouter router = await pumpLogin(tester, _FakeAuthRepository());
+
+      await tester.tap(find.byKey(const Key('login.createAccount')));
+      await tester.pumpAndSettle();
+
+      expect(location(router), '/signup');
     });
 
     testWidgets('no error banner before an attempt', (
@@ -451,12 +465,11 @@ class _FakeAuthRepository implements AuthRepository {
   Future<User> signUpWithEmailPassword({
     required String email,
     required String password,
-    required String inviteCode,
+    String? inviteCode,
   }) async => _signIn();
 
   @override
-  Future<User> signUpWithGoogle({required String inviteCode}) async =>
-      _signIn();
+  Future<User> signUpWithGoogle({String? inviteCode}) async => _signIn();
 
   @override
   Future<void> signOut() async {}

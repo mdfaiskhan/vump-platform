@@ -327,6 +327,53 @@ void main() {
       expect(auth.emailSignInCalls, 0, reason: 'and no session was opened');
     });
 
+    test('no invite code omits the field entirely', () async {
+      // A-056: an absent code means the default organisation. The field is
+      // omitted rather than sent empty, so the function reads the intent
+      // rather than inferring it from a blank string.
+      final FakeFirebaseFunctions functions = FakeFirebaseFunctions();
+      final _FakeAuth auth = _FakeAuth(_FakeUser(claims: goodClaims));
+
+      await build(
+        functions: functions,
+        auth: auth,
+      ).signUpWithEmailPassword(email: 'new@example.com', password: 'pw1234');
+
+      expect(functions.calledWith.single, <String, Object?>{
+        'email': 'new@example.com',
+        'password': 'pw1234',
+      });
+      expect(auth.createUserCalls, 0, reason: 'still server-side');
+    });
+
+    test('a supplied code is still sent, unchanged by A-056', () async {
+      final FakeFirebaseFunctions functions = FakeFirebaseFunctions();
+
+      await build(functions: functions).signUpWithEmailPassword(
+        email: 'new@example.com',
+        password: 'pw1234',
+        inviteCode: 'ABCDEFGHJK',
+      );
+
+      expect(
+        (functions.calledWith.single! as Map<String, Object?>)['code'],
+        'ABCDEFGHJK',
+      );
+    });
+
+    test('signing up never yields an admin, code or no code', () async {
+      // The property A-056 must not relax. The role comes from the claims the
+      // function set; the client cannot ask for one. Asserted on both paths.
+      for (final String? code in <String?>[null, 'ABCDEFGHJK']) {
+        final domain.User user = await build().signUpWithEmailPassword(
+          email: 'new@example.com',
+          password: 'pw1234',
+          inviteCode: code,
+        );
+        expect(user.role, Role.collector, reason: 'code=$code');
+      }
+    });
+
     test('a registered address is indistinguishable from a bad code', () async {
       // The oracle F1 described, asserted closed at this boundary. The server
       // reports AUTH_INVITE_CODE_INVALID for both, and the client does nothing
