@@ -1,26 +1,45 @@
+import 'dart:io';
+
+// One alphabetically sorted `package:` block rather than this file's previous
+// third-party-then-first-party grouping: `directives_ordering` (ADR-021) sorts
+// the whole section, and `path_provider` sorts after `mobile`, so the grouping
+// and the lint can no longer both hold.
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-
 import 'package:mobile/app/app.dart';
 import 'package:mobile/app/config/app_config.dart';
+import 'package:mobile/core/database/providers/database_provider.dart';
 import 'package:mobile/core/environment/environment_profile.dart';
 import 'package:mobile/core/errors/app_exception.dart';
 import 'package:mobile/core/firebase/providers/firebase_provider.dart';
 import 'package:mobile/core/logging/app_logger.dart';
 import 'package:mobile/core/logging/providers/logger_provider.dart';
+import 'package:path_provider/path_provider.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Resolved before the container so the database directory override can be
+  // supplied at construction. ADR-009 Caveat 2 makes this the composition
+  // root's job: `databaseDirectoryProvider` throws until overridden, because a
+  // guessed path is wrong on at least one platform and failing at the override
+  // point is easier to diagnose than a database opened somewhere unexpected.
+  final Directory documents = await getApplicationDocumentsDirectory();
 
   // The container is built before runApp so that asynchronous startup work can
   // be awaited here rather than inside a widget. ADR-010 requires Firebase to
   // be initialised exactly once, off the widget tree; this is the only place
   // that satisfies both.
-  final ProviderContainer container = ProviderContainer();
+  final ProviderContainer container = ProviderContainer(
+    overrides: <Override>[
+      databaseDirectoryProvider.overrideWithValue(documents.path),
+    ],
+  );
   final AppLogger logger = container.read(loggerProvider);
 
   _announceEnvironment(logger);
   await _initializeFirebase(container, logger);
+  await _openDatabase(container, logger);
 
   runApp(
     UncontrolledProviderScope(container: container, child: const VumpApp()),
@@ -87,5 +106,56 @@ Future<void> _initializeFirebase(
       'Starting without Firebase. Products that depend on it will fail.',
       error: error,
     );
+  }
+}
+
+/// Opens the local database before the first frame.
+///
+/// Awaiting `databaseProvider` here is what puts the open on the startup path,
+/// which Volume 6 Chapter 6.1 §2's bootstrap sequence requires and ADR-009
+/// assumes when it records that "database open is on the startup path, so its
+/// duration is worth recording".
+///
+/// ## Opening exactly once
+///
+/// Two mechanisms combine, and neither is sufficient alone. Riverpod caches the
+/// `FutureProvider`, so a later `ref.watch(databaseProvider)` from a widget
+/// receives this same future rather than starting a second open. Beneath it,
+/// `DatabaseService.open` holds the in-flight `Future` rather than the
+/// instance, so even direct concurrent callers await the first open — the
+/// guarantee ADR-009 requires by construction rather than by convention.
+///
+/// ## Failure aborts startup
+///
+/// **ADR-009 does not specify a failure policy for startup**, and this is the
+/// choice made here: a database that cannot open is fatal in every
+/// environment, unlike Firebase, whose policy ADR-017 makes environment-driven
+/// via `AppFeatureFlags.firebaseFailureIsFatal`.
+///
+/// The reasoning is that the two are not comparable. Firebase is survivable in
+/// development because no feature depends on it yet. The database is the
+/// offline-first foundation the Constitution §3 requires — every core workflow
+/// must work with no network, and `NFR-REL-04` requires the upload queue to
+/// survive a force-close. An application running without local persistence
+/// cannot honour "never lose a take"; it is broken rather than degraded, and
+/// continuing would hide that.
+///
+/// This is the second `fatal` call site in the codebase. `logging-standards.md`
+/// §5 records that adding one is a decision rather than a detail, which is why
+/// the reasoning is here and not left implicit.
+Future<void> _openDatabase(
+  ProviderContainer container,
+  AppLogger logger,
+) async {
+  try {
+    await container.read(databaseProvider.future);
+  } on AppException catch (error, stackTrace) {
+    logger.fatal(
+      'The local database could not be opened. Aborting startup rather than '
+      'running without local persistence.',
+      error: error,
+      stackTrace: stackTrace,
+    );
+    rethrow;
   }
 }

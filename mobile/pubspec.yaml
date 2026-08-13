@@ -57,6 +57,12 @@ dependencies:
   isar: ^3.1.0+1
   isar_flutter_libs: ^3.1.0+1
 
+  # Writable application directory for the local database.
+  # ADR-009 Caveat 2: `databaseDirectoryProvider` is deliberately
+  # unimplemented because resolving an app directory needs a platform plugin.
+  # This is that plugin, read only in `main.dart` to supply the override.
+  path_provider: ^2.1.6
+
   # Code generation annotations
   freezed_annotation: ^2.4.4
   json_annotation: ^4.9.0

@@ -147,11 +147,19 @@ Volume 5 §5.2 §1 is the authoritative source for every value:
 
 **P5 — cold start to Login < 2.5 s.** Measured by a manual stopwatch during device testing, and V9.4 §1 justifies not instrumenting it: *"no automated instrumentation needed for a one-time-per-launch metric."*
 
-**What startup does today**, from `main.dart`, in order: `WidgetsFlutterBinding.ensureInitialized()`, build the `ProviderContainer`, read the logger, log the resolved environment, `await` Firebase initialisation, then `runApp`.
+**What startup does today**, from `main.dart`, in order: `WidgetsFlutterBinding.ensureInitialized()`, `await` the application documents directory, build the `ProviderContainer` with the database directory override, read the logger, log the resolved environment, `await` Firebase initialisation, `await` the database open, then `runApp`.
 
-**One `await` sits between the process starting and the first frame.** Firebase initialisation is on the critical path by design — ADR-010 requires it exactly once, off the widget tree, and ADR-017 makes its failure fatal in staging and production. Its duration is already logged, which is the instrumentation P5 would otherwise need.
+**Three `await`s now sit between the process starting and the first frame**, and each is on the critical path deliberately:
 
-**Database open is not on the startup path today.** `databaseProvider` is a `FutureProvider`, and Riverpod providers are lazy, so nothing opens the database until something reads it. Volume 6 §6.1 §2's bootstrap sequence puts opening the local database *before* `runApp` — *"before any provider reads it"* — which the current `main.dart` does not do. That is a divergence with a performance consequence in both directions: today startup is faster and the first database read pays the cost; under Volume 6 §6.1 §2 startup is slower and predictable.
+| Await | Why it is before `runApp` | Failure policy |
+|---|---|---|
+| Application documents directory | ADR-009 Caveat 2 — the composition root must supply the database directory, and `databaseDirectoryProvider` throws until it does | Unhandled; a device with no documents directory cannot run the app |
+| Firebase initialisation | ADR-010 requires it exactly once, off the widget tree | Environment-driven (ADR-017) |
+| Database open | Volume 6 §6.1 §2's bootstrap sequence — *"before any provider reads it"* | **Fatal in every environment** |
+
+**The Volume 6 §6.1 §2 divergence is closed** as of Mission 1.2. Startup is now slower and predictable rather than faster with a deferred cost, which is the trade §6.1 §2 chose. Both the Firebase and database opens already log their duration, so two of the three awaits carry the instrumentation P5 would otherwise need.
+
+**The database failure policy is stricter than Firebase's, and ADR-009 does not specify it.** Mission 1.2 chose fatal in all three environments: Firebase is survivable in development because no feature depends on it yet, whereas the database is the offline-first foundation Constitution §3 requires and `NFR-REL-04` depends on. An app running without local persistence cannot honour *"never lose a take"*. This is the second `fatal` call site in the codebase, which `logging-standards.md` §5 records as a decision rather than a detail.
 
 **No provider is `autoDispose`.** Verified: no `autoDispose` or `keepAlive` anywhere. Every provider is created on first read and lives for the process, which is the correct default for infrastructure and worth revisiting for per-screen state.
 
@@ -232,7 +240,7 @@ Recorded rather than fixed — this is a documentation and governance mission.
 | **No profiling API, no benchmark, no profile-mode build** | §11 | Correct by design for the suite (ADR-029); the profile build is a gap when device testing starts |
 | **Duration instrumentation is not assertable** | `DateTime.now()` direct, no injected clock | **A-045.** Blocks P3 and P4 from becoming pass/fail |
 | **`relaxedDurability` versus the upload queue** | The constant's own justification depends on the database *"never [being] the sole record of a user's work"* | §6. Re-examine when the queue lands, against `NFR-REL-01` |
-| **Volume 6 §6.1 §2 puts database open before `runApp`; `main.dart` does not** | §8 | A divergence with a performance consequence either way. Not registered — Volume 6 §6.1 §2 also names Drift and `HumanArchiveApp`, both already amended (A-002), so the sequence needs reading against ADR-009 first |
+| ~~Volume 6 §6.1 §2 puts database open before `runApp`; `main.dart` does not~~ | §8 | **Closed by Mission 1.2.** `main.dart` now awaits the database open before `runApp`, matching §6.1 §2's sequence. Cold start pays the cost that was previously deferred to the first database read — a change against P5 that is not yet measured, because P5 has no instrumentation (§2) |
 | **429 classified terminal by V5.13, retryable by ADR-025** | §7 | **A-050** |
 | **16 KB page size unverified** | A-029 | Memory behaviour on modern Android; the next likely release blocker |
 | **iOS performance entirely unmeasured** | §13 | Accepted for MVP by Constitution §2 |
