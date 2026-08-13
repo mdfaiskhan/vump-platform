@@ -6,7 +6,7 @@ Governed by **ADR-024**. Where this document and the ADR disagree, the ADR gover
 
 Every rule below was derived from an audit of every tracked markdown file, not chosen from preference. Where the repository was already consistent, the existing practice is the rule. Where it was not, the deviation is recorded in §30 rather than resolved by a rewrite.
 
-Counts in this document are re-verified when it is edited, per §30, **and are measured after staging** — `git ls-files` is blind to untracked files, so a count taken before `git add` omits exactly the documents the current mission just wrote (ADR-032). They were last verified at **56 markdown files and 32 ADRs**.
+Counts in this document are re-verified when it is edited, per §30, **and are measured after staging** — `git ls-files` is blind to untracked files, so a count taken before `git add` omits exactly the documents the current mission just wrote (ADR-032). They were last verified at **57 markdown files and 33 ADRs**.
 
 **Nothing already governed is restated.** Cited, not duplicated:
 
@@ -96,7 +96,7 @@ A README is a **map, not a manual**. It answers "what is this and where do I go 
 
 Fixed by `docs/architecture/README.md`: one decision, the context that forced it, the alternatives rejected and why, and the consequences accepted. Four required sections — `Context`, `Decision`, `Alternatives Considered`, `Consequences` — plus a `Status`/`Date` block.
 
-Two sections are not in that template but have been used by every ADR since ADR-001 and are now equally expected: **`Related Missions`** and **`Implementation Status`**. All 32 ADRs carry `Related Missions`; 31 carry `Implementation Status` — ADR-002 is the sole exception, recorded in §30.
+Two sections are not in that template but have been used by every ADR since ADR-001 and are now equally expected: **`Related Missions`** and **`Implementation Status`**. All 33 ADRs carry `Related Missions`; 32 carry `Implementation Status` — ADR-002 is the sole exception, recorded in §30.
 
 **Belongs:** the decision, stated plainly in the active voice. The forces that made a decision necessary. Every alternative evaluated, each with the specific reason it was rejected — including the ones that were close calls. What this costs, what it makes harder, and what must now be maintained.
 
@@ -152,7 +152,7 @@ Every rule in this section was measured across every tracked markdown file. Wher
 
 **`---` separates top-level sections in prose documents. ADRs never use it.**
 
-Verified, and unanimous: **all 32 ADRs contain zero horizontal rules**, while every prose document uses between 3 and 11. The ADR template's headings carry the structure by themselves; a rule between `## Decision` and `## Alternatives Considered` adds a line and no information.
+Verified, and unanimous: **all 33 ADRs contain zero horizontal rules**, while every prose document uses between 3 and 11. The ADR template's headings carry the structure by themselves; a rule between `## Decision` and `## Alternatives Considered` adds a line and no information.
 
 Use one `---` between top-level (`##`) sections of a reference, guide or runbook. Never inside a section, never before the first heading, never two in a row.
 
@@ -447,15 +447,15 @@ Deciding which of the two you are looking at is a governance judgement, not a pr
 | **`docs/Teams_work.txt`** | Markdown content in a `.txt` file, `Title_Snake` case, at the root of `docs/`. Violates ADR-023 §1.4 and §20. Contents reviewed for this mission: a table allocating AI tools to workstreams — a personal working note, not repository documentation | **Recommend** moving to `docs/development/ai-tooling-allocation.md`, or removing it if it is not meant to be tracked. Not done here: relocating or deleting someone's working note is their call, not a naming fix |
 | **`CLAUDE.md` does not end with a newline** | The only file in the repository without one | One-character fix, deliberately not bundled into a documentation mission — `CLAUDE.md` is the constitution and every change to it should be visible on its own |
 | **Three documents state no precedence** | `secrets-management.md`, `disaster-recovery.md`, `infrastructure/aws/cloudfront/README.md`. All three are governed by accepted ADRs but do not say what happens on conflict | Added when each is next edited. **Corrected in Mission 0.19.12:** this row previously listed four and named `mobile/README.md`, which the same commit that wrote the row had already fixed — the list was stale on publication. `.github/pull_request_template.md` also lacks one and is now exempt (§3, ADR-032) |
-| **ADR-002 has no `Implementation Status`** | The only ADR of 32 without it. It has `Related Missions` | **Not fixed** — adding a section to an accepted ADR is a content change, not a formatting correction. Left as the documented exception |
+| **ADR-002 has no `Implementation Status`** | The only ADR of 33 without it. It has `Related Missions` | **Not fixed** — adding a section to an accepted ADR is a content change, not a formatting correction. Left as the documented exception |
 | **`CLAUDE.md` opens with `## Your Role`** | No one-line purpose statement between the H1 and the first section, unlike every other document | Left as-is. It is the constitution and its first section is its purpose |
 
 **Everything else conforms**, verified by audit. **Re-derived in Mission 0.19.12** — the figures below were previously Mission 0.19.4's and had not been refreshed:
 
 | Audited | Result |
 |---|---|
-| Tracked markdown files | 56 (excluding one 4-line Flutter platform template) |
-| Documents with exactly one H1 | 55 of 56 — the exception is the PR template, correctly |
+| Tracked markdown files | 57 (excluding one 4-line Flutter platform template) |
+| Documents with exactly one H1 | 56 of 57 — the exception is the PR template, correctly |
 | Heading level skips | **0** |
 | Maximum heading depth | H3, in every file |
 | Broken internal links | **0** |
@@ -463,9 +463,9 @@ Deciding which of the two you are looking at is a governance judgement, not a pr
 | External links in the project's own documentation | 1 (`conventionalcommits.org`, cited twice) |
 | Non-enclosed table rows | **0** |
 | Lines with trailing whitespace | **0** |
-| ADRs with all four required sections, `Status` and ISO `Date` | 32 of 32 |
-| ADRs containing a horizontal rule | **0 of 32** — the convention holds exactly |
-| ADR filenames matching `ADR-NNN-kebab-case-title.md` | 32 of 32 |
+| ADRs with all four required sections, `Status` and ISO `Date` | 33 of 33 |
+| ADRs containing a horizontal rule | **0 of 33** — the convention holds exactly |
+| ADR filenames matching `ADR-NNN-kebab-case-title.md` | 33 of 33 |
 | RFC 2119 keywords in use before this document | **0** |
 | Stale "Human Archive" references | **0** — all 9 occurrences are quotations of a source being corrected |
 | Terminology variants (`Github`, `pre-signed`, `riverpod` in prose) | **0** |

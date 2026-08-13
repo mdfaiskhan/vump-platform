@@ -239,7 +239,7 @@ forecloses, and what must now be maintained.
 
 ## Current State
 
-`decisions/` holds ADR-001 through ADR-032.
+`decisions/` holds ADR-001 through ADR-033.
 
 All are Accepted and therefore binding.
 
@@ -277,10 +277,13 @@ All are Accepted and therefore binding.
 | ADR-030 | Dependency management |
 | ADR-031 | Performance standards |
 | ADR-032 | Mission review and documentation maintenance rules |
+| ADR-033 | Database startup failure policy |
 
 ADR-007 supersedes the networking assumptions of ADR-006 in part. ADR-006 remains Accepted and binding in every other respect.
 
 ADR-032 refines ADR-024 in three respects — counts are measured after staging, templates are exempt from the precedence rule, and a terminology check must exclude backticked and quoted spans. ADR-024 remains Accepted and binding in every other respect.
+
+ADR-033 departs from ADR-017's Consequences in one respect. ADR-017 recommends that any future startup prerequisite — naming the database and secure storage — use its environment-driven shape. ADR-033 declines that for the database and makes an open failure fatal in every environment, because ADR-017's development tolerance exists to absorb a missing network and a missing configuration, and a local database needs neither. ADR-017 remains Accepted and binding for Firebase and in every other respect; secure storage is still undecided.
 
 ADR-022 refines ADR-002 in one respect: `app/router.dart` is the single file in `app/` permitted to import from `features/`, because ADR-004 requires one route table and a route table must name its screens. ADR-002 remains Accepted and binding in every other respect.
 

@@ -30,7 +30,7 @@ There is no `scripts/` or `assets/` directory. Both are reserved with a defined 
 | Path | Contents |
 |---|---|
 | [`docs/architecture/README.md`](docs/architecture/README.md) | **Start here.** How architectural decisions are recorded, changed and retired |
-| [`docs/architecture/decisions/`](docs/architecture/decisions/) | ADR-001 to ADR-032 — every binding decision |
+| [`docs/architecture/decisions/`](docs/architecture/decisions/) | ADR-001 to ADR-033 — every binding decision |
 | [`docs/architecture/volume-amendments.md`](docs/architecture/volume-amendments.md) | A-001 to A-050 — corrections to the source volumes, with the ADR that supersedes each |
 | [`docs/volumes/`](docs/volumes/) | Source specification volumes 0–12 (PDF) |
 | **Architecture references** | |
