@@ -1,5 +1,5 @@
 /**
- * Organisation invite-code redemption.
+ * Organisation invite-code redemption and account creation.
  *
  * **TEMPORARY INFRASTRUCTURE — retired at Mission 6/7. See ADR-036.**
  *
@@ -12,10 +12,29 @@
  * authorization bypass. Inside Cloud Functions the runtime authenticates
  * through the metadata server, so no such key ever exists.
  *
- * When the real backend lands this becomes a `/v1/...` route and this file is
- * deleted. What must survive the port: the transaction, the server-derived
- * uid, and the ordering of the two writes. Nothing else belongs in this
- * runtime — it is one function doing one job, not a backend.
+ * ## The order matters, and it changed
+ *
+ * Mission 2.9's security review (F1) found that creating the account before
+ * validating the code let an unauthenticated caller enumerate registered email
+ * addresses: a taken address failed differently from a free one, and no valid
+ * code was needed to ask. **The code is validated first now.** An invalid or
+ * expired code creates nothing, so there is nothing to delete and nothing to
+ * tell apart — the caller gets one error either way.
+ *
+ * ## Unauthenticated, deliberately
+ *
+ * There is no `request.auth` here because there is no account yet. The
+ * original design took the uid from the verified context so a client could
+ * never name the account to provision; that property is stronger now rather
+ * than weaker, because the function chooses the identity itself.
+ *
+ * The invite code is the credential gating this endpoint. It is what it was
+ * always for.
+ *
+ * ## Passwords
+ *
+ * A password reaches this function. It goes to `createUser` and nowhere else:
+ * never logged, never echoed in an error, never written to Firestore.
  */
 
 import {getApps, initializeApp} from "firebase-admin/app";
@@ -34,24 +53,27 @@ const COLLECTION = "org_invite_codes";
 /** asia-south1, matching ADR-011's ap-south-1 and the Firestore location. */
 const REGION = "asia-south1";
 
+/** Longest code accepted before Firestore is touched at all. */
+const MAX_CODE_LENGTH = 64;
+
 /**
  * `ErrorCode` values from `mobile/lib/core/errors/error_codes.dart`.
  *
  * Carried in `HttpsError.details` rather than in its `code`, because a
  * callable's code is drawn from a fixed gRPC set that cannot express this
- * taxonomy. The mobile side reads `details.errorCode` and maps it; the gRPC
- * code is left meaningful for anything that only understands that.
+ * taxonomy.
  */
 const ErrorCode = {
   inviteCodeInvalid: "AUTH_INVITE_CODE_INVALID",
   inviteCodeExpired: "AUTH_INVITE_CODE_EXPIRED",
-  unauthenticated: "AUTH_UNAUTHENTICATED",
   validationInvalidInput: "VALIDATION_INVALID_INPUT",
   unknown: "UNKNOWN",
 } as const;
 
 interface RedeemRequest {
   code?: unknown;
+  email?: unknown;
+  password?: unknown;
 }
 
 interface CodeDocument {
@@ -61,140 +83,193 @@ interface CodeDocument {
 }
 
 /**
- * Validates an invite code, consumes one use, and provisions the caller.
+ * Validates an invite code and, only then, creates the account it admits.
  *
- * The caller's uid comes from the verified auth context and never from the
- * request body. Accepting one as a parameter would let any signed-in account
- * provision claims for any other — the rule Volume 4 Chapter 4.7 §2 states as
- * "a client can never claim its own role", applied at the only other point
- * where claims are written.
+ * Returns `{uid, orgId}`. The caller signs in afterwards with the same
+ * credentials to obtain a session; the claims are already on the account, so
+ * the first token it receives carries them.
  */
 export const redeemInviteCode = onCall(
   {region: REGION, enforceAppCheck: false},
   async (request) => {
-    const uid = request.auth?.uid;
-    if (!uid) {
-      throw new HttpsError(
-        "unauthenticated",
-        "Sign in before redeeming an invite code.",
-        {errorCode: ErrorCode.unauthenticated},
-      );
-    }
+    const body = request.data as RedeemRequest | undefined;
 
-    const code = normaliseCode((request.data as RedeemRequest | undefined)?.code);
-    if (code === null) {
+    const code = normaliseCode(body?.code);
+    const email = normaliseEmail(body?.email);
+    const password = typeof body?.password === "string" ? body.password : null;
+
+    // Shape is checked before anything else, and reported as a validation
+    // failure rather than a bad code — a malformed request is the caller's
+    // mistake, not a statement about which codes exist.
+    if (code === null || email === null || password === null ||
+        password.length === 0) {
       throw new HttpsError(
         "invalid-argument",
-        "An invite code is required.",
+        "An invite code, email address and password are all required.",
         {errorCode: ErrorCode.validationInvalidInput},
       );
     }
 
-    const orgId = await consumeOneUse(code);
+    // Validate first. Nothing below this line runs for a bad code, which is
+    // what closes F1: there is no account-creation attempt to observe.
+    const orgId = await readValidCode(code);
 
-    // Deliberately after the transaction commits, and the ordering is a real
-    // trade-off rather than an oversight. setCustomUserClaims is not a
-    // Firestore operation and cannot join the transaction, so the two writes
-    // cannot be atomic. Claims-first fails open — membership granted on a code
-    // that then fails to decrement. This fails closed: a use is consumed and
-    // nobody is added, which an admin fixes by issuing another code.
-    await getAuth().setCustomUserClaims(uid, {role: "collector", org_id: orgId});
+    let uid: string;
+    try {
+      const created = await getAuth().createUser({email, password});
+      uid = created.uid;
+    } catch (error) {
+      throw fromCreateUserError(error);
+    }
 
-    // The claim reaches the client on its next token refresh, not on the token
-    // it is holding now. The caller must force one before reading its own
-    // role — see AuthRepositoryImpl.
+    try {
+      await getAuth().setCustomUserClaims(uid, {
+        role: "collector",
+        org_id: orgId,
+      });
+      await consumeOneUse(code);
+    } catch (error) {
+      // The account exists but is not usable — no claims, or a use that was
+      // not recorded. This is the one place a compensating delete still
+      // belongs, and it is inside the failure path rather than around the
+      // whole flow.
+      await discard(uid);
+      throw error;
+    }
+
     logger.info("Invite code redeemed", {uid, orgId});
-
-    return {orgId};
+    return {uid, orgId};
   },
 );
 
 /**
- * Runs the check-and-decrement as one Firestore transaction.
+ * Reads a code and rejects it if it is missing, expired or exhausted.
  *
- * The read must happen inside the transaction. Reading first and writing after
- * would let two people redeeming the last use both observe `remainingUses: 1`
- * and both succeed; inside a transaction Firestore aborts and retries when the
- * document changed underneath, which is what makes check-then-write atomic
- * rather than merely adjacent.
+ * Deliberately separate from consuming it. The read decides whether an account
+ * may be created; the decrement happens after the account exists, so a use is
+ * never spent on a sign-up that then failed to produce anything.
  */
-async function consumeOneUse(code: string): Promise<string> {
+async function readValidCode(code: string): Promise<string> {
+  const snapshot = await getFirestore()
+    .collection(COLLECTION)
+    .doc(code)
+    .get();
+
+  if (!snapshot.exists) {
+    throw invalidCode();
+  }
+
+  const data = snapshot.data() as CodeDocument;
+
+  const orgId = data.orgId;
+  if (typeof orgId !== "string" || orgId.length === 0) {
+    logger.error("Invite code document has no orgId", {code});
+    throw misconfigured();
+  }
+
+  // Compared against the server's clock. A device clock is attacker
+  // controlled, so an expiry checked on the caller's time is no expiry.
+  const expiresAt = data.expiresAt;
+  if (!(expiresAt instanceof Timestamp)) {
+    logger.error("Invite code document has no usable expiresAt", {code});
+    throw misconfigured();
+  }
+  if (expiresAt.toMillis() <= Date.now()) {
+    throw new HttpsError(
+      "failed-precondition",
+      "This invite code has expired.",
+      {errorCode: ErrorCode.inviteCodeExpired},
+    );
+  }
+
+  const remainingUses = data.remainingUses;
+
+  // Null means unlimited, matching Mission 2.1's OrgInviteCode.
+  if (remainingUses === null || remainingUses === undefined) {
+    return orgId;
+  }
+  if (typeof remainingUses !== "number" || !Number.isInteger(remainingUses)) {
+    logger.error("Invite code has a non-integer remainingUses", {code});
+    throw misconfigured();
+  }
+  if (remainingUses <= 0) {
+    // Reported as invalid rather than as its own condition: telling a caller
+    // a code exists but is used up confirms the code exists.
+    throw invalidCode();
+  }
+
+  return orgId;
+}
+
+/**
+ * Spends one use, transactionally.
+ *
+ * The read happens inside the transaction even though `readValidCode` has
+ * already looked: two sign-ups racing for the last use must not both succeed,
+ * and only a transactional re-read can decide that. The earlier read gates
+ * account creation; this one gates the decrement.
+ */
+async function consumeOneUse(code: string): Promise<void> {
   const reference = getFirestore().collection(COLLECTION).doc(code);
 
-  return getFirestore().runTransaction(async (transaction) => {
+  await getFirestore().runTransaction(async (transaction) => {
     const snapshot = await transaction.get(reference);
-
     if (!snapshot.exists) {
       throw invalidCode();
     }
 
-    const data = snapshot.data() as CodeDocument;
-
-    const orgId = data.orgId;
-    if (typeof orgId !== "string" || orgId.length === 0) {
-      // A malformed document is this side's fault, not the caller's, so it is
-      // logged as such rather than reported as a bad code.
-      logger.error("Invite code document has no orgId", {code});
-      throw new HttpsError(
-        "internal",
-        "This invite code is not configured correctly.",
-        {errorCode: ErrorCode.unknown},
-      );
-    }
-
-    // Compared against the server's clock. A device clock is attacker
-    // controlled, so an expiry checked on the caller's time is no expiry.
-    const expiresAt = data.expiresAt;
-    if (!(expiresAt instanceof Timestamp)) {
-      logger.error("Invite code document has no usable expiresAt", {code});
-      throw new HttpsError(
-        "internal",
-        "This invite code is not configured correctly.",
-        {errorCode: ErrorCode.unknown},
-      );
-    }
-    if (expiresAt.toMillis() <= Date.now()) {
-      throw new HttpsError(
-        "failed-precondition",
-        "This invite code has expired.",
-        {errorCode: ErrorCode.inviteCodeExpired},
-      );
-    }
-
-    const remainingUses = data.remainingUses;
-
-    // Null means unlimited, matching Mission 2.1's OrgInviteCode, where the
-    // field is nullable precisely so that is expressible. Treating null as
-    // zero would silently make every unlimited code dead on arrival.
+    const remainingUses = (snapshot.data() as CodeDocument).remainingUses;
     if (remainingUses === null || remainingUses === undefined) {
-      return orgId;
+      return;
     }
-
-    if (typeof remainingUses !== "number" || !Number.isInteger(remainingUses)) {
-      logger.error("Invite code has a non-integer remainingUses", {code});
-      throw new HttpsError(
-        "internal",
-        "This invite code is not configured correctly.",
-        {errorCode: ErrorCode.unknown},
-      );
-    }
-
-    if (remainingUses <= 0) {
-      // Reported as invalid rather than as its own condition. Telling a caller
-      // that a code exists but is used up confirms the code exists, which is
-      // the enumeration signal the read rule denies.
+    if (typeof remainingUses !== "number" || remainingUses <= 0) {
       throw invalidCode();
     }
 
-    transaction.update(reference, {
-      remainingUses: FieldValue.increment(-1),
-    });
-
-    return orgId;
+    transaction.update(reference, {remainingUses: FieldValue.increment(-1)});
   });
 }
 
-/** Covers both "no such code" and "no uses left" — see the call sites. */
+/** Removes an account whose provisioning failed after it was created. */
+async function discard(uid: string): Promise<void> {
+  try {
+    await getAuth().deleteUser(uid);
+  } catch (error) {
+    logger.error("Could not remove a half-provisioned account", {uid, error});
+  }
+}
+
+/**
+ * Maps an Admin SDK `createUser` failure.
+ *
+ * **`email-already-exists` is reported as an invalid code, deliberately.**
+ * That is the whole of F1's fix: a caller who reaches this point already
+ * supplied a valid code, and telling them the address is taken would hand back
+ * the enumeration oracle the validation-first ordering just removed. The
+ * account is not created either way, and an admin can tell a genuine returning
+ * user to sign in instead.
+ */
+function fromCreateUserError(error: unknown): HttpsError {
+  const code = (error as {code?: string} | null)?.code ?? "";
+
+  if (code === "auth/email-already-exists") {
+    return invalidCode();
+  }
+  if (code === "auth/invalid-email" || code === "auth/invalid-password") {
+    return new HttpsError(
+      "invalid-argument",
+      "That email address or password is not acceptable.",
+      {errorCode: ErrorCode.validationInvalidInput},
+    );
+  }
+
+  logger.error("createUser failed", {code});
+  return new HttpsError("internal", "The account could not be created.", {
+    errorCode: ErrorCode.unknown,
+  });
+}
+
+/** Covers "no such code", "no uses left", and "that address is taken". */
 function invalidCode(): HttpsError {
   return new HttpsError(
     "not-found",
@@ -203,11 +278,39 @@ function invalidCode(): HttpsError {
   );
 }
 
-/** Trims and upper-cases, or null when there is nothing usable. */
+function misconfigured(): HttpsError {
+  return new HttpsError(
+    "internal",
+    "This invite code is not configured correctly.",
+    {errorCode: ErrorCode.unknown},
+  );
+}
+
+/**
+ * Trims and upper-cases, or null when there is nothing usable.
+ *
+ * Length and character set are checked here, before Firestore is touched —
+ * Volume 8 §8.3 §2 asks for validation "before touching the database", and a
+ * document ID containing a slash is a path rather than a key (Mission 2.9's
+ * finding F3).
+ */
 function normaliseCode(raw: unknown): string | null {
   if (typeof raw !== "string") {
     return null;
   }
   const trimmed = raw.trim().toUpperCase();
-  return trimmed.length === 0 ? null : trimmed;
+  if (trimmed.length === 0 || trimmed.length > MAX_CODE_LENGTH) {
+    return null;
+  }
+  // Alphanumeric only. Rejects "/" and "." before they reach `.doc()`, where
+  // they would be read as path segments instead of as a key.
+  return /^[A-Z0-9]+$/.test(trimmed) ? trimmed : null;
+}
+
+function normaliseEmail(raw: unknown): string | null {
+  if (typeof raw !== "string") {
+    return null;
+  }
+  const trimmed = raw.trim();
+  return trimmed.length === 0 || trimmed.length > 320 ? null : trimmed;
 }

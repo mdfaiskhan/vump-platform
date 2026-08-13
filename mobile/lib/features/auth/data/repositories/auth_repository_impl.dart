@@ -192,39 +192,57 @@ class AuthRepositoryImpl implements AuthRepository {
     return _guard(
       description: 'create an account with an email address and password',
       action: () async {
+        // The function validates the code and creates the account together,
+        // server-side. Nothing is created here first, which is what closes
+        // Mission 2.9's F1: a rejected code produces one indistinguishable
+        // error whether or not the address was already registered, because no
+        // account-creation attempt is made for the caller to observe.
+        await _redeemInviteCode(
+          inviteCode: inviteCode,
+          email: email,
+          password: password,
+        );
+
+        // The account now exists with its claims already set, so the first
+        // token this sign-in receives carries them and no refresh is needed.
         final fb.UserCredential credential = await _firebaseAuth
-            .createUserWithEmailAndPassword(email: email, password: password);
-        return _provision(_requireUser(credential), inviteCode);
+            .signInWithEmailAndPassword(email: email, password: password);
+        return _toUser(_requireUser(credential));
       },
     );
   }
 
+  /// Creates an account from a Google identity and an invite code.
+  ///
+  /// **Deliberately still client-first, unlike the email/password path.**
+  /// There is no password to hand the server, and
+  /// `signInWithCredential` creates the Firebase account as a side effect of
+  /// the first federated sign-in — the account exists before any code of ours
+  /// runs.
+  ///
+  /// Mission 2.9's F1 does not reach here, for a structural reason. The
+  /// enumeration oracle existed because email/password sign-up let a caller
+  /// *assert* an arbitrary address; Google sign-up requires *authenticating
+  /// as* the identity, so a probe reveals only accounts the caller already
+  /// controls. See ADR-036's Mission 2.10 amendment.
+  ///
+  /// The compensating delete therefore stays on this path, where it still has
+  /// something to compensate for.
   @override
   Future<User> signUpWithGoogle({required String inviteCode}) {
     return _guard(
       description: 'create an account with Google',
       action: () async {
         final fb.UserCredential credential = await _authenticateWithGoogle();
-        return _provision(_requireUser(credential), inviteCode);
+        return _provisionFederated(_requireUser(credential), inviteCode);
       },
     );
   }
 
-  /// Redeems the code for a freshly created account, or undoes the account.
+  /// Redeems a code for an account Google has just created, or undoes it.
   ///
-  /// ## The account has to exist first, which reverses Mission 2.2's ordering
-  ///
-  /// That ordering redeemed before creating, so a rejected code left nothing
-  /// behind. It cannot survive contact with the real function: redemption sets
-  /// a custom claim, so it needs an authenticated caller to set it *on*, and
-  /// the uid comes from the verified auth context rather than the request body
-  /// (ADR-036). There is no account to name until one is created.
-  ///
-  /// The orphaned account that ordering was protecting against is therefore
-  /// real again, and is handled rather than accepted: a failed redemption
-  /// deletes the account it just created. The person can retry with a good
-  /// code instead of finding their address already taken by an account they
-  /// cannot use.
+  /// Only the federated path reaches this. The email/password path no longer
+  /// creates anything before validating, so it has nothing to undo.
   ///
   /// ## The token must be refreshed before the claims are readable
   ///
@@ -232,9 +250,13 @@ class AuthRepositoryImpl implements AuthRepository {
   /// holding was minted before that write and does not carry the new claims,
   /// so `_toUser` would find no `role` and reject the account it just
   /// provisioned. Forcing a refresh is what closes that window.
-  Future<User> _provision(fb.User user, String inviteCode) async {
+  Future<User> _provisionFederated(fb.User user, String inviteCode) async {
     try {
-      await _redeemInviteCode(inviteCode);
+      await _redeemInviteCode(
+        inviteCode: inviteCode,
+        email: user.email ?? '',
+        password: null,
+      );
     } on AppException {
       await _discard(user);
       rethrow;
@@ -297,26 +319,36 @@ class AuthRepositoryImpl implements AuthRepository {
     return _firebaseAuth.signInWithCredential(credential);
   }
 
-  /// Validates and consumes an organisation invite code.
+  /// Validates an invite code and provisions the account behind it.
   ///
   /// **TEMPORARY — calls the Cloud Function ADR-036 retires at Mission 6/7.**
-  /// When redemption becomes a `/v1/...` route this body changes to a Dio
-  /// call and `cloud_functions` leaves the project; the contract does not
-  /// change, which is why the seam is here rather than at the call sites.
   ///
-  /// The code is the only thing sent. The uid the claims are written to comes
-  /// from the caller's verified auth context on the server side, never from
-  /// this payload — a client that could name the account to provision could
-  /// provision somebody else's.
+  /// [password] is null on the federated path, where Google has already
+  /// created the account and the function only redeems and sets claims. On the
+  /// email/password path it is present, and the function creates the account
+  /// itself after the code checks out — the ordering that closes F1.
+  ///
+  /// The password is sent once, over HTTPS, to a function that passes it
+  /// straight to `createUser`. It is never logged here or there.
   ///
   /// Throws an `AuthenticationException` carrying
-  /// `AUTH_INVITE_CODE_INVALID` or `AUTH_INVITE_CODE_EXPIRED`; the function
-  /// reports which in `details.errorCode` and
-  /// [FirebaseFunctionsErrorMapper] reads it.
-  Future<void> _redeemInviteCode(String inviteCode) async {
+  /// `AUTH_INVITE_CODE_INVALID` or `AUTH_INVITE_CODE_EXPIRED`. A registered
+  /// address is reported as the former, not as its own condition — see
+  /// ADR-036.
+  Future<void> _redeemInviteCode({
+    required String inviteCode,
+    required String email,
+    required String? password,
+  }) async {
     try {
       await _functions.httpsCallable('redeemInviteCode').call<Object?>(
-        <String, Object?>{'code': inviteCode},
+        <String, Object?>{
+          'code': inviteCode,
+          'email': email,
+          // Omitted rather than sent as null on the federated path, where
+          // Google has already created the account.
+          'password': ?password,
+        },
       );
     } on FirebaseFunctionsException catch (error, stackTrace) {
       throw FirebaseFunctionsErrorMapper.toAuthenticationException(

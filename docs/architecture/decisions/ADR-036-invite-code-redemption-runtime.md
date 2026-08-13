@@ -132,6 +132,70 @@ Cloud Functions requires the **Blaze** plan. Its free tier is **2,000,000 invoca
 - Mission 2.6 — Invite-code redemption, which produced this ADR.
 - Mission 6/7 — the real backend, which retires it.
 
+## Amendment — Mission 2.10 (2026-08-13): the function creates the account
+
+**Status of this amendment: Accepted.** It changes what `redeemInviteCode` does, not where it runs.
+
+### What changed, and why
+
+Mission 2.9's security review found an email-enumeration oracle (**F1**) created by the ordering this ADR originally described. `AuthRepositoryImpl` created the Firebase account *first* and redeemed the code *second*, so an unauthenticated caller at the public `/signup` route could assert any email address and read the answer from which error came back:
+
+- a registered address returned `AUTH_EMAIL_ALREADY_IN_USE` — *"An account already exists for this email"*
+- an unregistered address created an account, failed redemption, deleted it again, and returned `AUTH_INVITE_CODE_INVALID`
+
+No valid invite code was needed to run the probe. That defeats, on the sign-up path, exactly the property ADR-034 records Firebase preserving on the sign-in path — the collapse of `wrong-password` and `user-not-found` so *"a caller cannot learn whether an account exists"*.
+
+**`redeemInviteCode` now takes `{code, email, password}` and does the whole thing server-side.** It validates the code first and creates the account only if the code was good, inside the same transaction discipline as before. An invalid or expired code touches nothing: no account is created, so none has to be deleted, and the caller gets one indistinguishable error whichever case it was.
+
+### The caller has no identity, which is the point
+
+The original design took the uid from `request.auth`, on the reasoning that a client must never name the account to provision. That reasoning is unchanged and is now satisfied more strongly rather than less: there is no account yet, so there is no uid to assert. The function creates the user itself and sets the claims on the user it just created, so the identity is server-chosen end to end.
+
+Sign-up is therefore the one unauthenticated entry point in this runtime. The invite code is the credential that gates it, which is what it was always for.
+
+### The compensating delete is retired for this path
+
+Mission 2.6 added a delete-on-failed-redemption because the old ordering could leave an orphaned account holding an address its owner could not use or reuse. With validation first, nothing is created to orphan. `_discard` and its logging are removed from the email/password path.
+
+### This does not reopen the Cloud Functions versus Lambda decision
+
+Stated explicitly so it is not left ambiguous. The original decision turned on **what credential each runtime requires to exist**: running the Admin SDK outside Google means holding a service-account private key that can grant `admin` on any organisation, while inside Cloud Functions the runtime authenticates through the metadata server and no key exists.
+
+Creating a user is `getAuth().createUser` — the same Admin SDK, the same credential, the same runtime. The responsibility expands; the privilege does not. Every word of the original reasoning holds, and the retirement obligation at Mission 6/7 is unchanged.
+
+### Google sign-up does not follow this pattern, and does not need to
+
+**Traced before assuming, because the shapes genuinely differ.**
+
+`signUpWithGoogle` has no password to send. The identity comes from Google, and `FirebaseAuth.signInWithCredential` creates the Firebase account as a side effect of the first federated sign-in — the account exists before any code of ours runs.
+
+**F1 does not reach that path, for a structural reason rather than a lucky one.** The enumeration oracle exists because email/password sign-up lets a caller *assert* an arbitrary address. Google sign-up requires *authenticating as* the identity in question: probing whether `someone@example.com` is registered would mean holding that person's Google account. An attacker learns only about accounts they already control.
+
+So the Google path keeps client-side sign-in followed by server-side redemption, and **keeps its compensating delete**, which still has something to compensate for: a rejected code after a federated sign-in does leave a real account behind.
+
+A symmetric server-side-first design is available — the client would send the Google ID token, the function would verify it and link the provider — and is deliberately not built. It closes no open finding, adds token verification to a runtime ADR-036 confines to one job, and the runtime is retired at Mission 6/7 regardless.
+
+### Two other Mission 2.9 findings closed in passing
+
+**F3 (unvalidated input reaching Firestore)** is closed by the same rewrite.
+`normaliseCode` now enforces an alphanumeric character set and a length bound
+before `.doc()` is called, so a code containing `/` — which Firestore reads as
+a path segment rather than a key — is rejected as `VALIDATION_INVALID_INPUT`
+instead of throwing an unhandled `internal`. Volume 8 §8.3 §2 asks for exactly
+this: validation "before touching the database".
+
+**F2 (no rate limiting)** is *not* closed and is now marginally more exposed:
+the endpoint is unauthenticated by design, where before it required a Firebase
+account. The mitigating factor is unchanged — a code is ~49 bits — but the
+divergence from Volume 8 §8.3 §1, which rate-limits every other endpoint,
+stands and is worth closing on its own terms.
+
+### Passwords now transit the function
+
+A cost the original design did not carry, recorded rather than left implicit. The password reaches `getAuth().createUser` over HTTPS inside Google's infrastructure — the same trust boundary Firebase Authentication already occupies — but it is now a value this project's own code holds in memory. It is never logged, never echoed in an error, and never written to Firestore. The function logs `uid` and `orgId` only.
+
+---
+
 ## Implementation Status
 
 **Implemented and deployed to `vump-platform-f86af`.**

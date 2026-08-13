@@ -155,6 +155,7 @@ void main() {
       expect(functions.calledNames, <String>['redeemInviteCode']);
       expect(functions.calledWith.single, <String, Object?>{
         'code': 'ABCDEFGHJK',
+        'email': 'someone@example.com',
       });
       expect(user.orgId, 'org-1');
     });
@@ -265,27 +266,47 @@ void main() {
     });
   });
 
-  group('signUpWithEmailPassword', () {
-    test('creates the account, redeems, and returns the user', () async {
-      final FakeFirebaseFunctions functions = FakeFirebaseFunctions();
+  group('signUpWithEmailPassword no longer creates before validating', () {
+    // The F1 regression group. Mission 2.9 found that creating the account
+    // first let an unauthenticated caller enumerate registered addresses: a
+    // taken one failed differently from a free one. Validation is server-side
+    // and first now, so the client attempts no local creation at all.
 
-      final domain.User user = await build(functions: functions)
+    test('redemption happens server-side, then the caller signs in', () async {
+      final FakeFirebaseFunctions functions = FakeFirebaseFunctions();
+      final _FakeAuth auth = _FakeAuth(_FakeUser(claims: goodClaims));
+
+      final domain.User user = await build(functions: functions, auth: auth)
           .signUpWithEmailPassword(
             email: 'new@example.com',
             password: 'pw1234',
             inviteCode: 'ABCDEFGHJK',
           );
 
-      expect(functions.calledNames, <String>['redeemInviteCode']);
+      expect(functions.calledWith.single, <String, Object?>{
+        'code': 'ABCDEFGHJK',
+        'email': 'new@example.com',
+        'password': 'pw1234',
+      });
+      expect(
+        auth.createUserCalls,
+        0,
+        reason: 'the function creates the account, not the client',
+      );
+      expect(auth.emailSignInCalls, 1, reason: 'sign in after provisioning');
       expect(user.orgId, 'org-1');
     });
 
-    test('a rejected code deletes the created account', () async {
+    test('a rejected code creates nothing and deletes nothing', () async {
+      // The fix stated as a property. Previously this path created an account,
+      // failed redemption, then deleted it — and the create attempt was the
+      // observable that leaked whether the address was already registered.
       final _FakeUser user = _FakeUser(claims: goodClaims);
+      final _FakeAuth auth = _FakeAuth(user);
 
       await expectLater(
         build(
-          auth: _FakeAuth(user),
+          auth: auth,
           redemptionThrows: FirebaseFunctionsException(
             code: 'not-found',
             message: 'no',
@@ -294,14 +315,49 @@ void main() {
             },
           ),
         ).signUpWithEmailPassword(
-          email: 'new@example.com',
+          email: 'target@example.com',
           password: 'pw1234',
           inviteCode: 'BADCODE',
         ),
         throwsA(isA<AuthenticationException>()),
       );
 
-      expect(user.deleteCalls, 1);
+      expect(auth.createUserCalls, 0, reason: 'nothing was created');
+      expect(user.deleteCalls, 0, reason: 'so nothing had to be deleted');
+      expect(auth.emailSignInCalls, 0, reason: 'and no session was opened');
+    });
+
+    test('a registered address is indistinguishable from a bad code', () async {
+      // The oracle F1 described, asserted closed at this boundary. The server
+      // reports AUTH_INVITE_CODE_INVALID for both, and the client does nothing
+      // locally that could tell them apart.
+      final _FakeAuth auth = _FakeAuth(_FakeUser(claims: goodClaims));
+
+      await expectLater(
+        build(
+          auth: auth,
+          redemptionThrows: FirebaseFunctionsException(
+            code: 'not-found',
+            message: 'address already registered',
+            details: const <Object?, Object?>{
+              'errorCode': 'AUTH_INVITE_CODE_INVALID',
+            },
+          ),
+        ).signUpWithEmailPassword(
+          email: 'registered@example.com',
+          password: 'pw1234',
+          inviteCode: 'GOODCODE12',
+        ),
+        throwsA(
+          isA<AuthenticationException>().having(
+            (AuthenticationException e) => e.errorCode,
+            'errorCode',
+            ErrorCode.authInviteCodeInvalid,
+          ),
+        ),
+      );
+
+      expect(auth.createUserCalls, 0);
     });
   });
 }
@@ -311,9 +367,20 @@ class _FakeAuth implements fb.FirebaseAuth {
 
   final fb.User? _user;
   int signOutCalls = 0;
+  int createUserCalls = 0;
+  int emailSignInCalls = 0;
 
   @override
   fb.User? get currentUser => _user;
+
+  @override
+  Future<fb.UserCredential> signInWithEmailAndPassword({
+    required String email,
+    required String password,
+  }) async {
+    emailSignInCalls += 1;
+    return _FakeCredential(_user);
+  }
 
   @override
   Future<fb.UserCredential> signInWithCredential(
@@ -324,7 +391,12 @@ class _FakeAuth implements fb.FirebaseAuth {
   Future<fb.UserCredential> createUserWithEmailAndPassword({
     required String email,
     required String password,
-  }) async => _FakeCredential(_user);
+  }) async {
+    // Still implemented so a regression that reintroduces client-side
+    // creation is caught by the counter rather than by a crash.
+    createUserCalls += 1;
+    return _FakeCredential(_user);
+  }
 
   @override
   Future<void> signOut() async {

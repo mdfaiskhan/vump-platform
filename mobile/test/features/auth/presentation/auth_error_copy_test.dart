@@ -110,6 +110,22 @@ void main() {
       expect(message.toLowerCase(), isNot(contains('not registered')));
     });
 
+    test('a rejected invite code reveals nothing about the address', () {
+      // The sign-up half of the enumeration property, after Mission 2.10's
+      // fix to F1. The server reports a registered address as an invalid
+      // code, so this one string is what a caller sees either way — it must
+      // not hint at an account.
+      final String message = copyFor(
+        ErrorCode.authInviteCodeInvalid,
+      ).toLowerCase();
+
+      expect(message, contains('invite code'));
+      expect(message, isNot(contains('account')));
+      expect(message, isNot(contains('already')));
+      expect(message, isNot(contains('registered')));
+      expect(message, isNot(contains('exists')));
+    });
+
     test('a cancelled sign-in is silent, and reported as such', () {
       // Not a failure: the person dismissed the sheet deliberately. Both the
       // empty message and the isSilent flag say so, and the screen reads the
