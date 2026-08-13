@@ -1,19 +1,268 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
-/// The single shared sign-in surface for both roles.
+import 'package:mobile/app/theme/app_sizes.dart';
+import 'package:mobile/app/theme/app_spacing.dart';
+import 'package:mobile/core/errors/failure.dart';
+import 'package:mobile/features/auth/application/auth_notifier.dart';
+import 'package:mobile/features/auth/domain/entities/role.dart';
+import 'package:mobile/features/auth/domain/entities/user.dart';
+import 'package:mobile/features/auth/presentation/auth_error_copy.dart';
+
+/// SH-02 — the single shared sign-in surface for both roles.
 ///
-/// Placeholder registered by Mission 1.3's navigation skeleton. It renders
-/// nothing but its own name; Volume 2 Chapter 2.4 §4 makes this role-agnostic —
-/// there is no separate Admin login — and the Role Router sends the user to the
-/// Collector or Admin root immediately after authentication.
-class LoginScreen extends StatelessWidget {
+/// Volume 2 Chapter 2.5 §1 specifies its contents: *"Email/password fields,
+/// SSO entry point, error states"*. Chapter 2.4 §4 makes it role-agnostic —
+/// *"there is no separate 'Admin login' surface"*.
+///
+/// ## The Role Router lives here
+///
+/// Chapter 2.4 §4: *"Immediately after authentication, the Role Router sends
+/// the user to the Collector root or Admin root — this happens once, silently,
+/// and is not user-visible as a separate step."*
+///
+/// SH-03 is listed in Chapter 2.5 §1 as `Shared (system)` and *"Not
+/// user-facing"*, so it is this navigation decision rather than a screen. It
+/// is performed here, on the strength of the returned user's role, rather than
+/// as a router redirect: redirect logic belongs to Mission 2.7's guard, and
+/// putting it there now would mean two places deciding where a signed-in user
+/// belongs.
+///
+/// ## Sign-up is not linked from here
+///
+/// Volume 10 Chapter 10.4 §4 records that the login screen has no Sign Up
+/// option *"since there deliberately isn't one"*, and amendment A-051 keeps
+/// self-service registration blocked until a redemption endpoint exists.
+/// `SignupScreen` is built but registered nowhere — see its documentation.
+class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
+
+  @override
+  ConsumerState<LoginScreen> createState() => _LoginScreenState();
+}
+
+class _LoginScreenState extends ConsumerState<LoginScreen> {
+  final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
+  final TextEditingController _email = TextEditingController();
+  final TextEditingController _password = TextEditingController();
+
+  /// True while an attempt is in flight, so the buttons cannot be tapped twice.
+  bool _busy = false;
+
+  /// The failure to show, or null. Held here rather than in the notifier —
+  /// a rejected password is an outcome of this attempt, not a session state.
+  String? _error;
+
+  @override
+  void dispose() {
+    _email.dispose();
+    _password.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Sign in')),
-      body: const Center(child: Text('Login Screen')),
+      body: SafeArea(
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(AppSpacing.lg),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 420),
+              child: Form(
+                key: _formKey,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: <Widget>[
+                    TextFormField(
+                      key: const Key('login.email'),
+                      controller: _email,
+                      enabled: !_busy,
+                      autofillHints: const <String>[AutofillHints.username],
+                      keyboardType: TextInputType.emailAddress,
+                      textInputAction: TextInputAction.next,
+                      decoration: const InputDecoration(
+                        labelText: 'Work email',
+                      ),
+                      validator: _validateEmail,
+                    ),
+                    const SizedBox(height: AppSpacing.md),
+                    TextFormField(
+                      key: const Key('login.password'),
+                      controller: _password,
+                      enabled: !_busy,
+                      autofillHints: const <String>[AutofillHints.password],
+                      obscureText: true,
+                      textInputAction: TextInputAction.done,
+                      decoration: const InputDecoration(labelText: 'Password'),
+                      validator: _validatePassword,
+                      onFieldSubmitted: (_) => _submitEmailPassword(),
+                    ),
+                    if (_error != null) ...<Widget>[
+                      const SizedBox(height: AppSpacing.md),
+                      _ErrorBanner(message: _error!),
+                    ],
+                    const SizedBox(height: AppSpacing.lg),
+                    FilledButton(
+                      key: const Key('login.submit'),
+                      onPressed: _busy ? null : _submitEmailPassword,
+                      child: _busy
+                          ? const SizedBox(
+                              height: AppSizes.iconSm,
+                              width: AppSizes.iconSm,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Text('Sign in'),
+                    ),
+                    const SizedBox(height: AppSpacing.md),
+                    // The "SSO entry point" of Chapter 2.5 §1. Amendment A-053
+                    // records that this reads FR-AUTH-02's enterprise SSO more
+                    // narrowly than written.
+                    OutlinedButton.icon(
+                      key: const Key('login.google'),
+                      onPressed: _busy ? null : _submitGoogle,
+                      icon: const Icon(Icons.account_circle_outlined),
+                      label: const Text('Continue with Google'),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Rejects an empty or obviously malformed address before a round trip.
+  ///
+  /// Deliberately shallow. A stricter pattern rejects addresses that are
+  /// genuinely valid, and the server is the authority on whether an account
+  /// exists — this only catches the typo that would waste a request.
+  String? _validateEmail(String? value) {
+    final String email = value?.trim() ?? '';
+    if (email.isEmpty) {
+      return 'Enter your work email.';
+    }
+    if (!email.contains('@') || email.startsWith('@') || email.endsWith('@')) {
+      return 'That does not look like an email address.';
+    }
+    return null;
+  }
+
+  String? _validatePassword(String? value) {
+    if (value == null || value.isEmpty) {
+      return 'Enter your password.';
+    }
+    return null;
+  }
+
+  Future<void> _submitEmailPassword() async {
+    if (!(_formKey.currentState?.validate() ?? false)) {
+      return;
+    }
+    await _run(
+      () => ref
+          .read(authNotifierProvider.notifier)
+          .signInWithEmailPassword(
+            email: _email.text.trim(),
+            password: _password.text,
+          ),
+    );
+  }
+
+  Future<void> _submitGoogle() async {
+    // No form validation: the account picker supplies the identity, so the
+    // empty email field is not a reason to block this path.
+    await _run(ref.read(authNotifierProvider.notifier).signInWithGoogle);
+  }
+
+  /// Runs an attempt, then either routes by role or shows the failure.
+  Future<void> _run(Future<Failure?> Function() attempt) async {
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+
+    final Failure? failure = await attempt();
+
+    if (!mounted) {
+      return;
+    }
+
+    if (failure == null) {
+      _routeByRole();
+      return;
+    }
+
+    setState(() {
+      _busy = false;
+      _error = AuthErrorCopy.isSilent(failure)
+          ? null
+          : AuthErrorCopy.forFailure(failure);
+    });
+  }
+
+  /// SH-03 — sends the signed-in user to their role's root, silently.
+  ///
+  /// Reads the role from the notifier's state rather than from the sign-in
+  /// call, so there is one source of truth for who is signed in.
+  void _routeByRole() {
+    final User? user = ref.read(authNotifierProvider).value?.user;
+
+    if (user == null) {
+      // The stream has not yet reported the new session. Staying put is
+      // correct: Mission 2.7's guard is what redirects on state, and guessing
+      // a destination here would race it.
+      setState(() => _busy = false);
+      return;
+    }
+
+    context.go(switch (user.role) {
+      Role.admin => '/admin/dashboard',
+      Role.collector => '/collector/dashboard',
+    });
+  }
+}
+
+/// The named, actionable error state Chapter 2.9 §2 requires.
+class _ErrorBanner extends StatelessWidget {
+  const _ErrorBanner({required this.message});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+    return Container(
+      key: const Key('login.error'),
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.errorContainer,
+        borderRadius: BorderRadius.circular(AppSpacing.sm),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Icon(
+            Icons.error_outline,
+            size: AppSizes.iconSm,
+            color: theme.colorScheme.onErrorContainer,
+          ),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: Text(
+              message,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: theme.colorScheme.onErrorContainer,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

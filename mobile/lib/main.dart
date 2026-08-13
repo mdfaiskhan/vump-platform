@@ -14,6 +14,8 @@ import 'package:mobile/core/errors/app_exception.dart';
 import 'package:mobile/core/firebase/providers/firebase_provider.dart';
 import 'package:mobile/core/logging/app_logger.dart';
 import 'package:mobile/core/logging/providers/logger_provider.dart';
+import 'package:mobile/features/auth/application/auth_notifier.dart';
+import 'package:mobile/features/auth/data/repositories/auth_repository_impl.dart';
 import 'package:path_provider/path_provider.dart';
 
 Future<void> main() async {
@@ -33,6 +35,14 @@ Future<void> main() async {
   final ProviderContainer container = ProviderContainer(
     overrides: <Override>[
       databaseDirectoryProvider.overrideWithValue(documents.path),
+      // The composition root is the only place that may name a concrete
+      // implementation: `application/` declares `authRepositoryProvider` and
+      // may not import `data/` (ADR-022), so the two are introduced here.
+      //
+      // Constructing it is safe with Firebase down — ADR-035 made the SDK
+      // resolution lazy precisely so this line cannot throw during startup
+      // that ADR-017 has already decided to tolerate.
+      authRepositoryProvider.overrideWithValue(AuthRepositoryImpl()),
     ],
   );
   final AppLogger logger = container.read(loggerProvider);

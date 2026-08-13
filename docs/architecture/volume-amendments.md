@@ -1025,6 +1025,27 @@ So the chapter whose stated purpose is turning Volume 1's prose into measurable 
 
 **Registered so the choice is deliberate.** `google_sign_in ^7.2.0` is admitted on this basis and confined to `features/auth/data/`. If enterprise SSO returns as a requirement it is additive — `firebase_auth` reaches SAML and OIDC providers with no further package — and this entry marks where the narrowing was taken.
 
+### A-054 — Per-feature sealed failure unions are superseded by `Failure` and `ErrorCode`
+
+| | |
+|---|---|
+| **Volume** | 3 — Technical Architecture, Chapter 3.9 §5 |
+| **Says** | *"Each feature that can fail defines its own sealed error type (a freezed union) rather than throwing a bare Exception, so the Presentation layer can pattern-match to the exact Chapter 2.9-specified message"*, illustrated with `sealed class ChecklistFailure` and its subtypes |
+| **Should say** | A feature defines no error type of its own. `presentation/` receives a `Failure` and pattern-matches on its `ErrorCode`, which is the vocabulary ADR-025 fixes for the whole repository |
+| **Authority** | ADR-025; project owner's decision, Mission 2.4 |
+| **Class** | Design change |
+| **Status** | Open |
+
+**The chapter's goal is met; only its mechanism is superseded.** §5's actual requirement is that presentation can pattern-match to Chapter 2.9's copy rather than rendering *"a single generic 'Checklist failed' string"*. `ErrorCode` delivers exactly that — it is a closed enum, a `switch` over it is exhaustive, and `AuthErrorCopy.forFailure` is the Chapter 2.9 copy table §5 asks for. Nothing about the outcome changes; the type carrying the discriminator does.
+
+**Two vocabularies for one set of conditions is the cost being avoided.** ADR-025 already defines `AUTH_INVALID_CREDENTIALS`, `AUTH_ACCOUNT_DISABLED`, `AUTH_SESSION_EXPIRED` and the rest, and `features/auth/data/` already maps every Firebase code onto them (ADR-034). A sealed `AuthFailure` union would restate those same conditions a second time, and every conversion between the two would be a place they could drift apart. §5 was written before ADR-025 existed and could not have known the taxonomy would be central.
+
+**`Failure` is deliberately not extensible, and that is the direct conflict.** `failure.dart` states it: *"The class is `final`: there is exactly one failure type, distinguished by its `code`. A hierarchy of failure subclasses would push infrastructure concerns back into the shape of the type."* A per-feature union is that hierarchy. One of the two documents had to give, and ADR-025 is the accepted, binding one — `CLAUDE.md` and `docs/architecture/README.md` both make an accepted ADR govern where a volume disagrees.
+
+**This is registered project-wide, not for `features/auth/` alone.** ADR-025 has been binding since Mission 0.10 and §26's propagation table already names `presentation/` as the layer that pattern-matches on `code`. Every feature was therefore already on the ADR's side of this disagreement; `auth` is simply the first with code to prove it. The entry exists so the next feature does not read §5, build a union in good faith, and have it rejected at review.
+
+**Chapter 3.9's other requirements are untouched and were followed.** §2's `AsyncValue` pattern, §3's `AsyncNotifier<AuthState>` and its three named cases are all implemented as written. This amendment reaches §5 only.
+
 ---
 
 ## Confirmed correct — no amendment
