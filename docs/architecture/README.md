@@ -87,6 +87,12 @@ Six further standards live in [`../development/`](../development/) because their
 
 `decisions/` holds the decisions themselves. It is a flat directory — no subfolders, no grouping by domain. Ordering is chronological by number, not thematic.
 
+### Logs
+
+A log records state rather than fixing a rule, so it is not in the standards table above and has no governing ADR:
+
+[`deferred-items.md`](../development/deferred-items.md) — known-incomplete implementation, each item with the mission that owns closing it. It decides nothing; every entry restates a fact already recorded in an ADR or a source comment. Not Volume 11's Risk Register (Ch. 11.4), Feature Tracker (Ch. 11.6) or Bug Tracker (Ch. 11.7) — the document itself records why it is none of the three.
+
 ---
 
 ## Naming Convention
