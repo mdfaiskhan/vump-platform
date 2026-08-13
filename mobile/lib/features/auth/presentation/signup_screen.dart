@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import 'package:mobile/app/theme/app_sizes.dart';
 import 'package:mobile/app/theme/app_spacing.dart';
@@ -128,6 +129,17 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                       onPressed: _busy ? null : _submitGoogle,
                       icon: const Icon(Icons.account_circle_outlined),
                       label: const Text('Continue with Google'),
+                    ),
+                    const SizedBox(height: AppSpacing.lg),
+                    // The mirror of Login's 'Create an account' link, in the
+                    // same position and with the same shape: a TextButton last
+                    // in the column, disabled while an attempt is in flight,
+                    // navigating by path so the router stays the only place
+                    // that maps paths to screens (ADR-004).
+                    TextButton(
+                      key: const Key('signup.signIn'),
+                      onPressed: _busy ? null : () => context.go('/login'),
+                      child: const Text('Already have an account? Sign in'),
                     ),
                   ],
                 ),
