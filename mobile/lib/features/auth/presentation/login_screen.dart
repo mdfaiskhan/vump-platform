@@ -6,6 +6,7 @@ import 'package:mobile/app/theme/app_sizes.dart';
 import 'package:mobile/app/theme/app_spacing.dart';
 import 'package:mobile/core/errors/failure.dart';
 import 'package:mobile/features/auth/application/auth_notifier.dart';
+import 'package:mobile/features/auth/application/auth_state.dart';
 import 'package:mobile/features/auth/domain/entities/role.dart';
 import 'package:mobile/features/auth/domain/entities/user.dart';
 import 'package:mobile/features/auth/presentation/auth_error_copy.dart';
@@ -61,6 +62,15 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     super.dispose();
   }
 
+  /// Whether the session lapsed rather than never having existed.
+  ///
+  /// Read from the notifier rather than passed as a route argument, so it
+  /// stays true wherever the user reaches this screen from — Mission 2.7's
+  /// guard will redirect here without going through a caller that could carry
+  /// a flag.
+  bool get _sessionExpired =>
+      ref.watch(authNotifierProvider).value is AuthStateExpired;
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -77,6 +87,19 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: <Widget>[
+                    // Volume 6 Chapter 6.7 §3 ends silent re-authentication by
+                    // "falling back to the Login screen". Arriving here with no
+                    // explanation, having been signed in a moment ago, is the
+                    // silent failure Chapter 2.9 §2 forbids — so the fallback
+                    // says why.
+                    if (_sessionExpired) ...<Widget>[
+                      const _Notice(
+                        key: Key('login.expired'),
+                        message:
+                            'Your session ended. Sign in again to continue.',
+                      ),
+                      const SizedBox(height: AppSpacing.md),
+                    ],
                     TextFormField(
                       key: const Key('login.email'),
                       controller: _email,
@@ -225,6 +248,38 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       Role.admin => '/admin/dashboard',
       Role.collector => '/collector/dashboard',
     });
+  }
+}
+
+/// An informational message, distinct from a failure.
+///
+/// A lapsed session is not an error the person made, so it does not get the
+/// error colouring — Chapter 2.9 §5's rule that a queued chunk must look
+/// different from a failed one is the same instinct: two different situations
+/// should not share one appearance.
+class _Notice extends StatelessWidget {
+  const _Notice({required this.message, super.key});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(AppSpacing.sm),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          const Icon(Icons.info_outline, size: AppSizes.iconSm),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(child: Text(message, style: theme.textTheme.bodyMedium)),
+        ],
+      ),
+    );
   }
 }
 

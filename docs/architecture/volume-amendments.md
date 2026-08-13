@@ -1046,6 +1046,29 @@ So the chapter whose stated purpose is turning Volume 1's prose into measurable 
 
 **Chapter 3.9's other requirements are untouched and were followed.** §2's `AsyncValue` pattern, §3's `AsyncNotifier<AuthState>` and its three named cases are all implemented as written. This amendment reaches §5 only.
 
+### A-055 — The Firebase refresh token cannot be stored in secure storage, because the SDK does not expose it
+
+| | |
+|---|---|
+| **Volume** | 6 — Mobile App Architecture, Chapter 6.7 §2 and §3 |
+| **Says** | What is stored in `flutter_secure_storage` is *"the Firebase refresh token"*, and *"the `AuthRepository` is the only caller — no feature module reads secure storage directly"* |
+| **Should say** | Nothing is stored. The `firebase_auth` SDK persists its own credential in the platform keystore, and the refresh token is not obtainable through the Flutter API on any target platform |
+| **Authority** | `firebase_auth 6.5.7`; ADR-008, ADR-034 |
+| **Class** | Correction of fact |
+| **Status** | Open |
+
+**The plan is not implementable, and the reason is in the package's own documentation.** `User.refreshToken` states: *"This property will be an empty string for native platforms (android, iOS & macOS) as they do not support refresh tokens."* Android, iOS and macOS are every platform this application ships to. There is no value to write.
+
+**The property Chapter 6.7 protects is nevertheless satisfied, by a different owner.** §4 justifies the chapter on the ground that *"the credential that could be used to impersonate a Collector or Admin against the backend is protected at least as strongly as the data it guards access to, using the platform's actual hardware-backed keystore rather than an ordinary file."* The native Firebase SDK persists its credential in exactly that keystore — the Keychain on iOS, Keystore-backed storage on Android. What changes is which code owns the write, not where the secret lands.
+
+**Two consequences follow, and both are visible in the codebase.**
+
+`SecureStorageService` has **no consumers**. It was built in Mission 0.7 for this purpose and every other candidate secret has since turned out to belong elsewhere. It is not dead by accident and should not be deleted on that reasoning alone — but nothing reads it today, and Chapter 6.7 §2's *"Nothing else, by design"* means nothing is queued behind it either.
+
+**ADR-008's startup consequence still holds, for a different reason.** It records that *"the session cannot be known synchronously before `runApp`"* because secure storage is asynchronous. That remains true: resolving the session is asynchronous because `restoreSession` is, not because a Keychain read is. Mission 2.5 satisfies it by awaiting the session in the composition root before `runApp`, so the constraint is discharged rather than inherited.
+
+**Chapter 6.7 §3's read-timing rule is followed as written.** *"Only at app cold-start, to attempt silent re-authentication before falling back to the Login screen — not read repeatedly during normal use"* describes exactly what `_restoreSession` does in `main.dart`. Only the storage mechanism named in §2 is wrong.
+
 ---
 
 ## Confirmed correct — no amendment

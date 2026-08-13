@@ -208,6 +208,56 @@ void main() {
     });
   });
 
+  group('the fallback from a lapsed session', () {
+    // Volume 6 Chapter 6.7 §3 ends silent re-authentication by "falling back
+    // to the Login screen". Until Mission 2.5 made AuthState.expired
+    // reachable, this branch could not be exercised at all.
+
+    testWidgets('an expired session is explained, not silent', (
+      WidgetTester tester,
+    ) async {
+      final _FakeAuthRepository repository = _FakeAuthRepository(
+        restored: const Session.authenticated(collector),
+      );
+      await pumpLogin(tester, repository);
+
+      repository.emit(const Session.unauthenticated());
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('login.expired')), findsOneWidget);
+      expect(
+        find.text('Your session ended. Sign in again to continue.'),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('a first-run user sees no expiry notice', (
+      WidgetTester tester,
+    ) async {
+      // Telling someone their session ended when they have never had one is
+      // the same class of defect as a generic error message.
+      await pumpLogin(tester, _FakeAuthRepository());
+
+      expect(find.byKey(const Key('login.expired')), findsNothing);
+    });
+
+    testWidgets('the notice is not styled as an error', (
+      WidgetTester tester,
+    ) async {
+      // An expiry is not a mistake the person made. Chapter 2.9 §5's rule that
+      // queued must not look like failed is the same instinct.
+      final _FakeAuthRepository repository = _FakeAuthRepository(
+        restored: const Session.authenticated(collector),
+      );
+      await pumpLogin(tester, repository);
+
+      repository.emit(const Session.unauthenticated());
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('login.error')), findsNothing);
+    });
+  });
+
   group('error states name a cause and a fix', () {
     testWidgets('a rejected credential shows the specific message', (
       WidgetTester tester,
@@ -337,10 +387,15 @@ void main() {
 
 /// A scripted `AuthRepository` that also reports the new session.
 class _FakeAuthRepository implements AuthRepository {
-  _FakeAuthRepository({this.signInResult, this.signInThrows});
+  _FakeAuthRepository({
+    this.signInResult,
+    this.signInThrows,
+    this.restored = const Session.unauthenticated(),
+  });
 
   final User? signInResult;
   final AuthenticationException? signInThrows;
+  final Session restored;
 
   int emailSignInCalls = 0;
   int googleSignInCalls = 0;
@@ -351,8 +406,10 @@ class _FakeAuthRepository implements AuthRepository {
   @override
   Stream<Session> get sessionChanges => _sessions.stream;
 
+  void emit(Session session) => _sessions.add(session);
+
   @override
-  Future<Session> restoreSession() async => const Session.unauthenticated();
+  Future<Session> restoreSession() async => restored;
 
   @override
   Future<User> signInWithEmailPassword({

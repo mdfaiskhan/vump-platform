@@ -57,6 +57,19 @@ final Provider<AuthRepository> authRepositoryProvider =
 class AuthNotifier extends AsyncNotifier<AuthState> {
   AuthRepository get _repository => ref.read(authRepositoryProvider);
 
+  /// True once a session has been observed, so a later loss can be told apart
+  /// from never having signed in.
+  ///
+  /// Firebase reports both as the same event — `authStateChanges()` emits null
+  /// for a revoked refresh token and for a signed-out user alike, so nothing
+  /// in the platform distinguishes them. The transition does: *was*
+  /// authenticated, now is not.
+  bool _wasAuthenticated = false;
+
+  /// True while [signOut] is in flight, so the resulting emission is not
+  /// mistaken for a session that lapsed on its own.
+  bool _signingOut = false;
+
   @override
   Future<AuthState> build() {
     // The stream is the source of truth, not the restore call: Firebase emits
@@ -87,14 +100,42 @@ class AuthNotifier extends AsyncNotifier<AuthState> {
       state = const AsyncLoading<AuthState>();
       return;
     }
-    state = AsyncData<AuthState>(next);
+    state = AsyncData<AuthState>(_classify(next));
+  }
+
+  /// Distinguishes a session that lapsed from one that never existed.
+  ///
+  /// `AuthState.expired` cannot come from the platform: Volume 4 Chapter 4.7
+  /// §3 has the SDK renew the ID token silently while the refresh token is
+  /// valid, and when it stops being valid Firebase emits exactly the same
+  /// `null` user it emits for a deliberate sign-out. The two are
+  /// indistinguishable at the moment they arrive.
+  ///
+  /// They are distinguishable as a *transition*, which is what this reads: a
+  /// user who was authenticated and is no longer, without having asked to be,
+  /// has a session that ended on its own. That is what lets the login screen
+  /// say why the person is looking at it again instead of showing a bare form.
+  AuthState _classify(AuthState next) {
+    if (next is AuthStateAuthenticated) {
+      _wasAuthenticated = true;
+      return next;
+    }
+
+    final bool lapsed = _wasAuthenticated && !_signingOut;
+    _wasAuthenticated = false;
+    return lapsed ? const AuthState.expired() : next;
   }
 
   Future<AuthState> _restore() async {
     try {
       final Session session = await _repository.restoreSession();
-      return AuthState.fromSession(session) ??
-          const AuthState.unauthenticated();
+      final AuthState restored =
+          AuthState.fromSession(session) ?? const AuthState.unauthenticated();
+      // A restored session is the first thing that makes a later loss legible
+      // as an expiry, so the transition is recorded here too and not only on
+      // the stream.
+      _wasAuthenticated = restored is AuthStateAuthenticated;
+      return restored;
     } on AppException {
       // A restore that fails is not an error state to show: it means nobody is
       // signed in as far as this launch is concerned. Mission 2.5 owns
@@ -125,8 +166,16 @@ class AuthNotifier extends AsyncNotifier<AuthState> {
   }
 
   /// Signs out, ending the session.
-  Future<Failure?> signOut() {
-    return _attempt(_repository.signOut);
+  ///
+  /// Flagged while in flight so the emission it causes is reported as
+  /// `unauthenticated` rather than as `expired` — the user asked for this one.
+  Future<Failure?> signOut() async {
+    _signingOut = true;
+    try {
+      return await _attempt(_repository.signOut);
+    } finally {
+      _signingOut = false;
+    }
   }
 
   /// Runs an authentication action, converting failure exactly once.

@@ -50,6 +50,7 @@ Future<void> main() async {
   _announceEnvironment(logger);
   await _initializeFirebase(container, logger);
   await _openDatabase(container, logger);
+  await _restoreSession(container, logger);
 
   runApp(
     UncontrolledProviderScope(container: container, child: const VumpApp()),
@@ -115,6 +116,53 @@ Future<void> _initializeFirebase(
     logger.error(
       'Starting without Firebase. Products that depend on it will fail.',
       error: error,
+    );
+  }
+}
+
+/// Resolves who is signed in before the first frame.
+///
+/// Volume 6 Chapter 6.7 §3 requires the session to be resolved *"only at app
+/// cold-start, to attempt silent re-authentication before falling back to the
+/// Login screen"*. Awaiting `authNotifierProvider` here is what puts that on
+/// the startup path: `AuthNotifier.build` calls `restoreSession`, and until
+/// this line existed nothing read the provider, so the restore never ran until
+/// something happened to watch it.
+///
+/// ADR-008 predicted the shape of this: *"the session cannot be known
+/// synchronously before `runApp`, so the router needs a loading state while
+/// the token is read"*. Awaiting it here satisfies the constraint without a
+/// loading state in the router, because the OS-native splash already covers
+/// the window — the first Flutter frame is drawn after the answer is known.
+///
+/// ## There is no token to read, and that is not an omission
+///
+/// Volume 6 Chapter 6.7 §2 expects the Firebase refresh token to live in
+/// `flutter_secure_storage`. It cannot: `firebase_auth` documents
+/// `User.refreshToken` as *"an empty string for native platforms (android, iOS
+/// & macOS)"*, so the value this application would store is not obtainable
+/// through the API. The native SDK persists its own credential in the
+/// platform's keystore instead, which is the same protection by a different
+/// owner. Registered as amendment A-055.
+///
+/// ## Failure is never fatal
+///
+/// Unlike the database, an unresolvable session is a normal outcome — nobody
+/// has signed in yet on a fresh install. `AuthNotifier` already converts a
+/// failed restore into `unauthenticated` rather than an error, so this await
+/// resolves either way; the guard here is for a defect in that conversion, not
+/// for the expected path.
+Future<void> _restoreSession(
+  ProviderContainer container,
+  AppLogger logger,
+) async {
+  try {
+    await container.read(authNotifierProvider.future);
+  } on Object catch (error, stackTrace) {
+    logger.error(
+      'The session could not be resolved at startup. Continuing signed out.',
+      error: error,
+      stackTrace: stackTrace,
     );
   }
 }
