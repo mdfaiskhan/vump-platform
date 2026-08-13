@@ -122,6 +122,9 @@ Every architectural invariant in force, with its authority and how it is checked
 | **I38** | Every non-ADR document states its precedence; markdown mechanics hold | ADR-024 §3, §30 | A markdown-lint job |
 | **I39** | `firebase_auth` only in `features/auth/data/` | ADR-034, ADR-022 §2.3 | CI `Architecture boundaries` |
 | **I40** | `google_sign_in` only in `features/auth/data/` | ADR-034, A-053 | CI `Architecture boundaries` |
+| **I41** | `core/` never imports `features/` | ADR-022 §2, ADR-035 | A grep — **checkable now** |
+
+**I41 was implicit until ADR-035 tested it.** ADR-022 states the rule; nothing checked it, because `core/` had no reason to want anything from a feature until `AuthInterceptor` needed a token. The resolution — `core/network/` declares `AuthTokenSource` and the composition root supplies the implementation — is the pattern every later `core/` module with the same problem should follow, and this invariant is what stops the shortcut being taken instead.
 
 **I39 and I40 belong to the I1–I4 family and are numbered at the end** because the register's numbers are cited from elsewhere — A-026 and ADR-026 both reference `I25`–`I33` by number — and renumbering would silently invalidate those citations.
 
@@ -188,6 +191,7 @@ Verified by running each check against the working tree, not asserted. Commands 
 | `dart format` on 59 hand-written files (I12) | 0 changed |
 | `flutter analyze` (I13) | no issues |
 | Cross-feature imports (I25) | none — `features/` is empty |
+| `core/` importing `features/` (I41) | none |
 | `app/` importing `features/` (I30) | none |
 | `core/` importing `app/theme/` (I31) | none |
 | `app/config/` importing `core/` (I32) | none |
@@ -253,6 +257,10 @@ for p in "dio core/network" "isar core/database" \
   check "$1 confined to lib/$2/" \
     "$(grep -rl "package:$1" lib --include='*.dart' | grep -v "^lib/$2/" || true)"
 done
+
+# I41 · core/ never imports features/
+check "core/ does not import features/" \
+  "$(grep -rn 'package:mobile/features' lib/core --include='*.dart' || true)"
 
 # I30 · app/ names no feature, except app/router.dart
 check "app/ is feature-blind" \

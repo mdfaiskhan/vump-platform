@@ -218,7 +218,7 @@ Four codes: `AUTH_UNAUTHENTICATED`, `AUTH_INVALID_CREDENTIALS`, `AUTH_SESSION_EX
 
 **`AuthenticationException` carries no credential, token or identifier.** `authentication_exception.dart` gives the reason in one line: *"An exception is logged, and a secret in a log is a secret disclosed."* This is ADR-007's position applied to the error path, which is the path most likely to be verbose.
 
-**Whichever identity provider is adopted, its native errors are mapped to this type at the boundary.** No layer above sees a provider-specific error class. `AuthInterceptor` is currently inert by design and attaches no credential; the refresh-and-retry behaviour is undecided and needs its own ADR (§16).
+**Whichever identity provider is adopted, its native errors are mapped to this type at the boundary.** No layer above sees a provider-specific error class. `AuthInterceptor` attaches a bearer credential and refreshes it once on a 401, per ADR-035. It reaches the token through `AuthTokenSource`, an interface `core/network/` declares and `features/auth/data/` implements, so the conversion to this type still happens at the feature boundary — the interceptor never sees a Firebase error.
 
 ### 11. Authorization errors
 
@@ -280,9 +280,11 @@ All four Dio timeout types collapse to a single `NETWORK_TIMEOUT` code, with the
 
 ### 16. Retry policy
 
-**No retry logic exists anywhere in the repository.** Verified: nothing implements a retry, a backoff or a circuit breaker. `AuthInterceptor` records the decision as deliberately deferred: *"Whether a 401 triggers a refresh-and-retry, and how concurrent requests are held while a single refresh is in flight... Those require their own ADR. Until it is taken, this class stays inert."*
+**One retry exists, and it is the narrow one.** ADR-035 discharged the ADR this section used to defer to, and `AuthInterceptor` now refreshes the credential once on a 401 and replays the request — the behaviour Volume 4 Chapter 4.7 §3 specifies for that component by name. It holds the in-flight refresh as a `Future`, so concurrent 401s share one refresh rather than triggering one each, and it marks the replayed request so a second 401 is never retried.
 
-**This section therefore defines the classification, not the mechanism.** The mechanism needs its own ADR. What follows is derivable from the taxonomy and is the input that ADR will need.
+**No general retry mechanism exists.** Nothing implements backoff, a circuit breaker, a bounded attempt count or durable retry state. The upload queue is what needs those, and they remain unowned by any ADR.
+
+**This section therefore defines the classification, and the mechanism only for the auth case.** What follows is derivable from the taxonomy and is the input the general retry ADR will need.
 
 **Retryable — the condition may clear on its own:**
 
@@ -593,7 +595,7 @@ That third assertion is the one every boundary needs.
 | **`DioClient._guard` has no catch-all** | It catches `on DioException` only, unlike the other four boundaries. The assumption is sound — Dio wraps every failure it produces in a `DioException` — but it is an assumption about a third-party library, not a guarantee the compiler checks. Anything Dio throws outside that envelope (a `StateError` from a malformed `Options`, an error from a future interceptor) escapes `core/network/` untranslated, which is the one thing §7 exists to prevent | Add a trailing `catch (error, stackTrace)` producing a `NetworkException` with `ErrorCode.unknown`, matching the other four. Three lines, and it closes the only hole in the confinement guarantee |
 | **No test for `ErrorInterceptor.mapToNetworkException`** | 13 documented mappings, no test file. The static exists specifically to make this testable without a live client | Add `test/core/network/interceptors/error_interceptor_test.dart`. The highest-value missing test in the repository |
 | **No timeout outside the network layer** | An Isar open, a keychain read and Firebase initialisation can hang indefinitely (§15) | Needs a decision about which operations get a deadline. Low priority while all three are local and fast |
-| **No retry anywhere** | §16. `AuthInterceptor` records it as needing its own ADR | Belongs to the mission that builds upload, where the Constitution makes it mandatory |
+| **No general retry mechanism** | §16. ADR-035 covers the 401 refresh-and-retry only; backoff, attempt caps and durable retry state are still unowned | Belongs to the mission that builds upload, where the Constitution makes it mandatory |
 
 **Verified as conforming**, across `mobile/lib/`:
 

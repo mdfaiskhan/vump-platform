@@ -53,11 +53,22 @@ class AuthRepositoryImpl implements AuthRepository {
   AuthRepositoryImpl({
     fb.FirebaseAuth? firebaseAuth,
     GoogleSignIn? googleSignIn,
-  }) : _firebaseAuth = firebaseAuth ?? fb.FirebaseAuth.instance,
+  }) : _injectedAuth = firebaseAuth,
        _googleSignIn = googleSignIn ?? GoogleSignIn.instance;
 
-  final fb.FirebaseAuth _firebaseAuth;
+  final fb.FirebaseAuth? _injectedAuth;
   final GoogleSignIn _googleSignIn;
+
+  /// Resolved on each use rather than in the constructor.
+  ///
+  /// `FirebaseAuth.instance` calls `Firebase.app()`, which throws
+  /// `FirebaseException(core/no-app)` when the platform never initialised — a
+  /// state ADR-017 tolerates in development. Resolving it in the initializer
+  /// list put that throw outside [_guard], so constructing this class leaked a
+  /// raw `FirebaseException` and broke the very guarantee ADR-034 states.
+  /// Every read here happens inside a guarded call. See ADR-035.
+  fb.FirebaseAuth get _firebaseAuth =>
+      _injectedAuth ?? fb.FirebaseAuth.instance;
 
   /// Holds the in-flight `initialize` call so concurrent callers share one.
   ///
@@ -91,7 +102,17 @@ class AuthRepositoryImpl implements AuthRepository {
     // Collector on every launch.
     yield const Session.unknown();
 
-    await for (final fb.User? user in _firebaseAuth.authStateChanges()) {
+    // Subscribing is itself a Firebase call: resolving the SDK throws
+    // `core/no-app` when startup tolerated an initialisation failure
+    // (ADR-017). Guarded so the stream errors with an AuthenticationException
+    // rather than a raw FirebaseException — a stream error is as much a
+    // boundary crossing as a thrown one. See ADR-035.
+    final Stream<fb.User?> changes = await _guard(
+      description: 'observe the session',
+      action: () async => _firebaseAuth.authStateChanges(),
+    );
+
+    await for (final fb.User? user in changes) {
       if (user == null) {
         yield const Session.unauthenticated();
       } else {
@@ -318,6 +339,21 @@ class AuthRepositoryImpl implements AuthRepository {
         error,
         stackTrace,
         description: description,
+      );
+    } on fb.FirebaseException catch (error, stackTrace) {
+      // The platform rather than the product, and it must come after the
+      // FirebaseAuthException clause above because that type extends this one.
+      // `core/no-app` and `core/not-initialized` both land here and both mean
+      // startup tolerated a Firebase failure (ADR-017) and something now needs
+      // it. Named so the message says Firebase instead of reporting an
+      // unclassified authentication failure. See ADR-035.
+      throw AuthenticationException(
+        errorCode: ErrorCode.unknown,
+        message:
+            'Firebase is not initialised, so the application could not '
+            '$description (firebase code: ${error.code}).',
+        cause: error,
+        stackTrace: stackTrace,
       );
     } on GoogleSignInException catch (error, stackTrace) {
       throw AuthenticationException(

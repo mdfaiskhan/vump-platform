@@ -6,6 +6,7 @@ import 'package:mobile/core/logging/app_logger.dart';
 import 'package:mobile/core/network/interceptors/auth_interceptor.dart';
 import 'package:mobile/core/network/interceptors/error_interceptor.dart';
 import 'package:mobile/core/network/interceptors/logging_interceptor.dart';
+import 'package:mobile/core/network/interfaces/auth_token_source.dart';
 import 'package:mobile/core/network/network_config.dart';
 
 /// The application's HTTP client.
@@ -32,20 +33,27 @@ import 'package:mobile/core/network/network_config.dart';
 /// Placing the error interceptor first would mean logging a wrapped exception
 /// and losing Dio's own classification.
 class DioClient {
-  DioClient({required NetworkConfig config, required AppLogger logger})
-    : dio = Dio(
-        BaseOptions(
-          baseUrl: config.baseUrl,
-          connectTimeout: config.connectTimeout,
-          receiveTimeout: config.receiveTimeout,
-          sendTimeout: config.sendTimeout,
-          headers: config.defaultHeaders,
-          contentType: config.defaultHeaders['Content-Type'],
-          responseType: ResponseType.json,
-        ),
-      ) {
+  DioClient({
+    required NetworkConfig config,
+    required AppLogger logger,
+    required AuthTokenSource tokenSource,
+  }) : dio = Dio(
+         BaseOptions(
+           baseUrl: config.baseUrl,
+           connectTimeout: config.connectTimeout,
+           receiveTimeout: config.receiveTimeout,
+           sendTimeout: config.sendTimeout,
+           headers: config.defaultHeaders,
+           contentType: config.defaultHeaders['Content-Type'],
+           responseType: ResponseType.json,
+         ),
+       ) {
     dio.interceptors.addAll(<Interceptor>[
-      AuthInterceptor(),
+      // `dio` is passed to the interceptor so a refreshed request replays
+      // through this same chain — logged and converted like any other call.
+      // It is available here because the field is assigned in the initializer
+      // list, before this body runs.
+      AuthInterceptor(tokenSource: tokenSource, client: dio),
       LoggingInterceptor(logger: logger),
       ErrorInterceptor(),
     ]);
