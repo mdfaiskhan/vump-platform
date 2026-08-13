@@ -42,3 +42,29 @@ No screen constructs a `MaterialPageRoute` directly.
 ## Implementation Status
 
 `appRouter` declares one route: `/`, building `HomeScreen`. No nested routes, redirects or route parameters exist yet.
+
+**Correction (Mission 1.3, 2026-08-13).** The paragraph above is out of date in three of its four claims. `appRouter` now declares **18 routes**, implementing Volume 2 Chapter 2.4's navigation model:
+
+```text
+/                            HomeScreen — Mission 0.6's placeholder, retained
+/login                       shared, role-agnostic (Chapter 2.4 §4)
+/collector/…                 StatefulShellRoute.indexedStack, 5 branches
+/admin/…                     StatefulShellRoute.indexedStack, 4 branches
+/checklist/:taskId           full-screen gate toward capture
+/recording/:sessionId        chrome-free; outside both shells
+/processing/:sessionId
+```
+
+Claim by claim:
+
+- **"one route"** — now 18.
+- **"No nested routes"** — now false. Two `StatefulShellRoute.indexedStack` shells carry nine `StatefulShellBranch`es between them, five for the Collector root and four for the Admin root, and branches nest routes further: `/collector/projects/:projectId/tasks/:taskId` is three levels deep.
+- **"or route parameters"** — now false. Three are in use: `projectId`, `sessionId`, `taskId`.
+- **"redirects"** — **still accurate. There are none.** The Role Router that Chapter 2.4 §4 requires is unbuilt because authentication does not exist, so `/collector` and `/admin` are both directly reachable. This ADR's Consequences already name route-level redirects as the home for an authentication guard; that guard remains undecided.
+
+Two Consequences of this ADR became live rather than hypothetical and are recorded here as unresolved, not as decided:
+
+- **Typed route arguments.** Every parameter is read as a raw `String` from `GoRouterState.pathParameters`. The choice between manual parsing and GoRouter's typed-routes generator is still open, and the first parameterised routes now exist.
+- **Route-level access control.** Beyond the Role Router, Volume 2 Chapter 2.3 §5 requires the Recording Screen to be reachable *only* through the Pre-Recording Checklist (BR-04). As a top-level route it is directly reachable, so that rule is currently unenforced. A redirect is the mechanism for both.
+
+Nothing in the Decision, Context, Alternatives or Consequences sections changed: routes are still declared in one place, the root widget still uses `MaterialApp.router`, navigation is still by path, and no screen constructs a `MaterialPageRoute`.
