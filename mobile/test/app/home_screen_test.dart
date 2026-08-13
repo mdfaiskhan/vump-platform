@@ -15,6 +15,6 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Vump Technologies'), findsOneWidget);
-    expect(find.text('Mission 0.6 Complete'), findsOneWidget);
+    expect(find.text('Mission 0.19.1 Complete'), findsOneWidget);
   });
 }
