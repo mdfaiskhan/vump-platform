@@ -165,6 +165,34 @@ class AuthNotifier extends AsyncNotifier<AuthState> {
     return _attempt(_repository.signInWithGoogle);
   }
 
+  /// Creates an account against an organisation invite code.
+  ///
+  /// Same shape as the sign-in methods, and for the same reason: a rejected
+  /// invite code is the outcome of one attempt, not a broken session.
+  ///
+  /// On success the repository has already created the account, redeemed the
+  /// code, and refreshed the token so the new claims are readable — so the
+  /// session stream reports an authenticated user and the route guard moves
+  /// the person to their role's root without this method navigating.
+  Future<Failure?> signUpWithEmailPassword({
+    required String email,
+    required String password,
+    required String inviteCode,
+  }) {
+    return _attempt(
+      () => _repository.signUpWithEmailPassword(
+        email: email,
+        password: password,
+        inviteCode: inviteCode,
+      ),
+    );
+  }
+
+  /// Creates an account from a Google identity and an invite code.
+  Future<Failure?> signUpWithGoogle({required String inviteCode}) {
+    return _attempt(() => _repository.signUpWithGoogle(inviteCode: inviteCode));
+  }
+
   /// Signs out, ending the session.
   ///
   /// Flagged while in flight so the emission it causes is reported as

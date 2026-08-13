@@ -245,7 +245,7 @@ forecloses, and what must now be maintained.
 
 ## Current State
 
-`decisions/` holds ADR-001 through ADR-036.
+`decisions/` holds ADR-001 through ADR-037.
 
 All are Accepted and therefore binding.
 
@@ -287,6 +287,7 @@ All are Accepted and therefore binding.
 | ADR-034 | Firebase Authentication integration |
 | ADR-035 | Authenticated requests and token refresh |
 | ADR-036 | Invite-code redemption runtime (**temporary**) |
+| ADR-037 | Route guards |
 
 ADR-007 supersedes the networking assumptions of ADR-006 in part. ADR-006 remains Accepted and binding in every other respect.
 
@@ -295,6 +296,8 @@ ADR-032 refines ADR-024 in three respects — counts are measured after staging,
 ADR-033 departs from ADR-017's Consequences in one respect. ADR-017 recommends that any future startup prerequisite — naming the database and secure storage — use its environment-driven shape. ADR-033 declines that for the database and makes an open failure fatal in every environment, because ADR-017's development tolerance exists to absorb a missing network and a missing configuration, and a local database needs neither. ADR-017 remains Accepted and binding for Firebase and in every other respect; secure storage is still undecided.
 
 ADR-022 refines ADR-002 in one respect: `app/router.dart` is the single file in `app/` permitted to import from `features/`, because ADR-004 requires one route table and a route table must name its screens. ADR-002 remains Accepted and binding in every other respect.
+
+ADR-037 discharges the guard ADR-004 deferred, and is recorded there as a dated correction rather than by editing ADR-004's decision. ADR-004 remains Accepted and binding: its route table is still declared in one place, and only its statement that no redirects exist has been overtaken.
 
 ADR-036 is the only accepted ADR that contradicts another on purpose. ADR-015 fixes the backend runtime as AWS Lambda; ADR-036 adds a Firebase Cloud Function beside it, because writing a Firebase custom claim from Lambda would require a long-lived service-account key that can grant `admin` on any organisation. It is explicitly temporary and is retired at Mission 6/7, at which point it is superseded rather than amended. ADR-015 is unchanged and still governs every other endpoint.
 

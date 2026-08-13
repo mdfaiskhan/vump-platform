@@ -1,14 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
-
 import 'package:mobile/app/theme/app_sizes.dart';
 import 'package:mobile/app/theme/app_spacing.dart';
 import 'package:mobile/core/errors/failure.dart';
 import 'package:mobile/features/auth/application/auth_notifier.dart';
 import 'package:mobile/features/auth/application/auth_state.dart';
-import 'package:mobile/features/auth/domain/entities/role.dart';
-import 'package:mobile/features/auth/domain/entities/user.dart';
 import 'package:mobile/features/auth/presentation/auth_error_copy.dart';
 
 /// SH-02 — the single shared sign-in surface for both roles.
@@ -17,18 +13,16 @@ import 'package:mobile/features/auth/presentation/auth_error_copy.dart';
 /// SSO entry point, error states"*. Chapter 2.4 §4 makes it role-agnostic —
 /// *"there is no separate 'Admin login' surface"*.
 ///
-/// ## The Role Router lives here
+/// ## This screen does not navigate
 ///
-/// Chapter 2.4 §4: *"Immediately after authentication, the Role Router sends
-/// the user to the Collector root or Admin root — this happens once, silently,
-/// and is not user-visible as a separate step."*
+/// It did until Mission 2.7. Chapter 2.4 §4's Role Router now lives in the
+/// route guard (`AuthGuard`, ADR-037): a successful sign-in changes the
+/// session, the router's `refreshListenable` fires, and the redirect sends the
+/// person to their role's root.
 ///
-/// SH-03 is listed in Chapter 2.5 §1 as `Shared (system)` and *"Not
-/// user-facing"*, so it is this navigation decision rather than a screen. It
-/// is performed here, on the strength of the returned user's role, rather than
-/// as a router redirect: redirect logic belongs to Mission 2.7's guard, and
-/// putting it there now would mean two places deciding where a signed-in user
-/// belongs.
+/// Navigating from here as well would put two things in charge of where a
+/// signed-in user belongs — the duplication the previous version of this
+/// comment warned about, resolved in the direction it predicted.
 ///
 /// ## Sign-up is not linked from here
 ///
@@ -216,37 +210,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       return;
     }
 
-    if (failure == null) {
-      _routeByRole();
-      return;
-    }
-
     setState(() {
       _busy = false;
-      _error = AuthErrorCopy.isSilent(failure)
+      _error = failure == null || AuthErrorCopy.isSilent(failure)
           ? null
           : AuthErrorCopy.forFailure(failure);
-    });
-  }
-
-  /// SH-03 — sends the signed-in user to their role's root, silently.
-  ///
-  /// Reads the role from the notifier's state rather than from the sign-in
-  /// call, so there is one source of truth for who is signed in.
-  void _routeByRole() {
-    final User? user = ref.read(authNotifierProvider).value?.user;
-
-    if (user == null) {
-      // The stream has not yet reported the new session. Staying put is
-      // correct: Mission 2.7's guard is what redirects on state, and guessing
-      // a destination here would race it.
-      setState(() => _busy = false);
-      return;
-    }
-
-    context.go(switch (user.role) {
-      Role.admin => '/admin/dashboard',
-      Role.collector => '/collector/dashboard',
     });
   }
 }

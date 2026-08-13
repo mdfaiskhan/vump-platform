@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:mobile/app/home_screen.dart';
+import 'package:mobile/app/auth_guard.dart';
 import 'package:mobile/app/navigation/tab_shell.dart';
+import 'package:mobile/features/auth/application/auth_notifier.dart';
+import 'package:mobile/features/auth/application/auth_state.dart';
 import 'package:mobile/features/auth/presentation/admin_invite_codes_screen.dart';
 import 'package:mobile/features/auth/presentation/login_screen.dart';
+import 'package:mobile/features/auth/presentation/signup_screen.dart';
 import 'package:mobile/features/projects_tasks/presentation/admin_dashboard_screen.dart';
 import 'package:mobile/features/projects_tasks/presentation/admin_project_detail_screen.dart';
 import 'package:mobile/features/projects_tasks/presentation/admin_projects_screen.dart';
@@ -46,13 +50,20 @@ import 'package:mobile/features/upload/presentation/collector_sessions_screen.da
 /// into a Project and switching tabs preserves both positions, which Chapter
 /// 2.4 §5 requires.
 ///
+/// ## The guard
+///
+/// A single top-level `redirect` delegates to [AuthGuard], a pure function of
+/// auth state and location — see ADR-037. `refreshListenable` is what re-runs
+/// it when the session changes, because GoRouter evaluates `redirect` on
+/// navigation and has no other reason to look again.
+///
+/// The router is a provider rather than a top-level `final` for one reason:
+/// `redirect` must read `authNotifierProvider`, and a top-level object has no
+/// `Ref`. ADR-004's "routes are declared in one place" is unaffected — this is
+/// still the only route table.
+///
 /// ## What is deliberately absent
 ///
-/// - **No role redirect.** Chapter 2.4 §4's Role Router sends a user to one
-///   root or the other on the strength of their authenticated role. There is
-///   no authentication yet, so `/collector` and `/admin` are both reachable
-///   directly. ADR-004 records that route-level redirects are where a guard
-///   belongs; the guard itself is undecided.
 /// - **No modal routes beyond the checklist.** Chapter 2.4 §2 and §3 also
 ///   specify Permission Blocked (owned by `onboarding`), Create/Edit Project,
 ///   Create/Edit Task, Assign Collectors, and Metadata Detail/Export (owned by
@@ -60,282 +71,332 @@ import 'package:mobile/features/upload/presentation/collector_sessions_screen.da
 /// - **No typed route arguments.** Every parameter is read as a raw `String`
 ///   from `GoRouterState`. ADR-004 records the choice between manual parsing
 ///   and GoRouter's typed-routes generator as unresolved.
-final GoRouter appRouter = GoRouter(
-  initialLocation: '/',
-  routes: <RouteBase>[
-    // Mission 0.6's placeholder. ADR-022 §2.2 marks it as leaving "when the
-    // first real screen exists"; it is kept here because its widget test is
-    // the suite's only widget test and removing it is a separate decision.
-    GoRoute(
-      path: '/',
-      builder: (BuildContext context, GoRouterState state) =>
-          const HomeScreen(),
-    ),
+/// The application's router.
+final Provider<GoRouter> routerProvider = Provider<GoRouter>((Ref ref) {
+  return GoRouter(
+    initialLocation: AuthGuard.entryRoute,
+    refreshListenable: _AuthRefresh(ref),
+    redirect: (BuildContext context, GoRouterState state) {
+      // `read`, not `watch`: this runs during navigation rather than a build,
+      // and watching would rebuild the provider that owns this router.
+      // Freshness comes from refreshListenable instead.
+      final AuthState? auth = ref.read(authNotifierProvider).value;
+      return AuthGuard.redirect(auth: auth, location: state.matchedLocation);
+    },
+    routes: <RouteBase>[
+      // The entry point renders nothing: the guard rewrites `/` before a
+      // builder is reached, which is why this route has a redirect and none.
+      //
+      // Mission 0.6's HomeScreen placeholder was here until this mission.
+      // ADR-022 §2.2 marked it as leaving "when the first real screen
+      // exists", and that condition is now met several times over.
+      GoRoute(
+        path: AuthGuard.entryRoute,
+        redirect: (BuildContext context, GoRouterState state) => '/login',
+      ),
 
-    GoRoute(
-      path: '/login',
-      builder: (BuildContext context, GoRouterState state) =>
-          const LoginScreen(),
-    ),
+      GoRoute(
+        path: '/login',
+        builder: (BuildContext context, GoRouterState state) =>
+            const LoginScreen(),
+      ),
 
-    // ---------------------------------------------------------------------
-    // Collector root — Chapter 2.4 §2. Five tabs, in the order it lists them.
-    // ---------------------------------------------------------------------
-    StatefulShellRoute.indexedStack(
-      builder:
-          (
-            BuildContext context,
-            GoRouterState state,
-            StatefulNavigationShell navigationShell,
-          ) => TabShell(
-            navigationShell: navigationShell,
-            destinations: const <NavigationDestination>[
-              NavigationDestination(
-                icon: Icon(Icons.dashboard_outlined),
-                selectedIcon: Icon(Icons.dashboard),
-                label: 'Dashboard',
-              ),
-              NavigationDestination(
-                icon: Icon(Icons.folder_outlined),
-                selectedIcon: Icon(Icons.folder),
-                label: 'Projects',
-              ),
-              NavigationDestination(
-                icon: Icon(Icons.fiber_manual_record_outlined),
-                selectedIcon: Icon(Icons.fiber_manual_record),
-                label: 'Record',
-              ),
-              NavigationDestination(
-                icon: Icon(Icons.cloud_upload_outlined),
-                selectedIcon: Icon(Icons.cloud_upload),
-                label: 'Sessions',
-              ),
-              NavigationDestination(
-                icon: Icon(Icons.settings_outlined),
-                selectedIcon: Icon(Icons.settings),
-                label: 'Settings',
+      // Reachable without a session, necessarily — the person has no account
+      // yet. Deliberately not linked from Login: Volume 2 SH-02 specifies
+      // email/password and an SSO entry point only, and Volume 10 Chapter
+      // 10.4 §4 records the absence of a Sign Up option as intentional. An
+      // admin sends the invite code out of band, and the code is what gates
+      // account creation (ADR-036).
+      GoRoute(
+        path: '/signup',
+        builder: (BuildContext context, GoRouterState state) =>
+            const SignupScreen(),
+      ),
+
+      // ---------------------------------------------------------------------
+      // Collector root — Chapter 2.4 §2. Five tabs, in the order it lists them.
+      // ---------------------------------------------------------------------
+      StatefulShellRoute.indexedStack(
+        builder:
+            (
+              BuildContext context,
+              GoRouterState state,
+              StatefulNavigationShell navigationShell,
+            ) => TabShell(
+              navigationShell: navigationShell,
+              destinations: const <NavigationDestination>[
+                NavigationDestination(
+                  icon: Icon(Icons.dashboard_outlined),
+                  selectedIcon: Icon(Icons.dashboard),
+                  label: 'Dashboard',
+                ),
+                NavigationDestination(
+                  icon: Icon(Icons.folder_outlined),
+                  selectedIcon: Icon(Icons.folder),
+                  label: 'Projects',
+                ),
+                NavigationDestination(
+                  icon: Icon(Icons.fiber_manual_record_outlined),
+                  selectedIcon: Icon(Icons.fiber_manual_record),
+                  label: 'Record',
+                ),
+                NavigationDestination(
+                  icon: Icon(Icons.cloud_upload_outlined),
+                  selectedIcon: Icon(Icons.cloud_upload),
+                  label: 'Sessions',
+                ),
+                NavigationDestination(
+                  icon: Icon(Icons.settings_outlined),
+                  selectedIcon: Icon(Icons.settings),
+                  label: 'Settings',
+                ),
+              ],
+            ),
+        branches: <StatefulShellBranch>[
+          // Tab 1 — Dashboard (Home).
+          StatefulShellBranch(
+            routes: <RouteBase>[
+              GoRoute(
+                path: '/collector/dashboard',
+                builder: (BuildContext context, GoRouterState state) =>
+                    const CollectorDashboardScreen(),
               ),
             ],
           ),
-      branches: <StatefulShellBranch>[
-        // Tab 1 — Dashboard (Home).
-        StatefulShellBranch(
-          routes: <RouteBase>[
-            GoRoute(
-              path: '/collector/dashboard',
-              builder: (BuildContext context, GoRouterState state) =>
-                  const CollectorDashboardScreen(),
-            ),
-          ],
-        ),
 
-        // Tab 2 — Projects, with its drill-down stack.
-        StatefulShellBranch(
-          routes: <RouteBase>[
-            GoRoute(
-              path: '/collector/projects',
-              builder: (BuildContext context, GoRouterState state) =>
-                  const CollectorProjectsScreen(),
-              routes: <RouteBase>[
-                GoRoute(
-                  path: ':projectId',
-                  builder: (BuildContext context, GoRouterState state) =>
-                      CollectorProjectDetailScreen(
-                        projectId: state.pathParameters['projectId'] ?? '',
+          // Tab 2 — Projects, with its drill-down stack.
+          StatefulShellBranch(
+            routes: <RouteBase>[
+              GoRoute(
+                path: '/collector/projects',
+                builder: (BuildContext context, GoRouterState state) =>
+                    const CollectorProjectsScreen(),
+                routes: <RouteBase>[
+                  GoRoute(
+                    path: ':projectId',
+                    builder: (BuildContext context, GoRouterState state) =>
+                        CollectorProjectDetailScreen(
+                          projectId: state.pathParameters['projectId'] ?? '',
+                        ),
+                    routes: <RouteBase>[
+                      GoRoute(
+                        path: 'tasks/:taskId',
+                        builder: (BuildContext context, GoRouterState state) =>
+                            CollectorTaskDetailScreen(
+                              taskId: state.pathParameters['taskId'] ?? '',
+                            ),
                       ),
-                  routes: <RouteBase>[
-                    GoRoute(
-                      path: 'tasks/:taskId',
-                      builder: (BuildContext context, GoRouterState state) =>
-                          CollectorTaskDetailScreen(
-                            taskId: state.pathParameters['taskId'] ?? '',
-                          ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ],
-        ),
-
-        // Tab 3 — Record. A shortcut per §2, not a destination.
-        StatefulShellBranch(
-          routes: <RouteBase>[
-            GoRoute(
-              path: '/collector/record',
-              builder: (BuildContext context, GoRouterState state) =>
-                  const RecordShortcutScreen(),
-            ),
-          ],
-        ),
-
-        // Tab 4 — Sessions, with its drill-down stack.
-        StatefulShellBranch(
-          routes: <RouteBase>[
-            GoRoute(
-              path: '/collector/sessions',
-              builder: (BuildContext context, GoRouterState state) =>
-                  const CollectorSessionsScreen(),
-              routes: <RouteBase>[
-                GoRoute(
-                  path: ':sessionId',
-                  builder: (BuildContext context, GoRouterState state) =>
-                      CollectorSessionDetailScreen(
-                        sessionId: state.pathParameters['sessionId'] ?? '',
-                      ),
-                ),
-              ],
-            ),
-          ],
-        ),
-
-        // Tab 5 — Settings.
-        StatefulShellBranch(
-          routes: <RouteBase>[
-            GoRoute(
-              path: '/collector/settings',
-              builder: (BuildContext context, GoRouterState state) =>
-                  const CollectorSettingsScreen(),
-            ),
-          ],
-        ),
-      ],
-    ),
-
-    // ---------------------------------------------------------------------
-    // Admin root — Chapter 2.4 §3. Four tabs, in the order it lists them.
-    // The left-sidebar alternative §3 mentions depends on Chapter 1.1 §8's
-    // open web-surface question and is not built.
-    // ---------------------------------------------------------------------
-    StatefulShellRoute.indexedStack(
-      builder:
-          (
-            BuildContext context,
-            GoRouterState state,
-            StatefulNavigationShell navigationShell,
-          ) => TabShell(
-            navigationShell: navigationShell,
-            destinations: const <NavigationDestination>[
-              NavigationDestination(
-                icon: Icon(Icons.dashboard_outlined),
-                selectedIcon: Icon(Icons.dashboard),
-                label: 'Dashboard',
-              ),
-              NavigationDestination(
-                icon: Icon(Icons.folder_outlined),
-                selectedIcon: Icon(Icons.folder),
-                label: 'Projects',
-              ),
-              NavigationDestination(
-                icon: Icon(Icons.assessment_outlined),
-                selectedIcon: Icon(Icons.assessment),
-                label: 'Sessions',
-              ),
-              NavigationDestination(
-                icon: Icon(Icons.settings_outlined),
-                selectedIcon: Icon(Icons.settings),
-                label: 'Settings',
+                    ],
+                  ),
+                ],
               ),
             ],
           ),
-      branches: <StatefulShellBranch>[
-        // Tab 1 — Dashboard (Home).
-        StatefulShellBranch(
-          routes: <RouteBase>[
-            GoRoute(
-              path: '/admin/dashboard',
-              builder: (BuildContext context, GoRouterState state) =>
-                  const AdminDashboardScreen(),
-            ),
-          ],
-        ),
 
-        // Tab 2 — Projects, with its drill-down stack.
-        StatefulShellBranch(
-          routes: <RouteBase>[
-            GoRoute(
-              path: '/admin/projects',
-              builder: (BuildContext context, GoRouterState state) =>
-                  const AdminProjectsScreen(),
-              routes: <RouteBase>[
-                GoRoute(
-                  path: ':projectId',
-                  builder: (BuildContext context, GoRouterState state) =>
-                      AdminProjectDetailScreen(
-                        projectId: state.pathParameters['projectId'] ?? '',
-                      ),
+          // Tab 3 — Record. A shortcut per §2, not a destination.
+          StatefulShellBranch(
+            routes: <RouteBase>[
+              GoRoute(
+                path: '/collector/record',
+                builder: (BuildContext context, GoRouterState state) =>
+                    const RecordShortcutScreen(),
+              ),
+            ],
+          ),
+
+          // Tab 4 — Sessions, with its drill-down stack.
+          StatefulShellBranch(
+            routes: <RouteBase>[
+              GoRoute(
+                path: '/collector/sessions',
+                builder: (BuildContext context, GoRouterState state) =>
+                    const CollectorSessionsScreen(),
+                routes: <RouteBase>[
+                  GoRoute(
+                    path: ':sessionId',
+                    builder: (BuildContext context, GoRouterState state) =>
+                        CollectorSessionDetailScreen(
+                          sessionId: state.pathParameters['sessionId'] ?? '',
+                        ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+
+          // Tab 5 — Settings.
+          StatefulShellBranch(
+            routes: <RouteBase>[
+              GoRoute(
+                path: '/collector/settings',
+                builder: (BuildContext context, GoRouterState state) =>
+                    const CollectorSettingsScreen(),
+              ),
+            ],
+          ),
+        ],
+      ),
+
+      // ---------------------------------------------------------------------
+      // Admin root — Chapter 2.4 §3. Four tabs, in the order it lists them.
+      // The left-sidebar alternative §3 mentions depends on Chapter 1.1 §8's
+      // open web-surface question and is not built.
+      // ---------------------------------------------------------------------
+      StatefulShellRoute.indexedStack(
+        builder:
+            (
+              BuildContext context,
+              GoRouterState state,
+              StatefulNavigationShell navigationShell,
+            ) => TabShell(
+              navigationShell: navigationShell,
+              destinations: const <NavigationDestination>[
+                NavigationDestination(
+                  icon: Icon(Icons.dashboard_outlined),
+                  selectedIcon: Icon(Icons.dashboard),
+                  label: 'Dashboard',
+                ),
+                NavigationDestination(
+                  icon: Icon(Icons.folder_outlined),
+                  selectedIcon: Icon(Icons.folder),
+                  label: 'Projects',
+                ),
+                NavigationDestination(
+                  icon: Icon(Icons.assessment_outlined),
+                  selectedIcon: Icon(Icons.assessment),
+                  label: 'Sessions',
+                ),
+                NavigationDestination(
+                  icon: Icon(Icons.settings_outlined),
+                  selectedIcon: Icon(Icons.settings),
+                  label: 'Settings',
                 ),
               ],
             ),
-          ],
-        ),
-
-        // Tab 3 — Sessions & Metadata. Volume 3 §3.5 §2 assigns this root to
-        // `upload` (A-07); the metadata overlay (A-08) is not registered.
-        StatefulShellBranch(
-          routes: <RouteBase>[
-            GoRoute(
-              path: '/admin/sessions',
-              builder: (BuildContext context, GoRouterState state) =>
-                  const AdminSessionsScreen(),
-            ),
-          ],
-        ),
-
-        // Tab 4 — Settings/Account.
-        StatefulShellBranch(
-          routes: <RouteBase>[
-            GoRoute(
-              path: '/admin/settings',
-              builder: (BuildContext context, GoRouterState state) =>
-                  const AdminSettingsScreen(),
-            ),
-          ],
-        ),
-      ],
-    ),
-
-    // The Admin's invite-code surface (ADR-036). Outside the shell because it
-    // is reached from Settings rather than being a tab of its own, and
-    // TEMPORARY — it is retired with the rest of ADR-036 at Mission 6/7.
-    //
-    // Unguarded, like every other /admin route here: this table still has no
-    // redirect (Mission 2.7 owns that). Reaching the screen grants nothing,
-    // because firestore.rules checks the admin claim on every write.
-    GoRoute(
-      path: '/admin/invite-codes',
-      builder: (BuildContext context, GoRouterState state) =>
-          const AdminInviteCodesScreen(),
-    ),
-
-    // ---------------------------------------------------------------------
-    // Outside both shells, so no tab bar wraps them — Chapter 2.4 §2 and §5.
-    // ---------------------------------------------------------------------
-
-    // Full-screen modal from Task Detail, and per Chapter 2.3 §5 the only
-    // route toward capture (BR-04). Nothing enforces that yet; see the class
-    // documentation on this route table.
-    GoRoute(
-      path: '/checklist/:taskId',
-      builder: (BuildContext context, GoRouterState state) =>
-          PreRecordingChecklistScreen(
-            taskId: state.pathParameters['taskId'] ?? '',
+        branches: <StatefulShellBranch>[
+          // Tab 1 — Dashboard (Home).
+          StatefulShellBranch(
+            routes: <RouteBase>[
+              GoRoute(
+                path: '/admin/dashboard',
+                builder: (BuildContext context, GoRouterState state) =>
+                    const AdminDashboardScreen(),
+              ),
+            ],
           ),
-    ),
 
-    // The one chrome-free route. See `RecordingScreen` for what delivers that.
-    GoRoute(
-      path: '/recording/:sessionId',
-      builder: (BuildContext context, GoRouterState state) =>
-          RecordingScreen(sessionId: state.pathParameters['sessionId'] ?? ''),
-    ),
-
-    GoRoute(
-      path: '/processing/:sessionId',
-      builder: (BuildContext context, GoRouterState state) =>
-          LocalProcessingScreen(
-            sessionId: state.pathParameters['sessionId'] ?? '',
+          // Tab 2 — Projects, with its drill-down stack.
+          StatefulShellBranch(
+            routes: <RouteBase>[
+              GoRoute(
+                path: '/admin/projects',
+                builder: (BuildContext context, GoRouterState state) =>
+                    const AdminProjectsScreen(),
+                routes: <RouteBase>[
+                  GoRoute(
+                    path: ':projectId',
+                    builder: (BuildContext context, GoRouterState state) =>
+                        AdminProjectDetailScreen(
+                          projectId: state.pathParameters['projectId'] ?? '',
+                        ),
+                  ),
+                ],
+              ),
+            ],
           ),
-    ),
-  ],
-);
+
+          // Tab 3 — Sessions & Metadata. Volume 3 §3.5 §2 assigns this root to
+          // `upload` (A-07); the metadata overlay (A-08) is not registered.
+          StatefulShellBranch(
+            routes: <RouteBase>[
+              GoRoute(
+                path: '/admin/sessions',
+                builder: (BuildContext context, GoRouterState state) =>
+                    const AdminSessionsScreen(),
+              ),
+            ],
+          ),
+
+          // Tab 4 — Settings/Account.
+          StatefulShellBranch(
+            routes: <RouteBase>[
+              GoRoute(
+                path: '/admin/settings',
+                builder: (BuildContext context, GoRouterState state) =>
+                    const AdminSettingsScreen(),
+              ),
+            ],
+          ),
+        ],
+      ),
+
+      // The Admin's invite-code surface (ADR-036). Outside the shell because it
+      // is reached from Settings rather than being a tab of its own, and
+      // TEMPORARY — it is retired with the rest of ADR-036 at Mission 6/7.
+      //
+      // Unguarded, like every other /admin route here: this table still has no
+      // redirect (Mission 2.7 owns that). Reaching the screen grants nothing,
+      // because firestore.rules checks the admin claim on every write.
+      GoRoute(
+        path: '/admin/invite-codes',
+        builder: (BuildContext context, GoRouterState state) =>
+            const AdminInviteCodesScreen(),
+      ),
+
+      // ---------------------------------------------------------------------
+      // Outside both shells, so no tab bar wraps them — Chapter 2.4 §2 and §5.
+      // ---------------------------------------------------------------------
+
+      // Full-screen modal from Task Detail, and per Chapter 2.3 §5 the only
+      // route toward capture (BR-04). Nothing enforces that yet; see the class
+      // documentation on this route table.
+      GoRoute(
+        path: '/checklist/:taskId',
+        builder: (BuildContext context, GoRouterState state) =>
+            PreRecordingChecklistScreen(
+              taskId: state.pathParameters['taskId'] ?? '',
+            ),
+      ),
+
+      // The one chrome-free route. See `RecordingScreen` for what delivers
+      // that.
+      GoRoute(
+        path: '/recording/:sessionId',
+        builder: (BuildContext context, GoRouterState state) =>
+            RecordingScreen(sessionId: state.pathParameters['sessionId'] ?? ''),
+      ),
+
+      GoRoute(
+        path: '/processing/:sessionId',
+        builder: (BuildContext context, GoRouterState state) =>
+            LocalProcessingScreen(
+              sessionId: state.pathParameters['sessionId'] ?? '',
+            ),
+      ),
+    ],
+  );
+});
+
+/// Re-runs the router's `redirect` when authentication state changes.
+///
+/// GoRouter evaluates `redirect` on navigation. Without this, a session that
+/// ends while the user is sitting on a screen leaves them there until they
+/// happen to navigate — and a sign-in would not move them at all, because
+/// nothing navigates after it.
+///
+/// `ChangeNotifier` rather than a stream subscription because `Listenable` is
+/// the type GoRouter's `refreshListenable` takes. `ref.listen` is what feeds
+/// it, and Riverpod disposes the subscription with the provider.
+class _AuthRefresh extends ChangeNotifier {
+  _AuthRefresh(Ref ref) {
+    ref.listen<AsyncValue<AuthState>>(authNotifierProvider, (
+      AsyncValue<AuthState>? previous,
+      AsyncValue<AuthState> next,
+    ) {
+      // Fires on any transition, including loading→data at cold start.
+      // The guard is a pure function, so a redundant evaluation costs a
+      // comparison and never a navigation.
+      notifyListeners();
+    });
+  }
+}

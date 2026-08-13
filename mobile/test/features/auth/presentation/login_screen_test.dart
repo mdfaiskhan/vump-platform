@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
+import 'package:mobile/app/auth_guard.dart';
 import 'package:mobile/core/errors/error_codes.dart';
 import 'package:mobile/core/errors/exceptions/authentication_exception.dart';
 import 'package:mobile/features/auth/application/auth_notifier.dart';
@@ -38,8 +39,20 @@ void main() {
     WidgetTester tester,
     _FakeAuthRepository repository,
   ) async {
+    late final ProviderContainer container;
+    final _Refresh refresh = _Refresh();
+
     final GoRouter router = GoRouter(
       initialLocation: '/login',
+      // The Role Router is the guard now, not the screen (ADR-037). Wiring it
+      // here is what keeps these assertions honest: they exercise the real
+      // redirect rather than navigation the screen no longer performs.
+      refreshListenable: refresh,
+      redirect: (BuildContext context, GoRouterState state) =>
+          AuthGuard.redirect(
+            auth: container.read(authNotifierProvider).value,
+            location: state.matchedLocation,
+          ),
       routes: <RouteBase>[
         GoRoute(path: '/login', builder: (_, _) => const LoginScreen()),
         GoRoute(
@@ -54,14 +67,22 @@ void main() {
     );
     addTearDown(router.dispose);
 
-    await tester.pumpWidget(
-      ProviderScope(
-        overrides: <Override>[
-          authRepositoryProvider.overrideWithValue(repository),
-        ],
-        child: MaterialApp.router(routerConfig: router),
+    final Widget app = ProviderScope(
+      overrides: <Override>[
+        authRepositoryProvider.overrideWithValue(repository),
+      ],
+      child: Builder(
+        builder: (BuildContext context) {
+          container = ProviderScope.containerOf(context);
+          container.listen(authNotifierProvider, (_, _) {
+            refresh.bump();
+          });
+          return MaterialApp.router(routerConfig: router);
+        },
       ),
     );
+
+    await tester.pumpWidget(app);
     await tester.pumpAndSettle();
     return router;
   }
@@ -452,4 +473,10 @@ class _FakeAuthRepository implements AuthRepository {
     _sessions.add(Session.authenticated(user));
     return user;
   }
+}
+
+/// A Listenable the test drives by hand, standing in for the router provider's
+/// own refresh wiring.
+class _Refresh extends ChangeNotifier {
+  void bump() => notifyListeners();
 }
