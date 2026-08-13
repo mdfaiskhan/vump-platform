@@ -143,3 +143,9 @@ The one planned exception is nested configuration for `public_member_api_docs`, 
 - `flutter build apk --debug` — succeeds.
 
 Severity promotion verified directly rather than assumed: a probe file containing `print()` and an unused local reported both as **errors**, while a missing type annotation reported as **info** — confirming the promotion map is applied and that the style/defect distinction is preserved.
+
+**Correction (Mission 1.5b, 2026-08-13).** The Decision above says the configuration "promotes 25 diagnostics to `error` or `warning`". The real number is **26**: 24 to `error` and 2 to `warning`. Mission 1.5's verification pass counted the `errors:` block directly and found 26 distinct entries, with no duplicate keys.
+
+The two `warning` promotions are `document_ignores` and `unnecessary_ignore`. Both concern ignore comments rather than the code itself, which is why they sit a step below the 24 that mark real defects.
+
+The other two figures in that sentence were re-counted at the same time and are **correct**: 176 explicit lint rules, and three type-system strictness flags (`strict-casts`, `strict-inference`, `strict-raw-types`). Nothing about the configuration changed — only this record's count of it was wrong, and `analysis_options.yaml` has been the authority throughout.
