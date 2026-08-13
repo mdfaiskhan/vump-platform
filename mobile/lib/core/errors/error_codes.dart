@@ -75,6 +75,22 @@ enum ErrorCode {
   /// The account exists but is disabled or suspended.
   authAccountDisabled('AUTH_ACCOUNT_DISABLED'),
 
+  /// The organisation invite code does not exist, or has already been redeemed.
+  authInviteCodeInvalid('AUTH_INVITE_CODE_INVALID'),
+
+  /// The organisation invite code exists but is past its expiry.
+  authInviteCodeExpired('AUTH_INVITE_CODE_EXPIRED'),
+
+  /// Sign-up was attempted with an email address that is already registered.
+  authEmailAlreadyInUse('AUTH_EMAIL_ALREADY_IN_USE'),
+
+  /// The user dismissed an external sign-in flow before it completed.
+  ///
+  /// Not a failure. It is in this taxonomy so that a deliberate cancellation
+  /// can be told apart from one, and reported as neither an error nor a
+  /// success.
+  authSignInCancelled('AUTH_SIGN_IN_CANCELLED'),
+
   // ---------------------------------------------------------------------------
   // Storage — local database, secure storage, files
   // ---------------------------------------------------------------------------
