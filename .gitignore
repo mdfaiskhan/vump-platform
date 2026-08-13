@@ -125,3 +125,19 @@ temp/
 
 # Rendered infrastructure templates (contain no secrets, but are generated)
 infrastructure/aws/cloudfront/.rendered-*.json
+
+# ---------------------------------------------------------------------------
+# Session report artifacts
+# ---------------------------------------------------------------------------
+# Per-mission reports written by a Claude Code session. They are a working
+# summary of one session, not a governed document, and they fail ADR-022's
+# root admission test: a top-level entry must ship or govern independently,
+# and these do neither.
+#
+# Nothing is lost by ignoring them. What a mission decided lives in its ADR,
+# what it changed lives in its commit message, and both are governed. A report
+# at the root is a third copy that nothing keeps current.
+#
+# Anchored with a leading slash so it applies at the repository root only,
+# where they are written — not to any similarly named file inside a package.
+/mission-*-report.txt
