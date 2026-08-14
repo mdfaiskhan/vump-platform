@@ -69,6 +69,55 @@ subprojects {
         }
     }
 }
+// ---------------------------------------------------------------------------
+// Compile-classpath shim for camera_android_camerax — see ADR-030, A-057.
+// ---------------------------------------------------------------------------
+//
+// `camera-core` 1.6.1 annotates `SurfaceRequest.mSurfaceRecreationCompleter`
+// with jspecify `@NonNull`, and that annotation references
+// `androidx.concurrent.futures.CallbackToFutureAdapter`. javac must be able to
+// resolve the referenced type to read the class file at all, so the type is
+// needed at COMPILE time — but `camera-core`'s POM declares
+// `androidx.concurrent:concurrent-futures` at RUNTIME scope, and Gradle 9.1
+// keeps runtime-scoped transitives off the compile classpath. The result:
+//
+//   :camera_android_camerax:compileDebugJavaWithJavac
+//     error: Cannot attach type annotations @org.jspecify.annotations.NonNull
+//     to SurfaceRequest.mSurfaceRecreationCompleter:
+//     class file for androidx.concurrent.futures.CallbackToFutureAdapter
+//     not found
+//
+// which fails before any application code is compiled.
+//
+// This is an upstream packaging issue, not a defect in this project, and it is
+// not ours to fix at source: `camera_android_camerax` lives in the pub cache,
+// is vendored, and any edit there is reverted by the next `flutter pub get`.
+//
+// It must be applied to THE PLUGIN MODULE, not to `:app`. Gradle module
+// classpaths are independent, so declaring the dependency in `app/build.gradle
+// .kts` compiles `:app` with it and leaves `:camera_android_camerax` exactly as
+// broken — which was tried, and failed with a byte-identical error.
+//
+// Scoped by name for the same reason the A-029 shim above is: a blanket
+// `subprojects` dependency would silently absorb the next plugin with a
+// classpath problem instead of failing loudly and forcing a decision.
+//
+// Remove when camera-core corrects the scope upstream.
+val modulesNeedingConcurrentFutures = setOf("camera_android_camerax")
+
+subprojects {
+    if (project.name in modulesNeedingConcurrentFutures) {
+        afterEvaluate {
+            dependencies {
+                add("implementation", "androidx.concurrent:concurrent-futures:1.2.0")
+            }
+            logger.lifecycle(
+                "camera shim: concurrent-futures -> ${project.name}",
+            )
+        }
+    }
+}
+
 subprojects {
     project.evaluationDependsOn(":app")
 }
