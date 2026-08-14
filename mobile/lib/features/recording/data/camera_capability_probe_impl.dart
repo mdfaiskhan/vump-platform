@@ -133,10 +133,48 @@ class CameraCapabilityProbeImpl implements CameraCapabilityProbe {
   /// may well have a dedicated ultra-wide lens and never needed Tier 2.
   Future<double?> _minimumZoomOrNull(CameraDescription camera) async {
     try {
-      return await _readMinimumZoom(camera);
+      return _normalised(await _readMinimumZoom(camera));
     } on CameraException {
       return null;
     }
+  }
+
+  /// Strips 32-bit float widening noise from a value that crossed the
+  /// platform channel.
+  ///
+  /// **This exists because a real device was blocked by it.** Android's
+  /// `getMinZoomLevel` returns CameraX's `ZoomState.minZoomRatio`, which is a
+  /// Java `float`. Widening it to a Dart `double` is exact but not
+  /// value-preserving in the way a reader expects: a sensor that reports
+  /// exactly `0.6f` arrives here as **0.6000000238418579**, larger than 0.6 by
+  /// 2.38e-8.
+  ///
+  /// BR-02 permits exactly 0.5x and 0.6x, so the ladder compares against 0.6 —
+  /// and that comparison failed for a device sitting precisely on the
+  /// permitted boundary, blocking recording on hardware that fully complies.
+  /// Observed on a CPH2707 (Android 16), the first physical device tested.
+  ///
+  /// ## Why here and not in the comparison
+  ///
+  /// The noise is an artefact of *this* boundary — the one place a platform
+  /// float becomes a Dart double. Fixing it here means `domain/` receives the
+  /// number the sensor actually reported, and `WideAngleLadder`'s comparison
+  /// stays an ordinary `<=` that reads the way BR-02 is written. Adding a
+  /// tolerance downstream instead would leave two files explaining the same
+  /// class of bug, and would push platform representation detail into a layer
+  /// that is meant to know nothing about platforms.
+  ///
+  /// ## Why six decimal places
+  ///
+  /// Two orders of magnitude above float32's noise at this scale (~2.4e-8),
+  /// so it absorbs the widening completely; five orders of magnitude below the
+  /// 0.1 gap between the two permitted factors, so it cannot move a value
+  /// across any distinction the ladder draws. A genuine 0.6000009 would be
+  /// preserved as distinct from 0.6 — a difference no camera reports and no
+  /// rule here cares about.
+  static double _normalised(double platformValue) {
+    const double precision = 1e6;
+    return (platformValue * precision).roundToDouble() / precision;
   }
 
   /// Opens [camera] purely to read its minimum zoom factor, then closes it.

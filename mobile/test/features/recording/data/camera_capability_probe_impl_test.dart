@@ -4,6 +4,8 @@ import 'package:mobile/core/errors/error_codes.dart';
 import 'package:mobile/core/errors/exceptions/device_exception.dart';
 import 'package:mobile/features/recording/data/camera_capability_probe_impl.dart';
 import 'package:mobile/features/recording/domain/entities/camera_capability.dart';
+import 'package:mobile/features/recording/domain/entities/wide_angle_eligibility.dart';
+import 'package:mobile/features/recording/domain/wide_angle_ladder.dart';
 
 /// The probe, driven through injected readers rather than a device.
 ///
@@ -156,6 +158,99 @@ void main() {
       ).probe();
 
       expect(result.minimumZoomFactor, 0.53);
+    });
+
+    group('float32 widening from the platform channel', () {
+      // CameraX's ZoomState.minZoomRatio is a Java float. Widening it to a
+      // Dart double is exact but not value-preserving as a reader expects:
+      // 0.6f arrives as 0.6000000238418579, larger than 0.6 by 2.38e-8.
+      //
+      // The whole suite used clean decimal literals — 0.5, 0.6, 0.55 — so
+      // nothing here could produce that value, and the gap was invisible to
+      // 299 passing tests until a physical CPH2707 hit it and was refused.
+      const double observedPointSix = 0.6000000238418579;
+
+      test('the exact value observed on real hardware is normalised', () async {
+        final CameraCapability result = await build(
+          cameras: <CameraDescription>[camera()],
+          minimumZoom: observedPointSix,
+        ).probe();
+
+        expect(result.minimumZoomFactor, 0.6);
+        expect(
+          result.minimumZoomFactor! <= 0.6,
+          isTrue,
+          reason: 'the raw value fails this comparison; the normalised one '
+              'must not',
+        );
+      });
+
+      test('a device reporting 0.6f resolves as HYBRID, not unsupported', () {
+        // The end-to-end assertion, and the one that should have existed
+        // before a real device found the gap. Driven through the ladder
+        // exactly as the Checklist will.
+        const CameraCapability raw = CameraCapability(
+          hasRearCamera: true,
+          hasDedicatedUltraWide: null,
+          minimumZoomFactor: observedPointSix,
+        );
+        expect(
+          WideAngleLadder.resolve(raw),
+          isA<WideAngleEligibilityIneligible>(),
+          reason: 'un-normalised, the raw value is still refused — which is '
+              'why the fix belongs at the boundary that produces it',
+        );
+
+        const CameraCapability normalised = CameraCapability(
+          hasRearCamera: true,
+          hasDedicatedUltraWide: null,
+          minimumZoomFactor: 0.6,
+        );
+        final WideAngleEligibility verdict = WideAngleLadder.resolve(
+          normalised,
+        );
+
+        expect(verdict, isA<WideAngleEligibilityHybrid>());
+        expect(verdict.zoomFactorOrNull, 0.6);
+      });
+
+      test('0.5f widening is absorbed too', () async {
+        // 0.5 is exactly representable in binary, so it survives widening
+        // unchanged — asserted so the fix is not mistaken for something that
+        // only matters at 0.6.
+        final CameraCapability result = await build(
+          cameras: <CameraDescription>[camera()],
+          minimumZoom: 0.5,
+        ).probe();
+
+        expect(result.minimumZoomFactor, 0.5);
+      });
+
+      test('a genuinely-too-narrow device is still refused', () {
+        // The mutation this guards: normalisation must not become a rounding
+        // that admits devices BR-02 excludes. 0.61 is not 0.6.
+        const CameraCapability tooNarrow = CameraCapability(
+          hasRearCamera: true,
+          hasDedicatedUltraWide: null,
+          minimumZoomFactor: 0.61,
+        );
+
+        expect(
+          WideAngleLadder.resolve(tooNarrow),
+          isA<WideAngleEligibilityIneligible>(),
+        );
+      });
+
+      test('normalisation preserves values that differ meaningfully', () async {
+        // Six decimal places is far below any distinction the ladder draws,
+        // so a real measurement is carried through unchanged.
+        final CameraCapability result = await build(
+          cameras: <CameraDescription>[camera()],
+          minimumZoom: 0.532,
+        ).probe();
+
+        expect(result.minimumZoomFactor, 0.532);
+      });
     });
 
     test('an unreadable zoom is null, not a thrown failure', () async {

@@ -1125,7 +1125,21 @@ Each platform answers exactly the tier the other cannot. **The platform-channel 
 Two consequences follow, both accepted:
 
 - **Tier fidelity is lost on Android.** A phone with a real ultra-wide lens is reported as `hybrid` rather than `optical`, because its Tier 1 answer is unavailable and its Tier 2 answer is affirmative. **The footage is unaffected** — the zoom factor is measured, not assumed, so BR-02 holds either way. Only the metadata's account of *how* the field of view was reached is imprecise. The platform channel closes this without changing the ladder.
-- **One false-block case remains.** An Android device that has an ultra-wide lens but whose bound camera will not report a minimum zoom factor at or below 0.6x is blocked at Tier 3, wrongly. This is the residue of the same gap and is the strongest argument for prioritising the channel.
+- ~~**One false-block case remains.** An Android device that has an ultra-wide lens but whose bound camera will not report a minimum zoom factor at or below 0.6x is blocked at Tier 3, wrongly. This is the residue of the same gap and is the strongest argument for prioritising the channel.~~
+
+  **Corrected 2026-08-15, on evidence from the first physical device tested.** The framing above is wrong in its central claim. The false block is **not a residue of the Tier 1 gap** and has nothing to do with whether a dedicated ultra-wide lens can be detected. It fires on any device whose reported zoom minimum widens across a permitted-factor boundary, and it fired immediately.
+
+  A CPH2707 (Android 16) reports a minimum zoom ratio of exactly `0.6f` — a device that satisfies BR-02 precisely. CameraX's `ZoomState.minZoomRatio` is a Java **float**, and widening it to a Dart `double` yields **0.6000000238418579**, greater than 0.6 by 2.38e-8. The ladder's `minimum <= 0.6` comparison therefore failed, and a fully compliant phone was refused with *"This device doesn't support the required wide-angle capture"*.
+
+  So the original entry understated this in both frequency and cause: not a narrow edge case behind an Android-only detection gap, but a defect reachable by any device sitting on a permitted factor — likely a large share of the fleet, since 0.5x and 0.6x are exactly the values BR-02 names and exactly the values hardware reports.
+
+  Fixed at the data boundary — `CameraCapabilityProbeImpl` normalises the platform value to six decimal places before it reaches `domain/`, so the ladder's comparison stays an ordinary `<=` that reads the way BR-02 is written. The ladder itself was not modified.
+
+- **What this says about the test suite, recorded because it will be asked.** 299 tests passed over this code, including a table covering the 0.6 boundary, and none of them could have caught it. Every test fed the ladder clean decimal literals — `0.5`, `0.6`, `0.55` — which are the values a Dart author writes and *not* the values a platform channel delivers. The defect lives entirely in the gap between those two, so no unit test written in Dart could reach it.
+
+  It was found by the throwaway on-device harness of Mission 3.1.5, on the first real device the ladder had ever run against, minutes after the Android build was first made to work.
+
+  **The general lesson, stated plainly for whoever reads this later: a value that crosses a platform channel cannot be verified by unit tests alone.** Its representation is decided on the other side of that boundary, by a language with different numeric types, and no amount of Dart-side coverage observes it. Any future capability read of this shape needs a real-device check before its verdict is trusted — which is now also the argument for prioritising the physical-device verification recorded as open against Mission 3.11.
 
 **BR-02 is never violated in either direction.** The reported minimum is snapped to the nearer of the two factors BR-02 permits, and a device wider than 0.5x is clamped rather than given its extra reach — fleet comparability is BR-02's own stated rationale, and one unusually wide device defeats it.
 
