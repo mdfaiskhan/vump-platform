@@ -1147,6 +1147,74 @@ Two consequences follow, both accepted:
 
 **No new ADR.** This extends Volume 5.1's existing decision rather than taking a new one; the ladder, the tiers and the caching are all the Volume's, and nothing here creates an architectural pattern the accepted ADRs do not already cover. The cross-feature question was checked and does not arise: probe, ladder, cache and the Checklist screen that consumes them are all `features/recording/`.
 
+### A-058 — Chapter 5.4's pipeline stages are the camera plugin's internals, not this project's code
+
+| | |
+|---|---|
+| **Volume** | 5 — Recording Engine, Chapter 5.4 §1 (Pipeline Stages) and §2 (Backpressure & Storage Checks) |
+| **Says** | §1: *"Camera Module (5.1) → Hardware Encoder (5.2 params) → Muxer (video+audio → .mp4 container) → Buffered Writer → Local Filesystem (5.8)"*, with the encoder *"never a software encoder"* and *"a buffered writer flushes to the device filesystem periodically (not only at Stop) so that a crash mid-chunk loses at most the last buffer interval"*. §2: *"the buffered writer monitors remaining free space on every flush"* |
+| **Should say** | The stages are real and happen in that order, but **inside CameraX's `Recorder`** — they are not stages this project builds, wires or can observe. The free-space check is driven by a timer, because there is no flush to hang it on |
+| **Reason** | Volume 3 Chapter 3.1 already chose the stack, and that decision outranks a Draft chapter's implementation detail |
+
+**The architecture decision was taken three chapters earlier.** Volume 3 Ch. 3.1's mobile stack table fixes capture as *"Flutter's official camera plugin, with a platform-channel extension for ultra-wide lens selection"* — a plugin, with a channel for **one** named gap. Chapter 5.4 then describes an encoder/muxer/writer chain as though the application owned those stages. It does not, and cannot: the plugin exposes `startVideoRecording()` and `stopVideoRecording()` and nothing between them. Its controller has **no flush, buffer, segment or split API of any kind** — verified by grep against `camera 0.12.0+2`, zero matches.
+
+Building the chain literally would mean writing a MediaCodec/MediaMuxer bridge, which is not the extension Ch. 3.1 sanctioned, would be Android-only, and would reverse Volume 3's own stack decision from inside a downstream chapter. **When an architecture decision and a Draft-status chapter's implementation detail conflict, the decision wins and the chapter is corrected** — the same relationship A-057 established for Ch. 5.1 and 5.2.
+
+What the chapter promises *observably* is delivered: a real-time mux to `.mp4`, incremental writing rather than a single flush at Stop, and one complete independent file per chunk. Those are properties of CameraX's `Recorder`. What changes is who guarantees them.
+
+#### Two guarantees become unverifiable. **Both are OPEN RISKS, not resolved.**
+
+**1. "Never a software encoder" — unverifiable, and not certain to hold.**
+
+This is the more serious of the two and it is not merely a measurement gap. CameraX selects the encoder itself, and **it can fall back to a software encoder** on some devices and configurations. Nothing in the Dart API reports which was used, so the application cannot detect it, cannot refuse it, and cannot log it.
+
+The chapter's stated reason for demanding hardware encoding is battery and thermal load across back-to-back 10-minute sessions. A silent software fallback would degrade both, and — for a business whose product *is* the footage — could degrade capture quality on an unknown subset of the fleet without any signal that it happened. **This is recorded as an accepted unknown, not a solved problem.**
+
+**2. The flush interval is unobservable and unconfigurable.**
+
+§1 promises a crash loses *"at most the last buffer interval"*. CameraX does write incrementally, so the shape of the promise holds — but its size is not ours to set, measure, or state. The crash-recovery behaviour Ch. 5.3 §5 builds on this is therefore bounded by a number nobody in this project knows.
+
+#### §2's free-space check is timed, not flush-driven
+
+With no flush hook, the check runs on a `Timer.periodic` at **5 seconds**. At Ch. 5.2 §1's bitrate — 8,000 kbps video plus 128 kbps audio, about 1.02 MB/s — that is roughly 5 MB written between checks, and `StatFs` is a single syscall. The chapter's *intent* (notice before the disk fills) is preserved; its *mechanism* is not available.
+
+**The threshold is 610 MB, derived rather than invented.** FR-CHK-02 gates recording on *"sufficient free local storage for at least one full chunk"*, so one full chunk is the unit the product already reasons in, and the mid-recording rule reuses it — the pipeline never allows less headroom than the Checklist demanded before it started. One chunk at spec bitrate is (8,000 + 128) kbps ÷ 8 × 600 s = 609.6 MB, rounded to 610 MB.
+
+**The early boundary reuses Chapter 5.3's existing pattern, exactly as §2 instructs**: *"the pipeline forces an early chunk boundary (treated exactly like the automatic 10-minute boundary, Chapter 5.3)"*. Same `ChunkBoundaryReason`, same edge, same finalization path. No new mechanism and no new enum case.
+
+#### The project's first `MethodChannel`
+
+`dart:io` exposes no free-space API, so reading it requires something native. A platform channel was chosen over a pub package, on the reasoning ADR-030 applies to packages:
+
+- The two maintained candidates — `disk_space_2` (22,499 downloads/30 d, 150/160 points, built-in Kotlin) and `storage_space` (5,320 downloads, applies KGP at Kotlin 1.8.22) — **both return megabytes computed through a 32-bit float division**. This project shipped a defect days earlier caused by trusting a float32 across exactly this boundary (A-057's correction). The channel returns `Long`/`int` bytes end to end, with no floating point anywhere in the path.
+- `storage_space` measures `Environment.getDataDirectory()`, a fixed partition, rather than the volume actually being written to.
+- A package carries ADR-030's full admission — confinement entry, inventory row, conversion boundary, Volume record — for roughly twenty lines of platform code.
+- The precedent is A-055's sibling reasoning and Mission 3.1's choice of `dart:io`'s `Platform.operatingSystemVersion` over `device_info_plus`. Ch. 3.1 already sanctions platform channels by name.
+
+It is confined the way ADR-030 confines a package even though no package is involved: one Dart file owns it, `PlatformException` and `MissingPluginException` are both converted there, and the only types crossing are a `String` in and an `int` out.
+
+**Android is verified on hardware.** On a CPH2707 the channel returned **86,695,772,160 bytes** for the app documents directory; the OS's own `df` reported 86,699,048,960 bytes for `/data` — a 0.004% difference, consistent with `StatFs.availableBytes` excluding reserved blocks. A non-existent path was rejected as `StorageException`, not as a raw platform type.
+
+**The iOS half has never executed.** No Mac, no iOS device, no iOS configuration in this project. It uses `volumeAvailableCapacityForImportantUsageKey` — Apple's recommended key, which accounts for purgeable space, rather than the cruder `volumeAvailableCapacity` that would under-report and force early boundaries on a device with room. That is a reasoned choice, not a tested one.
+
+#### The zoom write-back, carried from Mission 3.1.6 and now closed
+
+3.1.6 flagged a hazard: the pipeline would call `setZoomLevel(0.6)` on a device whose platform floor reads 0.6000000238418579, fractionally higher, and CameraX might reject it. **Measured on the CPH2707, it does not.** `setZoomLevel` accepted 0.6, accepted the raw minimum, and also accepted **0.3 — half the reported floor.** That platform performs no range validation at all, so there was never a rejection to avoid.
+
+That inverts the risk rather than removing it: an out-of-range value produces no error, no exception, and silently wrong footage. The only defence is not to compute one.
+
+The pipeline therefore sends `max(verdictFactor, platformMinimum)`, reading the minimum from **its own controller binding** rather than the cached verdict. One expression covers two cases: a verdict of 0.5 on a device whose floor is 0.25 stays 0.5 (the ladder clamped deliberately, because fleet comparability is BR-02's rationale), and a verdict of 0.6 on a device reporting 0.6000000238418579 sends the platform's own number.
+
+**This is belt-and-braces, not load-bearing.** On Android it changes nothing. It is kept because iOS *does* clamp `videoZoomFactor` to its available range, so a validating device is protected — and because it costs one comparison. **No change was needed to `CameraCapability` or to any code committed in 3.1 or 3.2**: the pipeline reads the floor from the controller it is about to configure, so the raw value never had to be retained.
+
+#### Follow-up: the Volume 9 device matrix
+
+Three items from this amendment need real hardware and cannot be closed from the repository. They belong with Volume 9 Ch. 9.8/9.9's manual and device-matrix testing:
+
+1. **Encoder spot-check** — confirm on real devices whether CameraX selected a hardware encoder, by inspecting the produced file's encoder metadata or `MediaCodecInfo`. The only way this is ever settled either way.
+2. **Crash-interval measurement** — kill the app mid-chunk and measure how much footage is actually lost, giving §1's "at most the last buffer interval" a number.
+3. **The iOS free-space channel** — first execution of that branch on any Apple device.
+
 ---
 
 ## Confirmed correct — no amendment

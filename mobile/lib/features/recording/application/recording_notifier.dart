@@ -9,6 +9,8 @@ import 'package:mobile/features/recording/domain/entities/recording_session.dart
 import 'package:mobile/features/recording/domain/entities/recording_state.dart';
 import 'package:mobile/features/recording/domain/recording_lifecycle.dart';
 import 'package:mobile/features/recording/domain/repositories/chunk_finalizer.dart';
+import 'package:mobile/features/recording/domain/repositories/free_space_reader.dart';
+import 'package:mobile/features/recording/domain/repositories/recording_pipeline.dart';
 import 'package:mobile/features/recording/domain/repositories/session_id_generator.dart';
 
 /// The chunk finalizer, overridden at the composition root.
@@ -41,6 +43,34 @@ typedef BoundaryTimerFactory =
 /// for `availableCameras` (Mission 3.1).
 final Provider<BoundaryTimerFactory> boundaryTimerFactoryProvider =
     Provider<BoundaryTimerFactory>((Ref ref) => Timer.new);
+
+/// The capture pipeline, overridden at the composition root.
+final Provider<RecordingPipeline> recordingPipelineProvider =
+    Provider<RecordingPipeline>(
+      (Ref ref) => throw UnimplementedError(
+        'recordingPipelineProvider must be overridden with a '
+        'RecordingPipeline. features/recording/data/ provides '
+        'CameraRecordingPipeline.',
+      ),
+    );
+
+/// The free-space reader, overridden at the composition root.
+final Provider<FreeSpaceReader> freeSpaceReaderProvider =
+    Provider<FreeSpaceReader>(
+      (Ref ref) => throw UnimplementedError(
+        'freeSpaceReaderProvider must be overridden with a FreeSpaceReader. '
+        'features/recording/data/ provides FreeSpaceChannel.',
+      ),
+    );
+
+/// The timer used to poll free space. Injected for the same reason as
+/// [boundaryTimerFactoryProvider].
+final Provider<PeriodicTimerFactory> storageTimerFactoryProvider =
+    Provider<PeriodicTimerFactory>((Ref ref) => Timer.periodic);
+
+/// Schedules the repeating free-space check.
+typedef PeriodicTimerFactory =
+    Timer Function(Duration interval, void Function(Timer timer) callback);
 
 /// The session-id source, overridden at the composition root.
 final Provider<SessionIdGenerator> sessionIdGeneratorProvider =
@@ -81,6 +111,7 @@ final Provider<SessionIdGenerator> sessionIdGeneratorProvider =
 /// states is the point.
 class RecordingNotifier extends Notifier<RecordingState> {
   Timer? _boundaryTimer;
+  Timer? _storageTimer;
 
   /// True while a finalization is in flight, so a second one cannot start.
   ///
@@ -94,9 +125,39 @@ class RecordingNotifier extends Notifier<RecordingState> {
 
   @override
   RecordingState build() {
-    ref.onDispose(_cancelBoundaryTimer);
+    ref.onDispose(() {
+      _cancelBoundaryTimer();
+      _cancelStorageTimer();
+    });
     return const RecordingState.idle();
   }
+
+  /// How often free space is checked while recording.
+  ///
+  /// Volume 5 Chapter 5.4 §2 asks the buffered writer to check *"on every
+  /// flush"*. The `camera` plugin exposes no flush — its controller has no
+  /// flush, buffer, segment or split API at all — so the check is driven by a
+  /// timer instead, which A-058 records as a deviation from the chapter's
+  /// mechanism rather than its intent.
+  ///
+  /// Five seconds. At Chapter 5.2 §1's bitrate — 8,000 kbps video plus 128
+  /// kbps audio, about 1.02 MB/s — that is roughly 5 MB written between
+  /// checks, negligible against [_lowStorageThresholdBytes]. `StatFs` is one
+  /// syscall, so there is no reason to poll less often, and nothing to gain by
+  /// polling more.
+  static const Duration storagePollInterval = Duration(seconds: 5);
+
+  /// Free space below which an early chunk boundary is forced.
+  ///
+  /// **Derived, not invented.** FR-CHK-02 gates recording on *"sufficient free
+  /// local storage for at least one full chunk"*, so one full chunk is the
+  /// unit the product already reasons in, and the mid-recording rule uses the
+  /// same one — the pipeline never allows less headroom than the Checklist
+  /// demanded before it started.
+  ///
+  /// One chunk at spec bitrate: (8,000 + 128) kbps ÷ 8 = 1,016 kB/s, times
+  /// 600 seconds, is 609.6 MB. Rounded to 610 MB.
+  static const int _lowStorageThresholdBytes = 610 * 1000 * 1000;
 
   /// The Checklist passed (BR-04) — generate the session and become `Ready`.
   ///
@@ -135,6 +196,7 @@ class RecordingNotifier extends Notifier<RecordingState> {
     }
     state = next;
     _startBoundaryTimer();
+    _startStorageWatch();
     return true;
   }
 
@@ -202,9 +264,13 @@ class RecordingNotifier extends Notifier<RecordingState> {
     );
     if (next != null) {
       state = next;
-      // Chunk N+1 of the same session — restart the timer for the new chunk.
       if (next is RecordingStateRecording) {
+        // Chunk N+1 of the same session — re-arm the chunk timer. The
+        // storage watch is session-scoped and left running.
         _startBoundaryTimer();
+      } else {
+        // The session ended; nothing is writing to the volume now.
+        _cancelStorageTimer();
       }
     }
     return null;
@@ -233,6 +299,64 @@ class RecordingNotifier extends Notifier<RecordingState> {
   void _cancelBoundaryTimer() {
     _boundaryTimer?.cancel();
     _boundaryTimer = null;
+  }
+
+  /// Starts watching free space for the duration of the session.
+  ///
+  /// Armed once per session rather than per chunk: storage pressure does not
+  /// reset at a chunk boundary, and re-arming would leave a gap across the
+  /// finalization it most needs to cover.
+  void _startStorageWatch() {
+    _cancelStorageTimer();
+    final String? directory = ref.read(recordingPipelineProvider)
+        .outputDirectory;
+    if (directory == null) {
+      return;
+    }
+    _storageTimer = ref.read(storageTimerFactoryProvider)(
+      storagePollInterval,
+      (Timer _) => unawaited(_checkFreeSpace(directory)),
+    );
+  }
+
+  /// Forces an early boundary if space has become critically low.
+  ///
+  /// Chapter 5.4 §2: *"if space becomes critically low mid-chunk, the pipeline
+  /// forces an early chunk boundary (**treated exactly like the automatic
+  /// 10-minute boundary, Chapter 5.3**)"*. So this reuses Mission 3.2's
+  /// internal-Stop pattern unchanged — same [ChunkBoundaryReason], same edge,
+  /// same finalization — rather than introducing a parallel mechanism. The
+  /// chapter's own words make that the specified behaviour, not a convenience.
+  ///
+  /// A failed reading is ignored rather than escalated. The pipeline is
+  /// mid-chunk and the alternative — aborting a recording because a free-space
+  /// syscall failed once — destroys footage to avoid a risk that may not
+  /// exist. The next tick tries again five seconds later.
+  Future<void> _checkFreeSpace(String directory) async {
+    if (state is! RecordingStateRecording) {
+      return;
+    }
+    final int available;
+    try {
+      available = await ref.read(freeSpaceReaderProvider).availableBytes(
+        directory,
+      );
+    } on AppException {
+      return;
+    }
+
+    if (available >= _lowStorageThresholdBytes) {
+      return;
+    }
+    await _finalizeCurrentChunk(
+      ChunkBoundaryReason.automaticBoundary,
+      DateTime.now(),
+    );
+  }
+
+  void _cancelStorageTimer() {
+    _storageTimer?.cancel();
+    _storageTimer = null;
   }
 }
 

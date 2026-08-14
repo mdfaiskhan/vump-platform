@@ -10,6 +10,8 @@ import 'package:mobile/features/recording/domain/entities/recording_session.dart
 import 'package:mobile/features/recording/domain/entities/recording_state.dart';
 import 'package:mobile/features/recording/domain/recording_lifecycle.dart';
 import 'package:mobile/features/recording/domain/repositories/chunk_finalizer.dart';
+import 'package:mobile/features/recording/domain/repositories/free_space_reader.dart';
+import 'package:mobile/features/recording/domain/repositories/recording_pipeline.dart';
 import 'package:mobile/features/recording/domain/repositories/session_id_generator.dart';
 
 /// The notifier driving Chapter 5.3's machine — timer, races and failure.
@@ -24,26 +26,43 @@ import 'package:mobile/features/recording/domain/repositories/session_id_generat
 void main() {
   final DateTime t0 = DateTime.utc(2026, 8, 15, 9);
 
-  ({
-    ProviderContainer container,
-    _FakeFinalizer finalizer,
-    _FakeTimers timers,
-  })
-  build({Exception? finalizerThrows, Completer<void>? gate}) {
+  _Harness build({
+    Exception? finalizerThrows,
+    Completer<void>? gate,
+    int freeBytes = 50 * 1000 * 1000 * 1000,
+    Exception? freeSpaceThrows,
+    String? outputDirectory = '/data/user/0/com.example.mobile/files',
+  }) {
     final _FakeFinalizer finalizer = _FakeFinalizer(
       throws: finalizerThrows,
       gate: gate,
     );
     final _FakeTimers timers = _FakeTimers();
+    final _FakeStorageTimers storageTimers = _FakeStorageTimers();
+    final _FakeFreeSpace freeSpace = _FakeFreeSpace(
+      bytes: freeBytes,
+      throws: freeSpaceThrows,
+    );
     final ProviderContainer container = ProviderContainer(
       overrides: <Override>[
         chunkFinalizerProvider.overrideWithValue(finalizer),
         sessionIdGeneratorProvider.overrideWithValue(_FixedIds()),
         boundaryTimerFactoryProvider.overrideWithValue(timers.create),
+        recordingPipelineProvider.overrideWithValue(
+          _FakePipeline(outputDirectory),
+        ),
+        freeSpaceReaderProvider.overrideWithValue(freeSpace),
+        storageTimerFactoryProvider.overrideWithValue(storageTimers.create),
       ],
     );
     addTearDown(container.dispose);
-    return (container: container, finalizer: finalizer, timers: timers);
+    return _Harness(
+      container: container,
+      finalizer: finalizer,
+      timers: timers,
+      storageTimers: storageTimers,
+      freeSpace: freeSpace,
+    );
   }
 
   RecordingNotifier notifierOf(ProviderContainer c) =>
@@ -108,12 +127,7 @@ void main() {
 
   group('the BR-06 boundary produces an internal Stop', () {
     test('the timer is armed for ten minutes when recording starts', () {
-      final ({
-        ProviderContainer container,
-        _FakeFinalizer finalizer,
-        _FakeTimers timers,
-      })
-      f = build();
+      final _Harness f = build();
       notifierOf(f.container).checklistPassed(zoomFactor: 0.5, now: t0);
 
       expect(f.timers.armed, isEmpty, reason: 'Ready does not capture yet');
@@ -125,12 +139,7 @@ void main() {
 
     test('the boundary finalizes and resumes, same session, next '
         'index', () async {
-      final ({
-        ProviderContainer container,
-        _FakeFinalizer finalizer,
-        _FakeTimers timers,
-      })
-      f = build();
+      final _Harness f = build();
       notifierOf(f.container).checklistPassed(zoomFactor: 0.5, now: t0);
       notifierOf(f.container).start(now: t0);
       final RecordingState opened = stateOf(f.container);
@@ -149,12 +158,7 @@ void main() {
     });
 
     test('it re-arms for each chunk, so boundaries keep coming', () async {
-      final ({
-        ProviderContainer container,
-        _FakeFinalizer finalizer,
-        _FakeTimers timers,
-      })
-      f = build();
+      final _Harness f = build();
       notifierOf(f.container).checklistPassed(zoomFactor: 0.5, now: t0);
       notifierOf(f.container).start(now: t0);
 
@@ -170,12 +174,7 @@ void main() {
 
   group('Ch. 5.6 §3 — a chunk is never double-finalized', () {
     test('a manual Stop cancels the pending boundary timer', () async {
-      final ({
-        ProviderContainer container,
-        _FakeFinalizer finalizer,
-        _FakeTimers timers,
-      })
-      f = build();
+      final _Harness f = build();
       notifierOf(f.container).checklistPassed(zoomFactor: 0.5, now: t0);
       notifierOf(f.container).start(now: t0);
 
@@ -194,12 +193,7 @@ void main() {
       // The race Ch. 5.6 §3 names: the timer's callback was already scheduled
       // when the Collector tapped Stop. Cancellation cannot un-schedule it, so
       // the state guard has to catch it.
-      final ({
-        ProviderContainer container,
-        _FakeFinalizer finalizer,
-        _FakeTimers timers,
-      })
-      f = build();
+      final _Harness f = build();
       notifierOf(f.container).checklistPassed(zoomFactor: 0.5, now: t0);
       notifierOf(f.container).start(now: t0);
 
@@ -212,12 +206,7 @@ void main() {
 
     test('a second Stop during an in-flight finalization is ignored', () async {
       final Completer<void> gate = Completer<void>();
-      final ({
-        ProviderContainer container,
-        _FakeFinalizer finalizer,
-        _FakeTimers timers,
-      })
-      f = build(gate: gate);
+      final _Harness f = build(gate: gate);
       notifierOf(f.container).checklistPassed(zoomFactor: 0.5, now: t0);
       notifierOf(f.container).start(now: t0);
 
@@ -232,6 +221,139 @@ void main() {
       await first;
 
       expect(f.finalizer.calls, 1);
+    });
+  });
+
+  group('Ch. 5.4 §2 — low storage forces an early boundary', () {
+    // The chapter says the pipeline "forces an early chunk boundary (treated
+    // exactly like the automatic 10-minute boundary, Chapter 5.3)". So the
+    // assertions below are that it reuses 3.2's existing Stop pattern — same
+    // reason, same edge, same finalization — not a parallel mechanism.
+
+    test('the watch is armed at the poll interval when recording starts', () {
+      final _Harness f = build();
+      notifierOf(f.container).checklistPassed(zoomFactor: 0.5, now: t0);
+      expect(f.storageTimers.armed, isEmpty, reason: 'Ready is not capturing');
+
+      notifierOf(f.container).start(now: t0);
+
+      expect(f.storageTimers.armed, <Duration>[
+        RecordingNotifier.storagePollInterval,
+      ]);
+    });
+
+    test('it reads the directory the pipeline is writing to', () async {
+      final _Harness f = build();
+      notifierOf(f.container).checklistPassed(zoomFactor: 0.5, now: t0);
+      notifierOf(f.container).start(now: t0);
+
+      await f.storageTimers.tick();
+
+      expect(f.freeSpace.paths, <String>[
+        '/data/user/0/com.example.mobile/files',
+      ]);
+    });
+
+    test('ample space changes nothing', () async {
+      final _Harness f = build();
+      notifierOf(f.container).checklistPassed(zoomFactor: 0.5, now: t0);
+      notifierOf(f.container).start(now: t0);
+
+      await f.storageTimers.tick();
+
+      expect(f.finalizer.calls, 0);
+      expect(stateOf(f.container), isA<RecordingStateRecording>());
+    });
+
+    test('space below one chunk forces a boundary and continues the '
+        'session', () async {
+      // The key assertion: this is an *early boundary*, not a stop. The
+      // session survives and chunk N+1 opens, exactly as the 10-minute
+      // boundary behaves.
+      final _Harness f = build(freeBytes: 100 * 1000 * 1000);
+      notifierOf(f.container).checklistPassed(zoomFactor: 0.5, now: t0);
+      notifierOf(f.container).start(now: t0);
+
+      await f.storageTimers.tick();
+
+      expect(f.finalizer.calls, 1);
+      final RecordingState after = stateOf(f.container);
+      expect(after, isA<RecordingStateRecording>());
+      expect((after as RecordingStateRecording).sequenceIndex, 1);
+      expect(after.session.sessionId, 'sess_0001');
+    });
+
+    test('the threshold is one full chunk at spec bitrate', () async {
+      // Derived from FR-CHK-02's "at least one full chunk", not invented:
+      // (8000 + 128) kbps / 8 * 600s = 609.6 MB. Just above passes, just
+      // below trips — asserted as a pair so the boundary is pinned.
+      final _Harness ample = build(freeBytes: 610 * 1000 * 1000);
+      notifierOf(ample.container).checklistPassed(zoomFactor: 0.5, now: t0);
+      notifierOf(ample.container).start(now: t0);
+      await ample.storageTimers.tick();
+      expect(ample.finalizer.calls, 0, reason: 'exactly at the threshold');
+
+      final _Harness scarce = build(freeBytes: 610 * 1000 * 1000 - 1);
+      notifierOf(scarce.container).checklistPassed(zoomFactor: 0.5, now: t0);
+      notifierOf(scarce.container).start(now: t0);
+      await scarce.storageTimers.tick();
+      expect(scarce.finalizer.calls, 1, reason: 'one byte under');
+    });
+
+    test('a failed reading is ignored, not escalated', () async {
+      // Aborting a recording because one syscall failed destroys footage to
+      // avoid a risk that may not exist. The next tick tries again.
+      final _Harness f = build(
+        freeSpaceThrows: const StorageException(
+          errorCode: ErrorCode.storageUnavailable,
+          message: 'statfs failed',
+        ),
+      );
+      notifierOf(f.container).checklistPassed(zoomFactor: 0.5, now: t0);
+      notifierOf(f.container).start(now: t0);
+
+      await f.storageTimers.tick();
+
+      expect(f.finalizer.calls, 0);
+      expect(stateOf(f.container), isA<RecordingStateRecording>());
+    });
+
+    test('the watch stops when the session ends', () async {
+      final _Harness f = build();
+      notifierOf(f.container).checklistPassed(zoomFactor: 0.5, now: t0);
+      notifierOf(f.container).start(now: t0);
+
+      await notifierOf(f.container).stop(now: t0);
+
+      expect(f.storageTimers.cancelled, 1);
+      expect(f.storageTimers.isArmed, isFalse);
+    });
+
+    test('the watch survives a chunk boundary within the session', () async {
+      // Storage pressure does not reset at a boundary, so re-arming per chunk
+      // would leave a gap across the finalization it most needs to cover.
+      final _Harness f = build();
+      notifierOf(f.container).checklistPassed(zoomFactor: 0.5, now: t0);
+      notifierOf(f.container).start(now: t0);
+
+      await f.timers.fire();
+
+      expect(f.storageTimers.cancelled, 0);
+      expect(f.storageTimers.isArmed, isTrue);
+    });
+
+    test('nothing is polled once the machine leaves Recording', () async {
+      final _Harness f = build(freeBytes: 1);
+      notifierOf(f.container).checklistPassed(zoomFactor: 0.5, now: t0);
+      notifierOf(f.container).start(now: t0);
+      await notifierOf(f.container).stop(now: t0);
+
+      // A tick that raced the stop must not finalize anything.
+      f.freeSpace.calls = 0;
+      await f.storageTimers.tickRegardlessOfCancellation();
+
+      expect(f.freeSpace.calls, 0, reason: 'guarded on Recording');
+      expect(f.finalizer.calls, 1, reason: 'only the manual Stop');
     });
   });
 
@@ -309,12 +431,7 @@ void main() {
     });
 
     test('a failed boundary does not resume recording', () async {
-      final ({
-        ProviderContainer container,
-        _FakeFinalizer finalizer,
-        _FakeTimers timers,
-      })
-      f = build(finalizerThrows: diskFull());
+      final _Harness f = build(finalizerThrows: diskFull());
       notifierOf(f.container).checklistPassed(zoomFactor: 0.5, now: t0);
       notifierOf(f.container).start(now: t0);
 
@@ -326,12 +443,7 @@ void main() {
 
   group('what the finalizer is asked for', () {
     test('each chunk is finalized once, with its own index', () async {
-      final ({
-        ProviderContainer container,
-        _FakeFinalizer finalizer,
-        _FakeTimers timers,
-      })
-      f = build();
+      final _Harness f = build();
       notifierOf(f.container).checklistPassed(zoomFactor: 0.5, now: t0);
       notifierOf(f.container).start(now: t0);
 
@@ -385,6 +497,124 @@ class _FakeTimer implements Timer {
   bool _active = true;
 
   void run() => _callback();
+
+  @override
+  void cancel() {
+    if (_active) {
+      _onCancel();
+    }
+    _active = false;
+  }
+
+  @override
+  bool get isActive => _active;
+
+  @override
+  int get tick => 0;
+}
+
+/// The collaborators one test needs, named rather than a five-field record.
+class _Harness {
+  _Harness({
+    required this.container,
+    required this.finalizer,
+    required this.timers,
+    required this.storageTimers,
+    required this.freeSpace,
+  });
+
+  final ProviderContainer container;
+  final _FakeFinalizer finalizer;
+  final _FakeTimers timers;
+  final _FakeStorageTimers storageTimers;
+  final _FakeFreeSpace freeSpace;
+}
+
+/// Stands in for the capture pipeline; only its output directory is read here.
+class _FakePipeline implements RecordingPipeline {
+  _FakePipeline(this._outputDirectory);
+
+  final String? _outputDirectory;
+
+  @override
+  String? get outputDirectory => _outputDirectory;
+
+  @override
+  Future<void> openSession({required double zoomFactor}) async {}
+
+  @override
+  Future<void> startChunk() async {}
+
+  @override
+  Future<String> stopChunk() async => '/chunk.mp4';
+
+  @override
+  Future<void> closeSession() async {}
+}
+
+/// Reports a fixed free-space figure, or fails on demand.
+class _FakeFreeSpace implements FreeSpaceReader {
+  _FakeFreeSpace({required this.bytes, this.throws});
+
+  int bytes;
+  final Exception? throws;
+  int calls = 0;
+  final List<String> paths = <String>[];
+
+  @override
+  Future<int> availableBytes(String path) async {
+    calls += 1;
+    paths.add(path);
+    if (throws != null) {
+      throw throws!;
+    }
+    return bytes;
+  }
+}
+
+/// Captures the periodic storage timer so a test can tick it on demand.
+class _FakeStorageTimers {
+  final List<Duration> armed = <Duration>[];
+  final List<_FakePeriodicTimer> _timers = <_FakePeriodicTimer>[];
+  int cancelled = 0;
+
+  Timer create(Duration interval, void Function(Timer timer) callback) {
+    armed.add(interval);
+    final _FakePeriodicTimer timer = _FakePeriodicTimer(
+      callback,
+      () => cancelled += 1,
+    );
+    _timers.add(timer);
+    return timer;
+  }
+
+  bool get isArmed => _timers.any((_FakePeriodicTimer t) => t.isActive);
+
+  /// One poll interval elapsing.
+  Future<void> tick() async {
+    final _FakePeriodicTimer timer = _timers.lastWhere(
+      (_FakePeriodicTimer t) => t.isActive,
+    );
+    timer.run();
+    await pumpEventQueue();
+  }
+
+  /// Fires the latest timer even if cancelled, reproducing a callback
+  /// already scheduled when cancellation landed.
+  Future<void> tickRegardlessOfCancellation() async {
+    _timers.last.run();
+    await pumpEventQueue();
+  }
+}
+
+class _FakePeriodicTimer implements Timer {
+  _FakePeriodicTimer(this._callback, this._onCancel);
+
+  final void Function(Timer timer) _callback;
+  final void Function() _onCancel;
+  bool _active = true;
+
+  void run() => _callback(this);
 
   @override
   void cancel() {
