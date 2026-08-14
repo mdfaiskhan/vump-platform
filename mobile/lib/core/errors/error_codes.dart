@@ -117,6 +117,31 @@ enum ErrorCode {
   storagePermissionDenied('STORAGE_PERMISSION_DENIED'),
 
   // ---------------------------------------------------------------------------
+  // Device — hardware capability the application cannot supply in software
+  // ---------------------------------------------------------------------------
+
+  /// The camera could not be opened or queried.
+  ///
+  /// The hardware exists but the platform refused it — in use by another
+  /// application, disabled by policy, or a driver-level failure.
+  deviceCameraUnavailable('DEVICE_CAMERA_UNAVAILABLE'),
+
+  /// No rear camera is present.
+  ///
+  /// BR-01 opens the rear camera only, so a device without one cannot record
+  /// at all. Distinct from [deviceCameraUnavailable]: nothing is wrong, the
+  /// hardware is simply absent.
+  deviceRearCameraAbsent('DEVICE_REAR_CAMERA_ABSENT'),
+
+  /// The device cannot reach the wide-angle field of view BR-02 requires.
+  ///
+  /// Tier 3 of Volume 5.1 §2's capability ladder — neither a dedicated
+  /// ultra-wide lens nor a primary sensor that zooms out to 0.5x/0.6x. A
+  /// named, honest block rather than a silent recording at the wrong field of
+  /// view.
+  deviceWideAngleUnsupported('DEVICE_WIDE_ANGLE_UNSUPPORTED'),
+
+  // ---------------------------------------------------------------------------
   // Validation
   // ---------------------------------------------------------------------------
 

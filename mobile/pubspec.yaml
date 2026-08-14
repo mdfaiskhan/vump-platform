@@ -75,6 +75,20 @@ dependencies:
   # directly; Firestore security rules are the enforcement, not the UI.
   cloud_firestore: ^6.8.0
 
+  # Camera capture. Volume 3 Chapter 3.1 names this package by name —
+  # "Flutter's official camera plugin, with a platform-channel extension for
+  # ultra-wide lens selection" — so the choice is recorded, not taken here.
+  # That same row flags the extension as an open engineering risk; amendment
+  # A-057 records that the risk is now confirmed and Android-only.
+  # Confined to `features/recording/data/`.
+  camera: ^0.12.0+2
+
+  # Caches the per-device wide-angle eligibility verdict (Volume 5.2 §2:
+  # "a fixed per-device-model decision made once at first launch and cached").
+  # NOT secure storage — ADR-008 governs secrets and this holds none, only a
+  # tier name and two version strings. Confined to `features/recording/data/`.
+  shared_preferences: ^2.5.5
+
   # Local database
   isar: ^3.1.0+1
   isar_flutter_libs: ^3.1.0+1

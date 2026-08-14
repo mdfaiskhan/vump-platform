@@ -1094,6 +1094,45 @@ So the chapter whose stated purpose is turning Volume 1's prose into measurable 
 
 **What this costs, recorded rather than discovered later.** Anyone who obtains the APK can create a Collector account and reach the Collector experience. That is the intended consequence of the owner's decision, not an oversight: the backend re-derives authorization on every request (Volume 4 Ch. 4.8 §1), a Collector sees only their own assigned Tasks (BR-19), and no Task is assigned to a new account by default. The exposure is the Collector shell with nothing in it. It stops being acceptable the moment the app is distributed beyond a trusted group, which is the same trigger as the App Review point above.
 
+### A-057 — Wide-angle eligibility is a sixth checklist item, cached per device rather than re-run live
+
+| | |
+|---|---|
+| **Volume** | 1 — Product Planning, §5 (FR-CHK-01 … FR-CHK-05); Volume 5 Ch. 5.1 §3 "Interaction With the Checklist"; Volume 3 Ch. 3.1 (mobile stack, Camera & Capture row) |
+| **Says** | The Pre-Recording Checklist has **exactly five** items, and every one is a live pre-flight check performed *"before recording starts"*: permissions (FR-CHK-01), free storage (FR-CHK-02), battery (FR-CHK-03), network (FR-CHK-04), and blocking with a remedy message when any fails (FR-CHK-05). Volume 5 Ch. 5.1 §3 discusses only permission and the BR-04 gate. Volume 3 Ch. 3.1 lists the camera stack as *"Flutter's official camera plugin, with a platform-channel extension for ultra-wide lens selection"* and defers the approach as *"an open engineering risk carried into Volume 6, not resolved here"* |
+| **Should say** | The Checklist has **six** items. Wide-angle capability (Volume 5 Ch. 5.1 §2's Tier 3) is checklist-visible and blocks recording exactly as FR-CHK-05 requires — but it is **decided once per install and cached**, not re-run before each session like the other five. Volume 3 Ch. 3.1's engineering risk is now **resolved in part and confirmed in part**: reachable on iOS through the plugin, and requiring the platform channel on Android |
+| **Reason** | Two independent reasons, one from the volumes and one from the platform |
+
+**The Volumes already require the caching; they just require it somewhere else.** Volume 5 Ch. 5.2 §2 states that *"zoom factor selection (0.5x vs. 0.6x) is a fixed per-device-model decision made once at first launch and cached — not re-negotiated every session — so footage from the same device is always comparable to itself over time."* That decision **is** the Tier 1/2/3 verdict — the ladder is what produces the factor. So a checklist item that re-ran it live would contradict Ch. 5.2 §2 directly. This amendment does not introduce caching; it records that the cached decision is the same decision the Checklist has to display, and that FR-CHK's enumeration never accounted for an item of that shape.
+
+**The other five checks measure things that change between sessions.** Battery drains, storage fills, permissions get revoked in Settings, connectivity comes and goes — each must be read at the moment recording starts or the answer is worthless. Wide-angle capability is a property of the hardware. It cannot change while the app is installed, and re-deriving it costs a camera open (below), so re-running it live would be slower, no more correct, and in conflict with Ch. 5.2 §2.
+
+**Invalidation is by app version and OS version, not by a clock.** A verdict does not decay with age; it becomes wrong only when the code that produced it changes or the platform that answered changes. Both arrive as a version bump, so both are the trigger, and nothing else is.
+
+**Probing costs a camera open, which is why this is correctness and not caching-as-optimisation.** Tier 2 reads the sensor's minimum zoom factor, and on Android that value comes from CameraX's `ZoomState`, which exists only once a camera is bound. So the probe must open the camera — after the Checklist has confirmed permission (Ch. 5.1 §3, BR-03), never before. A per-session probe would put a visible shutter delay in front of every recording and would risk two sessions on one device disagreeing about its own zoom factor, which is precisely what Ch. 5.2 §2 forbids.
+
+**Volume 3 Ch. 3.1's engineering risk, now measured rather than anticipated.** Read from the packages, not assumed:
+
+| Tier | iOS (`camera_avfoundation 0.10.2`) | Android (`camera_android_camerax 0.7.4+5`) |
+|---|---|---|
+| 1 — dedicated ultra-wide lens | **Reachable.** The discovery session includes `.builtInUltraWideCamera` and maps it to `CameraLensType.ultraWide` | **Not reachable.** `availableCameras()` constructs every `CameraDescription` without a `lensType`, so it is `CameraLensType.unknown` on every device whatever the hardware — zero occurrences of `lensType` in the package |
+| 2 — primary sensor zoom-out | Effectively not: `minimumAvailableZoomFactor` is relative to the selected device, and iOS reaches ultra-wide by selecting the ultra-wide device instead | **Reachable.** `getMinZoomLevel()` returns CameraX `ZoomState.minZoomRatio`, which goes below 1.0 on devices whose bound logical camera includes an ultra-wide |
+
+Each platform answers exactly the tier the other cannot. **The platform-channel extension Ch. 3.1 named is therefore confirmed necessary, and confirmed necessary on Android only** — which is the primary test target (Volume 0 Ch. 0.2). It is not built by this mission and is recorded as open.
+
+**What the Android gap costs until that channel exists, decided by the project owner rather than inferred.** Tier 1 is represented as a **tri-state** — true, false, or null for *"the platform cannot say"* — and null is never collapsed into false. The ladder falls through an indeterminate Tier 1 to Tier 2, and **Tier 3 fires only on a positive Tier 2 failure**: a device that reported its minimum zoom factor and could not reach 0.6x. "We could not look" is not evidence of absence, and Tier 3 hard-blocks a Collector from working at all.
+
+Two consequences follow, both accepted:
+
+- **Tier fidelity is lost on Android.** A phone with a real ultra-wide lens is reported as `hybrid` rather than `optical`, because its Tier 1 answer is unavailable and its Tier 2 answer is affirmative. **The footage is unaffected** — the zoom factor is measured, not assumed, so BR-02 holds either way. Only the metadata's account of *how* the field of view was reached is imprecise. The platform channel closes this without changing the ladder.
+- **One false-block case remains.** An Android device that has an ultra-wide lens but whose bound camera will not report a minimum zoom factor at or below 0.6x is blocked at Tier 3, wrongly. This is the residue of the same gap and is the strongest argument for prioritising the channel.
+
+**BR-02 is never violated in either direction.** The reported minimum is snapped to the nearer of the two factors BR-02 permits, and a device wider than 0.5x is clamped rather than given its extra reach — fleet comparability is BR-02's own stated rationale, and one unusually wide device defeats it.
+
+**Volume 5 Ch. 5.1 and 5.2 are not edited.** Both are `Status: Draft — Pending Approval`, and both are PDFs in `docs/volumes/` rather than editable Markdown. This register is the correction, in the same way an Accepted ADR is corrected in place rather than rewritten. The specific sentence this amendment reaches is Ch. 5.1 §3's "Interaction With the Checklist", which discusses permission and the BR-04 gate and does not mention that the wide-angle verdict is also checklist-visible or that it is cached.
+
+**No new ADR.** This extends Volume 5.1's existing decision rather than taking a new one; the ladder, the tiers and the caching are all the Volume's, and nothing here creates an architectural pattern the accepted ADRs do not already cover. The cross-feature question was checked and does not arise: probe, ladder, cache and the Checklist screen that consumes them are all `features/recording/`.
+
 ---
 
 ## Confirmed correct — no amendment

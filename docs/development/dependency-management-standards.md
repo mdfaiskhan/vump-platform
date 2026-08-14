@@ -53,6 +53,8 @@ Volume 3 §3.8 §2 fixes this and states the trade: *"Chapter 3.5's module bound
 | `google_sign_in` | `^7.2.0` | Core | `features/auth/data/` | ADR-034, **A-053** |
 | `cloud_functions` | `^6.3.6` | Leaf | `features/auth/data/` | ADR-036 — **temporary** |
 | `cloud_firestore` | `^6.8.0` | Leaf | `features/auth/data/` | ADR-036 — **temporary** |
+| `camera` | `^0.12.0+2` | Core | `features/recording/data/` | Volume 3 Ch. 3.1, **A-057** |
+| `shared_preferences` | `^2.5.5` | Leaf | `features/recording/data/` | Volume 5 Ch. 5.2 §2, **A-057** |
 | `logger` | `^2.5.0` | Leaf | `core/logging/` | ADR-027 |
 | `freezed_annotation` | `^2.4.4` | Leaf | — (annotations) | — |
 | `json_annotation` | `^4.9.0` | Leaf | — (annotations) | — |
@@ -65,7 +67,9 @@ Volume 3 §3.8 §2 fixes this and states the trade: *"Chapter 3.5's module bound
 
 **Every non-SDK dependency carries an explicit caret constraint.** Verified: no bare, unconstrained dependency exists, which satisfies §3.8 §4 item 6.
 
-**Every package has a documented reason.** Nine of the thirteen runtime packages are named by an accepted ADR; the rest are annotations, icons or lint rules. Nothing is present without a decision behind it, which is Volume 0 §2's requirement.
+**Every package has a documented reason.** Eleven of the fifteen runtime packages are named by an accepted ADR or, for the two added at Mission 3.1, by a Volume chapter plus the amendment that records the deviation; the rest are annotations, icons or lint rules. Nothing is present without a decision behind it, which is Volume 0 §2's requirement.
+
+**`camera` is Core and `shared_preferences` is Leaf, which is not an inconsistency.** `camera` is the recording engine's reason to exist — Volume 5 is built on it and no alternative is substitutable without redesigning the capture path, which is §3's test for Core. `shared_preferences` holds one cached verdict behind the `WideAngleEligibilityCache` port; swapping it for any other key-value store would change one file. **`camera` is also the one Core package named by a Volume rather than by an ADR**: Volume 3 Ch. 3.1 fixes it by name in the mobile stack table, so no ADR was needed to choose it, and A-057 records only what that table left open.
 
 **Two entries are marked temporary, and that is a tier of its own in practice.** `cloud_functions` and `cloud_firestore` exist only to reach the invite-code runtime ADR-036 stands up, and both leave the project when that runtime is retired at Mission 6/7 — redemption becomes a `/v1/...` route carried by `dio`, which is already here. They are classed Leaf rather than Core deliberately: nothing architectural depends on them, and their removal should be a deletion rather than a migration.
 

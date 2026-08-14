@@ -225,6 +225,8 @@ jobs:
           #   firebase_auth          → features/auth/data      (ADR-034)
           #   google_sign_in         → features/auth/data      (ADR-034)
           #   cloud_functions        → features/auth/data      (ADR-036)
+          #   camera                 → features/recording/data (V3 Ch. 3.1)
+          #   shared_preferences     → features/recording/data (A-057)
           #   cloud_firestore        → features/auth/data      (ADR-036)
           #
           # The last two are owned by a feature rather than by core/. ADR-010
@@ -256,6 +258,8 @@ jobs:
           check google_sign_in         lib/features/auth/data/
           check cloud_functions        lib/features/auth/data/
           check cloud_firestore        lib/features/auth/data/
+          check camera                 lib/features/recording/data/
+          check shared_preferences     lib/features/recording/data/
 
           exit $status
 
