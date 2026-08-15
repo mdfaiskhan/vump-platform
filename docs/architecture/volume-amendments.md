@@ -1859,8 +1859,14 @@ Until both hold, LiDAR depth capture is out of scope. If only the second arrives
 |---|---|---|---|
 | `recording/domain` | 90%+ | **99.29%** (139/140) | **Met** |
 | `recording/data` | 80%+ | **76.90%** (223/290) | **MISSED by 3.10 points** |
-| `recording/application` | *none stated* | 86.36% (171/198) | n/a — see below |
-| `recording/presentation` | golden tests, *"rather than a blanket coverage percentage"* | 22.22% (54/243) | n/a — see below |
+| `recording/application` | *none stated* | ~~86.36% (171/198)~~ **87.37% (173/198)** | n/a — see below |
+| `recording/presentation` | golden tests, *"rather than a blanket coverage percentage"* | ~~22.22% (54/243)~~ **48.63% (124/255)** | n/a — see below |
+
+> **Corrected 2026-08-15 by Mission 3.12's register cross-check.** The two figures above were measured at Mission 3.10 and were overtaken by Mission 3.12-PRE (`09f40ac`), whose widget test exercises `PreRecordingChecklistScreen` through a real tap. Presentation more than doubled; application gained two lines.
+>
+> **`domain` and `data` are unchanged and were re-measured, not assumed** — 99.29% and 76.90% still hold, so the data-layer miss and its `isar_chunk_store.dart` cause stand exactly as written.
+>
+> This is the **second** time the register cross-check has found drift, after A-057 and A-063 §5 at Mission 3.10. It is the argument for open item 23: a percentage recorded in prose goes stale the moment anyone adds a test, and only a scheduled re-check catches it.
 
 **Chapter 9.5 §2 names three layers and gives `application/` no numeric target.** Chapter 9.6 §1 instead requires *"every Riverpod Notifier's state transitions, using ProviderContainer overrides"*, which is a completeness rule and is satisfied — `RecordingNotifier` and `ChecklistNotifier` both have transition suites built that way. The 86.36% is reported for information, not against a target.
 
@@ -2106,7 +2112,7 @@ Every carried-forward item, in one place, accurate as of Mission 3.10. This is t
 | # | Item | Why it is cheap | Source |
 |---|---|---|---|
 | 11 | `collector_id` unsourced | `features/auth/` already knows it; needs only the ADR-022 R3 inversion — a `DeviceContext` supplied at the composition root | A-064 §3 |
-| 12 | `local_sessions.status` → `complete` | **CLOSED** by Mission 3.8, verified by 3.8.1 | A-063 §5 (corrected) |
+| 12 | `local_sessions.status` → `complete` | **CLOSED** by Mission 3.8 (`83d2a48`), verified on device by 3.8.1 and again by 3.12-PRE-5 (`09f40ac`) — `SESSION-COMPLETE status=complete` read back from Isar | A-063 §5 (corrected) |
 
 ### Risks named and not resolved
 
@@ -2141,12 +2147,12 @@ Every carried-forward item, in one place, accurate as of Mission 3.10. This is t
 
 | # | Finding | State | Source |
 |---|---|---|---|
-| 27 | **S1** — `shared_preferences` imported outside its confined layer; `Architecture boundaries` job failing since Mission 3.8 | **CLOSED** by Mission 3.11.1 — `main.dart` named as a second owner, full 13-package sweep green | A-067 |
+| 27 | **S1** — `shared_preferences` imported outside its confined layer; `Architecture boundaries` job failing since Mission 3.8 | **CLOSED** by Mission 3.11.1 (`958c0d8`) — `main.dart` named as a second owner, full 13-package sweep green | A-067 |
 | 28 | **S2** — the empty-string identity sentinel is ambiguous on the wire | **Open.** Two guards owed: `isIdentityComplete` checked at Ch. 5.10 §1's registration (Mission 4), and a Ch. 8.3 §2 server-side rule rejecting blank identity fields (whenever Lambda handlers exist). Neither surface exists; no network call is made by this feature at all. | A-068 |
-| 29 | **S3** — no changelog existed, despite Ch. 11.5 §2 requiring Security entries for storage and data handling | **CLOSED** by Mission 3.11.2 — `docs/CHANGELOG.md` started and Missions 3.1–3.10 backfilled. The backfill is itself the batching Ch. 11.5 §4 warns against, done once to establish the file. | Ch. 11.5, A-068 |
+| 29 | **S3** — no changelog existed, despite Ch. 11.5 §2 requiring Security entries for storage and data handling | **CLOSED** by Mission 3.11.2 (`4f992da`) — `docs/CHANGELOG.md` started and Missions 3.1–3.10 backfilled. The backfill is itself the batching Ch. 11.5 §4 warns against, done once to establish the file. | Ch. 11.5, A-068 |
 | 30 | Volume 8 Ch. 8.2 §3's inline "ADR-011" collides with this repository's ADR-011 | **Open** — documentation hazard. Cite it as "Volume 8 Chapter 8.2 §3", never as ADR-011. The decision itself is satisfied: OS-level sandbox encryption, no app-level layer owed. | A-069 |
 | 31 | CameraX `GRAPH_ERROR(ERROR_GRAPH_CONFIG)` on every session close | **Open, uninvestigated.** Fires after a successful `stopChunk()`, during `closeSession()`. Affected no run — chunk written, row committed, session completed each time. May be teardown noise or an unclean close that leaks across repeated sessions. Not assumed harmless. | A-070 §6 |
-| 32 | A device harness that drives the notifier cannot see UI wiring | **Third instance of "a whole checked in parts"** (cf. items 23, 26). Mission 3.8.1 returned `RESULT pass` twice while nothing in `lib/` called `start()`. Closed for this case by a widget test that taps the button; the general lesson is that an unattended harness proves the layer it drives and silently assumes the layer above calls it. | A-070 §3 |
+| 32 | A device harness that drives the notifier cannot see UI wiring | **CLOSED for this case** by Mission 3.12-PRE (`09f40ac`)'s widget test; the general lesson stays open. **Third instance of "a whole checked in parts"** (cf. items 23, 26). Mission 3.8.1 returned `RESULT pass` twice while nothing in `lib/` called `start()`. Closed for this case by a widget test that taps the button; the general lesson is that an unattended harness proves the layer it drives and silently assumes the layer above calls it. | A-070 §3 |
 | 33 | `flutter install` deploys a stale artifact | **Use `flutter run`, or `flutter build` immediately before `flutter install`.** It installed Mission 3.8's pre-fix APK and reported success, causing a fix to be reported as on-device when it was not. "Install succeeded" is not evidence the change is on the device. | A-070 §4 |
 
 ---

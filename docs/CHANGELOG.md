@@ -26,7 +26,8 @@ Chapter 11.5 §4 also states that pre-1.0.0 builds *"may log only against `[Unre
 
 ### Security
 
-- **2026-08-15** — `shared_preferences` gains the composition root as a second permitted owner, and the `Architecture boundaries` CI job is enforcing again. It had been failing since Mission 3.8 introduced the import in `main.dart` without widening the rule. Mission 3.11.1, A-067. (`0eae8bc`..)
+- **2026-08-15** — `shared_preferences` gains the composition root as a second permitted owner, and the `Architecture boundaries` CI job is enforcing again. It had been failing since Mission 3.8 introduced the import in `main.dart` without widening the rule. Mission 3.11.1, A-067. (`958c0d8`)
+
 - **2026-08-15** — Local storage of session, chunk and metadata records begins. Three Isar collections (`local_sessions`, `local_chunks`, `local_chunk_metadata`) persist to the app-private documents directory, and chunk `.mp4` files are placed under `<app-documents>/recordings/{session_id}/`. Both rely on OS-level app-sandbox encryption as Volume 8 Chapter 8.2 §3 decides; no app-level encryption layer is added. Chunk and metadata are written in one transaction, so a chunk file cannot exist locally without its metadata (FR-META-09). Mission 3.7. (`64e9d60`)
 - **2026-08-15** — Device-context and identity handling reaches persistent storage. `MetadataIdentity` carries `collector_id`, `device_id`, `project_id`, `task_id` and `session_id`; five of those have no source and are stored as the empty-string sentinel `MetadataIdentity.unsourced` rather than a plausible placeholder. `isIdentityComplete` exposes the gap to consumers. Two guards are owed before this data can leave the device — see A-068. Missions 3.6 and 3.8. (`7263b74`, `83d2a48`)
 - **2026-08-15** — GPS, battery and network fields enter the stored metadata schema. Volume 8 Chapter 8.6 §1 names GPS *"the single most sensitive field this system collects"*. **No GPS value is captured or stored today** — `capture_conditions` is written uniformly absent pending A-062 §3's unresolved conflict between Chapter 5.7 §2 and NFR-META-01. The schema exists; the collection does not. Mission 3.6. (`7263b74`)
@@ -44,6 +45,7 @@ Chapter 11.5 §4 also states that pre-1.0.0 builds *"may log only against `[Unre
 
 ### Fixed
 
+- **2026-08-15** — Recording never actually started. The Checklist reached `Ready` and navigated, but nothing called `RecordingNotifier.start()`, so the machine stayed in `Ready`, `isCapturing` was false, and the Recording Screen's Stop control rendered disabled and discarded every tap. Found by manual real-device testing; a unit test, a device harness and CI were all green throughout, because none exercised a UI tap. Mission 3.12-PRE, A-070. (`09f40ac`)
 - **2026-08-15** — A fully compliant device reporting a 0.6 zoom minimum was wrongly refused, because a Java `float` widened to a Dart `double` as 0.6000000238418579. Normalised at the data boundary. Found on the first physical device the ladder ever ran against. Mission 3.1.6, A-057. (`bc81a07`)
 - **2026-08-15** — Android build failure: `concurrent-futures` was missing from `camera_android_camerax`'s compile classpath. Mission 3.1.4. (`11d3ef4`)
 
