@@ -4,13 +4,20 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mobile/app/config/app_config.dart';
+import 'package:mobile/core/connectivity/connectivity_status.dart';
+import 'package:mobile/core/connectivity/interfaces/connectivity_source.dart';
 import 'package:mobile/core/logging/app_logger.dart';
 import 'package:mobile/core/queue/chunk_upload_status.dart';
 import 'package:mobile/core/queue/interfaces/chunk_queue_source.dart';
 import 'package:mobile/core/queue/queued_chunk.dart';
+import 'package:mobile/core/time/system_clock.dart';
+import 'package:mobile/core/upload/interfaces/chunk_upload_source.dart';
+import 'package:mobile/core/upload/uploadable_chunk.dart';
+import 'package:mobile/features/recording/data/connectivity_plus_connectivity_source.dart';
 import 'package:mobile/features/upload/application/chunk_upload_pipeline.dart';
 import 'package:mobile/features/upload/application/upload_dispatcher.dart';
 import 'package:mobile/features/upload/data/foreground_upload_service_host.dart';
+import 'package:mobile/features/upload/domain/entities/upload_failure_cause.dart';
 
 /// Mission 4.3's on-device probe for Volume 5 Chapter 5.11 §1 and §3.
 ///
@@ -89,16 +96,26 @@ class _ProbeScreen extends StatefulWidget {
 }
 
 class _ProbeScreenState extends State<_ProbeScreen> {
-  final _ProbeQueue _queue = _ProbeQueue();
+  /// The **real** connectivity source, so airplane mode drives Chapter 5.12
+  /// §4 rather than a fake standing in for it. This is the whole point of the
+  /// Mission 4.4 device pass.
+  final ConnectivitySource _connectivity = ConnectivityPlusConnectivitySource();
+  late final _ProbeQueue _queue;
   late final UploadDispatcher _dispatcher;
   Timer? _refresh;
 
   @override
   void initState() {
     super.initState();
+    _queue = _ProbeQueue(connectivity: _connectivity);
     _dispatcher = UploadDispatcher(
       queue: _queue,
-      // The real one. This is the whole point of the probe.
+      source: _queue,
+      // Both real. Airplane mode reaches the dispatcher through the first,
+      // and Chapter 5.13's backoff runs on real wall-clock time through the
+      // second — a faked clock here would prove nothing about the device.
+      connectivity: _connectivity,
+      clock: const SystemClock(),
       serviceHost: ForegroundUploadServiceHost(),
       uploadNext: _queue.uploadNext,
       logger: AppLogger(environment: AppConfig.environment),
@@ -174,31 +191,48 @@ class _ProbeScreenState extends State<_ProbeScreen> {
   }
 }
 
-/// An in-memory stand-in for the Isar-backed queue, and for Chapter 5.10.
+/// An in-memory stand-in for the Isar-backed queue and for Chapter 5.10.
 ///
-/// It mirrors the two properties the dispatcher actually depends on: a claim
-/// is atomic, and every status write re-emits the whole ordered queue. Nothing
-/// else about Isar matters here.
-class _ProbeQueue implements ChunkQueueSource {
-  final List<QueuedChunk> _rows = <QueuedChunk>[];
+/// It mirrors the properties the dispatcher actually depends on: a claim is
+/// atomic, every status write re-emits the whole ordered queue, and a chunk
+/// inside Chapter 5.13 §2's backoff window is not claimable.
+///
+/// ## The transfer fails while the device is offline, on purpose
+///
+/// That is what makes the Mission 4.4 device pass real. Airplane mode does not
+/// merely pause a stub — it makes [uploadNext] report a transient failure, so
+/// the chunk consumes an attempt, gets a Chapter 5.13 §2 delay, and sits.
+/// Turning airplane mode off fires the real `ConnectivitySource`, which clears
+/// the deadlines and resumes. NFR-AVL-02's 30-second target is then a
+/// wall-clock measurement rather than an assertion.
+class _ProbeQueue implements ChunkQueueSource, ChunkUploadSource {
+  _ProbeQueue({required this._connectivity});
+
+  final ConnectivitySource _connectivity;
+  final List<_ProbeRow> _rows = <_ProbeRow>[];
   final StreamController<List<QueuedChunk>> _controller =
       StreamController<List<QueuedChunk>>.broadcast();
 
   int _nextId = 0;
 
-  List<QueuedChunk> get rows => List<QueuedChunk>.unmodifiable(_rows);
+  List<QueuedChunk> get rows => <QueuedChunk>[
+    for (final _ProbeRow r in _rows) r.toQueued(),
+  ];
+
+  /// Attempts consumed, shown on screen so the six-attempt budget is visible.
+  Map<String, int> get attempts => <String, int>{
+    for (final _ProbeRow r in _rows)
+      if (r.attemptCount > 0) r.chunkId: r.attemptCount,
+  };
 
   void seed(int count) {
     final DateTime now = DateTime.now();
     for (int i = 0; i < count; i++) {
       _rows.add(
-        QueuedChunk(
+        _ProbeRow(
           chunkId: 'probe-${_nextId++}',
-          sessionId: 'probe-session',
           sequenceIndex: _rows.length,
-          sessionStartedAt: now,
-          status: ChunkUploadStatus.queued,
-          fileSizeBytes: 610 * 1024 * 1024,
+          startedAt: now,
         ),
       );
     }
@@ -207,52 +241,118 @@ class _ProbeQueue implements ChunkQueueSource {
 
   /// Stands in for `ChunkUploadPipeline.uploadNext`.
   ///
-  /// Claims atomically, holds the chunk in `uploading` for [_chunkDuration],
-  /// then completes it — the same three status writes the real pipeline makes,
-  /// with the network removed.
+  /// Claims, then either transfers for [_chunkDuration] or fails transiently
+  /// because the device is offline. The failure is left `uploading` exactly as
+  /// the real pipeline leaves a transient one, so `UploadDispatcher` is the
+  /// thing that decides to defer or fail.
   Future<UploadOutcome?> uploadNext() async {
+    final UploadableChunk? claimed = await claimNext(now: DateTime.now());
+    if (claimed == null) {
+      return null;
+    }
+
+    final ConnectivityStatus status = await _connectivity.current();
+    if (!status.isOnline) {
+      return UploadOutcome.failed(
+        chunkId: claimed.chunkId,
+        cause: UploadFailureCause.transportFailure,
+        detail: 'The device is offline.',
+        attemptCount: claimed.attemptCount + 1,
+      );
+    }
+
+    await Future<void>.delayed(_chunkDuration);
+    await markComplete(claimed.chunkId);
+    return UploadOutcome.complete(chunkId: claimed.chunkId);
+  }
+
+  @override
+  Future<UploadableChunk?> claimNext({required DateTime now}) async {
     final int index = _rows.indexWhere(
-      (QueuedChunk c) => c.status == ChunkUploadStatus.queued,
+      (_ProbeRow r) =>
+          r.status == ChunkUploadStatus.queued &&
+          (r.nextAttemptAt == null || !r.nextAttemptAt!.isAfter(now)),
     );
     if (index < 0) {
       return null;
     }
-
-    final QueuedChunk claimed = _rows[index];
-    _replace(index, ChunkUploadStatus.uploading);
+    final _ProbeRow row = _rows[index]..status = ChunkUploadStatus.uploading;
     _emit();
-
-    await Future<void>.delayed(_chunkDuration);
-
-    final int settled = _rows.indexWhere(
-      (QueuedChunk c) => c.chunkId == claimed.chunkId,
-    );
-    if (settled >= 0) {
-      _replace(settled, ChunkUploadStatus.complete);
-      _emit();
-    }
-    return UploadOutcome.complete(chunkId: claimed.chunkId);
-  }
-
-  void _replace(int index, ChunkUploadStatus status) {
-    final QueuedChunk current = _rows[index];
-    _rows[index] = QueuedChunk(
-      chunkId: current.chunkId,
-      sessionId: current.sessionId,
-      sequenceIndex: current.sequenceIndex,
-      sessionStartedAt: current.sessionStartedAt,
-      status: status,
-      fileSizeBytes: current.fileSizeBytes,
+    return UploadableChunk(
+      chunkId: row.chunkId,
+      sessionId: 'probe-session',
+      sequenceIndex: row.sequenceIndex,
+      sessionStartedAt: row.startedAt,
+      localFilePath: '/dev/null',
+      fileSizeBytes: 610 * 1024 * 1024,
+      checksumSha256: 'probe',
+      attemptCount: row.attemptCount,
     );
   }
 
-  void _emit() {
-    if (!_controller.isClosed) {
-      _controller.add(rows);
+  @override
+  Future<void> deferAttempt({
+    required String chunkId,
+    required int attemptCount,
+    required DateTime nextAttemptAt,
+  }) async {
+    final _ProbeRow? row = _find(chunkId);
+    if (row == null || row.status != ChunkUploadStatus.uploading) {
+      return;
     }
+    row
+      ..status = ChunkUploadStatus.queued
+      ..attemptCount = attemptCount
+      ..nextAttemptAt = nextAttemptAt;
+    _emit();
   }
 
-  void dispose() => unawaited(_controller.close());
+  @override
+  Future<void> clearBackoff() async {
+    final Iterable<_ProbeRow> pending = _rows.where(
+      (_ProbeRow r) =>
+          r.status == ChunkUploadStatus.queued && r.nextAttemptAt != null,
+    );
+    if (pending.isEmpty) {
+      return;
+    }
+    for (final _ProbeRow row in pending) {
+      row.nextAttemptAt = null;
+    }
+    _emit();
+  }
+
+  @override
+  Future<void> markFailed(String chunkId) =>
+      _settle(chunkId, ChunkUploadStatus.failed);
+
+  @override
+  Future<void> markComplete(String chunkId) =>
+      _settle(chunkId, ChunkUploadStatus.complete);
+
+  @override
+  Future<void> release(String chunkId) =>
+      _settle(chunkId, ChunkUploadStatus.queued);
+
+  @override
+  Future<void> recordObjectKey({
+    required String chunkId,
+    required String s3ObjectKey,
+  }) async {}
+
+  @override
+  Future<void> requeue(String chunkId) async {
+    final _ProbeRow? row = _find(chunkId);
+    if (row == null || row.status != ChunkUploadStatus.failed) {
+      return;
+    }
+    // Chapter 5.13 §3's manual override: counter reset, deadline cleared.
+    row
+      ..status = ChunkUploadStatus.queued
+      ..attemptCount = 0
+      ..nextAttemptAt = null;
+    _emit();
+  }
 
   @override
   Stream<List<QueuedChunk>> watchQueue() async* {
@@ -263,12 +363,55 @@ class _ProbeQueue implements ChunkQueueSource {
   @override
   Future<List<QueuedChunk>> currentQueue() async => rows;
 
-  @override
-  Future<void> requeue(String chunkId) async {
-    final int index = _rows.indexWhere((QueuedChunk c) => c.chunkId == chunkId);
-    if (index >= 0 && _rows[index].status == ChunkUploadStatus.failed) {
-      _replace(index, ChunkUploadStatus.queued);
-      _emit();
+  Future<void> _settle(String chunkId, ChunkUploadStatus to) async {
+    final _ProbeRow? row = _find(chunkId);
+    if (row == null || row.status != ChunkUploadStatus.uploading) {
+      return;
+    }
+    row.status = to;
+    _emit();
+  }
+
+  _ProbeRow? _find(String chunkId) {
+    for (final _ProbeRow row in _rows) {
+      if (row.chunkId == chunkId) {
+        return row;
+      }
+    }
+    return null;
+  }
+
+  void _emit() {
+    if (!_controller.isClosed) {
+      _controller.add(rows);
     }
   }
+
+  void dispose() => unawaited(_controller.close());
+}
+
+/// One mutable probe row.
+class _ProbeRow {
+  _ProbeRow({
+    required this.chunkId,
+    required this.sequenceIndex,
+    required this.startedAt,
+  });
+
+  final String chunkId;
+  final int sequenceIndex;
+  final DateTime startedAt;
+
+  ChunkUploadStatus status = ChunkUploadStatus.queued;
+  int attemptCount = 0;
+  DateTime? nextAttemptAt;
+
+  QueuedChunk toQueued() => QueuedChunk(
+    chunkId: chunkId,
+    sessionId: 'probe-session',
+    sequenceIndex: sequenceIndex,
+    sessionStartedAt: startedAt,
+    status: status,
+    fileSizeBytes: 610 * 1024 * 1024,
+  );
 }
