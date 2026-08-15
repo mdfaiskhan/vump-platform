@@ -4,6 +4,9 @@ import 'package:isar/isar.dart';
 
 import 'package:mobile/core/errors/error_codes.dart';
 import 'package:mobile/core/errors/exceptions/storage_exception.dart';
+import 'package:mobile/core/queue/chunk_upload_status.dart';
+import 'package:mobile/core/queue/interfaces/chunk_queue_source.dart';
+import 'package:mobile/core/queue/queued_chunk.dart';
 import 'package:mobile/features/recording/data/chunk_record_mapper.dart';
 import 'package:mobile/features/recording/data/collections/local_chunk.dart';
 import 'package:mobile/features/recording/data/collections/local_chunk_metadata.dart';
@@ -73,7 +76,7 @@ import 'package:mobile/features/recording/domain/repositories/chunk_store.dart';
 /// that cannot exist in this application's tree. This is a structural limit of
 /// the plugin choice, in the same category as A-058's software-encoder
 /// guarantee, and is recorded in amendment A-063.
-class IsarChunkStore implements ChunkStore {
+class IsarChunkStore implements ChunkStore, ChunkQueueSource {
   /// Creates a store over [database], writing files beneath the documents
   /// directory at [documentsDirectoryPath].
   const IsarChunkStore({
@@ -217,6 +220,104 @@ class IsarChunkStore implements ChunkStore {
         .where((LocalChunk row) => !File(row.localFilePath).existsSync())
         .map((LocalChunk row) => row.chunkId)
         .toList();
+  }
+
+  // ---------------------------------------------------------------------
+  // ChunkQueueSource — Volume 5 Chapter 5.9's queue view.
+  //
+  // Added by Mission 4.1 and entirely additive: nothing above this line
+  // changed. The capture and finalize path Mission 3 verified on hardware -
+  // saveChunk, markSessionComplete, _placeFile - is untouched.
+  //
+  // This class implements two interfaces because it is the one object that
+  // already holds the Isar instance. ADR-040 explains why the *contract* sits
+  // in core/ rather than here: features/upload/ must read these rows without
+  // importing features/recording/.
+  // ---------------------------------------------------------------------
+
+  @override
+  Stream<List<QueuedChunk>> watchQueue() async* {
+    yield await currentQueue();
+    // fireImmediately is false because the line above already emitted, and
+    // Isar would otherwise deliver a duplicate first event.
+    await for (final void _ in _isar.localChunks.watchLazy()) {
+      yield await currentQueue();
+    }
+  }
+
+  @override
+  Future<List<QueuedChunk>> currentQueue() async {
+    // Two reads and a join in Dart, per Mission 4.1's decision not to
+    // denormalise the session's start time onto LocalChunk. Isar has no
+    // joins, and adding a column to a Mission 3 collection for query
+    // convenience would mean a schema change and a migration to the one
+    // collection that already holds real footage on real devices.
+    final List<LocalChunk> rows = await _isar.localChunks.where().findAll();
+    final List<LocalSession> sessions = await _isar.localSessions
+        .where()
+        .findAll();
+
+    final Map<String, DateTime> startedAt = <String, DateTime>{
+      for (final LocalSession session in sessions)
+        session.sessionId: session.startedAt,
+    };
+
+    final List<QueuedChunk> queue = <QueuedChunk>[];
+    for (final LocalChunk row in rows) {
+      // BR-08 and Chapter 5.15: a chunk cleared after a confirmed upload is
+      // gone from the queue, not shown as a lingering entry.
+      if (row.localDeletedAt != null) {
+        continue;
+      }
+      final ChunkUploadStatus? status = ChunkUploadStatus.fromWireName(
+        row.status,
+      );
+      final DateTime? sessionStart = startedAt[row.sessionId];
+      // A row whose status is unrecognised, or whose session row is missing,
+      // is skipped rather than guessed at. Either would mean the database
+      // disagrees with itself, and inventing a status or a timestamp would
+      // put a chunk in the queue at a position nothing chose.
+      if (status == null || sessionStart == null) {
+        continue;
+      }
+      queue.add(
+        QueuedChunk(
+          chunkId: row.chunkId,
+          sessionId: row.sessionId,
+          sequenceIndex: row.sequenceIndex,
+          sessionStartedAt: sessionStart,
+          status: status,
+          fileSizeBytes: row.fileSizeBytes,
+        ),
+      );
+    }
+
+    queue.sort();
+    return queue;
+  }
+
+  @override
+  Future<void> requeue(String chunkId) async {
+    try {
+      await _isar.writeTxn(() async {
+        final LocalChunk? row = await _isar.localChunks.getByChunkId(chunkId);
+        // Only a failed chunk is retryable. Dragging an `uploading` chunk
+        // backwards would race Chapter 5.11's dispatcher, and re-queueing a
+        // `complete` one would contradict BR-12.
+        if (row == null || row.status != ChunkUploadStatus.failed.wireName) {
+          return;
+        }
+        row.status = ChunkUploadStatus.queued.wireName;
+        await _isar.localChunks.putByChunkId(row);
+      });
+    } catch (error, stackTrace) {
+      throw StorageException(
+        errorCode: ErrorCode.storageWriteFailed,
+        message: 'The chunk could not be returned to the queue.',
+        cause: error,
+        stackTrace: stackTrace,
+      );
+    }
   }
 
   /// Moves the plugin's output into Chapter 5.8 §2's layout.

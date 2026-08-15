@@ -37,6 +37,7 @@ import 'package:mobile/features/recording/data/random_uuid_generator.dart';
 import 'package:mobile/features/recording/data/shared_preferences_wide_angle_eligibility_cache.dart';
 import 'package:mobile/features/recording/data/unavailable_capture_conditions_reader.dart';
 import 'package:mobile/features/recording/data/unsourced_task_context.dart';
+import 'package:mobile/features/upload/application/upload_queue_notifier.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -169,11 +170,25 @@ List<Override> recordingOverrides(
       (Ref ref) => ConnectivityPlusNetworkReader(),
     ),
 
-    chunkStoreProvider.overrideWith(
+    // One IsarChunkStore behind both contracts it satisfies. It implements
+    // ChunkStore (declared in features/recording/domain/) and
+    // ChunkQueueSource (declared in core/queue/), and ADR-040 explains why
+    // the second lives in core/: it is what lets features/upload/ read these
+    // rows without importing features/recording/.
+    //
+    // Sharing one instance matters — the queue must observe exactly the rows
+    // the finalizer writes, not a second connection's view of them.
+    _chunkStoreProvider.overrideWith(
       (Ref ref) => IsarChunkStore(
         database: ref.watch(databaseProvider).requireValue,
         documentsDirectoryPath: documentsPath,
       ),
+    ),
+    chunkStoreProvider.overrideWith(
+      (Ref ref) => ref.watch(_chunkStoreProvider),
+    ),
+    chunkQueueSourceProvider.overrideWith(
+      (Ref ref) => ref.watch(_chunkStoreProvider),
     ),
 
     // Volume 3 Ch. 3.9 §4's FinalizeChunkUseCase — Chapters 5.5, 5.7 and 5.8
@@ -195,6 +210,15 @@ List<Override> recordingOverrides(
     ),
   ];
 }
+
+/// The one IsarChunkStore, shared by both contracts it satisfies.
+///
+/// Private because nothing outside this file should depend on the concrete
+/// type — each `application/` layer sees only its own port. Declaring it here
+/// is what keeps a single instance behind both overrides above.
+final Provider<IsarChunkStore> _chunkStoreProvider = Provider<IsarChunkStore>(
+  (Ref ref) => throw UnimplementedError('overridden in main()'),
+);
 
 /// One shared UUID source behind both id ports.
 final Provider<RandomUuidGenerator> _uuidGeneratorProvider =
