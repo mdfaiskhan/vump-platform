@@ -42,25 +42,35 @@ const LocalChunkSchema = CollectionSchema(
       name: r'localFilePath',
       type: IsarType.string,
     ),
-    r's3ObjectKey': PropertySchema(
+    r'nextAttemptAt': PropertySchema(
       id: 5,
+      name: r'nextAttemptAt',
+      type: IsarType.dateTime,
+    ),
+    r's3ObjectKey': PropertySchema(
+      id: 6,
       name: r's3ObjectKey',
       type: IsarType.string,
     ),
     r'sequenceIndex': PropertySchema(
-      id: 6,
+      id: 7,
       name: r'sequenceIndex',
       type: IsarType.long,
     ),
     r'sessionId': PropertySchema(
-      id: 7,
+      id: 8,
       name: r'sessionId',
       type: IsarType.string,
     ),
     r'status': PropertySchema(
-      id: 8,
+      id: 9,
       name: r'status',
       type: IsarType.string,
+    ),
+    r'uploadAttemptCount': PropertySchema(
+      id: 10,
+      name: r'uploadAttemptCount',
+      type: IsarType.long,
     )
   },
   estimateSize: _localChunkEstimateSize,
@@ -135,10 +145,12 @@ void _localChunkSerialize(
   writer.writeLong(offsets[2], object.fileSizeBytes);
   writer.writeDateTime(offsets[3], object.localDeletedAt);
   writer.writeString(offsets[4], object.localFilePath);
-  writer.writeString(offsets[5], object.s3ObjectKey);
-  writer.writeLong(offsets[6], object.sequenceIndex);
-  writer.writeString(offsets[7], object.sessionId);
-  writer.writeString(offsets[8], object.status);
+  writer.writeDateTime(offsets[5], object.nextAttemptAt);
+  writer.writeString(offsets[6], object.s3ObjectKey);
+  writer.writeLong(offsets[7], object.sequenceIndex);
+  writer.writeString(offsets[8], object.sessionId);
+  writer.writeString(offsets[9], object.status);
+  writer.writeLong(offsets[10], object.uploadAttemptCount);
 }
 
 LocalChunk _localChunkDeserialize(
@@ -154,10 +166,12 @@ LocalChunk _localChunkDeserialize(
   object.id = id;
   object.localDeletedAt = reader.readDateTimeOrNull(offsets[3]);
   object.localFilePath = reader.readString(offsets[4]);
-  object.s3ObjectKey = reader.readStringOrNull(offsets[5]);
-  object.sequenceIndex = reader.readLong(offsets[6]);
-  object.sessionId = reader.readString(offsets[7]);
-  object.status = reader.readString(offsets[8]);
+  object.nextAttemptAt = reader.readDateTimeOrNull(offsets[5]);
+  object.s3ObjectKey = reader.readStringOrNull(offsets[6]);
+  object.sequenceIndex = reader.readLong(offsets[7]);
+  object.sessionId = reader.readString(offsets[8]);
+  object.status = reader.readString(offsets[9]);
+  object.uploadAttemptCount = reader.readLong(offsets[10]);
   return object;
 }
 
@@ -179,13 +193,17 @@ P _localChunkDeserializeProp<P>(
     case 4:
       return (reader.readString(offset)) as P;
     case 5:
-      return (reader.readStringOrNull(offset)) as P;
+      return (reader.readDateTimeOrNull(offset)) as P;
     case 6:
-      return (reader.readLong(offset)) as P;
+      return (reader.readStringOrNull(offset)) as P;
     case 7:
-      return (reader.readString(offset)) as P;
+      return (reader.readLong(offset)) as P;
     case 8:
       return (reader.readString(offset)) as P;
+    case 9:
+      return (reader.readString(offset)) as P;
+    case 10:
+      return (reader.readLong(offset)) as P;
     default:
       throw IsarError('Unknown property with id $propertyId');
   }
@@ -1015,6 +1033,80 @@ extension LocalChunkQueryFilter
   }
 
   QueryBuilder<LocalChunk, LocalChunk, QAfterFilterCondition>
+      nextAttemptAtIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNull(
+        property: r'nextAttemptAt',
+      ));
+    });
+  }
+
+  QueryBuilder<LocalChunk, LocalChunk, QAfterFilterCondition>
+      nextAttemptAtIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNotNull(
+        property: r'nextAttemptAt',
+      ));
+    });
+  }
+
+  QueryBuilder<LocalChunk, LocalChunk, QAfterFilterCondition>
+      nextAttemptAtEqualTo(DateTime? value) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'nextAttemptAt',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<LocalChunk, LocalChunk, QAfterFilterCondition>
+      nextAttemptAtGreaterThan(
+    DateTime? value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'nextAttemptAt',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<LocalChunk, LocalChunk, QAfterFilterCondition>
+      nextAttemptAtLessThan(
+    DateTime? value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'nextAttemptAt',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<LocalChunk, LocalChunk, QAfterFilterCondition>
+      nextAttemptAtBetween(
+    DateTime? lower,
+    DateTime? upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'nextAttemptAt',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+      ));
+    });
+  }
+
+  QueryBuilder<LocalChunk, LocalChunk, QAfterFilterCondition>
       s3ObjectKeyIsNull() {
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(const FilterCondition.isNull(
@@ -1488,6 +1580,62 @@ extension LocalChunkQueryFilter
       ));
     });
   }
+
+  QueryBuilder<LocalChunk, LocalChunk, QAfterFilterCondition>
+      uploadAttemptCountEqualTo(int value) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'uploadAttemptCount',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<LocalChunk, LocalChunk, QAfterFilterCondition>
+      uploadAttemptCountGreaterThan(
+    int value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'uploadAttemptCount',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<LocalChunk, LocalChunk, QAfterFilterCondition>
+      uploadAttemptCountLessThan(
+    int value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'uploadAttemptCount',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<LocalChunk, LocalChunk, QAfterFilterCondition>
+      uploadAttemptCountBetween(
+    int lower,
+    int upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'uploadAttemptCount',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+      ));
+    });
+  }
 }
 
 extension LocalChunkQueryObject
@@ -1560,6 +1708,18 @@ extension LocalChunkQuerySortBy
     });
   }
 
+  QueryBuilder<LocalChunk, LocalChunk, QAfterSortBy> sortByNextAttemptAt() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'nextAttemptAt', Sort.asc);
+    });
+  }
+
+  QueryBuilder<LocalChunk, LocalChunk, QAfterSortBy> sortByNextAttemptAtDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'nextAttemptAt', Sort.desc);
+    });
+  }
+
   QueryBuilder<LocalChunk, LocalChunk, QAfterSortBy> sortByS3ObjectKey() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r's3ObjectKey', Sort.asc);
@@ -1605,6 +1765,20 @@ extension LocalChunkQuerySortBy
   QueryBuilder<LocalChunk, LocalChunk, QAfterSortBy> sortByStatusDesc() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'status', Sort.desc);
+    });
+  }
+
+  QueryBuilder<LocalChunk, LocalChunk, QAfterSortBy>
+      sortByUploadAttemptCount() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'uploadAttemptCount', Sort.asc);
+    });
+  }
+
+  QueryBuilder<LocalChunk, LocalChunk, QAfterSortBy>
+      sortByUploadAttemptCountDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'uploadAttemptCount', Sort.desc);
     });
   }
 }
@@ -1685,6 +1859,18 @@ extension LocalChunkQuerySortThenBy
     });
   }
 
+  QueryBuilder<LocalChunk, LocalChunk, QAfterSortBy> thenByNextAttemptAt() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'nextAttemptAt', Sort.asc);
+    });
+  }
+
+  QueryBuilder<LocalChunk, LocalChunk, QAfterSortBy> thenByNextAttemptAtDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'nextAttemptAt', Sort.desc);
+    });
+  }
+
   QueryBuilder<LocalChunk, LocalChunk, QAfterSortBy> thenByS3ObjectKey() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r's3ObjectKey', Sort.asc);
@@ -1732,6 +1918,20 @@ extension LocalChunkQuerySortThenBy
       return query.addSortBy(r'status', Sort.desc);
     });
   }
+
+  QueryBuilder<LocalChunk, LocalChunk, QAfterSortBy>
+      thenByUploadAttemptCount() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'uploadAttemptCount', Sort.asc);
+    });
+  }
+
+  QueryBuilder<LocalChunk, LocalChunk, QAfterSortBy>
+      thenByUploadAttemptCountDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'uploadAttemptCount', Sort.desc);
+    });
+  }
 }
 
 extension LocalChunkQueryWhereDistinct
@@ -1771,6 +1971,12 @@ extension LocalChunkQueryWhereDistinct
     });
   }
 
+  QueryBuilder<LocalChunk, LocalChunk, QDistinct> distinctByNextAttemptAt() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'nextAttemptAt');
+    });
+  }
+
   QueryBuilder<LocalChunk, LocalChunk, QDistinct> distinctByS3ObjectKey(
       {bool caseSensitive = true}) {
     return QueryBuilder.apply(this, (query) {
@@ -1795,6 +2001,13 @@ extension LocalChunkQueryWhereDistinct
       {bool caseSensitive = true}) {
     return QueryBuilder.apply(this, (query) {
       return query.addDistinctBy(r'status', caseSensitive: caseSensitive);
+    });
+  }
+
+  QueryBuilder<LocalChunk, LocalChunk, QDistinct>
+      distinctByUploadAttemptCount() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'uploadAttemptCount');
     });
   }
 }
@@ -1838,6 +2051,13 @@ extension LocalChunkQueryProperty
     });
   }
 
+  QueryBuilder<LocalChunk, DateTime?, QQueryOperations>
+      nextAttemptAtProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'nextAttemptAt');
+    });
+  }
+
   QueryBuilder<LocalChunk, String?, QQueryOperations> s3ObjectKeyProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r's3ObjectKey');
@@ -1859,6 +2079,12 @@ extension LocalChunkQueryProperty
   QueryBuilder<LocalChunk, String, QQueryOperations> statusProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'status');
+    });
+  }
+
+  QueryBuilder<LocalChunk, int, QQueryOperations> uploadAttemptCountProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'uploadAttemptCount');
     });
   }
 }

@@ -71,4 +71,32 @@ class LocalChunk {
 
   /// BR-08 — set only once `status` is `complete`. Chapter 5.15 owns it.
   DateTime? localDeletedAt;
+
+  /// Automatic attempts consumed against Chapter 5.13 §2's budget of six.
+  ///
+  /// Reset to zero by FR-UPL-07's manual retry (§3). Defaulted rather than
+  /// `late` so that rows written before Mission 4.4 read back as 0 — Isar
+  /// supplies the default for a property absent from an existing record.
+  int uploadAttemptCount = 0;
+
+  /// When Chapter 5.13 §2's backoff allows the next attempt, or null.
+  ///
+  /// Null means "eligible now": a chunk that has never failed, or one a manual
+  /// retry has cleared. `ChunkUploadSource.claimNext` skips any row whose
+  /// value is still in the future.
+  DateTime? nextAttemptAt;
 }
+
+// NOTE — no schemaVersion bump accompanies these two fields, and that is the
+// documented rule rather than an oversight. `DatabaseConstants.schemaVersion`
+// says to increment "only when a change requires existing data to be
+// transformed. Adding a collection or a nullable property does not qualify —
+// Isar handles those implicitly." Both additions are of that kind: the
+// `DateTime?` is nullable, and the `int` carries a default that Isar returns
+// for records written before it existed.
+//
+// Mission 4.4 considered bumping to 2 with a migration and rejected it. There
+// are no `Migration` implementations in this project yet, so the first one
+// would have been a no-op written to satisfy a version number, and it would
+// have run against real chunk rows already on a verified device. Amendment
+// A-082 records the reasoning.

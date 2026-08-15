@@ -318,6 +318,18 @@ class IsarChunkStore
           return;
         }
         row.status = ChunkUploadStatus.queued.wireName;
+        // Chapter 5.13 §3: tapping Retry Chunk "resets the attempt counter and
+        // immediately tries again, regardless of how long the chunk has been
+        // Failed — this is a deliberate Collector override of the automatic
+        // backoff schedule". Clearing the deadline is what makes "immediately"
+        // true; leaving the counter would give the override one attempt rather
+        // than a fresh six.
+        //
+        // It is not an override of §1's terminal classification. A chunk that
+        // failed on a 4xx will fail again on the next attempt, with the same
+        // named cause — which §3 states outright and C-11 then shows again.
+        row.uploadAttemptCount = 0;
+        row.nextAttemptAt = null;
         await _isar.localChunks.putByChunkId(row);
       });
     } catch (error, stackTrace) {
@@ -335,7 +347,7 @@ class IsarChunkStore
   // ---------------------------------------------------------------------
 
   @override
-  Future<UploadableChunk?> claimNext() async {
+  Future<UploadableChunk?> claimNext({required DateTime now}) async {
     try {
       return await _isar.writeTxn(() async {
         // Read and write inside one transaction. This is what makes the claim
@@ -343,10 +355,23 @@ class IsarChunkStore
         // concurrently, and a chunk claimed twice would be uploaded twice —
         // the one duplication S3's same-key semantics cannot undo, because
         // both attempts would be legitimate.
-        final List<LocalChunk> rows = await _isar.localChunks
+        final List<LocalChunk> all = await _isar.localChunks
             .filter()
             .statusEqualTo(ChunkUploadStatus.queued.wireName)
             .findAll();
+
+        // Chapter 5.13 §2's backoff window. A chunk waiting out its delay is
+        // legitimately `queued` — §1 forbids surfacing a transient failure as
+        // Failed before the attempts are exhausted — but it is not claimable
+        // yet. Filtering here rather than in the caller keeps the ordering and
+        // the eligibility rule in one transaction, so a chunk cannot become
+        // eligible between the two.
+        final List<LocalChunk> rows = all
+            .where(
+              (LocalChunk row) =>
+                  row.nextAttemptAt == null || !row.nextAttemptAt!.isAfter(now),
+            )
+            .toList();
         if (rows.isEmpty) {
           return null;
         }
@@ -395,6 +420,7 @@ class IsarChunkStore
           fileSizeBytes: best.fileSizeBytes,
           checksumSha256: best.checksumSha256,
           s3ObjectKey: best.s3ObjectKey,
+          attemptCount: best.uploadAttemptCount,
         );
       });
     } on StorageException {
@@ -457,6 +483,57 @@ class IsarChunkStore
     to: ChunkUploadStatus.failed,
     failureMessage: 'The chunk could not be marked failed.',
   );
+
+  @override
+  Future<void> deferAttempt({
+    required String chunkId,
+    required int attemptCount,
+    required DateTime nextAttemptAt,
+  }) => _write(chunkId, 'The chunk could not be rescheduled.', (
+    LocalChunk row,
+  ) {
+    // Same precondition as the three transitions above: only a claimed chunk
+    // can be deferred. Without it, a deferral racing a manual retry could
+    // push a chunk the Collector just re-queued back into a backoff window.
+    if (row.status != ChunkUploadStatus.uploading.wireName) {
+      return;
+    }
+    row.status = ChunkUploadStatus.queued.wireName;
+    row.uploadAttemptCount = attemptCount;
+    row.nextAttemptAt = nextAttemptAt;
+  });
+
+  @override
+  Future<void> clearBackoff() async {
+    try {
+      await _isar.writeTxn(() async {
+        final List<LocalChunk> rows = await _isar.localChunks
+            .filter()
+            .statusEqualTo(ChunkUploadStatus.queued.wireName)
+            .findAll();
+        final List<LocalChunk> pending = rows
+            .where((LocalChunk row) => row.nextAttemptAt != null)
+            .toList();
+        if (pending.isEmpty) {
+          // No write at all when nothing is deferred. The queue is a live
+          // Isar watch, and putting unchanged rows would emit a queue event
+          // on every reconnection — waking the dispatcher for no reason.
+          return;
+        }
+        for (final LocalChunk row in pending) {
+          row.nextAttemptAt = null;
+        }
+        await _isar.localChunks.putAllByChunkId(pending);
+      });
+    } catch (error, stackTrace) {
+      throw StorageException(
+        errorCode: ErrorCode.storageWriteFailed,
+        message: 'The backoff deadlines could not be cleared.',
+        cause: error,
+        stackTrace: stackTrace,
+      );
+    }
+  }
 
   @override
   Future<void> markComplete(String chunkId) => _transition(
