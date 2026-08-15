@@ -38,7 +38,9 @@ import 'package:mobile/features/recording/data/random_uuid_generator.dart';
 import 'package:mobile/features/recording/data/shared_preferences_wide_angle_eligibility_cache.dart';
 import 'package:mobile/features/recording/data/unavailable_capture_conditions_reader.dart';
 import 'package:mobile/features/recording/data/unsourced_task_context.dart';
+import 'package:mobile/features/upload/application/upload_dispatcher.dart';
 import 'package:mobile/features/upload/application/upload_queue_notifier.dart';
+import 'package:mobile/features/upload/data/foreground_upload_service_host.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -95,6 +97,7 @@ Future<void> main() async {
       ),
 
       ...recordingOverrides(documents.path, preferences),
+      ...uploadOverrides(),
     ],
   );
   final AppLogger logger = container.read(loggerProvider);
@@ -103,6 +106,7 @@ Future<void> main() async {
   await _initializeFirebase(container, logger);
   await _openDatabase(container, logger);
   await _restoreSession(container, logger);
+  _startUploadDispatcher(container, logger);
 
   runApp(
     UncontrolledProviderScope(container: container, child: const VumpApp()),
@@ -229,6 +233,35 @@ List<Override> recordingOverrides(
   ];
 }
 
+/// Introduces every `features/upload/` port to its implementation.
+///
+/// Public for the same reason [recordingOverrides] is: a second `--target`
+/// binds this exact list rather than re-declaring one that could drift from
+/// what the application ships.
+///
+/// ## Only one port, and the two that are deliberately absent
+///
+/// `uploadServiceHostProvider` is the only entry. The other two seams
+/// `features/upload/` declares are bound elsewhere or not at all:
+///
+/// - `chunkUploadSourceProvider` and `chunkMetadataSourceProvider` are in
+///   [recordingOverrides], because the one `IsarChunkStore` satisfies them.
+/// - `sessionRegistrarProvider` has no implementation anywhere. It needs a
+///   `task_id` that `features/projects_tasks/` owns, and that feature is
+///   unbuilt (open item 36). The pipeline therefore throws at that seam, and
+///   `UploadDispatcher` converts the throw into a logged stop rather than a
+///   crash. A fake satisfies it in the test suite only.
+List<Override> uploadOverrides() {
+  return <Override>[
+    // Volume 5 Chapter 5.11 §1's Android foreground service. ADR-042 records
+    // why the upload runs in this isolate and the service merely keeps the
+    // process alive around it.
+    uploadServiceHostProvider.overrideWith(
+      (Ref ref) => ForegroundUploadServiceHost(),
+    ),
+  ];
+}
+
 /// The one IsarChunkStore, shared by both contracts it satisfies.
 ///
 /// Private because nothing outside this file should depend on the concrete
@@ -346,6 +379,48 @@ Future<void> _restoreSession(
   } on Object catch (error, stackTrace) {
     logger.error(
       'The session could not be resolved at startup. Continuing signed out.',
+      error: error,
+      stackTrace: stackTrace,
+    );
+  }
+}
+
+/// Starts Volume 5 Chapter 5.11's Background Upload dispatcher.
+///
+/// Placed after [_openDatabase] because the dispatcher subscribes to the queue
+/// immediately, and the queue is a live view over rows the database has to be
+/// holding first.
+///
+/// ## Not awaited, unlike everything above it
+///
+/// The other startup steps block the first frame because something on that
+/// frame depends on their answer — which environment, who is signed in,
+/// whether persistence works. Uploading is not one of those: Chapter 2.9 §2
+/// principle 3 has it happen *while* the Collector does something else, and
+/// FR-UPL-04 lets a new session start while an earlier one is still
+/// uploading. Awaiting a drain here would hold the splash screen for the
+/// length of a video upload.
+///
+/// ## Nothing uploads today, and it fails visibly rather than silently
+///
+/// `sessionRegistrarProvider` throws until `features/projects_tasks/` exists
+/// (open item 36), so the first claimed chunk ends in `UploadDispatcher`
+/// logging a wiring fault and stopping. That is the honest state of the
+/// feature: A-068's Guard 1 would refuse every chunk on a real device anyway,
+/// because four of `MetadataIdentity`'s five fields still carry the unsourced
+/// sentinel (open item 37).
+///
+/// Starting it regardless is deliberate. A dispatcher wired but never started
+/// would be verified only by its own tests, and Mission 3.8.1 is the standing
+/// lesson that an unstarted path reports green while nothing calls it
+/// (open item 32).
+void _startUploadDispatcher(ProviderContainer container, AppLogger logger) {
+  try {
+    container.read(uploadDispatcherProvider).start();
+  } on Object catch (error, stackTrace) {
+    logger.error(
+      'The upload dispatcher could not be started. Recording is unaffected '
+      'and queued chunks stay on disk (BR-08).',
       error: error,
       stackTrace: stackTrace,
     );
