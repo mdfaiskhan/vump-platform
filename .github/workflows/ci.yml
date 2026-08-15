@@ -292,6 +292,67 @@ jobs:
           check battery_plus           lib/features/recording/data/
           check connectivity_plus      lib/features/recording/data/
 
+          # -----------------------------------------------------------------
+          # ADR-022 R3 — no cross-feature imports, in either direction.
+          #
+          # Stated in folder-structure.md since Mission 0.18 and unenforced
+          # until now: ADR-022 itself records that R3 "is binding in writing
+          # and unenforced in fact", because with zero features the check was
+          # vacuous. It is not vacuous any more.
+          #
+          # ADR-040 is what makes this checkable. features/upload/ reads the
+          # queue rows features/recording/ writes, and it does so through a
+          # contract in core/queue/ rather than by importing a sibling. That
+          # only holds if something enforces it - a rule living only in a
+          # document is exactly what let S1 (Mission 3.11) sit red for two
+          # missions.
+          #
+          # Every ordered pair is checked, not just the pair ADR-040 created,
+          # so a future feature cannot quietly reach into another one.
+          # -----------------------------------------------------------------
+
+          cross_feature() {
+            from="$1"
+            to="$2"
+            hits=$(grep -rn "package:mobile/features/${to}/" \
+              "lib/features/${from}/" --include='*.dart' 2>/dev/null || true)
+            if [ -n "$hits" ]; then
+              echo "::error::features/${from}/ imports features/${to}/ — ADR-022 R3 forbids this in either direction. Invert through a contract in core/ (ADR-040)."
+              echo "$hits" | sed 's/^/  /'
+              status=1
+            else
+              echo "ok  features/${from}/ does not import features/${to}/"
+            fi
+          }
+
+          features=$(ls -1 lib/features 2>/dev/null)
+          for a in $features; do
+            for b in $features; do
+              [ "$a" = "$b" ] && continue
+              cross_feature "$a" "$b"
+            done
+          done
+
+          # ADR-040 — core/queue/ is a contract, not a place for feature code.
+          #
+          # The contract only decouples the two features while it stays free of
+          # either one's types. If core/queue/ ever imports a feature it stops
+          # being neutral ground and becomes a third party that both features
+          # are coupled through, which is worse than the import it replaced.
+          #
+          # I41 already forbids core/ importing features/ generally; this is
+          # the narrower, louder check for the module whose whole purpose is to
+          # sit between two of them.
+          queue_leak=$(grep -rn "package:mobile/features/" lib/core/queue \
+            --include='*.dart' 2>/dev/null || true)
+          if [ -n "$queue_leak" ]; then
+            echo "::error::core/queue/ imports a feature — the contract must not name either side (ADR-040)."
+            echo "$queue_leak" | sed 's/^/  /'
+            status=1
+          else
+            echo "ok  core/queue/ names no feature"
+          fi
+
           exit $status
 
   commit-convention:
