@@ -25,7 +25,4 @@ enum NetworkType {
   /// The spelling Volume 4 Chapter 4.5's `capture_conditions.network_type`
   /// uses, so the stored value and the displayed one come from one source.
   final String wireName;
-
-  /// Whether an upload started now would begin immediately rather than queue.
-  bool get uploadsImmediately => this != none;
 }

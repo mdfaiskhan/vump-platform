@@ -3,6 +3,8 @@ import 'dart:io' show Platform;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mobile/features/recording/data/chunk_metadata_assembler.dart';
 import 'package:mobile/features/recording/data/codec_wire_name.dart';
+import 'package:mobile/features/recording/data/platform_device_context.dart';
+import 'package:mobile/features/recording/data/unsourced_task_context.dart';
 import 'package:mobile/features/recording/domain/entities/camera_specification.dart';
 import 'package:mobile/features/recording/domain/entities/chunk_integrity.dart';
 import 'package:mobile/features/recording/domain/entities/chunk_metadata.dart';
@@ -45,9 +47,11 @@ void main() {
   Future<ChunkMetadata> assemble({
     MetadataCaptureConditions conditions =
         MetadataCaptureConditions.unavailable,
+    TaskContext taskContext = const _FakeTask(),
+    DeviceContext deviceContext = const _FakeDevice(),
   }) => ChunkMetadataAssembler(
-    taskContext: const _FakeTask(),
-    deviceContext: const _FakeDevice(),
+    taskContext: taskContext,
+    deviceContext: deviceContext,
     conditionsReader: _FakeConditions(conditions),
   ).generate(
     session: session,
@@ -170,6 +174,11 @@ void main() {
 
     test('a complete reading reports complete', () async {
       // Proves isComplete tracks the data rather than being hardcoded false.
+      //
+      // Mission 3.8 redefined isComplete as `captureConditions.isComplete &&
+      // identity.isComplete`. This case satisfies BOTH halves — the fakes
+      // supply real ids — so it still means what it says. The two cases below
+      // pin the half it no longer covers on its own.
       final ChunkMetadata m = await assemble(
         conditions: const MetadataCaptureConditions(
           gps: GpsFix(latitude: 51.5, longitude: -0.12),
@@ -179,7 +188,50 @@ void main() {
       );
 
       expect(m.captureConditions.isComplete, isTrue);
+      expect(m.identity.isComplete, isTrue);
       expect(m.isComplete, isTrue);
+    });
+
+    test('complete conditions with an unsourced identity is NOT complete',
+        () async {
+      // The half Mission 3.8 added, and the half the fakes hid: before 3.10
+      // this file only ever varied captureConditions, so `isComplete` passed
+      // on identity by accident. These are the production stand-ins, so this
+      // is what the application actually assembles today.
+      final ChunkMetadata m = await assemble(
+        conditions: const MetadataCaptureConditions(
+          gps: GpsFix(latitude: 51.5, longitude: -0.12),
+          batteryPercent: 82,
+          networkType: 'wifi',
+        ),
+        taskContext: const UnsourcedTaskContext(),
+        deviceContext: const PlatformDeviceContext(appVersion: '1.0.0+1'),
+      );
+
+      expect(m.captureConditions.isComplete, isTrue, reason: 'one half holds');
+      expect(m.identity.isComplete, isFalse, reason: 'the other does not');
+      expect(m.isComplete, isFalse);
+      expect(m.isIdentityComplete, isFalse);
+    });
+
+    test('isIdentityComplete is what must gate upload — A-064 §3', () async {
+      // Ch. 5.14 §1's S3 key embeds project_id, task_id and session_id, so
+      // Ch. 5.10's registration must check this before composing one. A
+      // consumer asking `isComplete` alone would conflate a missing GPS fix
+      // with an unattributable chunk.
+      final ChunkMetadata sourced = await assemble();
+      final ChunkMetadata unsourced = await assemble(
+        taskContext: const UnsourcedTaskContext(),
+        deviceContext: const PlatformDeviceContext(appVersion: '1.0.0+1'),
+      );
+
+      expect(sourced.isIdentityComplete, isTrue);
+      expect(unsourced.isIdentityComplete, isFalse);
+      expect(
+        sourced.isComplete,
+        isFalse,
+        reason: 'still false, but for conditions — not identity',
+      );
     });
 
     test('a partial reading is not complete', () async {

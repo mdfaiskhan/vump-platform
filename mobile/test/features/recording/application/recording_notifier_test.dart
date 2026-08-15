@@ -305,7 +305,16 @@ void main() {
       // Derived from FR-CHK-02's "at least one full chunk", not invented:
       // (8000 + 128) kbps / 8 * 600s = 609.6 MB. Just above passes, just
       // below trips — asserted as a pair so the boundary is pinned.
-      final _Harness ample = build(freeBytes: 610 * 1000 * 1000);
+      //
+      // Reads RecordingLifecycle.oneChunkBytes rather than the literal it was
+      // written with. Mission 3.8 made that constant the single source for
+      // both this threshold and FR-CHK-02's Checklist row, and A-064 §4b
+      // records that it is likely to change — a measured chunk came in 4%
+      // above the derivation. Against a literal, this test would keep passing
+      // while no longer testing the threshold it names.
+      final _Harness ample = build(
+        freeBytes: RecordingLifecycle.oneChunkBytes,
+      );
       await notifierOf(
         ample.container,
       ).checklistPassed(zoomFactor: 0.5, now: t0);
@@ -313,7 +322,9 @@ void main() {
       await ample.storageTimers.tick();
       expect(ample.finalizer.calls, 0, reason: 'exactly at the threshold');
 
-      final _Harness scarce = build(freeBytes: 610 * 1000 * 1000 - 1);
+      final _Harness scarce = build(
+        freeBytes: RecordingLifecycle.oneChunkBytes - 1,
+      );
       await notifierOf(
         scarce.container,
       ).checklistPassed(zoomFactor: 0.5, now: t0);

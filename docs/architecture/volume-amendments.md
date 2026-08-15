@@ -1094,7 +1094,17 @@ So the chapter whose stated purpose is turning Volume 1's prose into measurable 
 
 **What this costs, recorded rather than discovered later.** Anyone who obtains the APK can create a Collector account and reach the Collector experience. That is the intended consequence of the owner's decision, not an oversight: the backend re-derives authorization on every request (Volume 4 Ch. 4.8 §1), a Collector sees only their own assigned Tasks (BR-19), and no Task is assigned to a new account by default. The exposure is the Collector shell with nothing in it. It stops being acceptable the moment the app is distributed beyond a trusted group, which is the same trigger as the App Review point above.
 
-### A-057 — Wide-angle eligibility is a sixth checklist item, cached per device rather than re-run live
+### A-057 — Wide-angle eligibility is a sixth checklist item, ~~cached per device rather than re-run live~~ cached only where the cache can answer exactly
+
+> **Corrected 2026-08-15 by Mission 3.10's register audit.** The title and §"Should say" below claim the verdict is *"decided once per install and cached, not re-run before each session like the other five."* **That is no longer true, and on the project's primary platform it is never true.**
+>
+> Mission 3.8 found that `WideAngleEligibilityCache` stores a `WideAngleTier` and nothing else, which cannot express a Tier 2 verdict: the ladder resolves `primarySensorZoom` to 0.5 on a device that reaches 0.5 and to 0.6 on one that stops at 0.6, and the stored tier is identical in both cases. Reconstructing a factor from it would hand a 0.5-capable device 0.6 on every session after its first — exactly what Chapter 5.2 §2 forbids.
+>
+> So `checklist_notifier.dart:250` returns null for a cached `primarySensorZoom` and **the probe re-runs every session**. Because Android can never answer Tier 1 (`lensType` is always `unknown`, per the table below), **every Android device is Tier 2 and therefore re-probes on every checklist run** — including the CPH2707, the only handset this project tests on.
+>
+> What survives unchanged: the item is still checklist-visible, still blocks per FR-CHK-05, and is still cached exactly where the cache is lossless — Tier 1 (always `zoomFactorOptical`) and `unsupported` (no factor). What is wrong is the unqualified claim that it is not re-run per session.
+>
+> The cost is a camera open before every session on most devices, which is the shutter delay this amendment argued against. The fix is to store the factor beside the tier, which changes a port and a persisted format committed in Mission 3.1. Recorded in **A-064 §6** and not taken.
 
 | | |
 |---|---|
@@ -1601,7 +1611,24 @@ Three things are therefore true and are recorded rather than resolved:
 
 **Note on mission numbers below.** Missions have tracked Volume 5's chapters one for one — 5.1/5.2 → 3.1, 5.3 → 3.2, 5.4 → 3.3, 5.5 → 3.4, 5.6 → 3.5, 5.7 → 3.6, 5.8 → 3.7. Numbers given for unrun missions are **projections from that pattern, not assignments**; the chapter named in each row is the authoritative owner.
 
-#### `local_sessions.status` never becomes `complete`
+#### ~~`local_sessions.status` never becomes `complete`~~ — CLOSED
+
+> **Closed 2026-08-15 by Mission 3.8, verified on device by Mission 3.8.1. Corrected here by Mission 3.10's register audit.**
+>
+> The table below described this as open, and **all three of its factual clauses are now false**:
+>
+> | Clause as written | Reality |
+> |---|---|
+> | *"`ChunkStore` is not injected anywhere yet"* | Injected at the composition root — `main.dart`'s `recordingOverrides` binds `IsarChunkStore` over the live Isar instance. |
+> | *"Nothing calls `saveChunk`"* | `FinalizeChunkUseCase` calls it for every chunk; both 3.8.1 device passes wrote two chunks each. |
+> | *"`RecordingSchemas.all` is not yet passed to `DatabaseConfig`"* | Passed via `databaseConfigProvider.overrideWith(... .withSchemas(...))`. The device log reads `database open collections=3`. |
+>
+> The gap itself is closed the way this entry predicted: `ChunkStore.markSessionComplete` is called when the drain reaches `Idle`, which is the one instant a session's end is known. Mission 3.8.1 read the row back from Isar on hardware twice — `db session=… status=complete` on both the fast and the full pass.
+>
+> The reasoning below is left standing because it is still correct about *why* the store cannot infer completion from a chunk write. Only the "what closes it" clauses were overtaken.
+
+<details>
+<summary>Original entry, retained</summary>
 
 | | |
 |---|---|
@@ -1610,6 +1637,8 @@ Three things are therefore true and are recorded rather than resolved:
 | **Owner** | **Chapter 5.3 (Recording Lifecycle), already implemented as Missions 3.2 and 3.4.5.** No chapter defers this; it is a gap in built code, not unbuilt work. FR-SES-02's transition belongs at the lifecycle's return to `Idle`, which is where the end of a session is actually known. |
 | **What closes it** | A wiring mission. **`ChunkStore` is not injected anywhere yet** — verified: no file outside the port, its implementation and the schema list names `ChunkStore`, `IsarChunkStore` or `RecordingSchemas`. Nothing calls `saveChunk`, and `RecordingSchemas.all` is not yet passed to `DatabaseConfig`. The same mission that connects the lifecycle to this store is the one that can also mark a session complete, because it is the first point where both halves exist. |
 | **Consequence of leaving it** | Bounded. No consumer reads the column: Chapter 5.9's queue reads `local_chunks.status`, not the session's. A stale `in_progress` misreports history rather than affecting any chunk's fate. |
+
+</details>
 
 #### `local_chunks.s3_object_key` is stored null
 
@@ -1811,6 +1840,115 @@ Neither condition is scheduled, and neither is assumed to arrive:
 Until both hold, LiDAR depth capture is out of scope. If only the second arrives, the fork in §2 becomes buildable but stays expensive, and the decision to take it is still the project owner's.
 
 **No ADR accompanies this**, deliberately. An ADR records an architectural decision that shapes the code; nothing was built, no pattern was established, and no existing decision changed. ADR-024 §"an ADR is not a design document, a specification, a tutorial or a task list" applies — this is a scope decision, and the register is where scope decisions against the volumes belong.
+
+---
+
+### A-066 — Volume 9's data-layer coverage target is missed, and the strongest evidence for that layer is not a unit test
+
+| | |
+|---|---|
+| **Volume** | 9 — Quality Assurance, Chapter 9.5 §2 (coverage targets); Chapter 9.6 §4 (what unit tests deliberately don't cover) |
+| **Says** | *"Data layer (repositories): 80%+, focused on error-path coverage per Chapter 9.1's rule, not just the happy path."* |
+| **Should say** | The target is right and is **missed at 76.90%**. One file accounts for the whole shortfall, for a reason Chapter 9.6 §4 half-covers and should cover fully |
+| **Class** | Measured result, recorded rather than corrected |
+| **Status** | Open — the target is not met and is not being waived |
+
+### Measured, Mission 3.10, 514 tests
+
+| Layer | Ch. 9.5 §2 target | Measured | Verdict |
+|---|---|---|---|
+| `recording/domain` | 90%+ | **99.29%** (139/140) | **Met** |
+| `recording/data` | 80%+ | **76.90%** (223/290) | **MISSED by 3.10 points** |
+| `recording/application` | *none stated* | 86.36% (171/198) | n/a — see below |
+| `recording/presentation` | golden tests, *"rather than a blanket coverage percentage"* | 22.22% (54/243) | n/a — see below |
+
+**Chapter 9.5 §2 names three layers and gives `application/` no numeric target.** Chapter 9.6 §1 instead requires *"every Riverpod Notifier's state transitions, using ProviderContainer overrides"*, which is a completeness rule and is satisfied — `RecordingNotifier` and `ChecklistNotifier` both have transition suites built that way. The 86.36% is reported for information, not against a target.
+
+### The whole shortfall is one file
+
+`isar_chunk_store.dart` measures **7.69% (4/52)**. Excluding it, the data layer is **92.02% (219/238)** — comfortably past the target, and error-path-weighted as Chapter 9.1 requires.
+
+Covering it needs a live Isar. `Isar.initializeIsarCore(download: true)` **fetches native binaries over the network**, so a unit test over this class would make the build depend on the internet. That dependency is not added.
+
+Chapter 9.6 §4 exempts *"real camera behavior, real background upload, real platform-channel calls"*. Isar is a native library rather than a platform channel, so this sits **adjacent to the exemption rather than inside it** — which is why this is recorded as a miss rather than claimed as exempt.
+
+### The evidence that does exist is stronger than the test would have been
+
+Mission 3.8.1 ran the real `IsarChunkStore` on a CPH2707, twice, against a real database:
+
+- **Independent re-hash.** Both chunks were re-read with `crypto` and compared against the checksum the store had written — `shaMatches=true`, `sizeMatches=true`, including on a 633 MB file.
+- **Read-back from Isar.** `db session=… status=complete chunks=2 files=2/2 orphans=0`, confirming the `writeTxn` pairing, the file placement, and `markSessionComplete`.
+- **Both durations.** A 90-second fast pass and a real 600-second boundary.
+
+A unit test against a downloaded binary would exercise the same Dart with a *different* engine build than production ships, on a desktop filesystem rather than Android scoped storage, and could not verify a 633 MB checksum at all. **The device run is the better evidence, and it is what Chapter 9.9 assigns.** The gap is that Chapter 9.5's percentage cannot see it.
+
+### Presentation is not measured against a percentage, and two files were still a real gap
+
+Chapter 9.5 §2 asks for *"golden tests for every Design System component … rather than a blanket coverage percentage"*, so the 22.22% is not a target miss. `golden_toolkit` is **not installed**, so no golden test exists; adding it is an ADR-030 admission nobody has taken.
+
+But `checklist_copy.dart` and `recording_error_copy.dart` are **pure functions in `presentation/`, not widgets** — outside the golden provision and trivially unit-testable. Both were at 0% and are now covered, including the property Chapter 2.9 §2 actually cares about: that **no `ErrorCode` and no `ChecklistCheck` can produce an empty or generic message**. That is a totality assertion over the whole taxonomy, not a percentage.
+
+The three screens remain at 0% and are left there deliberately: writing widget tests for them would raise a number against a target Volume 9 does not set, while the thing Volume 9 does ask for — goldens — is blocked on tooling.
+
+---
+
+## Consolidated open items — A-057 through A-066
+
+Every carried-forward item, in one place, accurate as of Mission 3.10. This is the seed for Mission 3.12's status report.
+
+### Blocked on an unbuilt feature module
+
+| # | Item | Owner | Source |
+|---|---|---|---|
+| 1 | `project_id`, `task_id` unsourced — stored as `MetadataIdentity.unsourced` | `features/projects_tasks/` (unbuilt) | A-062 §1, A-064 §3 |
+| 2 | `local_task_cache` table not implemented | `features/projects_tasks/` | A-063 §2, ADR-039 §3 |
+| 3 | `s3_object_key` stored null — key needs `org_id`/`project_id`/`task_id` | Ch. 5.10 §1 step 1 | A-063 §5 |
+
+### Blocked on a decision, not on work
+
+| # | Item | What must be decided | Source |
+|---|---|---|---|
+| 4 | GPS at finalization vs NFR-META-01's 500 ms budget | Await, cache, or drop from the hot path | A-062 §3 |
+| 5 | `device_id` — *"cached, stable device identifier"* | Install id, hardware id, or derived | A-062 §1 |
+| 6 | Minimum-duration threshold — Ch. 5.3 §5 vs Ch. 5.6 §3 | Which clause governs; no number stated anywhere | A-063 §4 |
+| 7 | `oneChunkBytes` is ~4% below a measured chunk (610 MB vs 633 MB) | A safety factor, or accept the derivation | A-064 §4b |
+| 8 | FR-REC-03's live preview not rendered | The seam by which the pipeline exposes a preview without exposing capture control | A-064 §5 |
+| 9 | `WideAngleEligibilityCache` cannot express Tier 2 → re-probes every session on Android | Whether to change a Mission 3.1 port and persisted format | A-057 (corrected), A-064 §6 |
+| 10 | LiDAR depth capture out of scope | Revisit only on a supported ARKit concurrency API **and** iOS infrastructure | A-065 |
+
+### Cheapest to close
+
+| # | Item | Why it is cheap | Source |
+|---|---|---|---|
+| 11 | `collector_id` unsourced | `features/auth/` already knows it; needs only the ADR-022 R3 inversion — a `DeviceContext` supplied at the composition root | A-064 §3 |
+| 12 | `local_sessions.status` → `complete` | **CLOSED** by Mission 3.8, verified by 3.8.1 | A-063 §5 (corrected) |
+
+### Risks named and not resolved
+
+| # | Risk | Why it is quiet | Source |
+|---|---|---|---|
+| 13 | Isar 3 is unmaintained; the project depends on an `@experimental` API for a uniqueness guarantee | The build no longer warns — ADR-038 silenced it | A-029, ADR-038 |
+| 14 | `battery_plus` applies the legacy Kotlin Gradle Plugin | Builds today; a future Flutter will refuse it | A-064 §4a |
+| 15 | Software-encoder fallback and unmeasurable flush interval | Silent by nature | A-058 |
+| 16 | An in-flight chunk is unrecoverable after a crash | Structural to the plugin; at most one chunk per crash | A-063 §3, A-064 §1 |
+| 17 | Android 16 KB page-size support unverified for Isar | Release-blocking rather than development-blocking | ADR-009 |
+
+### Testing and verification
+
+| # | Item | State | Source |
+|---|---|---|---|
+| 18 | Data-layer coverage 76.90% vs 80% | Missed; cause named; device evidence stronger | A-066 |
+| 19 | Golden tests for Design System components | None; `golden_toolkit` not installed | A-066, Ch. 9.5 §2 |
+| 20 | `integration_test` end-to-end flows (Ch. 9.7 §1's five) | Package not installed | A-028 |
+| 21 | `recoverableChunkIds()` has no caller | Ch. 5.9's queue is its consumer | A-064 §2 |
+| 22 | No iOS toolchain — no macOS host, no Xcode, no iOS device | Blocks any iOS verification | A-065 §3 |
+
+### Process and specification
+
+| # | Item | Recommendation | Source |
+|---|---|---|---|
+| 23 | Amendment drift went undetected for two missions | **Run the register cross-check at the close of every multi-sub-mission block, not only at a dedicated audit mission.** A-057 claimed the wide-angle verdict was cached per install; Mission 3.8 made it re-probe every session on Android, and the amendment still read as true through 3.8 and 3.9 until Mission 3.10 checked all nine side by side. Nothing in the workflow would have caught it sooner — each sub-mission verified its own work, and drift lives *between* them. Cheap to repeat: the check is a read of each amendment's claims against current code, and it found two in one pass. | A-057, A-063 §5 (both corrected by 3.10) |
+| 24 | `app/` has no stated coverage target | **Candidate for a future Volume 9 amendment, not a code fix.** Chapter 9.5 §2 names domain, data and presentation only. `app/` currently measures **72.73%** and holds `router.dart`, `auth_guard.dart` and `recording_guard.dart` — the last of which is where **BR-04** is actually enforced, since a disabled button stops a tap but not a deep link. A business rule enforced in a layer with no coverage target is a gap in the specification rather than in the code. Not fixed here: inventing a target for a layer Volume 9 does not discuss would be this project deciding Volume 9's content by writing tests. | Ch. 9.5 §2, A-066 |
 
 ---
 
