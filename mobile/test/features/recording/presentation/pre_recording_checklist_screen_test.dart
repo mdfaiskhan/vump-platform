@@ -11,6 +11,7 @@ import 'package:mobile/features/recording/application/recording_notifier.dart';
 import 'package:mobile/features/recording/domain/entities/camera_capability.dart';
 import 'package:mobile/features/recording/domain/entities/chunk_metadata.dart';
 import 'package:mobile/features/recording/domain/entities/chunk_processing_job.dart';
+import 'package:mobile/features/recording/domain/entities/cleanable_chunk.dart';
 import 'package:mobile/features/recording/domain/entities/device_fingerprint.dart';
 import 'package:mobile/features/recording/domain/entities/network_type.dart';
 import 'package:mobile/features/recording/domain/entities/recording_session.dart';
@@ -342,4 +343,11 @@ class _FakeStore implements ChunkStore {
   Future<List<String>> recoverableChunkIds() async => <String>[];
   @override
   Future<List<String>> orphanedChunkIds() async => <String>[];
+
+  @override
+  Future<List<CleanableChunk>> cleanableChunks({required int limit}) async =>
+      <CleanableChunk>[];
+
+  @override
+  Future<bool> deleteChunkFile(String chunkId) async => false;
 }

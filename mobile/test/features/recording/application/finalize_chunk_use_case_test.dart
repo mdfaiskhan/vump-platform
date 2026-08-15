@@ -5,6 +5,7 @@ import 'package:mobile/features/recording/application/finalize_chunk_use_case.da
 import 'package:mobile/features/recording/domain/entities/chunk_integrity.dart';
 import 'package:mobile/features/recording/domain/entities/chunk_metadata.dart';
 import 'package:mobile/features/recording/domain/entities/chunk_processing_job.dart';
+import 'package:mobile/features/recording/domain/entities/cleanable_chunk.dart';
 import 'package:mobile/features/recording/domain/entities/collector_authored.dart';
 import 'package:mobile/features/recording/domain/entities/metadata_capture.dart';
 import 'package:mobile/features/recording/domain/entities/metadata_capture_conditions.dart';
@@ -272,6 +273,13 @@ class _RecordingStore implements ChunkStore {
 
   @override
   Future<List<String>> orphanedChunkIds() async => <String>[];
+
+  @override
+  Future<List<CleanableChunk>> cleanableChunks({required int limit}) async =>
+      <CleanableChunk>[];
+
+  @override
+  Future<bool> deleteChunkFile(String chunkId) async => false;
 }
 
 class _ThrowingStore implements ChunkStore {
@@ -293,4 +301,11 @@ class _ThrowingStore implements ChunkStore {
 
   @override
   Future<List<String>> orphanedChunkIds() async => <String>[];
+
+  @override
+  Future<List<CleanableChunk>> cleanableChunks({required int limit}) async =>
+      <CleanableChunk>[];
+
+  @override
+  Future<bool> deleteChunkFile(String chunkId) async => false;
 }

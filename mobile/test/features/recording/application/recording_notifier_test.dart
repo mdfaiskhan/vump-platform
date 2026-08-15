@@ -8,6 +8,7 @@ import 'package:mobile/core/errors/failure.dart';
 import 'package:mobile/features/recording/application/recording_notifier.dart';
 import 'package:mobile/features/recording/domain/entities/chunk_metadata.dart';
 import 'package:mobile/features/recording/domain/entities/chunk_processing_job.dart';
+import 'package:mobile/features/recording/domain/entities/cleanable_chunk.dart';
 import 'package:mobile/features/recording/domain/entities/recording_session.dart';
 import 'package:mobile/features/recording/domain/entities/recording_state.dart';
 import 'package:mobile/features/recording/domain/recording_lifecycle.dart';
@@ -592,6 +593,13 @@ class _FakeStore implements ChunkStore {
 
   @override
   Future<List<String>> orphanedChunkIds() async => <String>[];
+
+  @override
+  Future<List<CleanableChunk>> cleanableChunks({required int limit}) async =>
+      <CleanableChunk>[];
+
+  @override
+  Future<bool> deleteChunkFile(String chunkId) async => false;
 }
 
 /// Stands in for the capture pipeline; only its output directory is read here.
