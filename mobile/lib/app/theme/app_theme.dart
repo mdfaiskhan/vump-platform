@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
-
 import 'package:mobile/app/theme/app_colors.dart';
 import 'package:mobile/app/theme/app_elevation.dart';
 import 'package:mobile/app/theme/app_radius.dart';
 import 'package:mobile/app/theme/app_semantic_colors.dart';
 import 'package:mobile/app/theme/app_sizes.dart';
 import 'package:mobile/app/theme/app_spacing.dart';
+import 'package:mobile/app/theme/app_status_colors.dart';
 import 'package:mobile/app/theme/app_text_theme.dart';
 
 /// Material 3 [ThemeData] for each supported brightness.
@@ -17,14 +17,16 @@ import 'package:mobile/app/theme/app_text_theme.dart';
 abstract final class AppTheme {
   /// Theme applied when the resolved brightness is light.
   static ThemeData get light =>
-      _build(AppColors.light, AppSemanticColors.light);
+      _build(AppColors.light, AppSemanticColors.light, AppStatusColors.light);
 
   /// Theme applied when the resolved brightness is dark.
-  static ThemeData get dark => _build(AppColors.dark, AppSemanticColors.dark);
+  static ThemeData get dark =>
+      _build(AppColors.dark, AppSemanticColors.dark, AppStatusColors.dark);
 
   static ThemeData _build(
     ColorScheme colorScheme,
     AppSemanticColors semanticColors,
+    AppStatusColors statusColors,
   ) {
     const TextTheme textTheme = AppTextTheme.textTheme;
 
@@ -33,7 +35,7 @@ abstract final class AppTheme {
       textTheme: textTheme,
       scaffoldBackgroundColor: colorScheme.surface,
       visualDensity: VisualDensity.adaptivePlatformDensity,
-      extensions: <ThemeExtension<dynamic>>[semanticColors],
+      extensions: <ThemeExtension<dynamic>>[semanticColors, statusColors],
 
       // Flat chrome. Depth comes from surface tone rather than shadow, which
       // is what keeps the interface reading as calm at rest.
