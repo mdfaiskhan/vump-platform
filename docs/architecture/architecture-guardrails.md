@@ -85,6 +85,7 @@ Every architectural invariant in force, with its authority and how it is checked
 | **I13** | Zero analyzer diagnostics | ADR-021, Constitution §4 | CI `Analyze` |
 | **I14** | All tests pass; coverage is measured | Volume 9 Ch. 9.5 §2 | CI `Test` — **measured, not gated** |
 | **I15** | The PR title follows Conventional Commits | ADR-020 | CI `Commit convention` |
+| **I25** | No cross-feature import, at any layer, in either direction | ADR-022 R3, V3.4 §1, V3.5 §4 | CI `Architecture boundaries` — every ordered feature pair |
 
 ### Enforced by the analyzer
 
@@ -106,7 +107,6 @@ Every architectural invariant in force, with its authority and how it is checked
 
 | # | Invariant | Authority | What would close it |
 |---|---|---|---|
-| **I25** | No cross-feature import, at any layer, in either direction | ADR-022 R3, V3.4 §1, V3.5 §4 | A grep over `lib/features/*/` |
 | **I26** | No circular dependency between features, layers or `core/` modules | ADR-022 R4 | An import-graph cycle check |
 | **I27** | `presentation/` never imports its own `data/` | ADR-022 §5.3 | A grep, once `features/` exists |
 | **I28** | `application/` never imports its own `data/` | ADR-022 §5.3 | A grep, once `features/` exists |
@@ -127,8 +127,15 @@ Every architectural invariant in force, with its authority and how it is checked
 | **I43** | `cloud_firestore` only in `features/auth/data/` | ADR-036 | CI `Architecture boundaries` |
 | **I44** | `battery_plus` only in `features/recording/data/` | FR-CHK-03, ADR-030 | CI `Architecture boundaries` |
 | **I45** | `connectivity_plus` only in `features/recording/data/` | FR-CHK-04, ADR-030 | CI `Architecture boundaries` |
+| **I46** | `core/queue/` imports no feature | ADR-040 | CI `Architecture boundaries` |
 
 **I2 widened at Mission 3.7 and is enforced again.** It read `isar` only in `core/database/` until Volume 5 Chapter 5.8's three collections were placed in the feature that owns them — a collection cannot be declared without importing the package, so the tables could satisfy the old rule or live with their feature, not both. ADR-039 supersedes ADR-009 on that clause alone and the CI check was widened to match; the job passes. **The rule did not weaken.** The engine, its lifecycle and its migrations are still `core/database/`'s exclusively, the two feature locations are a directory and a filename prefix rather than a layer, and nothing above `data/` may name an Isar type.
+
+**I25 moved out of this table at Mission 4.1, and the reason it sat here is instructive.** ADR-022 recorded R3 as *"binding in writing and unenforced in fact"* because with zero features the check was vacuous — there was no second feature to import. That stayed true through Missions 1 and 2, and quietly stopped being true in Mission 3.
+
+ADR-040 is what forced the issue: `features/upload/` needed rows `features/recording/` writes, which is exactly the import R3 forbids. The resolution — a contract in `core/queue/` — is only real if something checks it, so the CI job now tests **every ordered pair of features**, not just the pair this mission created. A companion check (I46) proves `core/queue/` itself names no feature, because a contract that imported either side would become a third party both features are coupled through.
+
+Both were verified by deliberately breaking them before being reported as passing, per the standard A-067 set after a rule living only in prose went unenforced for two missions.
 
 **I42 and I43 are temporary**, and are the only invariants in this register with an expiry: both packages leave the project when ADR-036's runtime is retired at Mission 6/7. They are registered anyway — an unenforced boundary is not cheaper for being short-lived, and the confinement is what keeps the retirement a deletion of one directory rather than a hunt.
 
@@ -198,7 +205,7 @@ Verified by running each check against the working tree, not asserted. Commands 
 | Generated code drift (I11) | none |
 | `dart format` on 59 hand-written files (I12) | 0 changed |
 | `flutter analyze` (I13) | no issues |
-| Cross-feature imports (I25) | none — `features/` is empty |
+| Cross-feature imports (I25) | none — enforced in CI for every ordered feature pair since Mission 4.1 (ADR-040) |
 | `core/` importing `features/` (I41) | none |
 | `app/` importing `features/` (I30) | none |
 | `core/` importing `app/theme/` (I31) | none |

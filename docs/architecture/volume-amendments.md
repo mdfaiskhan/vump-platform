@@ -1546,6 +1546,8 @@ Chapter 5.8's header names the engine as *"Drift (SQLite)"* and cites *"ADR-002,
 
 Nothing else in the chapter depends on the engine. The three tables, their columns and the *"identical field shape to Volume 4, Chapter 4.5's JSON"* requirement all transfer unchanged — Isar stores the seven metadata groups as embedded objects, which preserves that shape more directly than a relational flattening would have.
 
+> **Mission 4.1, 2026-08-15.** Chapter 5.9's Upload Queue was built against **Isar** on this entry's authority. Chapter 5.9 §3's *"a live view … over `local_chunks.status` in Drift"* is the third instance of the stale name recorded above; no new amendment was raised for it, because duplicating a finding across two entries is how a register goes stale. `ChunkQueueSource` reads the Isar collections ADR-039 placed in `features/recording/data/collections/`, and ADR-040 records the contract that lets `features/upload/` see them.
+
 **A-062 §4 is now discharged in part.** Its two complaints were the wrong engine name and the missing storage layer. The layer exists as of Mission 3.7 and **FR-META-09 is satisfied**: `IsarChunkStore.saveChunk` writes the chunk row and the metadata row inside one `writeTxn`, and the `.mp4` is moved into place before that transaction commits, so a committed row never names a file that is not there. A-062's other three sections — the unsourced fields, the permission gap and the GPS/NFR-META-01 conflict — remain open and untouched.
 
 ### 2. `local_task_cache` is not this feature's table
@@ -1866,6 +1868,12 @@ Until both hold, LiDAR depth capture is out of scope. If only the second arrives
 >
 > **`domain` and `data` are unchanged and were re-measured, not assumed** — 99.29% and 76.90% still hold, so the data-layer miss and its `isar_chunk_store.dart` cause stand exactly as written.
 >
+> **Re-measured 2026-08-15 by Mission 4.1.** `recording/data` has fallen further, to **69.25% (223/322)**, and the cause is this mission's own code: `IsarChunkStore` gained 32 lines implementing `ChunkQueueSource`, none of which a unit test can reach for the reason §"the whole shortfall is one file" already gives — they need a live Isar engine. **Excluding that file the data layer is still 92.02%**, unchanged, because every new uncovered line landed in it.
+>
+> The miss is therefore wider in the number and identical in cause. No network-downloading test dependency was added, and the exemption reasoning is not re-argued here.
+>
+> Mission 4.1's own new code is covered: `core/queue/` 100% (30/30), `features/upload/application/` 96.15% (25/26 — the uncovered line is the port's `UnimplementedError`, which by design nothing reaches).
+>
 > This is the **second** time the register cross-check has found drift, after A-057 and A-063 §5 at Mission 3.10. It is the argument for open item 23: a percentage recorded in prose goes stale the moment anyone adds a test, and only a scheduled re-check catches it.
 
 **Chapter 9.5 §2 names three layers and gives `application/` no numeric target.** Chapter 9.6 §1 instead requires *"every Riverpod Notifier's state transitions, using ProviderContainer overrides"*, which is a completeness rule and is satisfied — `RecordingNotifier` and `ChecklistNotifier` both have transition suites built that way. The 86.36% is reported for information, not against a target.
@@ -1985,6 +1993,22 @@ Volume 8 numbers its own inline ADRs in a sequence that runs independently of `d
 The reopening trigger Volume 8 states — *"a future client contract or regulatory review requiring app-level encryption as a compliance checkbox regardless of the OS's own protection"* — is carried forward unchanged.
 
 **Refer to it as "Volume 8 Chapter 8.2 §3"**, never as ADR-011.
+
+### Widened 2026-08-15 by Mission 4.1 — the collision is systemic, not one number
+
+This is not confined to Volume 8. **Volume 3 Chapter 3.2 carries its own inline ADR sequence** that collides across the board:
+
+| Volume 3 Ch. 3.2's inline ADR | This repository's ADR |
+|---|---|
+| ADR-001 — State Management Library | ADR-001 — Clean Architecture |
+| ADR-002 — Local Persistence Engine | ADR-002 — Top-Level Project Structure |
+| ADR-003 — Background Upload Mechanism | ADR-003 — Riverpod |
+
+Volume 5 Chapter 5.8's own header compounds it, citing *"Drift (SQLite) — **ADR-002**, Volume 3, Chapter 3.2"* — a database decision pointed at this repository's project-structure ADR.
+
+**The general rule, stated once so it is not re-litigated volume by volume: no `ADR-NNN` citation appearing inside any Volume can be assumed to mean this repository's ADR-NNN.** Always resolve against `docs/architecture/decisions/ADR-*.md` by subject, never by number.
+
+Sweeping every Volume for this collision is recorded as open item 34 and is deliberately not attempted here.
 
 ---
 
@@ -2154,6 +2178,7 @@ Every carried-forward item, in one place, accurate as of Mission 3.10. This is t
 | 31 | CameraX `GRAPH_ERROR(ERROR_GRAPH_CONFIG)` on every session close | **Open, uninvestigated.** Fires after a successful `stopChunk()`, during `closeSession()`. Affected no run — chunk written, row committed, session completed each time. May be teardown noise or an unclean close that leaks across repeated sessions. Not assumed harmless. | A-070 §6 |
 | 32 | A device harness that drives the notifier cannot see UI wiring | **CLOSED for this case** by Mission 3.12-PRE (`09f40ac`)'s widget test; the general lesson stays open. **Third instance of "a whole checked in parts"** (cf. items 23, 26). Mission 3.8.1 returned `RESULT pass` twice while nothing in `lib/` called `start()`. Closed for this case by a widget test that taps the button; the general lesson is that an unattended harness proves the layer it drives and silently assumes the layer above calls it. | A-070 §3 |
 | 33 | `flutter install` deploys a stale artifact | **Use `flutter run`, or `flutter build` immediately before `flutter install`.** It installed Mission 3.8's pre-fix APK and reported success, causing a fix to be reported as on-device when it was not. "Install succeeded" is not evidence the change is on the device. | A-070 §4 |
+| 34 | Volumes' inline ADR citations collide with this repository's ADR numbers | **Sweep all Volumes, rather than fixing each as it is hit.** Confirmed in Volume 8 Ch. 8.2 §3 and across Volume 3 Ch. 3.2's whole inline sequence; Volume 5 Ch. 5.8's header inherits one. Each has been caught only when a mission happened to read that chapter. A single pass listing every inline `ADR-NNN` and what it actually means would turn a recurring trap into a lookup table. Not attempted in Mission 4.1 — out of scope. | A-069 |
 
 ---
 

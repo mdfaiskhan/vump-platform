@@ -26,6 +26,8 @@ Chapter 11.5 §4 also states that pre-1.0.0 builds *"may log only against `[Unre
 
 ### Security
 
+- **2026-08-15** — Volume 5 Chapter 5.9's Upload Queue reads the locally stored chunk rows as a live view. It is read-only over data handling: no network call, no upload, and no new stored field. `features/upload/` reaches those rows through a contract in `core/queue/` rather than by importing `features/recording/`, so neither feature can see the other's schema — the projection carries a chunk id, session id, sequence index, session start time, status and byte count, and deliberately no file path or checksum. Soft-deleted rows (BR-08) are excluded from the view. ADR-022 R3 is now enforced in CI for every feature pair, having been binding in writing only since Mission 0.18. Mission 4.1, ADR-040.
+
 - **2026-08-15** — `shared_preferences` gains the composition root as a second permitted owner, and the `Architecture boundaries` CI job is enforcing again. It had been failing since Mission 3.8 introduced the import in `main.dart` without widening the rule. Mission 3.11.1, A-067. (`958c0d8`)
 
 - **2026-08-15** — Local storage of session, chunk and metadata records begins. Three Isar collections (`local_sessions`, `local_chunks`, `local_chunk_metadata`) persist to the app-private documents directory, and chunk `.mp4` files are placed under `<app-documents>/recordings/{session_id}/`. Both rely on OS-level app-sandbox encryption as Volume 8 Chapter 8.2 §3 decides; no app-level encryption layer is added. Chunk and metadata are written in one transaction, so a chunk file cannot exist locally without its metadata (FR-META-09). Mission 3.7. (`64e9d60`)
