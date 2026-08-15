@@ -41,12 +41,36 @@ enum ChunkUploadStatus {
   /// surfaces the Retry Chunk action. **Nothing writes this yet.**
   failed('failed'),
 
-  /// Backend-confirmed and checksum-verified.
+  /// Backend-confirmed.
   ///
-  /// Volume 4 Chapter 4.5's `verified_at` is set and reflected back to the
-  /// device. **Nothing writes this yet**, and nothing should until the
-  /// backend actually confirms — BR-12 makes "complete" mean the data is safe
-  /// in cloud storage, not merely that the device finished its part.
+  /// ## What actually writes this, corrected at Mission 4.5
+  ///
+  /// This doc used to say *"nothing writes this yet, and nothing should until
+  /// the backend actually confirms"*. Mission 4.2 then wrote it, and the
+  /// sentence was never updated — a contradiction Mission 4.5 found while
+  /// tracing Chapter 5.15, whose file deletion keys off exactly this value.
+  ///
+  /// `ChunkUploadPipeline` writes it after Chapter 5.10 §1 **step 4**, not
+  /// step 3, and that ordering is a deliberate divergence recorded as A-073:
+  /// BR-08 makes `complete` the point a chunk becomes eligible for local
+  /// deletion, and deleting a chunk whose metadata never reached the backend
+  /// would be unrecoverable.
+  ///
+  /// ## The device does not observe `verified_at`
+  ///
+  /// Volume 4 Chapter 4.5's `verified_at` is set by the backend, and Chapter
+  /// 4.6 §4 gates the status transition on it — so a successful
+  /// `PATCH /v1/chunks/{id}/status` implies verification happened. But the
+  /// device never reads `verified_at` back: Chapter 5.10 §1 step 5 has it
+  /// observed *"via its next sync"*, and no sync mechanism exists.
+  ///
+  /// So this value means **the backend accepted the transition**, not *the
+  /// device saw the verification*. Chapter 5.15's cleanup deletes the only
+  /// local copy on the strength of it, which A-086 records as the assumption
+  /// future backend work must honour.
+  ///
+  /// **No chunk has reached this state on a device.** `SessionRegistrar` has
+  /// no implementation (open item 36), so the pipeline cannot run at all.
   complete('complete');
 
   const ChunkUploadStatus(this.wireName);
