@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-
 import 'package:mobile/core/connectivity/connectivity_status.dart';
 import 'package:mobile/core/connectivity/interfaces/connectivity_source.dart';
 import 'package:mobile/core/connectivity/providers/connectivity_ports.dart';
@@ -15,6 +14,7 @@ import 'package:mobile/core/time/providers/clock_provider.dart';
 import 'package:mobile/core/upload/interfaces/chunk_upload_source.dart';
 import 'package:mobile/core/upload/providers/upload_ports.dart';
 import 'package:mobile/features/upload/application/chunk_upload_pipeline.dart';
+import 'package:mobile/features/upload/application/upload_progress_notifier.dart';
 import 'package:mobile/features/upload/application/upload_queue_notifier.dart';
 import 'package:mobile/features/upload/domain/entities/retry_schedule.dart';
 import 'package:mobile/features/upload/domain/entities/upload_batch_progress.dart';
@@ -568,6 +568,31 @@ final Provider<UploadDispatcher> uploadDispatcherProvider =
         clock: ref.watch(clockProvider),
         serviceHost: ref.watch(uploadServiceHostProvider),
         logger: ref.watch(loggerProvider),
-        uploadNext: () => ref.read(chunkUploadPipelineProvider).uploadNext(),
+        // C-11's live percentage is bound here rather than inside the
+        // dispatcher, which has no business knowing a UI exists: the closure
+        // already owns the seam onto Chapter 5.10, so it owns reporting too.
+        // Progress is cleared when the chunk stops uploading, so a completed
+        // or failed row never leaves a stale percentage for the next attempt.
+        uploadNext: () async {
+          final UploadProgressNotifier progress = ref.read(
+            uploadProgressNotifierProvider.notifier,
+          );
+          final UploadOutcome? outcome = await ref
+              .read(chunkUploadPipelineProvider)
+              .uploadNext(
+                onChunkProgress:
+                    (String chunkId, int sentBytes, int totalBytes) =>
+                        progress.report(
+                          chunkId: chunkId,
+                          sentBytes: sentBytes,
+                          totalBytes: totalBytes,
+                        ),
+              );
+          final String? finished = outcome?.chunkId;
+          if (finished != null) {
+            progress.clear(finished);
+          }
+          return outcome;
+        },
       ),
     );

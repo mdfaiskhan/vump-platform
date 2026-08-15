@@ -110,6 +110,7 @@ class ChunkUploadPipeline {
   /// anything.
   Future<UploadOutcome?> uploadNext({
     ChunkUploadProgress? onProgress,
+    ChunkProgressReporter? onChunkProgress,
     Future<void>? cancelSignal,
   }) async {
     final UploadableChunk? chunk;
@@ -130,7 +131,18 @@ class ChunkUploadPipeline {
       return null;
     }
 
-    return _run(chunk, onProgress: onProgress, cancelSignal: cancelSignal);
+    // Chapter 2.7's C-11 needs the percentage attributed to a chunk, and
+    // `ChunkUploadProgress` is Dio's shape — two counters and no identity. The
+    // chunk id is only known here, after the claim, so it is bound in rather
+    // than pushed into `core/network/`'s neutral typedef (ADR-041).
+    final ChunkUploadProgress? progress = onChunkProgress == null
+        ? onProgress
+        : (int sent, int total) {
+            onProgress?.call(sent, total);
+            onChunkProgress(chunk!.chunkId, sent, total);
+          };
+
+    return _run(chunk, onProgress: progress, cancelSignal: cancelSignal);
   }
 
   Future<UploadOutcome> _run(
@@ -330,6 +342,14 @@ class ChunkUploadPipeline {
     return UploadFailureCause.transportFailure;
   }
 }
+
+/// Reports transfer progress for a named chunk.
+///
+/// Distinct from `ChunkUploadProgress`, which is `core/network/`'s neutral
+/// stand-in for Dio's callback and carries no identity. C-11 renders one row
+/// per chunk, so it needs to know which row the bytes belong to.
+typedef ChunkProgressReporter =
+    void Function(String chunkId, int sentBytes, int totalBytes);
 
 /// What one run of [ChunkUploadPipeline] did.
 ///
