@@ -1462,6 +1462,63 @@ That makes it an amendment, which is the same instrument A-057, A-058 and A-059 
 
 ---
 
+### A-062 — Chapter 5.7's metadata cannot be completed by this application yet, and two of its clauses conflict
+
+| | |
+|---|---|
+| **Volume** | 5 — Recording Engine, Chapter 5.7; Volume 4 Chapter 4.5 §2 (the schema it defers to); Volume 1 §11 (NFR-META-01) |
+| **Says** | Ch. 5.7 §2 names a source for every field group, and §3 requires the assembled object be written *"to the local Drift `chunk_metadata` table … in the same transaction as the chunk's own local record"* |
+| **Should say** | Nine of the twenty-one fields have no source in this application, one field group cannot be read within the budget another requirement sets, and §3 names an engine this project does not use and a layer that does not exist |
+| **Reason** | Four separate gaps, none resolvable inside this mission |
+
+**Twelve of twenty-one fields are sourced** and are implemented: `chunk_id`, `identity.session_id`, all of `timing`, all of `capture`, `device_context.os_version`, both `integrity` fields, and `collector_authored` (empty, as §2 requires). The rest are behind ports with no implementation, so the object assembles but is **factually incomplete and says so** — `ChunkMetadata.isComplete` reports it rather than leaving a consumer to inspect fields.
+
+### 1. The `identity` group is mostly unreachable, and one field is a cross-feature import
+
+`project_id` and `task_id` belong to `features/projects_tasks/`, whose `domain/`, `data/` and `application/` are still `.gitkeep` — only Mission 1.3's placeholder screens exist. Nothing in the recording feature knows which Task is being recorded.
+
+`collector_id` is `features/auth/`'s `User.uid`, and reading it directly is the cross-feature import **ADR-022 R3 forbids** *"at any layer, in either direction"* — the same collision Missions 2.3, 2.4 and the sign-out mission each resolved by inversion. `TaskContext` and `DeviceContext` follow that resolution rather than inventing a fourth.
+
+`device_id` is Ch. 5.7 §2's *"cached, stable device identifier"*. Nothing produces or caches one, and **what it should be is undecided** — an install id, a hardware id, or something derived. That is a decision, not an omission.
+
+### 2. `capture_conditions` needs three dependencies and a permission FR-CHK does not have
+
+GPS, battery percentage and network type have no source in `dart:io` or in any admitted package. Realistically `geolocator`, `battery_plus` and `connectivity_plus` — three ADR-030 admissions — plus a **location permission**. Volume 5 Ch. 5.1 §3 assigns permissions to the Pre-Recording Checklist, and FR-CHK-01..05 covers camera, microphone, storage, battery and network — **not location**. So granting it needs an FR-CHK extension of the same shape as A-057's.
+
+Absence is represented explicitly rather than by omission. Defaulting to zeroes would be worse than null: `{"lat": 0.0, "lng": 0.0}` is a real place in the Gulf of Guinea, and a plausible wrong value is harder to catch than an obvious empty one.
+
+### 3. GPS at finalization contradicts NFR-META-01 — UNRESOLVED, needs a product decision
+
+Ch. 5.7 §2 requires these be *"read at the moment of chunk finalization, not session start"*, and §4 explains why: they are *"only meaningful as of the actual capture moment"*.
+
+NFR-META-01 caps metadata generation at **under 500 ms of added overhead per chunk**, and per A-059's correction that budget genuinely does cover this work — unlike the checksum, which sits inside finalization rather than metadata generation. Assembling the JSON is microseconds.
+
+**A cold GPS fix routinely takes several seconds.** The two clauses cannot both hold.
+
+This is a contradiction between requirements, not an implementation problem, and it is **not resolved here**. The options each cost something different and the choice is the project owner's:
+
+- **Await the fix** — honours §2 exactly, breaks NFR-META-01, and stalls the metadata for every chunk.
+- **Use a cached position** — honours the budget, and weakens §4's *"as of the actual capture moment"* by however stale the cache is.
+- **Drop GPS from the hot path** — read it once per session, or asynchronously after generation, which changes what the field means.
+
+Recorded now so that whoever implements `CaptureConditionsReader` does not silently pick one.
+
+### 4. §3's persistence names the wrong engine and a layer that does not exist
+
+*"Written to the local **Drift** `chunk_metadata` table"* — but **ADR-009 chose Isar**, and Volume 3 Ch. 3.1's stack table naming Drift is a decision ADR-009 already superseded. Ch. 5.7 §3 inherits the stale name.
+
+Separately, the requirement is atomic: *"in the same transaction as the chunk's own local record — both succeed or both fail together, so a chunk file can never exist locally without its metadata already alongside it"*. That transaction spans two records in a layer Mission 3.7 owns and which does not exist.
+
+**So FR-META-09 is not satisfied by this mission**, and no substitute was invented — in particular, no JSON file is written to disk, because the chapter never asks for one and inventing a second persistence mechanism would be worse than having none.
+
+### Not amendment-worthy, recorded for completeness
+
+**The codec spelling differs between volumes.** Ch. 5.2 §1's capture table says `H.264 (AVC)` and `CameraSpecification.videoCodec` transcribes `'H.264'`; Ch. 4.5 §2's wire format says `"codec": "h264"`. Both are correct for their own side — one describes an encoder, the other fixes a JSON value a backend parses — so it is translated at the boundary by `CodecWireName` rather than changing either source.
+
+**No LiDAR fields exist in Ch. 4.5's schema.** Checked because Mission 3.9 has not run: the canonical JSON contains no LiDAR group and no `has_lidar` field, so there is no forward dependency and nothing was stubbed.
+
+---
+
 ## Confirmed correct — no amendment
 
 Recorded so they are not re-litigated.
