@@ -155,13 +155,14 @@ class __$$MetadataIdentityImplCopyWithImpl<$Res>
 
 /// @nodoc
 
-class _$MetadataIdentityImpl implements _MetadataIdentity {
+class _$MetadataIdentityImpl extends _MetadataIdentity {
   const _$MetadataIdentityImpl(
       {required this.sessionId,
       required this.projectId,
       required this.taskId,
       required this.collectorId,
-      required this.deviceId});
+      required this.deviceId})
+      : super._();
 
   /// From `RecordingSession.sessionId` (Mission 3.2).
   @override
@@ -217,13 +218,14 @@ class _$MetadataIdentityImpl implements _MetadataIdentity {
           this, _$identity);
 }
 
-abstract class _MetadataIdentity implements MetadataIdentity {
+abstract class _MetadataIdentity extends MetadataIdentity {
   const factory _MetadataIdentity(
       {required final String sessionId,
       required final String projectId,
       required final String taskId,
       required final String collectorId,
       required final String deviceId}) = _$MetadataIdentityImpl;
+  const _MetadataIdentity._() : super._();
 
   @override
 

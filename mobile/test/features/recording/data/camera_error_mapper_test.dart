@@ -29,26 +29,58 @@ void main() {
     });
   });
 
-  group('permission is not handled here, deliberately', () {
-    test('CameraAccessDenied maps to unavailable like any other failure', () {
-      // Volume 5.1 §3 puts BR-03 with the Pre-Recording Checklist and says it
-      // is "not re-checked redundantly here". This code arriving means the
-      // Checklist's guarantee was broken upstream; handling it would build
-      // the redundant re-check the chapter forbids.
+  group('permission refusals are named — changed at Mission 3.8', () {
+    // Until Mission 3.8 these collapsed into deviceCameraUnavailable, and a
+    // test here asserted that no code named camera permission at all. The
+    // reasoning was that Volume 5.1 §3 assigns BR-03 to the Checklist, so a
+    // refusal reaching the camera module meant an upstream guarantee had
+    // already broken.
+    //
+    // That reasoning was about *requesting* permission, and it still holds —
+    // nothing here requests anything. What changed is that the Checklist now
+    // exists, and FR-CHK-05 requires it to name the specific failed check.
+    // `CameraPermissionProbeImpl` verifies both grants by opening a camera
+    // with audio, and the plugin code is the only thing that says which grant
+    // is missing. Flattening it would make C-08's remedy card generic, which
+    // Volume 2 Ch. 2.9 §2 calls a defect rather than a fallback.
+
+    test('CameraAccessDenied names the camera grant', () {
       expect(
         CameraErrorMapper.mapCode('CameraAccessDenied'),
-        ErrorCode.deviceCameraUnavailable,
+        ErrorCode.devicePermissionCameraDenied,
       );
     });
 
-    test('no error code in the taxonomy names camera permission', () {
-      // Guards the decision above from being quietly reversed by adding a
-      // code for it.
-      final Iterable<String> codes = ErrorCode.values.map(
-        (ErrorCode e) => e.code,
+    test('AudioAccessDenied names the microphone grant, separately', () {
+      // BR-03 requires both, and they are separate grants — a Collector who
+      // allowed one and refused the other must be told which.
+      expect(
+        CameraErrorMapper.mapCode('AudioAccessDenied'),
+        ErrorCode.devicePermissionMicrophoneDenied,
       );
+    });
 
-      expect(codes, isNot(contains('DEVICE_CAMERA_PERMISSION_DENIED')));
+    test('the without-prompt and restricted variants map the same way', () {
+      // Same remedy either way: enable it in Settings. The distinction the
+      // plugin draws is about whether a prompt is still possible, which the
+      // copy does not depend on.
+      expect(
+        CameraErrorMapper.mapCode('CameraAccessDeniedWithoutPrompt'),
+        ErrorCode.devicePermissionCameraDenied,
+      );
+      expect(
+        CameraErrorMapper.mapCode('AudioAccessRestricted'),
+        ErrorCode.devicePermissionMicrophoneDenied,
+      );
+    });
+
+    test('a non-permission failure is still unavailable', () {
+      // The camera held by another app is not a refusal, and its remedy is
+      // different — close the other app, not open Settings.
+      expect(
+        CameraErrorMapper.mapCode('cameraNotReadable'),
+        ErrorCode.deviceCameraUnavailable,
+      );
     });
   });
 

@@ -66,7 +66,18 @@ abstract final class CameraErrorMapper {
       'setZoomLevelFailed' ||
       'ZoomLevelInvalid' => ErrorCode.deviceCameraUnavailable,
 
-      // Everything else, including CameraAccessDenied — see the class comment.
+      // Permission refusals, distinguished by Mission 3.8. The class comment
+      // above still holds — nothing here *requests* a permission, which is
+      // Volume 5.1 §3's assignment to the Checklist. What changed is that the
+      // Checklist now exists and FR-CHK-05 requires it to name which grant is
+      // missing, so the two refusals are no longer flattened into "the camera
+      // could not be opened".
+      'CameraAccessDenied' ||
+      'CameraAccessDeniedWithoutPrompt' ||
+      'CameraAccessRestricted' => ErrorCode.devicePermissionCameraDenied,
+      'AudioAccessDenied' ||
+      'AudioAccessDeniedWithoutPrompt' ||
+      'AudioAccessRestricted' => ErrorCode.devicePermissionMicrophoneDenied,
       _ => ErrorCode.deviceCameraUnavailable,
     };
   }

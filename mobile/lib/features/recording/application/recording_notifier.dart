@@ -12,6 +12,7 @@ import 'package:mobile/features/recording/domain/entities/recording_state.dart';
 import 'package:mobile/features/recording/domain/recording_lifecycle.dart';
 import 'package:mobile/features/recording/domain/repositories/chunk_finalizer.dart';
 import 'package:mobile/features/recording/domain/repositories/chunk_id_generator.dart';
+import 'package:mobile/features/recording/domain/repositories/chunk_store.dart';
 import 'package:mobile/features/recording/domain/repositories/free_space_reader.dart';
 import 'package:mobile/features/recording/domain/repositories/recording_pipeline.dart';
 import 'package:mobile/features/recording/domain/repositories/session_id_generator.dart';
@@ -29,6 +30,18 @@ final Provider<ChunkFinalizer> chunkFinalizerProvider =
         'which arrives with Chapters 5.5, 5.7 and 5.9.',
       ),
     );
+
+/// The local store, overridden at the composition root.
+///
+/// Read here only to write FR-SES-02's session status when a session drains.
+/// Every chunk write goes through [chunkFinalizerProvider] instead, so this
+/// notifier never persists a chunk itself.
+final Provider<ChunkStore> chunkStoreProvider = Provider<ChunkStore>(
+  (Ref ref) => throw UnimplementedError(
+    'chunkStoreProvider must be overridden with a ChunkStore. '
+    'features/recording/data/ provides IsarChunkStore.',
+  ),
+);
 
 /// Schedules the BR-06 chunk boundary.
 ///
@@ -178,9 +191,11 @@ class RecordingNotifier extends Notifier<RecordingState> {
   /// same one — the pipeline never allows less headroom than the Checklist
   /// demanded before it started.
   ///
-  /// One chunk at spec bitrate: (8,000 + 128) kbps ÷ 8 = 1,016 kB/s, times
-  /// 600 seconds, is 609.6 MB. Rounded to 610 MB.
-  static const int _lowStorageThresholdBytes = 610 * 1000 * 1000;
+  /// The derivation moved to [RecordingLifecycle.oneChunkBytes] at Mission
+  /// 3.8, when the Checklist needed the same number. One constant, two
+  /// callers — the pipeline can no longer allow less headroom than the
+  /// Checklist demanded, because they read the same field.
+  static const int _lowStorageThresholdBytes = RecordingLifecycle.oneChunkBytes;
 
   /// The Checklist passed (BR-04) — generate the session and become `Ready`.
   ///
@@ -333,7 +348,17 @@ class RecordingNotifier extends Notifier<RecordingState> {
 
     // Deliberately unawaited — this is the whole point of the mission. The
     // caller's chunk is closed and the next one is already recording.
-    unawaited(_processChunk(next.activeSession ?? current.session, job));
+    //
+    // `current.chunkStartedAt` is read from the state *before* the transition,
+    // which is the only place the start of the chunk that just ended still
+    // exists — `next` already carries the next chunk's start.
+    unawaited(
+      _processChunk(
+        next.activeSession ?? current.session,
+        job,
+        current.chunkStartedAt,
+      ),
+    );
     return failure;
   }
 
@@ -349,10 +374,15 @@ class RecordingNotifier extends Notifier<RecordingState> {
   Future<void> _processChunk(
     RecordingSession session,
     ChunkProcessingJob job,
+    DateTime chunkStartedAt,
   ) async {
     ErrorCode? cause;
     try {
-      await _finalizer.finalizeChunk(session: session, job: job);
+      await _finalizer.finalizeChunk(
+        session: session,
+        job: job,
+        chunkStartedAt: chunkStartedAt,
+      );
     } on AppException catch (exception) {
       cause = exception.errorCode;
     }
@@ -362,8 +392,32 @@ class RecordingNotifier extends Notifier<RecordingState> {
       chunkId: job.chunkId,
       cause: cause,
     );
-    if (next != null) {
-      state = next;
+    if (next == null) {
+      return;
+    }
+    state = next;
+
+    // The drain completed — this is the one instant the end of a session is
+    // known, and therefore the only place FR-SES-02's `complete` can be
+    // written. Amendment A-063 recorded the gap and named this as its closing
+    // point; `ChunkStore.markSessionComplete` is the other half.
+    if (next is RecordingStateIdle) {
+      await _markSessionComplete(session);
+    }
+  }
+
+  /// Records FR-SES-02's terminal status, without disturbing the machine.
+  ///
+  /// A failure here is logged into the returned nothing and deliberately not
+  /// escalated: the session is over, every chunk is already persisted with its
+  /// metadata, and a status column that still reads `in_progress` misreports
+  /// history rather than risking data. Chapter 5.9 reads
+  /// `local_chunks.status`, never the session's, so nothing downstream stalls.
+  Future<void> _markSessionComplete(RecordingSession session) async {
+    try {
+      await ref.read(chunkStoreProvider).markSessionComplete(session.sessionId);
+    } on AppException {
+      return;
     }
   }
 
@@ -378,10 +432,7 @@ class RecordingNotifier extends Notifier<RecordingState> {
         // failure is already reported through the return value rather than by
         // throwing out of a callback nobody can catch.
         unawaited(
-          _endChunk(
-            ChunkBoundaryReason.automaticBoundary,
-            DateTime.now(),
-          ),
+          _endChunk(ChunkBoundaryReason.automaticBoundary, DateTime.now()),
         );
       },
     );
@@ -399,7 +450,8 @@ class RecordingNotifier extends Notifier<RecordingState> {
   /// finalization it most needs to cover.
   void _startStorageWatch() {
     _cancelStorageTimer();
-    final String? directory = ref.read(recordingPipelineProvider)
+    final String? directory = ref
+        .read(recordingPipelineProvider)
         .outputDirectory;
     if (directory == null) {
       return;
@@ -429,9 +481,9 @@ class RecordingNotifier extends Notifier<RecordingState> {
     }
     final int available;
     try {
-      available = await ref.read(freeSpaceReaderProvider).availableBytes(
-        directory,
-      );
+      available = await ref
+          .read(freeSpaceReaderProvider)
+          .availableBytes(directory);
     } on AppException {
       return;
     }
@@ -439,10 +491,7 @@ class RecordingNotifier extends Notifier<RecordingState> {
     if (available >= _lowStorageThresholdBytes) {
       return;
     }
-    await _endChunk(
-      ChunkBoundaryReason.automaticBoundary,
-      DateTime.now(),
-    );
+    await _endChunk(ChunkBoundaryReason.automaticBoundary, DateTime.now());
   }
 
   void _cancelStorageTimer() {
@@ -453,5 +502,6 @@ class RecordingNotifier extends Notifier<RecordingState> {
 
 /// The live recording lifecycle.
 final NotifierProvider<RecordingNotifier, RecordingState>
-recordingNotifierProvider =
-    NotifierProvider<RecordingNotifier, RecordingState>(RecordingNotifier.new);
+recordingNotifierProvider = NotifierProvider<RecordingNotifier, RecordingState>(
+  RecordingNotifier.new,
+);

@@ -97,6 +97,24 @@ dependencies:
   # Confined to `features/recording/data/`.
   crypto: ^3.0.7
 
+  # Battery level for FR-CHK-03's Pre-Recording Checklist row. Volume 1 §5
+  # requires the level be verified "before recording starts" and Volume 2
+  # Ch. 2.7's C-07 requires the row show its current value ("Battery: 82%"),
+  # neither of which `dart:io` can answer. Confined to
+  # `features/recording/data/`.
+  battery_plus: ^6.2.1
+
+  # Network availability for FR-CHK-04, which asks whether upload "will start
+  # immediately or be queued" — so the row needs the connection *type*, not a
+  # reachability boolean. Confined to `features/recording/data/`.
+  #
+  # Both packages are `plus` ecosystem, BSD-3-Clause, and maintained by the
+  # Flutter Community. They also make two thirds of amendment A-062's
+  # `capture_conditions` gap reachable; that is deliberately NOT wired here,
+  # because the group's third field (GPS) is still blocked on A-062 §3's
+  # unresolved product decision.
+  connectivity_plus: ^6.1.5
+
   # Local database
   isar: ^3.1.0+1
   isar_flutter_libs: ^3.1.0+1

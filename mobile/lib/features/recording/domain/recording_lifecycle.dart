@@ -55,6 +55,19 @@ abstract final class RecordingLifecycle {
   /// keep up, on a disk already near its limit in the case that causes it.
   static const int maximumConcurrentProcessing = 3;
 
+  /// The bytes one full chunk occupies at Chapter 5.2 §1's bitrate.
+  ///
+  /// **The unit FR-CHK-02 already reasons in** — *"sufficient free local
+  /// storage for at least one full chunk"* — and therefore the unit Chapter
+  /// 5.4 §2's mid-recording backpressure uses too. Kept here, on the domain
+  /// object that owns [chunkDuration], so the Checklist's floor and the
+  /// pipeline's floor are the same number by construction rather than by two
+  /// copies agreeing.
+  ///
+  /// (8,000 kbps video + 128 kbps audio) ÷ 8 = 1,016 kB/s, times 600 s =
+  /// 609.6 MB. Rounded up to 610 MB.
+  static const int oneChunkBytes = 610 * 1000 * 1000;
+
   /// `Idle` → `Ready`, the Checklist edge (BR-04).
   ///
   /// The only way into `Ready`, and `Ready` is the only way into `Recording`.
@@ -122,8 +135,7 @@ abstract final class RecordingLifecycle {
       job,
     ];
 
-    final bool atCapacity =
-        processing.length >= maximumConcurrentProcessing;
+    final bool atCapacity = processing.length >= maximumConcurrentProcessing;
     final bool continues =
         reason == ChunkBoundaryReason.automaticBoundary && !atCapacity;
 
@@ -207,12 +219,11 @@ abstract final class RecordingLifecycle {
       ),
       // The cause survives the drain. It is needed *after* Idle is reached,
       // which is when the Collector is looking at a stopped recording.
-      RecordingStateFinalizing() when remaining.isEmpty =>
-        RecordingState.idle(
-          lastCompletedSession: state.session,
-          endCause: state.endCause,
-          failed: failed,
-        ),
+      RecordingStateFinalizing() when remaining.isEmpty => RecordingState.idle(
+        lastCompletedSession: state.session,
+        endCause: state.endCause,
+        failed: failed,
+      ),
       RecordingStateFinalizing() => RecordingState.finalizing(
         session: state.session,
         processing: remaining,

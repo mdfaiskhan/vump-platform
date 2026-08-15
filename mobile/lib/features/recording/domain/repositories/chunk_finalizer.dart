@@ -46,8 +46,20 @@ abstract interface class ChunkFinalizer {
   /// implementation can no longer ask the pipeline which file is meant. The
   /// job names it, and the identity it carries is fixed and never recomputed
   /// (Chapter 5.13 §4).
+  ///
+  /// [chunkStartedAt] is when capture of this chunk **began**, and it is
+  /// separate from [job] because the job does not carry it —
+  /// `ChunkProcessingJob.startedAt` is the instant capture *ended*, which
+  /// Mission 3.4.5 named for when processing became possible. Chapter 5.7 §2's
+  /// `timing.started_at` needs the other end of the interval, and
+  /// `RecordingStateRecording.chunkStartedAt` is the only place it exists.
+  ///
+  /// Added at Mission 3.8, when composing the three chapters for the first
+  /// time showed that an implementation given only [job] would report every
+  /// chunk as zero seconds long.
   Future<void> finalizeChunk({
     required RecordingSession session,
     required ChunkProcessingJob job,
+    required DateTime chunkStartedAt,
   });
 }

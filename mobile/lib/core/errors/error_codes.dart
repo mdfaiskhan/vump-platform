@@ -141,6 +141,35 @@ enum ErrorCode {
   /// view.
   deviceWideAngleUnsupported('DEVICE_WIDE_ANGLE_UNSUPPORTED'),
 
+  /// Camera permission was refused by the operating system.
+  ///
+  /// Split out from [deviceCameraUnavailable] by Mission 3.8, because FR-CHK-01
+  /// and Volume 2 Ch. 2.7's C-08 require the Checklist to name the specific
+  /// failed check and its remedy — and "enable camera access in Settings" is a
+  /// different sentence from "the camera is in use by another app".
+  devicePermissionCameraDenied('DEVICE_PERMISSION_CAMERA_DENIED'),
+
+  /// Microphone permission was refused by the operating system.
+  ///
+  /// Separate from [devicePermissionCameraDenied] because they are separate
+  /// grants and BR-03 requires both — a Collector who granted one and refused
+  /// the other must be told which.
+  devicePermissionMicrophoneDenied('DEVICE_PERMISSION_MICROPHONE_DENIED'),
+
+  /// The battery level could not be read.
+  ///
+  /// FR-CHK-03 requires the level be verified before recording starts, so a
+  /// reading that fails is a failed check rather than a skipped one — the
+  /// Checklist cannot confirm what it could not measure.
+  deviceBatteryUnreadable('DEVICE_BATTERY_UNREADABLE'),
+
+  /// The connection status could not be read.
+  ///
+  /// Distinct from having no connection: [deviceNetworkStatusUnreadable] means
+  /// the platform did not answer, where "offline" is a perfectly good answer
+  /// that FR-CHK-04 reports and never blocks on.
+  deviceNetworkStatusUnreadable('DEVICE_NETWORK_STATUS_UNREADABLE'),
+
   // ---------------------------------------------------------------------------
   // Validation
   // ---------------------------------------------------------------------------

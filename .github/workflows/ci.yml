@@ -231,6 +231,8 @@ jobs:
           #   shared_preferences     → features/recording/data (A-057)
           #   crypto                 → features/recording/data (V5 Ch. 5.5)
           #   cloud_firestore        → features/auth/data      (ADR-036)
+          #   battery_plus           → features/recording/data (FR-CHK-03)
+          #   connectivity_plus      → features/recording/data (FR-CHK-04)
           #
           # The last two are owned by a feature rather than by core/. ADR-010
           # keeps the Firebase *platform* in core/firebase/; a Firebase
@@ -277,6 +279,8 @@ jobs:
           check camera                 lib/features/recording/data/
           check shared_preferences     lib/features/recording/data/
           check crypto                 lib/features/recording/data/
+          check battery_plus           lib/features/recording/data/
+          check connectivity_plus      lib/features/recording/data/
 
           exit $status
 

@@ -125,6 +125,8 @@ Every architectural invariant in force, with its authority and how it is checked
 | **I41** | `core/` never imports `features/` | ADR-022 §2, ADR-035 | A grep — **checkable now** |
 | **I42** | `cloud_functions` only in `features/auth/data/` | ADR-036 | CI `Architecture boundaries` |
 | **I43** | `cloud_firestore` only in `features/auth/data/` | ADR-036 | CI `Architecture boundaries` |
+| **I44** | `battery_plus` only in `features/recording/data/` | FR-CHK-03, ADR-030 | CI `Architecture boundaries` |
+| **I45** | `connectivity_plus` only in `features/recording/data/` | FR-CHK-04, ADR-030 | CI `Architecture boundaries` |
 
 **I2 widened at Mission 3.7 and is enforced again.** It read `isar` only in `core/database/` until Volume 5 Chapter 5.8's three collections were placed in the feature that owns them — a collection cannot be declared without importing the package, so the tables could satisfy the old rule or live with their feature, not both. ADR-039 supersedes ADR-009 on that clause alone and the CI check was widened to match; the job passes. **The rule did not weaken.** The engine, its lifecycle and its migrations are still `core/database/`'s exclusively, the two feature locations are a directory and a filename prefix rather than a layer, and nothing above `data/` may name an Isar type.
 

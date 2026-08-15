@@ -1623,6 +1623,103 @@ Three things are therefore true and are recorded rather than resolved:
 
 ---
 
+### A-064 — BR-13's crash promise is satisfied only under a stated reading, and Chapter 2.2's next-launch behaviour is not buildable
+
+| | |
+|---|---|
+| **Volume** | 1 — Ch. 1.9, BR-13; 2 — Ch. 2.2 §2 step 9; 2 — Ch. 2.7 C-07 and C-09; 1 — §5 (FR-CHK), §6 (FR-REC-03) |
+| **Says** | BR-13: *"A session that is interrupted (e.g. app killed mid-recording) shall preserve all footage recorded up to the last safely written point."* Ch. 2.2 step 9: *"App killed before Stop → footage recorded up to last safe write point is preserved (Chapter 1.9, BR-13); **resumes into Local Processing on next launch**"* |
+| **Should say** | BR-13 holds, with *"last safely written point"* read as **the last finalized chunk**. Chapter 2.2's *"resumes into Local Processing on next launch"* does not hold and cannot be built with the current camera plugin |
+| **Authority** | A-063 §3 (the plugin boundary), A-058 (the precedent for it) |
+| **Class** | Documentation update, plus four implementation gaps recorded below |
+| **Status** | Open |
+
+### 1. BR-13 is satisfied, under a reading that must be stated rather than assumed
+
+A-063 §3 established that an in-flight chunk is unrecoverable: `VideoCaptureOptions` exposes no output path, so a partial file sits in the plugin's temp directory under a name carrying no `session_id` and no `sequence_index`.
+
+That sounds like a BR-13 violation and is not, because **chunked recording makes every finalized chunk a safe write point**. A session killed at minute 17 has its first chunk complete, checksummed, paired with metadata and queued; only the 7 minutes since the last boundary are lost. BR-13's *"all footage recorded up to the last safely written point"* is exactly what survives.
+
+**The reading is load-bearing and is therefore recorded, not left implicit.** Under the other available reading — *"last safely written point"* meaning the last flushed encoder buffer — BR-13 is violated on every crash, and closing it needs a native recording path. The bound on the exposure is **at most one chunk per crash**, which Chapter 5.6's ten-minute boundary caps.
+
+### 2. Chapter 2.2 step 9's next-launch behaviour is not implementable
+
+*"Resumes into Local Processing on next launch"* has nothing to resume. Chunks finalized before the crash already completed Local Processing — checksum, metadata and storage all happen at the chunk boundary, not at Stop — so they are queued, not pending. The interrupted chunk cannot be found. **Both halves of the sentence are empty.**
+
+Mission 3.8 therefore builds **no crash-recovery screen**, and no launch-time notice. Volume 2 specifies neither, and inventing copy for a state the volumes do not describe would be a product decision taken in a widget.
+
+`ChunkStore.recoverableChunkIds()` exists and is correct — it returns exactly the finalized-and-queued chunks — and **nothing calls it yet**. Chapter 5.9's Upload Queue is its consumer, and re-queueing on launch is that mission's work.
+
+### 3. `MetadataIdentity`'s four unsourced fields carry the empty string
+
+Mission 3.6 made all five fields required and non-null, on the reasoning that *"a chunk that cannot say which Task it belongs to or who recorded it is not a valid record"*. Mission 3.8 had to record real footage anyway, and the two positions had to be reconciled.
+
+**Decided: `MetadataIdentity.unsourced`, the empty string.** The alternative — stubs that throw — is more honest about the gap and loses footage: metadata assembly sits in front of `ChunkStore.saveChunk`, so a throw means no chunk is ever persisted. The Constitution's *"never lose a take"* and `error-handling.md`'s *"never recover by discarding data"* both outrank the tidiness of refusing to guess.
+
+Nothing plausible is invented, following `MetadataCaptureConditions`' reasoning about `{0.0, 0.0}`: `'unassigned'` or a generated placeholder would read as data. An empty string reads as absence.
+
+**Detectability is the condition of the decision.** `MetadataIdentity.isComplete` and `ChunkMetadata.isIdentityComplete` report it, and **Chapter 5.10's registration must check the latter before composing an S3 key** — Chapter 5.14 §1's key embeds three of these fields, so uploading an incomplete identity would write an object nobody can attribute. That check does not exist yet, because no upload path does.
+
+Of the four, `collector_id` is the cheapest to close and the most damaging to leave: `features/auth/` already knows it, and the only obstacle is the ADR-022 R3 inversion — a `DeviceContext` supplied at the composition root from auth's own state. The other three need `features/projects_tasks/` (A-062) or a decision about what a device id is.
+
+### 4. `battery_plus` and `connectivity_plus` are admitted, and `capture_conditions` is still not wired
+
+FR-CHK-03 and FR-CHK-04 have no source in `dart:io`; both are now ADR-030 admissions confined to `features/recording/data/`, with invariants I44 and I45.
+
+They make **two thirds of A-062 §2 reachable** — battery percentage and network type are now one line each. They are deliberately **not** wired into `MetadataCaptureConditions`. A-062 §3's conflict between Chapter 5.7 §2's *"read at the moment of chunk finalization"* and NFR-META-01's 500 ms budget is unresolved, and its resolution decides the shape of the whole group: awaited, cached, or off the hot path. Filling in two fields under one reading of a rule still being decided would half-commit the group to an answer nobody has given.
+
+### 4a. `battery_plus` carries a dated build risk, named on the day it was admitted
+
+The Android build prints, on every run:
+
+> WARNING: Your app uses the following plugins that apply Kotlin Gradle Plugin (KGP): `battery_plus`, `cloud_functions`. **Future versions of Flutter will fail to build** if your app uses plugins that apply KGP.
+
+Verified rather than taken from the warning: `battery_plus 6.2.3`'s `android/build.gradle` applies `kotlin-android` and pins `ext.kotlin_version = '1.7.22'`. `connectivity_plus 6.1.5` does **not** — it uses the modern `settings.gradle` plugins block, which is why Flutter names only one of the two packages admitted by Mission 3.8.
+
+`cloud_functions` is also named and is **not** a new exposure: ADR-036 makes it temporary and it leaves the project at Mission 6/7.
+
+So one newly-admitted dependency builds today and will stop building on a future Flutter. It is not urgent — no date is announced, and the fix is a `battery_plus` release that migrates to Built-in Kotlin — but it is exactly the kind of thing that becomes invisible between the day it is noticed and the day it breaks a release. **Named, not resolved**, in the same register as A-029's unmaintained engine and ADR-038's experimental-API dependency. If no migrated release exists when Flutter enforces this, the alternative is the platform channel considered and rejected during 3.8's step 0.
+
+### 4b. `oneChunkBytes` is about 4 % low against a measured chunk
+
+`RecordingLifecycle.oneChunkBytes` derives 610 MB from Chapter 5.2 §1's bitrates: (8,000 + 128) kbps ÷ 8 × 600 s = 609.6 MB. It is the floor for **both** FR-CHK-02's Checklist row and Chapter 5.4 §2's mid-recording backpressure.
+
+**Measured on a CPH2707, Mission 3.8.1's full-duration run: 633,232,477 bytes for a 601-second chunk** — 633 MB, or 8.43 Mbps against the 8.128 Mbps the constant assumes. About 3.8 % above the derivation.
+
+The cause is ordinary: the encoder is variable-bitrate and the spec figure is a target, not a ceiling. Nothing is misconfigured — the fast pass measured 8.07 Mbps on a 91-second chunk, *below* target, which is the same variance in the other direction.
+
+**Consequence, small but real.** A device sitting exactly at the 610 MB floor has slightly less headroom than one full chunk actually needs, so the Checklist could admit a session whose first chunk does not quite fit. The exposure is bounded by Chapter 5.4 §2's 5-second free-space poll, which forces an early boundary long before the volume fills, and by the fact that a device that close to full is minutes from being blocked anyway.
+
+**Not changed here.** The constant is derived from the specification, and moving it to a measured number would replace a traceable derivation with a single device's sample. The right fix is a margin — the derivation times a stated safety factor — and choosing that factor is a product decision about how close to full a Collector may start recording. Recorded for whoever takes it.
+
+### 5. FR-REC-03's live preview is not rendered
+
+> *The system shall display a full-screen live camera preview during recording.* — FR-REC-03
+
+The Recording Screen shows the recording indicator, the elapsed timer and the Stop control on a black surface. **There is no preview**, because `CameraRecordingPipeline` owns the `CameraController` and does not expose it — deliberately, since handing a controller to a widget would let the UI start and stop capture behind the state machine's back.
+
+Closing it needs a deliberate seam: the pipeline exposing a preview widget, or a `Listenable` the screen can build a `CameraPreview` from, without exposing capture control. That is a design decision about the boundary Mission 3.3 drew, and it is recorded here rather than taken by breaking the boundary from the UI side.
+
+### 6. Two seams that were wrong until this mission composed them
+
+**`ChunkFinalizer.finalizeChunk` had no way to know when a chunk started.** `ChunkProcessingJob.startedAt` is the instant capture *ended* — Mission 3.4.5 named it for when processing became possible — and Chapter 5.7 §2's `timing.started_at` needs the other end of the interval. An implementation given only the job would have set `started_at` equal to `ended_at` and reported **every chunk as zero seconds long**, in the field Chapter 4.5 derives `duration_seconds` from. `chunkStartedAt` is now a parameter, passed from `RecordingStateRecording`.
+
+Nothing could have caught this before 3.8: the port had no implementation, so no test exercised the pairing.
+
+**`WideAngleEligibilityCache` cannot express a Tier 2 verdict.** It stores a `WideAngleTier` and nothing else. That is lossless for Tier 1 (always `zoomFactorOptical`) and for `unsupported` (no factor). It is **not** lossless for `primarySensorZoom`, which the ladder resolves to 0.5 on a device that reaches 0.5 and 0.6 on one that stops at 0.6 — the stored tier is identical in both cases.
+
+Reconstructing a factor from it would hand a 0.5-capable device 0.6 on every session after its first, which is precisely what Chapter 5.2 §2 forbids: *"footage from the same device is always comparable to itself over time."*
+
+**Mission 3.8 does not guess: a cached Tier 2 re-probes.** That is correct and slower than A-057 intended — a camera open before every session on exactly the devices the Android path produces most often, the CPH2707 among them, since Android cannot answer Tier 1 at all. The fix is to store the factor beside the tier, which changes a port and a persisted format committed in Mission 3.1 and is left for a decision rather than taken here.
+
+### 7. Two smaller readings, recorded so they are not re-litigated
+
+**C-07 has five rows against FR-CHK's four.** A-057 already added wide-angle as a sixth FR-CHK item; FR-CHK-05 is not a row but the rule that blocks when any row fails. Five rows, one gate.
+
+**C-09's timer switches format at ten minutes, not at one hour.** *"Timer format mm:ss up to 9:59, then hh:mm:ss"*, read literally, so 10:00 renders `0:10:00`. Unusual, and it lines up with Chapter 5.6's chunk boundary — the moment a Collector has a reason to count in a larger unit.
+
+---
+
 ## Confirmed correct — no amendment
 
 Recorded so they are not re-litigated.

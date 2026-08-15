@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:mobile/app/auth_guard.dart';
 import 'package:mobile/app/navigation/tab_shell.dart';
+import 'package:mobile/app/recording_guard.dart';
 import 'package:mobile/features/auth/application/auth_notifier.dart';
 import 'package:mobile/features/auth/application/auth_state.dart';
 import 'package:mobile/features/auth/presentation/admin_invite_codes_screen.dart';
@@ -16,6 +17,7 @@ import 'package:mobile/features/projects_tasks/presentation/collector_dashboard_
 import 'package:mobile/features/projects_tasks/presentation/collector_project_detail_screen.dart';
 import 'package:mobile/features/projects_tasks/presentation/collector_projects_screen.dart';
 import 'package:mobile/features/projects_tasks/presentation/collector_task_detail_screen.dart';
+import 'package:mobile/features/recording/application/recording_notifier.dart';
 import 'package:mobile/features/recording/presentation/local_processing_screen.dart';
 import 'package:mobile/features/recording/presentation/pre_recording_checklist_screen.dart';
 import 'package:mobile/features/recording/presentation/record_shortcut_screen.dart';
@@ -96,7 +98,21 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((Ref ref) {
           ? const AuthState.unauthenticated()
           : session.valueOrNull;
 
-      return AuthGuard.redirect(auth: auth, location: state.matchedLocation);
+      final String? authRedirect = AuthGuard.redirect(
+        auth: auth,
+        location: state.matchedLocation,
+      );
+      if (authRedirect != null) {
+        return authRedirect;
+      }
+
+      // BR-04, and it runs second on purpose: someone who is not signed in
+      // belongs on Login regardless of what the recording machine is doing,
+      // and sending them to the Record tab first would bounce them twice.
+      return RecordingGuard.redirect(
+        state: ref.read(recordingNotifierProvider),
+        location: state.matchedLocation,
+      );
     },
     routes: <RouteBase>[
       // The entry point renders nothing: the guard rewrites `/` before a

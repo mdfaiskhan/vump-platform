@@ -127,7 +127,10 @@ void main() {
       // device lands here whatever its hardware. Reporting false would claim
       // a phone has no ultra-wide lens when it plainly does.
       final CameraCapability result = await build(
-        cameras: <CameraDescription>[camera(), camera(name: 'cam2')],
+        cameras: <CameraDescription>[
+          camera(),
+          camera(name: 'cam2'),
+        ],
       ).probe();
 
       expect(result.hasDedicatedUltraWide, isNull);
@@ -180,7 +183,8 @@ void main() {
         expect(
           result.minimumZoomFactor! <= 0.6,
           isTrue,
-          reason: 'the raw value fails this comparison; the normalised one '
+          reason:
+              'the raw value fails this comparison; the normalised one '
               'must not',
         );
       });
@@ -197,7 +201,8 @@ void main() {
         expect(
           WideAngleLadder.resolve(raw),
           isA<WideAngleEligibilityIneligible>(),
-          reason: 'un-normalised, the raw value is still refused — which is '
+          reason:
+              'un-normalised, the raw value is still refused — which is '
               'why the fix belongs at the boundary that produces it',
         );
 
@@ -333,7 +338,10 @@ void main() {
           isA<DeviceException>().having(
             (DeviceException e) => e.errorCode,
             'errorCode',
-            ErrorCode.deviceCameraUnavailable,
+            // Named since Mission 3.8 — see camera_error_mapper_test.dart.
+            // The point of this test is that no CameraException escapes, not
+            // which code it becomes.
+            ErrorCode.devicePermissionCameraDenied,
           ),
         ),
       );

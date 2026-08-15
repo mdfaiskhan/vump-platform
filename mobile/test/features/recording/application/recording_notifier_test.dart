@@ -6,12 +6,14 @@ import 'package:mobile/core/errors/error_codes.dart';
 import 'package:mobile/core/errors/exceptions/storage_exception.dart';
 import 'package:mobile/core/errors/failure.dart';
 import 'package:mobile/features/recording/application/recording_notifier.dart';
+import 'package:mobile/features/recording/domain/entities/chunk_metadata.dart';
 import 'package:mobile/features/recording/domain/entities/chunk_processing_job.dart';
 import 'package:mobile/features/recording/domain/entities/recording_session.dart';
 import 'package:mobile/features/recording/domain/entities/recording_state.dart';
 import 'package:mobile/features/recording/domain/recording_lifecycle.dart';
 import 'package:mobile/features/recording/domain/repositories/chunk_finalizer.dart';
 import 'package:mobile/features/recording/domain/repositories/chunk_id_generator.dart';
+import 'package:mobile/features/recording/domain/repositories/chunk_store.dart';
 import 'package:mobile/features/recording/domain/repositories/free_space_reader.dart';
 import 'package:mobile/features/recording/domain/repositories/recording_pipeline.dart';
 import 'package:mobile/features/recording/domain/repositories/session_id_generator.dart';
@@ -39,6 +41,7 @@ void main() {
       throws: finalizerThrows,
       gate: gate,
     );
+    final _FakeStore store = _FakeStore();
     final _FakeTimers timers = _FakeTimers();
     final _FakeStorageTimers storageTimers = _FakeStorageTimers();
     final _FakeFreeSpace freeSpace = _FakeFreeSpace(
@@ -56,6 +59,7 @@ void main() {
         ),
         freeSpaceReaderProvider.overrideWithValue(freeSpace),
         storageTimerFactoryProvider.overrideWithValue(storageTimers.create),
+        chunkStoreProvider.overrideWithValue(store),
       ],
     );
     addTearDown(container.dispose);
@@ -65,6 +69,7 @@ void main() {
       timers: timers,
       storageTimers: storageTimers,
       freeSpace: freeSpace,
+      store: store,
     );
   }
 
@@ -236,18 +241,24 @@ void main() {
     // assertions below are that it reuses 3.2's existing Stop pattern — same
     // reason, same edge, same finalization — not a parallel mechanism.
 
-    test('the watch is armed at the poll interval when recording starts',
-        () async {
-      final _Harness f = build();
-      await notifierOf(f.container).checklistPassed(zoomFactor: 0.5, now: t0);
-      expect(f.storageTimers.armed, isEmpty, reason: 'Ready is not capturing');
+    test(
+      'the watch is armed at the poll interval when recording starts',
+      () async {
+        final _Harness f = build();
+        await notifierOf(f.container).checklistPassed(zoomFactor: 0.5, now: t0);
+        expect(
+          f.storageTimers.armed,
+          isEmpty,
+          reason: 'Ready is not capturing',
+        );
 
-      await notifierOf(f.container).start(now: t0);
+        await notifierOf(f.container).start(now: t0);
 
-      expect(f.storageTimers.armed, <Duration>[
-        RecordingNotifier.storagePollInterval,
-      ]);
-    });
+        expect(f.storageTimers.armed, <Duration>[
+          RecordingNotifier.storagePollInterval,
+        ]);
+      },
+    );
 
     test('it reads the directory the pipeline is writing to', () async {
       final _Harness f = build();
@@ -295,19 +306,17 @@ void main() {
       // (8000 + 128) kbps / 8 * 600s = 609.6 MB. Just above passes, just
       // below trips — asserted as a pair so the boundary is pinned.
       final _Harness ample = build(freeBytes: 610 * 1000 * 1000);
-      await notifierOf(ample.container).checklistPassed(
-        zoomFactor: 0.5,
-        now: t0,
-      );
+      await notifierOf(
+        ample.container,
+      ).checklistPassed(zoomFactor: 0.5, now: t0);
       await notifierOf(ample.container).start(now: t0);
       await ample.storageTimers.tick();
       expect(ample.finalizer.calls, 0, reason: 'exactly at the threshold');
 
       final _Harness scarce = build(freeBytes: 610 * 1000 * 1000 - 1);
-      await notifierOf(scarce.container).checklistPassed(
-        zoomFactor: 0.5,
-        now: t0,
-      );
+      await notifierOf(
+        scarce.container,
+      ).checklistPassed(zoomFactor: 0.5, now: t0);
       await notifierOf(scarce.container).start(now: t0);
       await scarce.storageTimers.tick();
       expect(scarce.finalizer.calls, 1, reason: 'one byte under');
@@ -434,8 +443,10 @@ void main() {
       await notifierOf(c).stop(now: t0);
       await pumpEventQueue();
 
-      expect(await notifierOf(c).checklistPassed(zoomFactor: 0.5, now: t0),
-          isNull);
+      expect(
+        await notifierOf(c).checklistPassed(zoomFactor: 0.5, now: t0),
+        isNull,
+      );
       expect(stateOf(c), isA<RecordingStateReady>());
       expect(stateOf(c).activeSession!.sessionId, 'sess_0002');
     });
@@ -531,6 +542,7 @@ class _Harness {
     required this.timers,
     required this.storageTimers,
     required this.freeSpace,
+    required this.store,
   });
 
   final ProviderContainer container;
@@ -538,6 +550,39 @@ class _Harness {
   final _FakeTimers timers;
   final _FakeStorageTimers storageTimers;
   final _FakeFreeSpace freeSpace;
+  final _FakeStore store;
+}
+
+/// Records FR-SES-02's session-completion writes, and nothing else.
+///
+/// Only [markSessionComplete] is exercised here: every chunk write goes
+/// through the finalizer, which this test suite already fakes.
+class _FakeStore implements ChunkStore {
+  final List<String> completed = <String>[];
+
+  /// Set to make the write fail, so the notifier's tolerance is observable.
+  Exception? throws;
+
+  @override
+  Future<void> markSessionComplete(String sessionId) async {
+    if (throws != null) {
+      throw throws!;
+    }
+    completed.add(sessionId);
+  }
+
+  @override
+  Future<void> saveChunk({
+    required RecordingSession session,
+    required ChunkProcessingJob job,
+    required ChunkMetadata metadata,
+  }) async => throw UnimplementedError();
+
+  @override
+  Future<List<String>> recoverableChunkIds() async => <String>[];
+
+  @override
+  Future<List<String>> orphanedChunkIds() async => <String>[];
 }
 
 /// Stands in for the capture pipeline; only its output directory is read here.
@@ -652,14 +697,23 @@ class _FakeFinalizer implements ChunkFinalizer {
   final List<int> indices = <int>[];
   final List<String> sessionIds = <String>[];
 
+  /// The chunk-start instants received, in call order.
+  ///
+  /// Recorded so a test can assert the notifier passes the start of the chunk
+  /// that ended rather than the start of the one now recording — the seam
+  /// Mission 3.8 added.
+  final List<DateTime> chunkStarts = <DateTime>[];
+
   @override
   Future<void> finalizeChunk({
     required RecordingSession session,
     required ChunkProcessingJob job,
+    required DateTime chunkStartedAt,
   }) async {
     calls += 1;
     indices.add(job.sequenceIndex);
     sessionIds.add(session.sessionId);
+    chunkStarts.add(chunkStartedAt);
     if (gate != null) {
       await gate!.future;
     }

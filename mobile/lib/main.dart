@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mobile/app/app.dart';
 import 'package:mobile/app/config/app_config.dart';
+import 'package:mobile/core/database/database_config.dart';
 import 'package:mobile/core/database/providers/database_provider.dart';
 import 'package:mobile/core/environment/environment_profile.dart';
 import 'package:mobile/core/errors/app_exception.dart';
@@ -18,7 +19,26 @@ import 'package:mobile/features/auth/application/auth_notifier.dart';
 import 'package:mobile/features/auth/application/invite_code_notifier.dart';
 import 'package:mobile/features/auth/data/invite_code_repository_impl.dart';
 import 'package:mobile/features/auth/data/repositories/auth_repository_impl.dart';
+import 'package:mobile/features/recording/application/checklist_notifier.dart';
+import 'package:mobile/features/recording/application/finalize_chunk_use_case.dart';
+import 'package:mobile/features/recording/application/recording_notifier.dart';
+import 'package:mobile/features/recording/data/battery_plus_battery_reader.dart';
+import 'package:mobile/features/recording/data/camera_capability_probe_impl.dart';
+import 'package:mobile/features/recording/data/camera_permission_probe_impl.dart';
+import 'package:mobile/features/recording/data/camera_recording_pipeline.dart';
+import 'package:mobile/features/recording/data/chunk_metadata_assembler.dart';
+import 'package:mobile/features/recording/data/collections/recording_schemas.dart';
+import 'package:mobile/features/recording/data/connectivity_plus_network_reader.dart';
+import 'package:mobile/features/recording/data/free_space_channel.dart';
+import 'package:mobile/features/recording/data/isar_chunk_store.dart';
+import 'package:mobile/features/recording/data/isolate_video_processor.dart';
+import 'package:mobile/features/recording/data/platform_device_context.dart';
+import 'package:mobile/features/recording/data/random_uuid_generator.dart';
+import 'package:mobile/features/recording/data/shared_preferences_wide_angle_eligibility_cache.dart';
+import 'package:mobile/features/recording/data/unavailable_capture_conditions_reader.dart';
+import 'package:mobile/features/recording/data/unsourced_task_context.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -29,6 +49,12 @@ Future<void> main() async {
   // guessed path is wrong on at least one platform and failing at the override
   // point is easier to diagnose than a database opened somewhere unexpected.
   final Directory documents = await getApplicationDocumentsDirectory();
+
+  // Resolved here for the same reason as the documents directory: obtaining it
+  // is asynchronous, and `SharedPreferencesWideAngleEligibilityCache` takes the
+  // instance rather than resolving one itself so it stays substitutable in
+  // tests. A-057's per-device verdict is what it holds.
+  final SharedPreferences preferences = await SharedPreferences.getInstance();
 
   // The container is built before runApp so that asynchronous startup work can
   // be awaited here rather than inside a widget. ADR-010 requires Firebase to
@@ -51,6 +77,22 @@ Future<void> main() async {
       inviteCodeRepositoryProvider.overrideWithValue(
         InviteCodeRepositoryImpl(),
       ),
+
+      // The recording feature's collections, contributed here rather than by
+      // editing `core/database/`. ADR-039 §2: the engine's module has no
+      // knowledge of any feature collection, and invariant I41 forbids `core/`
+      // importing `features/` — so the composition root is the only place the
+      // two can meet.
+      databaseConfigProvider.overrideWith(
+        (Ref ref) => DatabaseConfig(
+          directory: ref.watch(databaseDirectoryProvider),
+          inspector: AppFeatureFlags.forEnvironment(
+            AppConfig.environment,
+          ).databaseInspectorEnabled,
+        ).withSchemas(RecordingSchemas.all),
+      ),
+
+      ...recordingOverrides(documents.path, preferences),
     ],
   );
   final AppLogger logger = container.read(loggerProvider);
@@ -64,6 +106,99 @@ Future<void> main() async {
     UncontrolledProviderScope(container: container, child: const VumpApp()),
   );
 }
+
+/// Introduces every `features/recording/` port to its implementation.
+///
+/// **Public so that an alternate entrypoint binds the same wiring.** A second
+/// `--target` that re-declared this list could verify a composition the
+/// application does not actually ship, which is worse than not verifying it —
+/// so there is one list and both entrypoints read it.
+///
+/// ## Why they are all here and none of them have defaults
+///
+/// `application/` declares the providers and may not import `data/`
+/// (ADR-022 §5.3), so a default would have to name a class it cannot see.
+/// Every one of these therefore throws `UnimplementedError` until this
+/// function overrides it — the same arrangement `authRepositoryProvider` has
+/// had since Mission 2.2. It fails loudly at the override point rather than
+/// quietly at first use.
+///
+/// [documentsPath] is the writable application directory, already resolved for
+/// the database.
+///
+/// ## `chunkStoreProvider` reads the database synchronously, and that is safe
+///
+/// `databaseProvider` is a `FutureProvider`, but `main` awaits it before
+/// `runApp`, so by the time anything reads a store the future has completed.
+/// `requireValue` states that expectation rather than hiding it behind a
+/// silent null — if the ordering in `main` ever changes, this throws where the
+/// mistake is instead of recording chunks into nothing.
+List<Override> recordingOverrides(
+  String documentsPath,
+  SharedPreferences preferences,
+) {
+  return <Override>[
+    recordingsDirectoryProvider.overrideWithValue(documentsPath),
+
+    recordingPipelineProvider.overrideWith(
+      (Ref ref) => CameraRecordingPipeline(outputDirectoryPath: documentsPath),
+    ),
+    freeSpaceReaderProvider.overrideWith((Ref ref) => const FreeSpaceChannel()),
+
+    // One generator, two ports — see RandomUuidGenerator on why `uuid` is not
+    // a dependency. Shared instance so both draw from one secure source.
+    sessionIdGeneratorProvider.overrideWith(
+      (Ref ref) => ref.watch(_uuidGeneratorProvider),
+    ),
+    chunkIdGeneratorProvider.overrideWith(
+      (Ref ref) => ref.watch(_uuidGeneratorProvider),
+    ),
+
+    // Checklist rows.
+    cameraPermissionProbeProvider.overrideWith(
+      (Ref ref) => CameraPermissionProbeImpl(),
+    ),
+    cameraCapabilityProbeProvider.overrideWith(
+      (Ref ref) => CameraCapabilityProbeImpl(),
+    ),
+    wideAngleEligibilityCacheProvider.overrideWith(
+      (Ref ref) => SharedPreferencesWideAngleEligibilityCache(preferences),
+    ),
+    batteryReaderProvider.overrideWith((Ref ref) => BatteryPlusBatteryReader()),
+    networkReaderProvider.overrideWith(
+      (Ref ref) => ConnectivityPlusNetworkReader(),
+    ),
+
+    chunkStoreProvider.overrideWith(
+      (Ref ref) => IsarChunkStore(
+        database: ref.watch(databaseProvider).requireValue,
+        documentsDirectoryPath: documentsPath,
+      ),
+    ),
+
+    // Volume 3 Ch. 3.9 §4's FinalizeChunkUseCase — Chapters 5.5, 5.7 and 5.8
+    // joined. Mission 3.8 wrote it; until then this provider had no
+    // implementation at all and the first chunk boundary would have thrown.
+    chunkFinalizerProvider.overrideWith(
+      (Ref ref) => FinalizeChunkUseCase(
+        videoProcessor: const IsolateVideoProcessor(),
+        metadataGenerator: const ChunkMetadataAssembler(
+          taskContext: UnsourcedTaskContext(),
+          // `app/config/` is granted to `core/` and `shared/` by ADR-022 and
+          // not to a feature's `data/`, so the version is read here and passed
+          // in rather than imported there.
+          deviceContext: PlatformDeviceContext(appVersion: AppInfo.fullVersion),
+          conditionsReader: UnavailableCaptureConditionsReader(),
+        ),
+        chunkStore: ref.watch(chunkStoreProvider),
+      ),
+    ),
+  ];
+}
+
+/// One shared UUID source behind both id ports.
+final Provider<RandomUuidGenerator> _uuidGeneratorProvider =
+    Provider<RandomUuidGenerator>((Ref ref) => RandomUuidGenerator());
 
 /// Records which environment this build resolved to, and warns if it fell back.
 ///

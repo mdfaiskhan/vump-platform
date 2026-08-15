@@ -67,5 +67,15 @@ class ChunkMetadata with _$ChunkMetadata {
   /// `capture_conditions` has no source. Exposed so an incomplete object is
   /// detectable by a caller rather than only by inspection — the same reason
   /// [MetadataCaptureConditions.unavailable] is named rather than implied.
-  bool get isComplete => captureConditions.isComplete;
+  bool get isComplete => captureConditions.isComplete && identity.isComplete;
+
+  /// Whether the `identity` group names real things.
+  ///
+  /// Separate from [isComplete] because the two gaps close on different
+  /// schedules and a consumer may care about only one. **Identity is the one
+  /// that must gate upload**: Chapter 5.14 §1's S3 key is composed from these
+  /// fields, so sending a chunk whose `collector_id` is
+  /// [MetadataIdentity.unsourced] would write an object nobody can attribute.
+  /// Missing `capture_conditions` merely makes a record less descriptive.
+  bool get isIdentityComplete => identity.isComplete;
 }

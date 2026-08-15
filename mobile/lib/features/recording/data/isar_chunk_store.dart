@@ -170,6 +170,31 @@ class IsarChunkStore implements ChunkStore {
   }
 
   @override
+  Future<void> markSessionComplete(String sessionId) async {
+    try {
+      await _isar.writeTxn(() async {
+        final LocalSession? row = await _isar.localSessions.getBySessionId(
+          sessionId,
+        );
+        if (row == null) {
+          // A session that produced no chunk never got a row. Creating one
+          // here would record a completed session that captured nothing.
+          return;
+        }
+        row.status = ChunkRecordMapper.sessionComplete;
+        await _isar.localSessions.putBySessionId(row);
+      });
+    } catch (error, stackTrace) {
+      throw StorageException(
+        errorCode: ErrorCode.storageWriteFailed,
+        message: 'The session could not be marked complete.',
+        cause: error,
+        stackTrace: stackTrace,
+      );
+    }
+  }
+
+  @override
   Future<List<String>> recoverableChunkIds() async {
     final List<LocalChunk> rows = await _isar.localChunks
         .filter()

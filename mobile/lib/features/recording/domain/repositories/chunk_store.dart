@@ -29,6 +29,19 @@ abstract interface class ChunkStore {
     required ChunkMetadata metadata,
   });
 
+  /// Marks a session `complete` — FR-SES-02's other half.
+  ///
+  /// **This closes amendment A-063's first open gap.** `saveChunk` is called
+  /// per chunk and cannot tell the last one from a middle one, so the session
+  /// row is written `in_progress` and left alone. The end of a session is
+  /// known in exactly one place — the lifecycle's return to `Idle` after
+  /// draining — and this is what that place calls.
+  ///
+  /// Idempotent, and a no-op for a session with no rows: a session that ended
+  /// before producing a chunk never reached storage, and inventing a row for
+  /// it here would record a session that captured nothing.
+  Future<void> markSessionComplete(String sessionId);
+
   /// Chunks that survived a crash and can still be uploaded.
   ///
   /// Volume 5 Chapter 5.3 §5's crash recovery, as far as it is achievable —
