@@ -424,6 +424,16 @@ jobs:
     # ADR-019 makes the squash-merge commit message — the message that actually
     # lands in develop's history.
     if: github.event_name == 'pull_request'
+    # Overrides the workflow-level `mobile` default. This job has no checkout,
+    # so `mobile/` does not exist on the runner and the step could not start —
+    # it failed with a process-start error that reads as "your PR title is
+    # wrong", which is the most misleading of open item 51's three
+    # manifestations. `$GITHUB_WORKSPACE` itself is created by the runner
+    # before any step, so `.` is a real directory even with nothing checked
+    # out, and no checkout is needed to fix this.
+    defaults:
+      run:
+        working-directory: .
     steps:
       - name: Validate the pull request title
         env:
@@ -484,6 +494,16 @@ jobs:
     name: Environment consistency
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    # Overrides the workflow-level `mobile` default. This job's subject is the
+    # repository, not the Flutter package: it reads two files under
+    # `infrastructure/` and one under `mobile/`, all written repo-root-relative.
+    # Under the default they resolved one level down — `mobile/infrastructure/…`
+    # and `mobile/mobile/lib/…` — so it died on FileNotFoundError before
+    # evaluating a single assertion, from the commit that created it. Open
+    # item 49.
+    defaults:
+      run:
+        working-directory: .
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -542,6 +562,15 @@ jobs:
     name: Secret scan
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    # Overrides the workflow-level `mobile` default, and this is the one that
+    # mattered. `git ls-files` and `git grep -- .` are both scoped to the
+    # current directory, so under the default this job scanned 444 of 561
+    # tracked files and **zero** under `infrastructure/` — where the AWS
+    # configuration lives — while reporting green. A committed key there would
+    # have passed. Open item 50; a hollow green is worse than a red.
+    defaults:
+      run:
+        working-directory: .
     steps:
       - name: Checkout
         uses: actions/checkout@v4
