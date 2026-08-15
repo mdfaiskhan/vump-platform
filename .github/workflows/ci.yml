@@ -357,15 +357,43 @@ jobs:
           # I41 already forbids core/ importing features/ generally; this is
           # the narrower, louder check for the module whose whole purpose is to
           # sit between two of them.
-          queue_leak=$(grep -rn "package:mobile/features/" lib/core/queue \
-            --include='*.dart' 2>/dev/null || true)
-          if [ -n "$queue_leak" ]; then
-            echo "::error::core/queue/ imports a feature — the contract must not name either side (ADR-040)."
-            echo "$queue_leak" | sed 's/^/  /'
-            status=1
-          else
-            echo "ok  core/queue/ names no feature"
-          fi
+          #
+          # Mission 4.2 added a second such module. core/upload/ holds Chapter
+          # 5.10's three contracts: ChunkUploadSource and ChunkMetadataSource,
+          # implemented by features/recording/ and consumed by
+          # features/upload/, plus SessionRegistrar, which features/upload/
+          # consumes and features/projects_tasks/ will eventually implement.
+          # Three feature pairs, none of which may name each other.
+          #
+          # Checked as a list rather than as two copies of one block, so
+          # adding a third contract module is one word rather than ten lines
+          # someone can forget to keep in step.
+          for module in queue upload; do
+            leak=$(grep -rn "package:mobile/features/" "lib/core/${module}" \
+              --include='*.dart' 2>/dev/null || true)
+            if [ -n "$leak" ]; then
+              echo "::error::core/${module}/ imports a feature — a contract must not name either side (ADR-040, ADR-041)."
+              echo "$leak" | sed 's/^/  /'
+              status=1
+            else
+              echo "ok  core/${module}/ names no feature"
+            fi
+          done
+
+          # ADR-041 — dio stays inside core/network/, and the reason the
+          # neutral transfer types exist is that it otherwise would not.
+          #
+          # DioClient's verb methods return Response<T>, a Dio type, so any
+          # caller outside core/network/ must import package:dio. The rule
+          # above was green only because nothing outside core/network/ had ever
+          # called DioClient. Mission 4.2 is the first feature consumer, and it
+          # goes through VumpApi, TransferHandle and TransferProgress instead —
+          # none of which publishes a Dio type.
+          #
+          # The `check dio` sweep above already enforces this. This is the
+          # explicit note for the next person who reaches for DioClient from a
+          # feature and finds it does not compile: the answer is another
+          # neutral type in core/network/, not a wider confinement rule.
 
           exit $status
 

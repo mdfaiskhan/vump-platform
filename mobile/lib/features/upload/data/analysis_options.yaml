@@ -1,0 +1,19 @@
+# Scopes `public_member_api_docs` to this layer.
+#
+# ADR-022 §6.1 step 7 requires this file for every feature's `domain/` and
+# `data/`, and the root `analysis_options.yaml` explains why it cannot live
+# there: the Dart analyzer cannot scope a lint to a subdirectory from the root
+# file. Volume 3 §3.7 §2 scopes the rule to "domain/ and data/ layers only".
+# Registered as amendment A-025.
+#
+# Missing until Mission 4.2, because `features/upload/` had no `domain/` or
+# `data/` file until then — Mission 4.1 added only `application/`, which the
+# rule does not cover.
+#
+# Four `../` segments from `lib/features/<feature>/data/`:
+# data -> upload -> features -> lib -> mobile.
+include: ../../../../analysis_options.yaml
+
+linter:
+  rules:
+    - public_member_api_docs

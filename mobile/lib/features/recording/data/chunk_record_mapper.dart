@@ -45,6 +45,20 @@ import 'package:mobile/features/recording/domain/entities/recording_session.dart
 ///
 /// The consumer that needs read-back is the Upload Queue, Chapter 5.9, which
 /// is a later mission. It is left unwritten rather than written wrong.
+///
+/// **Discharged 2026-08-15, Mission 4.2 — and the hazard above was answered,
+/// not overruled.** `ChunkMetadataDocumentMapper` now reads a stored row back,
+/// but it does not produce a `ChunkMetadata`: it produces a
+/// `ChunkMetadataDocument`, whose identity fields are **nullable**. So nothing
+/// is substituted — a stored null arrives as null, a stored blank arrives as
+/// blank — and `ChunkMetadataDocument.isIdentityComplete` (A-068 Guard 1)
+/// refuses it before any network call. The narrowing that made a reverse
+/// mapper unsafe never happens.
+///
+/// There is still no reverse mapper *here*, and there should not be. The
+/// unsafe direction is the one that produces a domain object with five
+/// required fields from a row with five nullable ones, and that direction is
+/// still unwritten. See amendment A-071.
 abstract final class ChunkRecordMapper {
   /// `local_chunks.status` for a chunk written to disk and not yet uploaded.
   ///
@@ -82,10 +96,27 @@ abstract final class ChunkRecordMapper {
   /// loading metadata, and copying one source into two columns keeps them
   /// from disagreeing.
   ///
-  /// `s3ObjectKey` stays null. Chapter 5.14 §1's key is
+  /// `s3ObjectKey` stays null, but **not for the reason first recorded here.**
+  ///
+  /// ~~Chapter 5.14 §1's key is
   /// `{org_id}/{project_id}/{task_id}/{session_id}/{sequence_index:04d}_{chunk_id}.mp4`
   /// and three of those five have no source yet; composing it from
-  /// placeholders would produce a key that looks deterministic and is not.
+  /// placeholders would produce a key that looks deterministic and is not.~~
+  ///
+  /// **Corrected 2026-08-15, Mission 4.2.** That premise assumed the client
+  /// composes the key. It does not. Volume 4 Chapter 4.10 §2 step 1: *"the
+  /// Lambda computes the deterministic key (Volume 5.14) and returns"* it, and
+  /// Chapter 4.6 §5 shows `s3_object_key` as a **response** field of chunk
+  /// registration, whose request body carries only `sequence_index`,
+  /// `file_size_bytes` and `checksum_sha256`. Chapter 5.14 §1 is authoritative
+  /// for both sides, but the client's own use of it is §2's *local* path,
+  /// which omits org/project/task entirely.
+  ///
+  /// So the field is null here because **registration has not happened yet**,
+  /// not because the key cannot be computed.
+  /// `ChunkUploadSource.recordObjectKey` fills it from the registration
+  /// response. Amendment A-071 corrects the register entry that carried the
+  /// same wrong premise.
   static LocalChunk toLocalChunk({
     required ChunkProcessingJob job,
     required RecordingSession session,

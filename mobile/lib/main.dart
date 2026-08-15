@@ -15,6 +15,7 @@ import 'package:mobile/core/errors/app_exception.dart';
 import 'package:mobile/core/firebase/providers/firebase_provider.dart';
 import 'package:mobile/core/logging/app_logger.dart';
 import 'package:mobile/core/logging/providers/logger_provider.dart';
+import 'package:mobile/core/upload/providers/upload_ports.dart';
 import 'package:mobile/features/auth/application/auth_notifier.dart';
 import 'package:mobile/features/auth/application/invite_code_notifier.dart';
 import 'package:mobile/features/auth/data/invite_code_repository_impl.dart';
@@ -188,6 +189,23 @@ List<Override> recordingOverrides(
       (Ref ref) => ref.watch(_chunkStoreProvider),
     ),
     chunkQueueSourceProvider.overrideWith(
+      (Ref ref) => ref.watch(_chunkStoreProvider),
+    ),
+
+    // Mission 4.2's two additions, behind the same instance. Chapter 5.10's
+    // pipeline must move exactly the rows C-11 renders and the finalizer
+    // wrote — four contracts, one store, one connection.
+    //
+    // sessionRegistrarProvider is deliberately NOT overridden: no
+    // implementation exists, because it needs a task_id that
+    // features/projects_tasks/ owns and that feature is unbuilt. The pipeline
+    // therefore throws at that seam rather than uploading, which is the
+    // feature's honest state. A fake satisfies it in the test suite only —
+    // Volume 11's M12 gate makes a fake wired into a build a defect.
+    chunkUploadSourceProvider.overrideWith(
+      (Ref ref) => ref.watch(_chunkStoreProvider),
+    ),
+    chunkMetadataSourceProvider.overrideWith(
       (Ref ref) => ref.watch(_chunkStoreProvider),
     ),
 

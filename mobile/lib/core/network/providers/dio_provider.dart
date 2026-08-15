@@ -6,6 +6,7 @@ import 'package:mobile/core/logging/providers/logger_provider.dart';
 import 'package:mobile/core/network/dio_client.dart';
 import 'package:mobile/core/network/interfaces/auth_token_source.dart';
 import 'package:mobile/core/network/network_config.dart';
+import 'package:mobile/core/network/s3_transfer_client.dart';
 
 /// Network configuration for the environment this build targets.
 ///
@@ -72,3 +73,20 @@ final Provider<DioClient> dioClientProvider = Provider<DioClient>(
 final Provider<Dio> dioProvider = Provider<Dio>(
   (Ref ref) => ref.watch(dioClientProvider).dio,
 );
+
+/// The client used for Volume 5 Chapter 5.10 §1 step 2's direct-to-S3 upload.
+///
+/// **Deliberately not derived from [dioClientProvider].** It is a separate
+/// client with no `AuthInterceptor`, because a presigned S3 request carries
+/// its own SigV4 authorisation and S3 rejects one that also presents a
+/// conflicting `Authorization` header — and with no `LoggingInterceptor`,
+/// because a presigned URL is a bearer credential in a query string. See
+/// `S3TransferClient` for both arguments in full.
+///
+/// It reads [loggerProvider] and nothing else. There is no token source in
+/// scope, which is the point: no code path here can send a Vump credential to
+/// Amazon.
+final Provider<S3TransferClient> s3TransferClientProvider =
+    Provider<S3TransferClient>(
+      (Ref ref) => S3TransferClient(logger: ref.watch(loggerProvider)),
+    );

@@ -7,6 +7,11 @@ import 'package:mobile/core/errors/exceptions/storage_exception.dart';
 import 'package:mobile/core/queue/chunk_upload_status.dart';
 import 'package:mobile/core/queue/interfaces/chunk_queue_source.dart';
 import 'package:mobile/core/queue/queued_chunk.dart';
+import 'package:mobile/core/upload/interfaces/chunk_metadata_source.dart';
+import 'package:mobile/core/upload/interfaces/chunk_upload_source.dart';
+import 'package:mobile/core/upload/metadata/chunk_metadata_document.dart';
+import 'package:mobile/core/upload/uploadable_chunk.dart';
+import 'package:mobile/features/recording/data/chunk_metadata_document_mapper.dart';
 import 'package:mobile/features/recording/data/chunk_record_mapper.dart';
 import 'package:mobile/features/recording/data/collections/local_chunk.dart';
 import 'package:mobile/features/recording/data/collections/local_chunk_metadata.dart';
@@ -76,7 +81,12 @@ import 'package:mobile/features/recording/domain/repositories/chunk_store.dart';
 /// that cannot exist in this application's tree. This is a structural limit of
 /// the plugin choice, in the same category as A-058's software-encoder
 /// guarantee, and is recorded in amendment A-063.
-class IsarChunkStore implements ChunkStore, ChunkQueueSource {
+class IsarChunkStore
+    implements
+        ChunkStore,
+        ChunkQueueSource,
+        ChunkUploadSource,
+        ChunkMetadataSource {
   /// Creates a store over [database], writing files beneath the documents
   /// directory at [documentsDirectoryPath].
   const IsarChunkStore({
@@ -314,6 +324,209 @@ class IsarChunkStore implements ChunkStore, ChunkQueueSource {
       throw StorageException(
         errorCode: ErrorCode.storageWriteFailed,
         message: 'The chunk could not be returned to the queue.',
+        cause: error,
+        stackTrace: stackTrace,
+      );
+    }
+  }
+
+  // ---------------------------------------------------------------------
+  // ChunkUploadSource — Chapter 5.10's pipeline view of the same rows
+  // ---------------------------------------------------------------------
+
+  @override
+  Future<UploadableChunk?> claimNext() async {
+    try {
+      return await _isar.writeTxn(() async {
+        // Read and write inside one transaction. This is what makes the claim
+        // atomic: Chapter 5.11's dispatcher will run several of these
+        // concurrently, and a chunk claimed twice would be uploaded twice —
+        // the one duplication S3's same-key semantics cannot undo, because
+        // both attempts would be legitimate.
+        final List<LocalChunk> rows = await _isar.localChunks
+            .filter()
+            .statusEqualTo(ChunkUploadStatus.queued.wireName)
+            .findAll();
+        if (rows.isEmpty) {
+          return null;
+        }
+
+        final List<LocalSession> sessions = await _isar.localSessions
+            .where()
+            .findAll();
+        final Map<String, DateTime> startedAt = <String, DateTime>{
+          for (final LocalSession session in sessions)
+            session.sessionId: session.startedAt,
+        };
+
+        // Same skips as currentQueue, for the same reasons: a soft-deleted
+        // row is gone (BR-08), and a row whose session is missing has no
+        // position, so claiming it would upload out of the order Chapter 5.9
+        // §2 fixes.
+        LocalChunk? best;
+        DateTime? bestStart;
+        for (final LocalChunk row in rows) {
+          if (row.localDeletedAt != null) {
+            continue;
+          }
+          final DateTime? sessionStart = startedAt[row.sessionId];
+          if (sessionStart == null) {
+            continue;
+          }
+          if (best == null || _precedes(sessionStart, row, bestStart!, best)) {
+            best = row;
+            bestStart = sessionStart;
+          }
+        }
+
+        if (best == null || bestStart == null) {
+          return null;
+        }
+
+        best.status = ChunkUploadStatus.uploading.wireName;
+        await _isar.localChunks.putByChunkId(best);
+
+        return UploadableChunk(
+          chunkId: best.chunkId,
+          sessionId: best.sessionId,
+          sequenceIndex: best.sequenceIndex,
+          sessionStartedAt: bestStart,
+          localFilePath: best.localFilePath,
+          fileSizeBytes: best.fileSizeBytes,
+          checksumSha256: best.checksumSha256,
+          s3ObjectKey: best.s3ObjectKey,
+        );
+      });
+    } on StorageException {
+      rethrow;
+    } catch (error, stackTrace) {
+      throw StorageException(
+        errorCode: ErrorCode.storageWriteFailed,
+        message: 'The next chunk could not be claimed for upload.',
+        cause: error,
+        stackTrace: stackTrace,
+      );
+    }
+  }
+
+  /// Chapter 5.9 §2's order, as a comparison between two candidate rows.
+  ///
+  /// Identical to `QueuedChunk.compareTo` — session start, then sequence
+  /// index, then chunk id. Written out rather than built through
+  /// `UploadableChunk` so the scan does not allocate a projection per row
+  /// while looking for one.
+  static bool _precedes(
+    DateTime candidateStart,
+    LocalChunk candidate,
+    DateTime bestStart,
+    LocalChunk best,
+  ) {
+    final int bySession = candidateStart.compareTo(bestStart);
+    if (bySession != 0) {
+      return bySession < 0;
+    }
+    final int bySequence = candidate.sequenceIndex.compareTo(
+      best.sequenceIndex,
+    );
+    if (bySequence != 0) {
+      return bySequence < 0;
+    }
+    return candidate.chunkId.compareTo(best.chunkId) < 0;
+  }
+
+  @override
+  Future<void> recordObjectKey({
+    required String chunkId,
+    required String s3ObjectKey,
+  }) => _write(
+    chunkId,
+    "The chunk's object key could not be stored.",
+    (LocalChunk row) => row.s3ObjectKey = s3ObjectKey,
+  );
+
+  @override
+  Future<void> release(String chunkId) => _transition(
+    chunkId,
+    to: ChunkUploadStatus.queued,
+    failureMessage: 'The chunk could not be released back to the queue.',
+  );
+
+  @override
+  Future<void> markFailed(String chunkId) => _transition(
+    chunkId,
+    to: ChunkUploadStatus.failed,
+    failureMessage: 'The chunk could not be marked failed.',
+  );
+
+  @override
+  Future<void> markComplete(String chunkId) => _transition(
+    chunkId,
+    to: ChunkUploadStatus.complete,
+    failureMessage: 'The chunk could not be marked complete.',
+  );
+
+  /// Moves a chunk out of `uploading`.
+  ///
+  /// All three transitions guard on the same precondition, and that guard is
+  /// the point: only a claimed chunk can be released, failed or completed. A
+  /// `queued` chunk moved to `complete` was never uploaded, and a `complete`
+  /// one moved back would contradict BR-12. Ignoring the call rather than
+  /// throwing makes a duplicate — a retry after a dropped response — a no-op,
+  /// which is what Chapter 5.10 §3's idempotency argument assumes.
+  Future<void> _transition(
+    String chunkId, {
+    required ChunkUploadStatus to,
+    required String failureMessage,
+  }) => _write(chunkId, failureMessage, (LocalChunk row) {
+    if (row.status != ChunkUploadStatus.uploading.wireName) {
+      return;
+    }
+    row.status = to.wireName;
+  });
+
+  /// Applies [mutate] to one chunk row inside a transaction.
+  ///
+  /// A missing row is ignored rather than raised: it means the chunk was
+  /// cleaned up or never existed, and neither is a storage failure. Only a
+  /// failure of the write itself becomes a [StorageException].
+  Future<void> _write(
+    String chunkId,
+    String failureMessage,
+    void Function(LocalChunk row) mutate,
+  ) async {
+    try {
+      await _isar.writeTxn(() async {
+        final LocalChunk? row = await _isar.localChunks.getByChunkId(chunkId);
+        if (row == null) {
+          return;
+        }
+        mutate(row);
+        await _isar.localChunks.putByChunkId(row);
+      });
+    } catch (error, stackTrace) {
+      throw StorageException(
+        errorCode: ErrorCode.storageWriteFailed,
+        message: failureMessage,
+        cause: error,
+        stackTrace: stackTrace,
+      );
+    }
+  }
+
+  // ---------------------------------------------------------------------
+  // ChunkMetadataSource — Chapter 5.10 §1 step 4's document
+  // ---------------------------------------------------------------------
+
+  @override
+  Future<ChunkMetadataDocument?> metadataDocument(String chunkId) async {
+    try {
+      final LocalChunkMetadata? row = await _isar.localChunkMetadatas
+          .getByChunkId(chunkId);
+      return row == null ? null : ChunkMetadataDocumentMapper.fromLocal(row);
+    } catch (error, stackTrace) {
+      throw StorageException(
+        errorCode: ErrorCode.storageReadFailed,
+        message: "The chunk's metadata could not be read.",
         cause: error,
         stackTrace: stackTrace,
       );
