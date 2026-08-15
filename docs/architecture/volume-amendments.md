@@ -1298,6 +1298,60 @@ Joining the list under A-058:
 
 4. **Re-measure the checksum on the CPH2707** — the desktop figure above is an upper bound on speed and a lower bound on duration. The real number is what the product question should be decided against, and it also sets the true size of the capture gap above.
 
+### A-060 — Chapter 5.6 is already satisfied, and Chapter 5.14 assigns it work it never mentions
+
+| | |
+|---|---|
+| **Volume** | 5 — Recording Engine, Chapter 5.6 (Video Chunking); Chapter 5.14 §3 (File Naming Strategy) |
+| **Says** | Ch. 5.6 states the chunking rules, the sequencing rules and three edge cases. Ch. 5.14 §3 states that *"`chunk_id`: a UUID generated locally the moment a chunk begins finalizing (**Chapter 5.6**)"* |
+| **Should say** | Ch. 5.6 is correct and needs no change — every clause in it was implemented by Missions 3.2 and 3.4 before this chapter was read as a mission of its own. But Ch. 5.6 **never mentions `chunk_id`**, so Ch. 5.14 §3 assigns generation to a chapter that does not describe it |
+| **Reason** | Two separate findings: a chapter with no remaining work, and a cross-chapter attribution gap |
+
+**This amendment records no defect in Chapter 5.6.** It exists because a mission was opened against the chapter and found nothing to build, and because that outcome is worth being able to find later rather than inferring from an absent commit.
+
+### Chapter 5.6 is fully satisfied by already-committed work
+
+Checked clause by clause against the code rather than assumed:
+
+| Ch. 5.6 clause | Where it is implemented |
+|---|---|
+| §1 BR-05 — a boundary is always an internal or Collector-initiated Stop, never a slice | `ChunkBoundaryReason` and the internal-Stop pattern — Mission 3.2 (`09e7fbe`) |
+| §1 BR-06 — every chunk exactly 10 minutes, final may be shorter | `RecordingLifecycle.chunkDuration` — 3.2 |
+| §1 BR-07 — written to local storage in full before reaching the Upload Queue | the notifier awaits `ChunkFinalizer` before taking the edge — 3.2; checksum after finalization — Mission 3.4 (`390c170`) |
+| §2 — `sequence_index` starting at 0 | `RecordingLifecycle.firstSequenceIndex` — 3.2 |
+| §2 — incremented once per Finalizing transition | `onChunkPersisted`, and nowhere else — 3.2 |
+| §2 — `session_id` generated once at session start, never re-created by chunking | `SessionIdGenerator` on the Checklist edge — 3.2 |
+| §3 — a very short final chunk is valid; no minimum duration | 3.2, asserted in `recording_lifecycle_test.dart` |
+| §3 — the automatic timer is cancelled the instant a manual Stop begins finalization | 3.2, cancelled before the await, with a re-entrancy guard for the already-scheduled callback |
+| §3 — app killed exactly at a boundary | **deferred to Mission 3.7**, already recorded — crash recovery needs Chapter 5.8's local storage |
+| §4 — metadata record, file naming | deferred to Chapters 5.7 and 5.14 |
+
+The overlap is not coincidental. Chapter 5.6 §3's timer-cancellation rule is stated **only** in this chapter — Chapter 5.3 omits it — and Mission 3.2 implemented it after reading 5.6 alongside its own chapter. §2's sequencing rules are what fixed `firstSequenceIndex` and the placement of the increment.
+
+**Chapter 5.6 §2's `sequence_index` base is confirmed consistent** with the decision recorded in Mission 3.2: the chapter's *"starting at 0 (or 1, matching Volume 4's convention)"* defers to a Volume 4 convention that does not exist, so its stated default stands. The reasoning is in `RecordingLifecycle.firstSequenceIndex`'s documentation and in `09e7fbe`'s message.
+
+### `chunk_id` — the attribution gap
+
+Chapter 5.14 §3 assigns it plainly:
+
+> `chunk_id`: a UUID generated locally the moment a chunk begins finalizing (**Chapter 5.6**) — never reused, never predictable, never assigned by a counter that could collide across devices.
+
+**Chapter 5.6 does not mention `chunk_id` anywhere.** Its §2 "Sequencing" covers `sequence_index` and `session_id` only. So the requirement is real — the S3 object key is `{sequence_index:04d}_{chunk_id}.mp4` (Ch. 5.14 §1) — but it is attributed to a chapter that never describes it.
+
+Same species as A-057 and A-058: a chapter deferring to a section that does not carry what the deferral claims. Recorded rather than silently absorbed, so the next reader of Chapter 5.6 does not conclude the id is generated somewhere they have not looked.
+
+`chunk_id` is **not currently generated anywhere in the codebase** — confirmed by grep, which finds the term only inside a doc comment. Note that it is needed for the S3 key but **not** for the local path, which Ch. 5.14 §2 defines as `{sequence_index:04d}.mp4` with no id.
+
+### Deferred to Mission 3.4.5, deliberately
+
+*"The moment a chunk begins finalizing"* is the `Recording → Finalizing` transition, so the generated id has to be stored on **`RecordingStateFinalizing`** and survive until the chunk is named. Nothing else spans that interval, and no other component observes both ends of it.
+
+That is the same state A-059 already schedules Mission 3.4.5 to restructure for the capture-overlap fix, where `onChunkPersisted` splits into two independent facts and the four-state union may no longer express what it needs to.
+
+**Building `chunk_id` now would mean opening that state twice** — once to add a field, and again weeks later to change what the state means — with the second change landing on top of the first and re-testing the same union. It is folded into 3.4.5 instead.
+
+The two also touch the same key. A-059 records that under overlap *"increment timing and processing-completion order diverge, and the S3 key is deterministic and UNIQUE on that index"*; `chunk_id` is the other component of that key. Deciding both together is more likely to produce a coherent answer than deciding them a mission apart.
+
 ---
 
 ## Confirmed correct — no amendment
