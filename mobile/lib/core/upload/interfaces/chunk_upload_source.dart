@@ -22,17 +22,43 @@ import 'package:mobile/core/upload/uploadable_chunk.dart';
 /// session start time is not a preference here, it is what stops *"an earlier
 /// session's chunks … being starved by a later session's"*.
 ///
-/// ## What is deliberately absent
+/// ## What was deliberately absent, and what arrived with its policy
 ///
-/// No attempt counter, no backoff deadline, no multipart upload id. Chapter
-/// 5.13 owns retry timing and Chapter 5.11 owns backgrounding; fields for
-/// either would be state with no policy behind it, which is the same mistake
-/// this contract exists to avoid.
+/// This contract originally carried *"no attempt counter, no backoff deadline,
+/// no multipart upload id"*, on the ground that Chapter 5.13 owned retry
+/// timing and fields without a policy behind them are the mistake this
+/// contract exists to avoid.
+///
+/// **Mission 4.4 is that policy**, so the first two arrived with it:
+/// [deferAttempt] records both, and [claimNext] honours the deadline. The
+/// reasoning is unchanged — they are here now because Chapter 5.13 §2's
+/// schedule is implemented, not because a field looked useful.
+///
+/// **The multipart upload id is still absent, and still deliberately.**
+/// Chapter 5.13 §4 wants a retry to reuse *"where possible the same
+/// in-progress multipart upload ID"*, which needs the backend to hand one back
+/// — `SessionRegistrar` has no implementation and open item 36 blocks it. A
+/// field for it now would be exactly the state-without-policy this paragraph
+/// warns about. NFR-REL-02's *"resume without restarting from zero"* is
+/// therefore not satisfied; A-084 records that plainly rather than leaving it
+/// to be discovered.
 abstract interface class ChunkUploadSource {
-  /// Claims the next `queued` chunk, moving it to `uploading`.
+  /// Claims the next eligible `queued` chunk, moving it to `uploading`.
   ///
   /// Returns the chunk in Chapter 5.9 §2's order — earliest session first,
   /// then lowest sequence index. Returns null when nothing is claimable.
+  ///
+  /// **Skips chunks still inside Chapter 5.13 §2's backoff window** — a row
+  /// whose `nextAttemptAt` is after [now] is not eligible, however far forward
+  /// in the queue it sits. Chapter 5.13 §1 requires a transient failure to be
+  /// retried on a schedule rather than immediately, and a chunk that stayed
+  /// claimable would be retried in a tight loop and burn its six attempts in
+  /// milliseconds.
+  ///
+  /// [now] is supplied by the caller rather than read here, because the caller
+  /// holds the `Clock` (Volume 9 Chapter 9.6 §2, A-045) and a store that read
+  /// the wall clock itself would put an untestable branch inside a
+  /// transaction.
   ///
   /// **Atomic.** Two concurrent callers never receive the same chunk: the read
   /// and the status write happen in one transaction, so a chunk observed as
@@ -44,7 +70,54 @@ abstract interface class ChunkUploadSource {
   /// this application recognises.
   ///
   /// Throws a `StorageException` if the transaction fails.
-  Future<UploadableChunk?> claimNext();
+  Future<UploadableChunk?> claimNext({required DateTime now});
+
+  /// Returns a chunk to `queued` after a transient failure, on a schedule.
+  ///
+  /// Chapter 5.13 §1 is explicit that a transient failure is *"never surfaced
+  /// to the Collector as Failed until attempts are exhausted"*, so this is
+  /// **not** [markFailed]: the chunk goes back to `queued` and C-11 keeps
+  /// showing it as waiting, which is the honest description of what it is.
+  ///
+  /// [attemptCount] is the number of attempts made **including** the one that
+  /// just failed, so the sixth call carries 6 and exhausts §2's budget.
+  /// [nextAttemptAt] is when [claimNext] may consider it again.
+  ///
+  /// Ignores a chunk that is not currently `uploading`, for the same reason
+  /// the other transitions do: only a claimed chunk can be deferred.
+  ///
+  /// Throws a `StorageException` if the write fails.
+  Future<void> deferAttempt({
+    required String chunkId,
+    required int attemptCount,
+    required DateTime nextAttemptAt,
+  });
+
+  /// Clears every pending backoff deadline, making queued chunks claimable.
+  ///
+  /// Chapter 5.12 §4's reconnection behaviour, and the only way NFR-AVL-02 is
+  /// reachable. On an online transition the dispatcher must claim the front of
+  /// the queue *"immediately — no polling delay, no Collector action
+  /// required"*, and the target is *"< 30 seconds after network restoration"*.
+  /// A batch that went offline together will be sitting on Chapter 5.13 §2
+  /// deadlines of up to 160 seconds; honouring those after connectivity
+  /// returns would miss the target by construction.
+  ///
+  /// **Clears deadlines, not attempt counts.** §2's budget of six still
+  /// applies — this makes a chunk eligible again, it does not forgive the
+  /// attempts it already spent. A device flapping on and off a marginal
+  /// connection therefore still converges on `failed` rather than retrying
+  /// forever.
+  ///
+  /// **Touches `queued` rows only.** §2 says an exhausted chunk waits for
+  /// *"connectivity/context to change … or a manual retry"*, which reads as
+  /// connectivity also reviving a `failed` chunk. That is not done here,
+  /// because reviving one would need to know whether it failed transiently or
+  /// terminally, and no failure cause is stored on the row — a terminal 4xx
+  /// would be retried on every reconnection, against §1. Recorded as A-085.
+  ///
+  /// Throws a `StorageException` if the write fails.
+  Future<void> clearBackoff();
 
   /// Stores the key the backend returned at registration.
   ///

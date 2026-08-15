@@ -42,6 +42,7 @@ class UploadableChunk implements Comparable<UploadableChunk> {
     required this.fileSizeBytes,
     required this.checksumSha256,
     this.s3ObjectKey,
+    this.attemptCount = 0,
   });
 
   /// The chunk's UUID, minted at capture-stop and never regenerated.
@@ -90,6 +91,21 @@ class UploadableChunk implements Comparable<UploadableChunk> {
   /// attempt after a dropped response, where re-registering is safe (§3) but
   /// unnecessary.
   final String? s3ObjectKey;
+
+  /// How many automatic attempts this chunk has already consumed.
+  ///
+  /// Chapter 5.13 §2 allows *"up to 6 automatic attempts per chunk"*, and this
+  /// is what the dispatcher counts against that budget. Zero for a chunk that
+  /// has never been attempted, and reset to zero by FR-UPL-07's manual retry
+  /// — §3 makes that reset explicit: tapping Retry Chunk *"resets the attempt
+  /// counter and immediately tries again"*.
+  ///
+  /// Persisted rather than held in memory, so the budget survives the app
+  /// being killed. NFR-REL-04 already requires the queue itself to, and a
+  /// counter that reset on relaunch would silently grant six fresh attempts
+  /// after every restart — which on a crash-looping device is an unbounded
+  /// retry loop wearing a bounded one's clothes.
+  final int attemptCount;
 
   /// Chapter 5.9 §2's order, identical to [QueuedChunk.compareTo].
   ///
