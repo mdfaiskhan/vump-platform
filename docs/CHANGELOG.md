@@ -24,7 +24,23 @@ Chapter 11.5 §4 also states that pre-1.0.0 builds *"may log only against `[Unre
 
 ## [Unreleased]
 
+### Added
+
+- **2026-08-16** — Volume 5 Chapter 5.11's Background Upload (Android). A single foreground service starts when a chunk enters `Uploading` and stops when the queue drains — one persistent notification for the whole batch, showing aggregate progress ("Uploading 2 of 5 chunks."), never restarted per chunk. Up to two chunks upload in parallel (§3's *"small fixed number"*; the number is chosen rather than derived — A-078).
+
+  **The upload runs in the app's main isolate, not in the service's task isolate**, and ADR-042 records why: the plugin's `TaskHandler` runs in a separate isolate that cannot hold the single `IsarChunkStore` instance ADR-040 requires, and `firebase_auth` does not serve tokens to a background isolate. An Android foreground service keeps its host process alive, which is the whole of what Chapter 5.11 §3 asks for.
+
+  **Nothing uploads yet.** `sessionRegistrarProvider` still throws (open item 36) and A-068's Guard 1 refuses every chunk a device has recorded (open item 37), so the dispatcher logs a wiring fault and stops. That is the honest state of the feature and it fails visibly rather than silently. Mission 4.3, ADR-042.
+
 ### Security
+
+- **2026-08-16** — Two new Android permissions reach the shipped manifest. `FOREGROUND_SERVICE_DATA_SYNC` is declared deliberately — Android 14 requires the permission matching the service's `foregroundServiceType`, and `dataSync` is Google's documented type for transferring data to the cloud. The service itself is `android:exported="false"`; nothing outside the app can start it.
+
+  **Three permissions and two receivers arrive by manifest merge rather than by choice**: `flutter_foreground_task` contributes `FOREGROUND_SERVICE`, `WAKE_LOCK`, `POST_NOTIFICATIONS` and `RECEIVE_BOOT_COMPLETED`, the last alongside an **exported** `RebootReceiver`. Boot-restart is configured off (`autoRunOnBoot: false`), so the receiver has nothing to start, but the permission is requested and the receiver is reachable. Reported rather than removed — see open item 45.
+
+  Notification permission is requested at the moment the first service starts, not at app launch, so the prompt appears when the thing it protects is about to happen. A refusal does not stop the upload: the notification is how the work stays visible (Ch. 2.9 §2 principle 3), and losing visibility is not a reason to stop transferring chunks the Collector already recorded. Mission 4.3.
+
+  No new network call, no new stored field, and no change to any verified path from Missions 3.x, 4.1 or 4.2.
 
 - **2026-08-15** — Volume 5 Chapter 5.10's Upload Pipeline is built, and it is the **first code in this project to make an HTTP request**. Four consequences worth recording as security, not as features.
 

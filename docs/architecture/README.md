@@ -245,7 +245,7 @@ forecloses, and what must now be maintained.
 
 ## Current State
 
-`decisions/` holds ADR-001 through ADR-039.
+`decisions/` holds ADR-001 through ADR-042.
 
 All are Accepted and therefore binding, except ADR-021 (**Superseded** by ADR-038) and ADR-009 (**Superseded** by ADR-039).
 
@@ -290,6 +290,11 @@ All are Accepted and therefore binding, except ADR-021 (**Superseded** by ADR-03
 | ADR-037 | Route guards |
 | ADR-038 | Static analysis for generated collections |
 | ADR-039 | Feature-owned Isar collections |
+| ADR-040 | Cross-feature contracts in `core/` |
+| ADR-041 | Neutral types for confined packages |
+| ADR-042 | Background upload runs in the main isolate |
+
+ADR-040, ADR-041 and ADR-042 are one line of argument applied at widening scope, and are best read in order. ADR-035 inverted a dependency between `core/` and one feature; ADR-040 does it between two features, with `core/` holding a contract that names neither; ADR-041 does it between a layer and a third-party package; ADR-042 applies the same move to an OS capability, and adds the constraint that makes it non-obvious — a foreground service's task isolate cannot hold the single database instance ADR-040 requires.
 
 ADR-038 supersedes ADR-021 solely to correct one section. ADR-021 claimed `isar_generator` emits its own `ignore_for_file` header; it emits none, and the claim was verified only in a directory where the rule it would have tripped is not enabled. ADR-021 is marked Superseded and left otherwise untouched, incorrect paragraph included, so the error stays legible. Everything else it decided is carried forward unchanged.
 

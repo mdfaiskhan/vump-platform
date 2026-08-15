@@ -2356,9 +2356,116 @@ The general lesson, stated once: **a green check over an empty set is not eviden
 
 ---
 
-## Consolidated open items — A-057 through A-076
+### A-077 — Chapter 5.11's header cites Volume 3's internal ADR-003, which is this repository's Riverpod record
 
-Every carried-forward item, in one place. Accurate as of **Mission 4.2**; originally the seed for Mission 3.12's status report, and re-checked at the close of each sub-mission block per item 23.
+| | |
+|---|---|
+| **Volume** | 5, Chapter 5.11 header — *"Expands ADR-003 (Volume 3, Chapter 3.2)"* |
+| **Says** | ADR-003 |
+| **Means** | Volume 3 Chapter 3.2's **own** ADR-003 — Background Upload (Android) — summarised in Volume 3 Chapter 3.1 §2's stack table |
+| **This repository's ADR-003** | State management (Riverpod) |
+| **Class** | Citation collision. **Third instance in three missions** |
+
+Volume 3 Chapter 3.1 §2's table is the actual authority Mission 4.3 implements against, and it names the package outright: *"A foreground service (`flutter_foreground_task`) driving Dio multipart uploads, with a persistent, dismissible-only-on-completion notification."* The package choice is therefore **transcribed, not taken** by this mission.
+
+Volume 3's internal sequence, read off that table for anyone who hits this again: ADR-001 state management, ADR-002 local persistence, **ADR-003 background upload (Android)**, ADR-004 Dio, ADR-005 go_router, ADR-006 dependency injection.
+
+### The pattern, now proven by repetition rather than argued
+
+Three missions, three collisions, each found by whichever chapter happened to be read:
+
+| Mission | Volume citation | What it means here |
+|---|---|---|
+| 4.1 | V8 Ch. 8.2 §3's "ADR-011" | Not this repo's ADR-011 (S3 storage) — A-069 |
+| 4.2 | V5 Ch. 5.10 §2/§4's "ADR-004" | Real record is ADR-007 (network), not GoRouter — open item 34 |
+| 4.3 | V5 Ch. 5.11's "ADR-003" | Real record is V3 Ch. 3.2's own ADR-003, not Riverpod |
+
+Open item 34 recommended a single sweep listing every inline `ADR-NNN`. That recommendation is now three-for-three and is restated with more force below. Not attempted here — out of scope for 4.3 as it was for 4.1 and 4.2.
+
+### A secondary, smaller mismatch in the same chapter
+
+§1 attributes the persistent notification to *"Chapter 2.9's honest-signal principle"*. **No such phrase exists in Chapter 2.9.** The nearest real clause is §2 principle 3, *"Background work stays visible, never invisible"*, which supports the requirement fully. Cited as §2 principle 3 in code rather than by the invented name.
+
+---
+
+### A-078 — Chapter 5.11 §3's concurrency bound has no number, and two is provisional
+
+| | |
+|---|---|
+| **Volume** | 5, Chapter 5.11 §3 |
+| **Says** | *"Uploaded with limited concurrency (a small fixed number in parallel, not all at once) to avoid saturating a constrained field connection and starving the Recording Pipeline (Ch.5.4) of CPU/network priority"* |
+| **Omits** | The number. No Volume states one |
+| **Decision** | **Two**, provisional, recorded rather than derived |
+
+### Why two, stated as a choice and not as a derivation
+
+Two is the smallest number that is still parallel. It satisfies §3's requirement — *"not all at once"* — while conceding the least to a field connection nobody has measured. There is no calculation behind it, and this entry exists so nobody later reads `defaultConcurrency = 2` as if there were.
+
+### Why A-061's three was not reused, explicitly
+
+A-061 fixed a concurrency bound of three for **chunk processing**, and derived it: a 600 s chunk boundary against roughly 12 s of processing, plus Chapter 5.4 §2's low-storage path forcing an early boundary at Mission 3.3's 5 s poll. Every term in that derivation is about disk and CPU during capture. None of it says anything about upload bandwidth.
+
+Transcribing three here would have looked like a citation and been a coincidence. That is the failure mode A-071 caught in time on the S3 key — a plausible-looking value, minted once, then reused forever by design.
+
+### What would replace it
+
+A pilot measurement on a real field connection, or the bandwidth-floor NFR open item 35 is already waiting on (A-072). Either turns the constant into a derived value. Until one exists, `UploadDispatcher.defaultConcurrency` is a named constant with this entry behind it, and the bound is constructor-injected so a measurement can be applied without touching the dispatcher's logic.
+
+---
+
+### A-079 — The wake lock is held for the service's active life, not per transfer
+
+| | |
+|---|---|
+| **Volume** | 5, Chapter 5.11 §1 |
+| **Says** | *"The service holds a partial wake lock only while actively transferring bytes — not for its entire lifetime — to limit battery impact during any idle gaps between chunks"* |
+| **Divergence** | The lock is held for the service's active life |
+| **Class** | Deliberate divergence, not an omission |
+
+### The mechanical constraint
+
+`allowWakeLock` is a field on `ForegroundTaskOptions`, fixed when the service starts. The only way to change it on a running service is `FlutterForegroundTask.updateService(foregroundTaskOptions: …)`.
+
+### Why the literal reading was rejected
+
+Honouring §1's wording means an `updateService` call around **every chunk** — which re-enters the notification flicker §1 itself names two bullets earlier as the reason the service is *"not restarted per chunk"*. The chapter's two requirements point in opposite directions at this granularity.
+
+The saving is also smaller than the sentence implies. §1 scopes the cost to *"idle gaps between chunks"*, and the dispatcher only holds the service open while it is actively draining a queue: the gaps in question are the milliseconds between one `claimNext` and the next, not idle stretches. A device with nothing to upload has no service running and no lock held at all, because the service stops the moment the batch drains.
+
+### What is bounded instead
+
+The lock's lifetime is bounded by the **drain**, not by the app's lifetime. That is the property §1 is protecting — a lock held while nothing is happening — and it is delivered by the service's stop condition rather than by the flag.
+
+### What would change this
+
+A measured battery cost attributable to the inter-chunk gaps, or a plugin release exposing a wake lock independent of the notification. Neither exists today.
+
+---
+
+### A-080 — Manual upload mode has no source, and the dispatcher reads Chapter 5.9 §4's other branch
+
+| | |
+|---|---|
+| **Volume** | 5, Chapter 5.9 §4; FR-UPL-02 |
+| **Says** | *"When a device is configured for manual upload … Chapter 5.11's Background Upload dispatcher does not automatically claim them; it waits for an explicit Collector-triggered upload action instead"* |
+| **Reading taken** | Always automatic |
+| **Class** | Unimplementable clause — the condition has no source |
+
+Chapter 5.9 §4 makes the dispatcher's behaviour conditional on a device being *"configured for manual upload"*. **Nothing in this application holds that configuration.** There is no `UploadMode`, no setting, no remote flag, and FR-UPL-02 has no surface in Chapter 2.7's screen inventory that would set one. `features/settings/` exists as a directory and is empty.
+
+`UploadDispatcher` therefore always claims automatically, which is §4's other branch and the one every device is on today. §4's own last sentence makes this safe: *"The queue's own model is identical in both modes"* — so adding the condition later changes when `claimNext` is called and nothing about the stored rows.
+
+### No port was built, deliberately
+
+The reflex is a `ManualUploadModeSource` port alongside the other three. Declined: `SessionRegistrar`'s precedent is a port declared for a requirement a **named** chapter states concretely, owed to a **named** future feature. This has neither — no chapter says where the setting lives, and no feature is assigned it. A port here would be a guess about a shape nobody has specified, and open item 21's `recoverableChunkIds()` is the standing example of a method declared before its question was settled and left uncalled for two missions.
+
+Recorded so the gap is visible rather than inferred from an absence.
+
+---
+
+## Consolidated open items — A-057 through A-080
+
+Every carried-forward item, in one place. Accurate as of **Mission 4.3**; originally the seed for Mission 3.12's status report, and re-checked at the close of each sub-mission block per item 23.
 
 ### Blocked on an unbuilt feature module
 
@@ -2392,7 +2499,7 @@ Every carried-forward item, in one place. Accurate as of **Mission 4.2**; origin
 | # | Risk | Why it is quiet | Source |
 |---|---|---|---|
 | 13 | Isar 3 is unmaintained; the project depends on an `@experimental` API for a uniqueness guarantee | The build no longer warns — ADR-038 silenced it | A-029, ADR-038 |
-| 14 | `battery_plus` applies the legacy Kotlin Gradle Plugin | Builds today; a future Flutter will refuse it | A-064 §4a |
+| 14 | ~~`battery_plus` applies~~ **Three plugins apply** the legacy Kotlin Gradle Plugin | **Widened 2026-08-16 by Mission 4.3, from a build rather than from a reading.** `flutter build apk --debug` names `battery_plus`, `cloud_functions` **and** `flutter_foreground_task`. `cloud_functions` was already in the tree and this item never mentioned it, so the item understated the exposure before 4.3 added to it. Builds today; a future Flutter will refuse it. Mitigating: `cloud_functions` retires with ADR-036 at Mission 6/7 | A-064 §4a, ADR-042 |
 | 15 | Software-encoder fallback and unmeasurable flush interval | Silent by nature | A-058 |
 | 16 | An in-flight chunk is unrecoverable after a crash | Structural to the plugin; at most one chunk per crash | A-063 §3, A-064 §1 |
 | 17 | Android 16 KB page-size support unverified for Isar | Release-blocking rather than development-blocking | ADR-009 |
@@ -2427,14 +2534,20 @@ Every carried-forward item, in one place. Accurate as of **Mission 4.2**; origin
 | 31 | CameraX `GRAPH_ERROR(ERROR_GRAPH_CONFIG)` on every session close | **Open, uninvestigated.** Fires after a successful `stopChunk()`, during `closeSession()`. Affected no run — chunk written, row committed, session completed each time. May be teardown noise or an unclean close that leaks across repeated sessions. Not assumed harmless. | A-070 §6 |
 | 32 | A device harness that drives the notifier cannot see UI wiring | **CLOSED for this case** by Mission 3.12-PRE (`09f40ac`)'s widget test; the general lesson stays open. **Third instance of "a whole checked in parts"** (cf. items 23, 26). Mission 3.8.1 returned `RESULT pass` twice while nothing in `lib/` called `start()`. Closed for this case by a widget test that taps the button; the general lesson is that an unattended harness proves the layer it drives and silently assumes the layer above calls it. | A-070 §3 |
 | 33 | `flutter install` deploys a stale artifact | **Use `flutter run`, or `flutter build` immediately before `flutter install`.** It installed Mission 3.8's pre-fix APK and reported success, causing a fix to be reported as on-device when it was not. "Install succeeded" is not evidence the change is on the device. | A-070 §4 |
-| 34 | Volumes' inline ADR citations collide with this repository's ADR numbers | **Sweep all Volumes, rather than fixing each as it is hit.** Confirmed in Volume 8 Ch. 8.2 §3, across Volume 3 Ch. 3.2's whole inline sequence, and inherited by Volume 5 Ch. 5.8's header. **Second instance found 2026-08-15 by Mission 4.2: Volume 5 Ch. 5.10 §2 and §4 both cite "ADR-004" for Dio's progress callbacks and cancellation tokens — this repository's ADR-004 is GoRouter; the real record is ADR-007 (network configuration).** Two missions running, a citation collision has been found by whichever chapter happened to be read, which is the pattern rather than the exception. A single pass listing every inline `ADR-NNN` and what it actually means would turn a recurring trap into a lookup table. Not attempted in 4.1 or 4.2 — out of scope for both. | A-069 |
+| 34 | Volumes' inline ADR citations collide with this repository's ADR numbers | **Sweep all Volumes, rather than fixing each as it is hit.** Confirmed in Volume 8 Ch. 8.2 §3, across Volume 3 Ch. 3.2's whole inline sequence, and inherited by Volume 5 Ch. 5.8's header. **Second instance found 2026-08-15 by Mission 4.2: Volume 5 Ch. 5.10 §2 and §4 both cite "ADR-004" for Dio's progress callbacks and cancellation tokens — this repository's ADR-004 is GoRouter; the real record is ADR-007 (network configuration).** Two missions running, a citation collision has been found by whichever chapter happened to be read, which is the pattern rather than the exception. A single pass listing every inline `ADR-NNN` and what it actually means would turn a recurring trap into a lookup table. Not attempted in 4.1, 4.2 or 4.3 — out of scope for all three. **Third instance found 2026-08-16 by Mission 4.3: Volume 5 Ch. 5.11's header cites "ADR-003", which is Volume 3 Ch. 3.2's own Background Upload record; this repository's ADR-003 is Riverpod.** Three missions, three collisions, each found only because someone happened to read that chapter. The recommendation is unchanged and now three-for-three. A-077 carries Volume 3's internal sequence as a partial lookup table. | A-069, A-077 |
 | 35 | **No field bandwidth-floor NFR exists** (Volume 1 Ch. 1.4) — `S3TransferClient` consequently has no send timeout | **Raising this NFR is a product decision, not an engineering one, and belongs in its own conversation rather than inside an implementation mission.** Deferred, not resolved. No number was proposed and none was guessed. The constant becomes derivable the moment the NFR exists. | A-072 |
 | 36 | Backend session registration has no implementation — `SessionRegistrar` is a named, unowned port | **Owed to whichever mission builds `features/projects_tasks/`.** Ch. 5.10 §1 step 1's URL needs a backend session id from `POST /v1/tasks/{id}/sessions`, which needs a `task_id`. `sessionRegistrarProvider` throws; a fake satisfies it in tests only. **Until this lands the pipeline cannot upload anything**, which is why 4.2's verification is against the fake rather than a real endpoint. | A-071, Ch. 4.6 §4 |
 | 37 | Guard 1 refuses 100% of chunks recorded on a device | **Correct behaviour, not a defect — and the reason it fires is items 1, 5 and 11.** Four of `MetadataIdentity`'s five fields carry the unsourced sentinel, so no real chunk can be uploaded until `features/projects_tasks/`, the `collector_id` inversion and a `device_id` source all exist. Named here so nobody reads an empty upload log as a broken pipeline. | A-068 Guard 1, A-062 §1 |
 | 38 | `LoggingInterceptor` logs full request URIs, and redaction is header-only | **Decide in Mission 4.8.** No Vump endpoint puts a secret in a query string today and Ch. 4.6 §1 uses cursor pagination, so nothing is exposed. But a future endpoint taking a signed parameter would leak it silently. `S3TransferClient` avoids the problem by not installing the interceptor at all; the general mechanism is unchanged. Not fixed in 4.2 — a change to a verified path, out of scope. | A-074 |
 | 39 | Presigned-URL redaction is a design-time mitigation and has not been re-verified against shipped code | **Mission 4.8 must confirm it as a confirmed-safe item, not assume it from Mission 4.2's report.** Four things to check: `redactUrl` applied at every log site in `S3TransferClient`; no interceptor added to it; no other path prints a presigned URL, including via an exception's `cause`; `ChunkRegistration.toString()` still omits the URL list. | A-074 |
 | 40 | `integration_test` and Ch. 9.7 §1's local mock server are still not installed | **Belongs in Mission 4.7**, and **M6's "Upload Engine Working E2E" claim in the 4.9 report depends on 4.7 actually building it.** Mission 4.2's two-tier fake is the nearest available substitute — a scripted `HttpClientAdapter` under the real client stack — but it runs in `flutter_test`, not against a server, and it is not what Ch. 9.7 §1 specifies. Explicitly not built in 4.2. | Ch. 9.7 §1, open item 20 |
-| 41 | A green check over an empty set is not evidence | **Ask, at each mission that introduces a first consumer of anything, which dormant rules it has just woken up.** `dio`'s confinement passed for eleven missions because nothing outside `core/network/` made an HTTP request; ADR-022 R3 was *"binding in writing and unenforced in fact"* while there were no features. **Fourth instance of "a whole checked in parts"** (cf. items 23, 26, 32). | A-076 |
+| 41 | A green check over an empty set is not evidence | **Ask, at each mission that introduces a first consumer of anything, which dormant rules it has just woken up.** `dio`'s confinement passed for eleven missions because nothing outside `core/network/` made an HTTP request; ADR-022 R3 was *"binding in writing and unenforced in fact"* while there were no features. **Fourth instance of "a whole checked in parts"** (cf. items 23, 26, 32). Asked and answered in 4.3: the dormant rules woken were the fourteenth package confinement, the first foreground service, the first isolate entry point and the first manifest permission. | A-076 |
+| 42 | **The `Format` CI job is red on `mission-0.18.4-ci`, and has been for at least two missions** | **Fifth instance of "a whole checked in parts"** (cf. items 23, 26, 32, 41), and found the same way item 26 was — by running the full sweep instead of the touched subset. `dart format --set-exit-if-changed` over all 254 committed hand-written Dart files reports **16 unformatted**: 6 in `lib/features/recording/`, 9 in `test/features/recording/`, and `test/features/upload/application/upload_queue_notifier_test.dart` from Mission 4.1. **Not fixed by 4.3** — 15 of the 16 are Mission 3's verified capture path and reformatting them inside an upload mission would put unrelated churn in this diff. Owed its own commit: `cd mobile && dart format .` then commit, nothing else. Mission 4.3's own 8 files are format-clean. | Mission 4.3 verification |
+| 43 | The concurrency bound is 2, chosen rather than derived | **Replace with a measurement, not with a different guess.** A pilot on a real field connection, or the bandwidth-floor NFR item 35 already waits on, turns it into a derived value. Constructor-injected so a measurement lands without touching dispatcher logic. | A-078 |
+| 44 | Manual upload mode (FR-UPL-02, Ch. 5.9 §4) has no configuration source | **Owed to whichever mission gives FR-UPL-02 a surface.** No `UploadMode`, no setting, no chapter saying where it lives; `features/settings/` is empty. The dispatcher always claims automatically. Safe to add later because §4 states the queue's model is identical in both modes — only the claim trigger changes. No port was built, deliberately. | A-080 |
+| 45 | `flutter_foreground_task` merges `RECEIVE_BOOT_COMPLETED` and an **exported** `RebootReceiver` into the app manifest | **Security review, not a self-fix.** Confirmed in the merged debug manifest. `autoRunOnBoot` and `autoRunOnMyPackageReplaced` are both `false`, so the receiver has nothing to start — but the permission is requested and the receiver is `android:exported="true"`. Removable with `tools:node="remove"`; not attempted in 4.3 because a manifest-merger change is a build-wide risk that belongs in a commit that can be reverted on its own. Also visible in the same merged manifest and pre-existing: `READ_EXTERNAL_STORAGE`, `USE_BIOMETRIC`, `USE_FINGERPRINT`, `c2dm.permission.RECEIVE`. | Mission 4.3, ADR-042 |
+| 46 | `applicationId` is still `com.example.mobile` | Untouched by 4.3 and noted once. The notification channel, the service and any future FCM registration all key off it. A release blocker rather than a development one, and it belongs with signing config (`build.gradle.kts` still signs release with debug keys). | Mission 4.3, V10 Ch. 10.1 |
+| 47 | **The `AWS credential isolation` CI job is red on `mission-0.18.4-ci`, introduced by Mission 4.2 (`75caec1`)** | Found by the same full sweep as item 42. The job greps `lib test` for `amazonaws\.com` and hits four lines of **test fixtures** — a fake presigned URL in `s3_transfer_client_test.dart` (×3) and in `fake_backend_adapter.dart`. Nothing is disclosed: the check's own rationale is that *"S3 URLs arrive at runtime from the backend, presigned"*, and a test asserting exactly that is the rule working, not breaking. **Needs a decision, not a patch**: either scope the endpoint grep to `lib` (the other three greps have real reasons to cover `test`), or move the fixture URL behind a constant the grep does not match. Not fixed by 4.3 — changing a security job's scope is a decision about what the job means. | Mission 4.3 verification, ADR-041 |
 
 ---
 
