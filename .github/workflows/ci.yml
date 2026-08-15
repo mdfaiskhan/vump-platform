@@ -264,10 +264,24 @@ jobs:
 
           status=0
 
+          # Matches import and export DIRECTIVES, not the package name anywhere
+          # in the file.
+          #
+          # It used to match the bare string. That was a false positive waiting
+          # to happen, and Mission 4.2 tripped it twice in one sweep: two files
+          # documenting that they deliberately do NOT import a confined package
+          # were reported as importing it. A rule that fails on a true
+          # statement about itself teaches people to stop writing the
+          # statement.
+          #
+          # No coverage is lost. A package can only be used by importing it,
+          # and `export` is checked too so a re-export cannot smuggle one
+          # across the boundary.
           check() {
             package="$1"
             owner="$2"
-            hits=$(grep -rl "package:${package}" lib/ --include='*.dart' 2>/dev/null \
+            hits=$(grep -rlE "^\s*(import|export)\s+'package:${package}[/']" \
+              lib/ --include='*.dart' 2>/dev/null \
               | grep -Ev "^(${owner})" || true)
             if [ -n "$hits" ]; then
               echo "::error::${package} is imported outside ${owner}:"
