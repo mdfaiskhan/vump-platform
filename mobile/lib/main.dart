@@ -25,6 +25,7 @@ import 'package:mobile/features/auth/data/repositories/auth_repository_impl.dart
 import 'package:mobile/features/recording/application/checklist_notifier.dart';
 import 'package:mobile/features/recording/application/finalize_chunk_use_case.dart';
 import 'package:mobile/features/recording/application/recording_notifier.dart';
+import 'package:mobile/features/recording/application/storage_cleanup_sweep.dart';
 import 'package:mobile/features/recording/data/battery_plus_battery_reader.dart';
 import 'package:mobile/features/recording/data/camera_capability_probe_impl.dart';
 import 'package:mobile/features/recording/data/camera_permission_probe_impl.dart';
@@ -110,6 +111,7 @@ Future<void> main() async {
   await _openDatabase(container, logger);
   await _restoreSession(container, logger);
   _startUploadDispatcher(container, logger);
+  _startStorageCleanup(container, logger);
 
   runApp(
     UncontrolledProviderScope(container: container, child: const VumpApp()),
@@ -455,6 +457,33 @@ void _startUploadDispatcher(ProviderContainer container, AppLogger logger) {
     logger.error(
       'The upload dispatcher could not be started. Recording is unaffected '
       'and queued chunks stay on disk (BR-08).',
+      error: error,
+      stackTrace: stackTrace,
+    );
+  }
+}
+
+/// Starts Volume 5 Chapter 5.15's storage cleanup sweep.
+///
+/// After [_openDatabase], because the sweep reads chunk rows; after the
+/// dispatcher, because a chunk only becomes eligible once the pipeline has
+/// confirmed it, and starting cleanup first would only ever find last
+/// session's leftovers a few milliseconds sooner.
+///
+/// ## Not awaited, and not fatal
+///
+/// §2 makes cleanup explicitly non-urgent — *"deleting a large video file is
+/// not time-critical"*. Awaiting it would hold the first frame behind file
+/// I/O for no benefit, and a cleanup that cannot run costs disk space rather
+/// than data: BR-08 means the failure mode is files that should have gone and
+/// did not, never the reverse.
+void _startStorageCleanup(ProviderContainer container, AppLogger logger) {
+  try {
+    container.read(storageCleanupSweepProvider).start();
+  } on Object catch (error, stackTrace) {
+    logger.error(
+      'Storage cleanup could not be started. Confirmed chunks will stay on '
+      'disk until a later launch reclaims them.',
       error: error,
       stackTrace: stackTrace,
     );
