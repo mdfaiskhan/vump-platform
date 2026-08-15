@@ -36,6 +36,8 @@ final class QueuedChunk implements Comparable<QueuedChunk> {
     required this.sessionStartedAt,
     required this.status,
     required this.fileSizeBytes,
+    this.attemptCount = 0,
+    this.nextAttemptAt,
   });
 
   /// The chunk's stable UUID (Ch. 5.14 §3).
@@ -58,6 +60,42 @@ final class QueuedChunk implements Comparable<QueuedChunk> {
 
   /// The finalized file's size, for C-11's progress rendering.
   final int fileSizeBytes;
+
+  /// Automatic attempts Chapter 5.13 §2's budget has already spent.
+  ///
+  /// ## Why the projection widened, and why deliberately
+  ///
+  /// ADR-040 requires a field C-11 later needs to be *"added to `QueuedChunk`
+  /// deliberately, not picked up for free by widening a passthrough"*, and
+  /// names a failure cause and an attempt count as the likely candidates. This
+  /// is that moment for the attempt count.
+  ///
+  /// It is here to resolve a real conflict rather than to be available.
+  /// Chapter 2.9 §4.3 requires that *"a failed upload never silently retries
+  /// in a way the Collector can't see"*, while Chapter 5.13 §1 keeps a
+  /// transiently-failed chunk showing as `queued` until its attempts are
+  /// exhausted. Mission 4.4 implemented the second and thereby created the
+  /// first: a chunk in backoff retries invisibly. Without these two fields
+  /// C-11 cannot tell the Collector that a retry is pending, and 2.9 §4.3
+  /// cannot be satisfied at all. Amendment A-091.
+  final int attemptCount;
+
+  /// When Chapter 5.13 §2's backoff next allows an attempt, or null.
+  ///
+  /// Null means the chunk is eligible now — it has never failed, or a manual
+  /// retry cleared the deadline (§3). Non-null on a `queued` chunk is exactly
+  /// the state Chapter 2.9 §4.3 says must be visible.
+  final DateTime? nextAttemptAt;
+
+  /// Whether this chunk is waiting out Chapter 5.13 §2's backoff.
+  ///
+  /// Takes the instant rather than reading the clock, for the reason A-045
+  /// gives: a projection that read `DateTime.now()` would make every consumer
+  /// untestable without waiting out a real delay.
+  bool isAwaitingRetry(DateTime now) =>
+      status == ChunkUploadStatus.queued &&
+      nextAttemptAt != null &&
+      nextAttemptAt!.isAfter(now);
 
   /// Chapter 5.9 §2's ordering, expressed once.
   ///

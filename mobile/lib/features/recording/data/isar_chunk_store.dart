@@ -408,6 +408,8 @@ class IsarChunkStore
           sessionStartedAt: sessionStart,
           status: status,
           fileSizeBytes: row.fileSizeBytes,
+          attemptCount: row.uploadAttemptCount,
+          nextAttemptAt: row.nextAttemptAt,
         ),
       );
     }
