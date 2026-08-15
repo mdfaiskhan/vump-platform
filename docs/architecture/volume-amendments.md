@@ -1892,7 +1892,97 @@ The three screens remain at 0% and are left there deliberately: writing widget t
 
 ---
 
-## Consolidated open items — A-057 through A-066
+### A-067 — `shared_preferences` is confined to two owners, and the composition root is the second
+
+| | |
+|---|---|
+| **Volume** | None directly. Extends A-057's confinement of `shared_preferences`, under ADR-030's admission rules |
+| **Says** | A-057 confines `shared_preferences` to `features/recording/data/`, and `ci.yml` enforced exactly that |
+| **Should say** | Two owners: `lib/features/recording/data/` **and** `lib/main.dart` |
+| **Class** | Confinement rule change, enforced in CI |
+| **Status** | Closed |
+
+**Found by Mission 3.11's security review, as a failing check rather than a judgement call.** `lib/main.dart:41` imports `package:shared_preferences/shared_preferences.dart` while `ci.yml` permitted only `lib/features/recording/data/`, so the `Architecture boundaries` job was **failing at HEAD**.
+
+Introduced by **Mission 3.8** (`83d2a48`) and undetected for two missions. The cause is worth recording because it is a process fault, not a reasoning fault: Mission 3.8 ran the confinement check for the three packages it had touched — `isar`, `battery_plus`, `connectivity_plus` — reported "confinement green", and never re-ran the full sweep. A per-package check cannot see a violation in a file the package was already allowed to be near. **The sweep is only meaningful run whole**, which is how Mission 3.11 found it.
+
+### Why the composition root, and not an inversion
+
+`SharedPreferences.getInstance()` is asynchronous. `SharedPreferencesWideAngleEligibilityCache` takes a resolved instance rather than resolving one, so it stays substitutable in tests — the same shape ADR-009 Caveat 2 already forces for the database directory, where `databaseDirectoryProvider` throws until the composition root supplies a path it resolved with `path_provider`.
+
+So `main.dart` resolves the instance before constructing the container and supplies it through an override. Moving the resolution into the cache would remove the import from `main.dart` and take the substitutability with it.
+
+**The permission is one file, not a directory.** `lib/main\.dart` is matched exactly, so nothing acquires the import by being added nearby — unlike a directory-scoped owner. That is the same narrowness ADR-039 chose for `isar`'s `data/isar_*.dart`.
+
+### A false precedent, corrected
+
+The instruction that authorised this fix described the composition root as *"already permitted for other async platform instance resolution (path_provider, database directory)"*. **It is not.** `grep -c path_provider .github/workflows/ci.yml` returns **0** — `path_provider` is not confined at all, so `main.dart` was never *permitted* to import it; the question was never asked.
+
+The real precedent is ADR-039's regex owner for `isar`, which this reuses. Recorded so nobody later cites a permission that does not exist.
+
+### A smaller gap this surfaced, not closed here
+
+**`path_provider` has no confinement rule.** It is imported only by `lib/main.dart` today, but nothing prevents it spreading. Every other platform-touching package in this project is confined; this one was never added to the list. Not fixed here because adding a confinement rule is an ADR-030 decision rather than a CI edit, and this mission's scope was S1.
+
+---
+
+### A-068 — The empty-string identity sentinel needs two guards, and neither surface exists yet
+
+| | |
+|---|---|
+| **Volume** | 8 — Security, Chapter 8.3 §2 (input validation), Chapter 8.6 §2 (why identity is collected); Volume 5 Chapter 5.10 §1 (registration); Volume 1 BR-21/BR-22 |
+| **Says** | Ch. 8.6 §2 collects identity *"to attribute footage to the correct Collector/device for BR-21/22's integrity and audit requirements"*. Ch. 8.3 §2 requires every Lambda handler to validate its request body against a strict schema, *"rejecting unexpected fields rather than silently ignoring them"* |
+| **Should say** | The same rejection rule must cover **blank** values in identity fields, not only unexpected ones — and the client must not send them in the first place |
+| **Class** | Two guards owed to future missions, neither buildable today |
+| **Status** | Open — required when their surfaces exist |
+
+**Found by Mission 3.11's security review of the A-064 §3 sentinel, deliberately while the pattern was fresh rather than when the risk surface appears.**
+
+`MetadataIdentity.unsourced` is the empty string, and `PlatformDeviceContext` and `UnsourcedTaskContext` return it for `collectorId`, `deviceId`, `deviceModel`, `projectId` and `taskId`. A-064 §3 chose it over a placeholder because it cannot collide with a real id and fails `isComplete`, and that reasoning holds.
+
+### The residual risk, stated precisely
+
+**The empty string is safe in Dart and ambiguous on the wire.** `''` fails a null check, an emptiness check and `isIdentityComplete` — but once serialised into a metadata document, `"collector_id": ""` is indistinguishable from a value that was truncated, stripped by a proxy, or deliberately blanked. A backend receiving it cannot tell "this build had no source" from "something removed this".
+
+That matters because BR-22 makes system-generated metadata immutable and rejected on any subsequent PATCH. **A chunk stored with a blank attribution could not be corrected afterwards** — it would be permanently unattributable evidence, which is the opposite of what Ch. 8.6 §2 collects identity for.
+
+### Guard 1 — client-side, owed to Mission 4
+
+`ChunkMetadata.isIdentityComplete` exists for exactly this and **has no caller**. Volume 5 Chapter 5.10 §1 step 1 is *"Register `POST /v1/sessions/{id}/chunks` → presigned multipart URLs"*, and Chapter 5.14 §1's key embeds `project_id`, `task_id` and `session_id`. Registration must check `isIdentityComplete` before composing a key or sending a metadata document, and refuse rather than send blanks.
+
+### Guard 2 — server-side, owed whenever Lambda handlers exist
+
+Ch. 8.3 §2's validation rule as written rejects *unexpected* fields. It must also **reject an expected field that is present and blank** in the identity group. Client-side checks are a correctness measure, not a security boundary — Volume 4 Chapter 4.8's principle that authorization is *"never client-trusted"* applies to attribution for the same reason.
+
+**Both are required; neither is optional in favour of the other.** Guard 1 prevents a well-behaved client from producing unattributable evidence; Guard 2 is what holds if a client is modified, out of date, or replaced.
+
+### Why nothing is built now
+
+There is no upload path, no registration call, and `backend/` is empty (ADR-015). Mission 3.11's review confirmed the recording feature makes **no network calls at all** — no `dio`, no `http`, no socket. So the risk surface does not exist, and building a guard against a call that cannot happen would be untestable. This entry is the record that both are owed the moment either surface appears.
+
+### A-069 — Volume 8 Chapter 8.2 §3 embeds an "ADR-011" that is not this project's ADR-011
+
+| | |
+|---|---|
+| **Volume** | 8 — Security, Chapter 8.2 §3 |
+| **Says** | *"ADR-011 — Local (On-Device) Chunk Encryption at Rest"*, an Accepted decision to rely on OS-level app-sandbox encryption rather than adding app-level AES |
+| **Should say** | The **decision** is correct and binding. Its **number** collides with this repository's `ADR-011 — S3 Storage Architecture` and must not be cited as "ADR-011" in code or documentation |
+| **Class** | Documentation hazard |
+| **Status** | Open |
+
+Volume 8 numbers its own inline ADRs in a sequence that runs independently of `docs/architecture/decisions/`. This repository's ADR-011 is **S3 Storage Architecture**; Volume 8's is **local chunk encryption**. Same identifier, unrelated subjects.
+
+**The risk is a citation, not a defect.** Anyone writing "per ADR-011" about on-device encryption would point a reader at an S3 bucket-naming decision, and the mistake reads as plausible in both directions. Nothing in the codebase currently makes that citation — checked.
+
+**The substance is satisfied and is worth recording here so the decision is not lost with its number.** Volume 8 Ch. 8.2 §3 chose OS-level app-sandbox encryption as the MVP baseline and explicitly declined app-level encryption, on the grounds that it would add CPU and battery cost to a ten-minute continuous write and that BR-08 keeps the exposure window short. Mission 3.8.1's device run confirms compliance: chunks are written to `/data/user/0/com.example.mobile/app_flutter/recordings/…`, Android app-private internal storage covered by File-Based Encryption, and the Isar database shares that directory. **No app-level encryption is owed.**
+
+The reopening trigger Volume 8 states — *"a future client contract or regulatory review requiring app-level encryption as a compliance checkbox regardless of the OS's own protection"* — is carried forward unchanged.
+
+**Refer to it as "Volume 8 Chapter 8.2 §3"**, never as ADR-011.
+
+---
+
+## Consolidated open items — A-057 through A-069
 
 Every carried-forward item, in one place, accurate as of Mission 3.10. This is the seed for Mission 3.12's status report.
 
@@ -1949,6 +2039,17 @@ Every carried-forward item, in one place, accurate as of Mission 3.10. This is t
 |---|---|---|---|
 | 23 | Amendment drift went undetected for two missions | **Run the register cross-check at the close of every multi-sub-mission block, not only at a dedicated audit mission.** A-057 claimed the wide-angle verdict was cached per install; Mission 3.8 made it re-probe every session on Android, and the amendment still read as true through 3.8 and 3.9 until Mission 3.10 checked all nine side by side. Nothing in the workflow would have caught it sooner — each sub-mission verified its own work, and drift lives *between* them. Cheap to repeat: the check is a read of each amendment's claims against current code, and it found two in one pass. | A-057, A-063 §5 (both corrected by 3.10) |
 | 24 | `app/` has no stated coverage target | **Candidate for a future Volume 9 amendment, not a code fix.** Chapter 9.5 §2 names domain, data and presentation only. `app/` currently measures **72.73%** and holds `router.dart`, `auth_guard.dart` and `recording_guard.dart` — the last of which is where **BR-04** is actually enforced, since a disabled button stops a tap but not a deep link. A business rule enforced in a layer with no coverage target is a gap in the specification rather than in the code. Not fixed here: inventing a target for a layer Volume 9 does not discuss would be this project deciding Volume 9's content by writing tests. | Ch. 9.5 §2, A-066 |
+| 25 | `path_provider` has no confinement rule | **Add one, or record why it is exempt.** Every other platform-touching package is confined; this one was never listed. Imported only by `lib/main.dart` today, but nothing enforces that. An ADR-030 decision rather than a CI edit. | A-067 |
+| 26 | Package-confinement checks were run per-package, not as a sweep | **Run the full sweep, never a subset.** Mission 3.8 checked the three packages it touched, reported green, and left the `Architecture boundaries` job failing for two missions. A subset check cannot see a violation involving a package it did not test. Same class as item 23's amendment drift: the fault is in checking part of a whole. | A-067 |
+
+### Security review findings — Mission 3.11
+
+| # | Finding | State | Source |
+|---|---|---|---|
+| 27 | **S1** — `shared_preferences` imported outside its confined layer; `Architecture boundaries` job failing since Mission 3.8 | **CLOSED** by Mission 3.11.1 — `main.dart` named as a second owner, full 13-package sweep green | A-067 |
+| 28 | **S2** — the empty-string identity sentinel is ambiguous on the wire | **Open.** Two guards owed: `isIdentityComplete` checked at Ch. 5.10 §1's registration (Mission 4), and a Ch. 8.3 §2 server-side rule rejecting blank identity fields (whenever Lambda handlers exist). Neither surface exists; no network call is made by this feature at all. | A-068 |
+| 29 | **S3** — no changelog existed, despite Ch. 11.5 §2 requiring Security entries for storage and data handling | **CLOSED** by Mission 3.11.2 — `docs/CHANGELOG.md` started and Missions 3.1–3.10 backfilled. The backfill is itself the batching Ch. 11.5 §4 warns against, done once to establish the file. | Ch. 11.5, A-068 |
+| 30 | Volume 8 Ch. 8.2 §3's inline "ADR-011" collides with this repository's ADR-011 | **Open** — documentation hazard. Cite it as "Volume 8 Chapter 8.2 §3", never as ADR-011. The decision itself is satisfied: OS-level sandbox encryption, no app-level layer owed. | A-069 |
 
 ---
 
