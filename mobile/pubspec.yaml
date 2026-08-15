@@ -89,6 +89,14 @@ dependencies:
   # tier name and two version strings. Confined to `features/recording/data/`.
   shared_preferences: ^2.5.5
 
+  # SHA-256 over each finalized chunk (Volume 5 Ch. 5.5 §1.2, FR-META-10).
+  # Already in the tree transitively via Firebase; promoted to a direct
+  # dependency because `depend_on_referenced_packages` forbids importing a
+  # package this pubspec does not declare. Dart-team owned, and
+  # `startChunkedConversion` is exactly the block-wise API §1.2 asks for.
+  # Confined to `features/recording/data/`.
+  crypto: ^3.0.7
+
   # Local database
   isar: ^3.1.0+1
   isar_flutter_libs: ^3.1.0+1

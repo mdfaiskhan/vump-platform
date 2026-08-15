@@ -1215,6 +1215,89 @@ Three items from this amendment need real hardware and cannot be closed from the
 2. **Crash-interval measurement** — kill the app mid-chunk and measure how much footage is actually lost, giving §1's "at most the last buffer interval" a number.
 3. **The iOS free-space channel** — first execution of that branch on any Apple device.
 
+### A-059 — Chapter 5.5 §2 charges the checksum to a budget NFR-META-01 does not cover, and the real cost raises a product question
+
+| | |
+|---|---|
+| **Volume** | 5 — Recording Engine, Chapter 5.5 §2; Volume 1 §11 (NFR-META-01); Volume 2 Chapter 2.7 (C-10) |
+| **Says** | *"NFR-META-01 (Volume 1) caps metadata generation at under 500ms of added overhead per chunk. **Checksum computation is the dominant cost here**, so it is streamed and runs on a background isolate/thread separate from the UI, so **the brief Local Processing state** (C-10) reflects genuine progress rather than blocking the main thread."* |
+| **Should say** | NFR-META-01 caps **metadata generation**, which is Chapter 5.7's work, measured as overhead *added to* finalization. The checksum is part of finalization and is therefore part of the baseline, not part of the 500 ms. And it is not brief: measured at roughly **12.3 seconds** for a full chunk |
+| **Reason** | The chapter misreads its own citation, and the real number contradicts the word "brief" |
+
+**What NFR-META-01 actually says**, from Volume 1 §11 — *"Metadata Integrity (New)"*:
+
+> **NFR-META-01** — Metadata generation for a chunk shall not measurably delay chunk finalization. — *< 500ms added overhead per chunk*
+
+The subject is **metadata generation**, and the measure is overhead *added to* chunk finalization. Chapter 5.5 §2 folds the checksum into that cap by calling it *"the dominant cost here"*, but §1.1–§1.3 place the checksum inside finalization itself. Finalization is the thing the 500 ms is added *to*. Read correctly there is no contradiction and no violated requirement — but read as written, the chapter sets a budget the checksum was never inside and could never meet.
+
+**~~"the brief Local Processing state"~~ — measured, and struck through 2026-08-15.**
+
+Pure-Dart SHA-256 over a file, streamed in blocks exactly as §1.2 requires:
+
+| Sample | Time | Throughput | Extrapolated to 610 MB |
+|---|---|---|---|
+| 200 MB, run 1 | 4,151 ms | 48.2 MB/s | **12,661 ms** |
+| 200 MB, run 2 | 4,016 ms | 49.8 MB/s | **12,249 ms** |
+
+610 MB is one full 10-minute chunk at the Chapter 5.2 §1 bitrate, derived in A-058. **These figures are from desktop hardware**, measured when the test handset was disconnected. A phone will be slower, not faster, so ~12.3 s is a floor rather than an estimate. Re-measuring on the CPH2707 is recorded below.
+
+The §2 requirement that the work run on a background isolate is therefore **load-bearing, not precautionary**, and is implemented that way.
+
+### The open PRODUCT question — not an engineering follow-up
+
+**Will a Collector accept a 12-second-plus Local Processing state at every automatic chunk boundary?**
+
+This is stated separately from the engineering list on purpose. Nothing is broken and no requirement is violated; the code does what Chapter 5.5 specifies. What is unresolved is whether the resulting experience is acceptable, and that is a judgement about the product, not about the implementation.
+
+The shape of it: a session longer than ten minutes crosses a boundary automatically (BR-06), the Collector did not ask for it and cannot avoid it, and C-10 appears each time. An hour-long walkthrough crosses five boundaries. Volume 2 Chapter 2.7's C-10 and Chapter 5.5 §2 both describe this state as *brief*, which was written before anyone had measured it.
+
+**This needs a decision from the project owner, not a ticket.** The engineering options are known and none is chosen here:
+
+- **Accept it.** The work is off the UI thread and the screen can show real progress. Recording is not blocked; only the transition is visible.
+- **Make it fast.** A SHA-256 platform channel over Android's `MessageDigest` and iOS's `CryptoKit` would use hardware SHA extensions, plausibly one to two orders of magnitude quicker. **This is deliberately not built.** It would be the project's second `MethodChannel` and its second untestable iOS half, and building it before anyone has said the duration matters would be optimising against a number nobody has objected to. The remedy is identified and available; it is not scheduled.
+- **Hide it.** Let finalization proceed in the background while the Collector returns to the Task list, showing chunk state in the upload queue instead. This is the largest change and reaches into Chapters 5.3 and 5.9, so it is named only for completeness.
+
+### How often C-10 appears — decided 2026-08-15
+
+**Decision: C-10 is shown only when `Finalizing.reason == collectorStop`. Automatic chunk boundaries are invisible to the Collector.**
+
+So the duration above is a **once-per-session** cost, not a five-or-six-times-an-hour one. That materially lowers the pressure behind the product question above, and it is the reason the native SHA-256 channel stays unbuilt.
+
+**Why this was undecided until now — a Volume 2 / Volume 5 reconciliation gap.** Volume 2 describes C-10 three times and none of them distinguishes an automatic boundary from a manual Stop:
+
+- The screen inventory: *"C-10 Local Processing — Brief transient state while chunking + metadata generation run **after Stop**."*
+- Chapter 2.7 §4.1: *"Local Processing (C-10, **the gap between Stop and the chunk being ready**)…"*
+
+Both are satisfied by either reading, because Chapter 5.3 §1 makes the automatic boundary *"identical in every way to a manual Stop"*.
+
+The Collector flow explains the silence. Its steps 9–11 run Stop → Local Processing → Upload as a single linear pass, and step 10 reads *"Local Processing — **Automatic Chunking** + Metadata Generation"* — placing chunking **inside** Local Processing, after the recording has ended.
+
+**That is the design Chapter 5.4 §3 explicitly rejected:** *"An alternative design would record one long file per session and slice it into 10-minute segments afterward. This was rejected."* Volume 2's flow still describes the pre-rejection model, in which there is exactly one finalization per session and the question could not arise. Volume 5 replaced that model with the internal-Stop pattern, creating one `Finalizing` per chunk, and C-10 was never revisited.
+
+The decision costs nothing to implement: `RecordingStateFinalizing` already carries `reason` (Mission 3.2), so Mission 3.8 branches on a field that exists rather than needing new state.
+
+**Volume 2 Chapter 2.7 §4.1 carries the same NFR-META-01 misreading corrected above** — *"NFR-META-01 budgets it at under 500ms"* — for the same reason, and is corrected by the same argument.
+
+### The capture gap — HIGHER PRIORITY than the UI question, and NOT resolved here
+
+**`isCapturing` is false for the whole of every automatic `Finalizing` — roughly 12 seconds, every ten minutes — so the camera is not recording during it.**
+
+This is a separate problem from C-10 and a more serious one. The decision above hides the boundary from the Collector; it does nothing about the gap itself. A Collector walking through a site keeps walking, and that footage does not exist.
+
+It matters more here than it would on most products. Volume 5's whole premise is a continuous egocentric walkthrough at a fixed wide-angle field of view (BR-01, BR-02), and the output is training data. A periodic, silent, unavoidable hole in the record is a data-quality defect, not a UX inconvenience — and because the boundary is system-triggered (BR-06), the Collector cannot work around it or even know it happened, least of all once C-10 is hidden for automatic boundaries.
+
+The gap follows from two decisions that are each individually correct. BR-05 forbids mid-stream slicing, so a chunk boundary must be a real Stop; and BR-07 requires a chunk be fully persisted before anything proceeds, which is what the machine waits for. Neither should be reversed to close this.
+
+**This needs its own architectural decision and does not get one here.** The question to answer is whether a new capture session may begin before the previous chunk's finalization completes — for example by starting the next recording as soon as the file handle is closed and letting checksumming proceed in parallel, rather than serialising finalization ahead of the next chunk. That reaches into Chapters 5.3, 5.4 and 5.5 together, changes what `Finalizing` means in the lifecycle, and may not be achievable with a single `CameraController` at all.
+
+Recorded now, unresolved, and deliberately not designed inside an amendment. **It should be settled before Mission 3.8 builds a UI on a lifecycle whose timing may change.**
+
+### Recorded for Volume 9's device matrix
+
+Joining the list under A-058:
+
+4. **Re-measure the checksum on the CPH2707** — the desktop figure above is an upper bound on speed and a lower bound on duration. The real number is what the product question should be decided against, and it also sets the true size of the capture gap above.
+
 ---
 
 ## Confirmed correct — no amendment

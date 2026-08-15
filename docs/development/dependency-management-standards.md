@@ -55,6 +55,7 @@ Volume 3 §3.8 §2 fixes this and states the trade: *"Chapter 3.5's module bound
 | `cloud_firestore` | `^6.8.0` | Leaf | `features/auth/data/` | ADR-036 — **temporary** |
 | `camera` | `^0.12.0+2` | Core | `features/recording/data/` | Volume 3 Ch. 3.1, **A-057** |
 | `shared_preferences` | `^2.5.5` | Leaf | `features/recording/data/` | Volume 5 Ch. 5.2 §2, **A-057** |
+| `crypto` | `^3.0.7` | Leaf | `features/recording/data/` | Volume 5 Ch. 5.5 §1.2, FR-META-10 |
 | `logger` | `^2.5.0` | Leaf | `core/logging/` | ADR-027 |
 | `freezed_annotation` | `^2.4.4` | Leaf | — (annotations) | — |
 | `json_annotation` | `^4.9.0` | Leaf | — (annotations) | — |
