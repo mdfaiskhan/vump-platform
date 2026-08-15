@@ -628,9 +628,37 @@ jobs:
             && fail "AWS credential identifiers referenced in the mobile source." "$hits" \
             || echo "ok  no credential references"
 
-          hits=$(grep -rn 'amazonaws\.com' lib test 2>/dev/null || true)
+          # SCOPED TO lib/ ONLY, unlike the three checks above.
+          #
+          # This one looks for a hardcoded *endpoint*, which is a design
+          # defect rather than a disclosure: shipping code that names an S3
+          # host has stopped waiting for the backend to presign a URL. That
+          # fault can only exist in shipped code, so test/ is out of scope.
+          #
+          # The three checks above stay over `lib test`, deliberately. They
+          # look for credential *material* — an access key id, a secret, a
+          # session token — and a real one of those committed under test/ is
+          # every bit as disclosed as one under lib/. Narrowing them would
+          # trade a real guarantee for a green tick.
+          #
+          # Why this changed (open item 47): the check ran over `lib test` and
+          # failed on four Mission 4.2 test fixtures — three in
+          # s3_transfer_client_test.dart and one in fake_backend_adapter.dart.
+          # Each was read before this line was changed. They are presigned-URL
+          # fixtures whose assertions are `isNot(contains('X-Amz-Signature'))`
+          # and `isNot(contains('AKIAEXAMPLE'))` — tests that exist to prove a
+          # credential is stripped, and which need a realistically shaped URL
+          # to prove anything at all. Their placeholder is `AKIAEXAMPLE`, four
+          # characters plus seven, chosen so it cannot match the AKIA pattern
+          # above.
+          #
+          # So the job was failing on the evidence that the rule it protects
+          # is being followed. A check that fires on its own proof is the same
+          # fault A-075 recorded when the confinement rule matched a comment
+          # saying a package was deliberately not imported.
+          hits=$(grep -rn 'amazonaws\.com' lib 2>/dev/null || true)
           [ -n "$hits" ] \
-            && fail "A hardcoded AWS endpoint appears in the mobile source. S3 URLs arrive at runtime from the backend, presigned." "$hits" \
-            || echo "ok  no hardcoded AWS endpoint"
+            && fail "A hardcoded AWS endpoint appears in the mobile app's shipped source. S3 URLs arrive at runtime from the backend, presigned." "$hits" \
+            || echo "ok  no hardcoded AWS endpoint in lib/"
 
           exit $status
