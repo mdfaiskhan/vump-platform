@@ -234,6 +234,7 @@ jobs:
           #   cloud_firestore        → features/auth/data      (ADR-036)
           #   battery_plus           → features/recording/data (FR-CHK-03)
           #   connectivity_plus      → features/recording/data (FR-CHK-04)
+          #                            + main.dart              (V5 Ch. 5.12 §2)
           #   flutter_foreground_task → features/upload/data   (V5 Ch. 5.11)
           #
           # The last two are owned by a feature rather than by core/. ADR-010
@@ -305,7 +306,22 @@ jobs:
           check shared_preferences     'lib/features/recording/data/|lib/main\.dart'
           check crypto                 lib/features/recording/data/
           check battery_plus           lib/features/recording/data/
-          check connectivity_plus      lib/features/recording/data/
+          # connectivity_plus gains main.dart as a second owner, on exactly the
+          # precedent shared_preferences set (A-067): the composition root is
+          # where this project resolves a platform instance so one object can
+          # be shared by more than one port.
+          #
+          # Here the sharing is the requirement, not a convenience. Volume 5
+          # Ch. 5.12 §2 says the queue and the dispatcher "neither polls it
+          # independently, avoiding duplicated battery cost", and there are two
+          # ports above this plugin - NetworkReader for FR-CHK-04's one-shot
+          # checklist row, ConnectivitySource for §4's transition stream. One
+          # Connectivity instance behind both is what satisfies §2, and the
+          # composition root is the only place allowed to name the type.
+          #
+          # The permission is one FILE, not a directory, so nothing else can
+          # acquire it by being added nearby. A-081.
+          check connectivity_plus      'lib/features/recording/data/|lib/main\.dart'
 
           # The fourteenth rule, added by Mission 4.3. Volume 3 Ch. 3.1 §2
           # names the package; Volume 5 Ch. 5.11 §1 is what it implements.
@@ -374,6 +390,14 @@ jobs:
           # the narrower, louder check for the module whose whole purpose is to
           # sit between two of them.
           #
+          # Mission 4.4 added a third: core/connectivity/ holds Chapter 5.12
+          # §2's ConnectivityService contract, implemented by
+          # features/recording/ (which owns connectivity_plus) and consumed by
+          # features/upload/'s dispatcher. The most lopsided instance of
+          # ADR-040 so far - the implementing feature does not consume it
+          # through this contract at all - which A-081 records rather than
+          # hides.
+          #
           # Mission 4.2 added a second such module. core/upload/ holds Chapter
           # 5.10's three contracts: ChunkUploadSource and ChunkMetadataSource,
           # implemented by features/recording/ and consumed by
@@ -384,7 +408,7 @@ jobs:
           # Checked as a list rather than as two copies of one block, so
           # adding a third contract module is one word rather than ten lines
           # someone can forget to keep in step.
-          for module in queue upload; do
+          for module in queue upload connectivity; do
             leak=$(grep -rn "package:mobile/features/" "lib/core/${module}" \
               --include='*.dart' 2>/dev/null || true)
             if [ -n "$leak" ]; then
