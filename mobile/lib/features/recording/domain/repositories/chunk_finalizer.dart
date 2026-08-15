@@ -1,3 +1,4 @@
+import 'package:mobile/features/recording/domain/entities/chunk_processing_job.dart';
 import 'package:mobile/features/recording/domain/entities/recording_session.dart';
 
 /// Performs the work of the `Finalizing` state, whatever that work turns out
@@ -38,8 +39,15 @@ abstract interface class ChunkFinalizer {
   /// does not convert — this port is declared in `domain/` and its
   /// implementation lives in `data/`, which is the layer error-handling.md §26
   /// makes responsible for producing the taxonomy in the first place.
+  /// [job] carries the chunk's minted identity and the closed file's path.
+  ///
+  /// Passed whole because since Mission 3.4.5 this runs **after** capture has
+  /// ended, and possibly while the next chunk is recording — so the
+  /// implementation can no longer ask the pipeline which file is meant. The
+  /// job names it, and the identity it carries is fixed and never recomputed
+  /// (Chapter 5.13 §4).
   Future<void> finalizeChunk({
     required RecordingSession session,
-    required int sequenceIndex,
+    required ChunkProcessingJob job,
   });
 }

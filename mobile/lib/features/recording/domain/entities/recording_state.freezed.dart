@@ -18,37 +18,64 @@ final _privateConstructorUsedError = UnsupportedError(
 mixin _$RecordingState {
   @optionalTypeArgs
   TResult when<TResult extends Object?>({
-    required TResult Function(RecordingSession? lastCompletedSession) idle,
+    required TResult Function(RecordingSession? lastCompletedSession,
+            List<FailedChunk> failed, SessionEndCause? endCause)
+        idle,
     required TResult Function(RecordingSession session) ready,
-    required TResult Function(RecordingSession session, int sequenceIndex,
-            DateTime chunkStartedAt)
+    required TResult Function(
+            RecordingSession session,
+            int sequenceIndex,
+            DateTime chunkStartedAt,
+            List<ChunkProcessingJob> processing,
+            List<FailedChunk> failed)
         recording,
-    required TResult Function(RecordingSession session, int sequenceIndex,
-            ChunkBoundaryReason reason)
+    required TResult Function(
+            RecordingSession session,
+            List<ChunkProcessingJob> processing,
+            SessionEndCause endCause,
+            List<FailedChunk> failed)
         finalizing,
   }) =>
       throw _privateConstructorUsedError;
   @optionalTypeArgs
   TResult? whenOrNull<TResult extends Object?>({
-    TResult? Function(RecordingSession? lastCompletedSession)? idle,
+    TResult? Function(RecordingSession? lastCompletedSession,
+            List<FailedChunk> failed, SessionEndCause? endCause)?
+        idle,
     TResult? Function(RecordingSession session)? ready,
-    TResult? Function(RecordingSession session, int sequenceIndex,
-            DateTime chunkStartedAt)?
+    TResult? Function(
+            RecordingSession session,
+            int sequenceIndex,
+            DateTime chunkStartedAt,
+            List<ChunkProcessingJob> processing,
+            List<FailedChunk> failed)?
         recording,
-    TResult? Function(RecordingSession session, int sequenceIndex,
-            ChunkBoundaryReason reason)?
+    TResult? Function(
+            RecordingSession session,
+            List<ChunkProcessingJob> processing,
+            SessionEndCause endCause,
+            List<FailedChunk> failed)?
         finalizing,
   }) =>
       throw _privateConstructorUsedError;
   @optionalTypeArgs
   TResult maybeWhen<TResult extends Object?>({
-    TResult Function(RecordingSession? lastCompletedSession)? idle,
+    TResult Function(RecordingSession? lastCompletedSession,
+            List<FailedChunk> failed, SessionEndCause? endCause)?
+        idle,
     TResult Function(RecordingSession session)? ready,
-    TResult Function(RecordingSession session, int sequenceIndex,
-            DateTime chunkStartedAt)?
+    TResult Function(
+            RecordingSession session,
+            int sequenceIndex,
+            DateTime chunkStartedAt,
+            List<ChunkProcessingJob> processing,
+            List<FailedChunk> failed)?
         recording,
-    TResult Function(RecordingSession session, int sequenceIndex,
-            ChunkBoundaryReason reason)?
+    TResult Function(
+            RecordingSession session,
+            List<ChunkProcessingJob> processing,
+            SessionEndCause endCause,
+            List<FailedChunk> failed)?
         finalizing,
     required TResult orElse(),
   }) =>
@@ -104,7 +131,10 @@ abstract class _$$RecordingStateIdleImplCopyWith<$Res> {
           $Res Function(_$RecordingStateIdleImpl) then) =
       __$$RecordingStateIdleImplCopyWithImpl<$Res>;
   @useResult
-  $Res call({RecordingSession? lastCompletedSession});
+  $Res call(
+      {RecordingSession? lastCompletedSession,
+      List<FailedChunk> failed,
+      SessionEndCause? endCause});
 
   $RecordingSessionCopyWith<$Res>? get lastCompletedSession;
 }
@@ -121,12 +151,22 @@ class __$$RecordingStateIdleImplCopyWithImpl<$Res>
   @override
   $Res call({
     Object? lastCompletedSession = freezed,
+    Object? failed = null,
+    Object? endCause = freezed,
   }) {
     return _then(_$RecordingStateIdleImpl(
       lastCompletedSession: freezed == lastCompletedSession
           ? _value.lastCompletedSession
           : lastCompletedSession // ignore: cast_nullable_to_non_nullable
               as RecordingSession?,
+      failed: null == failed
+          ? _value._failed
+          : failed // ignore: cast_nullable_to_non_nullable
+              as List<FailedChunk>,
+      endCause: freezed == endCause
+          ? _value.endCause
+          : endCause // ignore: cast_nullable_to_non_nullable
+              as SessionEndCause?,
     ));
   }
 
@@ -147,14 +187,37 @@ class __$$RecordingStateIdleImplCopyWithImpl<$Res>
 /// @nodoc
 
 class _$RecordingStateIdleImpl extends RecordingStateIdle {
-  const _$RecordingStateIdleImpl({this.lastCompletedSession}) : super._();
+  const _$RecordingStateIdleImpl(
+      {this.lastCompletedSession,
+      final List<FailedChunk> failed = const <FailedChunk>[],
+      this.endCause})
+      : _failed = failed,
+        super._();
 
   @override
   final RecordingSession? lastCompletedSession;
+  final List<FailedChunk> _failed;
+  @override
+  @JsonKey()
+  List<FailedChunk> get failed {
+    if (_failed is EqualUnmodifiableListView) return _failed;
+    // ignore: implicit_dynamic_type
+    return EqualUnmodifiableListView(_failed);
+  }
+
+  /// Why the last session ended, or null on a cold start.
+  ///
+  /// Carried here and not only on `Finalizing` because the explanation is
+  /// needed **after** draining completes, which is when the Collector is
+  /// looking at a stopped recording and wondering why. Volume 2 Ch. 2.9 §4.3
+  /// requires a cause and a recovery action; this is the half the domain
+  /// owes, and Mission 3.8 maps it to the other half.
+  @override
+  final SessionEndCause? endCause;
 
   @override
   String toString() {
-    return 'RecordingState.idle(lastCompletedSession: $lastCompletedSession)';
+    return 'RecordingState.idle(lastCompletedSession: $lastCompletedSession, failed: $failed, endCause: $endCause)';
   }
 
   @override
@@ -163,11 +226,15 @@ class _$RecordingStateIdleImpl extends RecordingStateIdle {
         (other.runtimeType == runtimeType &&
             other is _$RecordingStateIdleImpl &&
             (identical(other.lastCompletedSession, lastCompletedSession) ||
-                other.lastCompletedSession == lastCompletedSession));
+                other.lastCompletedSession == lastCompletedSession) &&
+            const DeepCollectionEquality().equals(other._failed, _failed) &&
+            (identical(other.endCause, endCause) ||
+                other.endCause == endCause));
   }
 
   @override
-  int get hashCode => Object.hash(runtimeType, lastCompletedSession);
+  int get hashCode => Object.hash(runtimeType, lastCompletedSession,
+      const DeepCollectionEquality().hash(_failed), endCause);
 
   @JsonKey(ignore: true)
   @override
@@ -179,48 +246,75 @@ class _$RecordingStateIdleImpl extends RecordingStateIdle {
   @override
   @optionalTypeArgs
   TResult when<TResult extends Object?>({
-    required TResult Function(RecordingSession? lastCompletedSession) idle,
+    required TResult Function(RecordingSession? lastCompletedSession,
+            List<FailedChunk> failed, SessionEndCause? endCause)
+        idle,
     required TResult Function(RecordingSession session) ready,
-    required TResult Function(RecordingSession session, int sequenceIndex,
-            DateTime chunkStartedAt)
+    required TResult Function(
+            RecordingSession session,
+            int sequenceIndex,
+            DateTime chunkStartedAt,
+            List<ChunkProcessingJob> processing,
+            List<FailedChunk> failed)
         recording,
-    required TResult Function(RecordingSession session, int sequenceIndex,
-            ChunkBoundaryReason reason)
+    required TResult Function(
+            RecordingSession session,
+            List<ChunkProcessingJob> processing,
+            SessionEndCause endCause,
+            List<FailedChunk> failed)
         finalizing,
   }) {
-    return idle(lastCompletedSession);
+    return idle(lastCompletedSession, failed, endCause);
   }
 
   @override
   @optionalTypeArgs
   TResult? whenOrNull<TResult extends Object?>({
-    TResult? Function(RecordingSession? lastCompletedSession)? idle,
+    TResult? Function(RecordingSession? lastCompletedSession,
+            List<FailedChunk> failed, SessionEndCause? endCause)?
+        idle,
     TResult? Function(RecordingSession session)? ready,
-    TResult? Function(RecordingSession session, int sequenceIndex,
-            DateTime chunkStartedAt)?
+    TResult? Function(
+            RecordingSession session,
+            int sequenceIndex,
+            DateTime chunkStartedAt,
+            List<ChunkProcessingJob> processing,
+            List<FailedChunk> failed)?
         recording,
-    TResult? Function(RecordingSession session, int sequenceIndex,
-            ChunkBoundaryReason reason)?
+    TResult? Function(
+            RecordingSession session,
+            List<ChunkProcessingJob> processing,
+            SessionEndCause endCause,
+            List<FailedChunk> failed)?
         finalizing,
   }) {
-    return idle?.call(lastCompletedSession);
+    return idle?.call(lastCompletedSession, failed, endCause);
   }
 
   @override
   @optionalTypeArgs
   TResult maybeWhen<TResult extends Object?>({
-    TResult Function(RecordingSession? lastCompletedSession)? idle,
+    TResult Function(RecordingSession? lastCompletedSession,
+            List<FailedChunk> failed, SessionEndCause? endCause)?
+        idle,
     TResult Function(RecordingSession session)? ready,
-    TResult Function(RecordingSession session, int sequenceIndex,
-            DateTime chunkStartedAt)?
+    TResult Function(
+            RecordingSession session,
+            int sequenceIndex,
+            DateTime chunkStartedAt,
+            List<ChunkProcessingJob> processing,
+            List<FailedChunk> failed)?
         recording,
-    TResult Function(RecordingSession session, int sequenceIndex,
-            ChunkBoundaryReason reason)?
+    TResult Function(
+            RecordingSession session,
+            List<ChunkProcessingJob> processing,
+            SessionEndCause endCause,
+            List<FailedChunk> failed)?
         finalizing,
     required TResult orElse(),
   }) {
     if (idle != null) {
-      return idle(lastCompletedSession);
+      return idle(lastCompletedSession, failed, endCause);
     }
     return orElse();
   }
@@ -265,11 +359,22 @@ class _$RecordingStateIdleImpl extends RecordingStateIdle {
 
 abstract class RecordingStateIdle extends RecordingState {
   const factory RecordingStateIdle(
-          {final RecordingSession? lastCompletedSession}) =
-      _$RecordingStateIdleImpl;
+      {final RecordingSession? lastCompletedSession,
+      final List<FailedChunk> failed,
+      final SessionEndCause? endCause}) = _$RecordingStateIdleImpl;
   const RecordingStateIdle._() : super._();
 
   RecordingSession? get lastCompletedSession;
+  List<FailedChunk> get failed;
+
+  /// Why the last session ended, or null on a cold start.
+  ///
+  /// Carried here and not only on `Finalizing` because the explanation is
+  /// needed **after** draining completes, which is when the Collector is
+  /// looking at a stopped recording and wondering why. Volume 2 Ch. 2.9 §4.3
+  /// requires a cause and a recovery action; this is the half the domain
+  /// owes, and Mission 3.8 maps it to the other half.
+  SessionEndCause? get endCause;
   @JsonKey(ignore: true)
   _$$RecordingStateIdleImplCopyWith<_$RecordingStateIdleImpl> get copyWith =>
       throw _privateConstructorUsedError;
@@ -350,13 +455,22 @@ class _$RecordingStateReadyImpl extends RecordingStateReady {
   @override
   @optionalTypeArgs
   TResult when<TResult extends Object?>({
-    required TResult Function(RecordingSession? lastCompletedSession) idle,
+    required TResult Function(RecordingSession? lastCompletedSession,
+            List<FailedChunk> failed, SessionEndCause? endCause)
+        idle,
     required TResult Function(RecordingSession session) ready,
-    required TResult Function(RecordingSession session, int sequenceIndex,
-            DateTime chunkStartedAt)
+    required TResult Function(
+            RecordingSession session,
+            int sequenceIndex,
+            DateTime chunkStartedAt,
+            List<ChunkProcessingJob> processing,
+            List<FailedChunk> failed)
         recording,
-    required TResult Function(RecordingSession session, int sequenceIndex,
-            ChunkBoundaryReason reason)
+    required TResult Function(
+            RecordingSession session,
+            List<ChunkProcessingJob> processing,
+            SessionEndCause endCause,
+            List<FailedChunk> failed)
         finalizing,
   }) {
     return ready(session);
@@ -365,13 +479,22 @@ class _$RecordingStateReadyImpl extends RecordingStateReady {
   @override
   @optionalTypeArgs
   TResult? whenOrNull<TResult extends Object?>({
-    TResult? Function(RecordingSession? lastCompletedSession)? idle,
+    TResult? Function(RecordingSession? lastCompletedSession,
+            List<FailedChunk> failed, SessionEndCause? endCause)?
+        idle,
     TResult? Function(RecordingSession session)? ready,
-    TResult? Function(RecordingSession session, int sequenceIndex,
-            DateTime chunkStartedAt)?
+    TResult? Function(
+            RecordingSession session,
+            int sequenceIndex,
+            DateTime chunkStartedAt,
+            List<ChunkProcessingJob> processing,
+            List<FailedChunk> failed)?
         recording,
-    TResult? Function(RecordingSession session, int sequenceIndex,
-            ChunkBoundaryReason reason)?
+    TResult? Function(
+            RecordingSession session,
+            List<ChunkProcessingJob> processing,
+            SessionEndCause endCause,
+            List<FailedChunk> failed)?
         finalizing,
   }) {
     return ready?.call(session);
@@ -380,13 +503,22 @@ class _$RecordingStateReadyImpl extends RecordingStateReady {
   @override
   @optionalTypeArgs
   TResult maybeWhen<TResult extends Object?>({
-    TResult Function(RecordingSession? lastCompletedSession)? idle,
+    TResult Function(RecordingSession? lastCompletedSession,
+            List<FailedChunk> failed, SessionEndCause? endCause)?
+        idle,
     TResult Function(RecordingSession session)? ready,
-    TResult Function(RecordingSession session, int sequenceIndex,
-            DateTime chunkStartedAt)?
+    TResult Function(
+            RecordingSession session,
+            int sequenceIndex,
+            DateTime chunkStartedAt,
+            List<ChunkProcessingJob> processing,
+            List<FailedChunk> failed)?
         recording,
-    TResult Function(RecordingSession session, int sequenceIndex,
-            ChunkBoundaryReason reason)?
+    TResult Function(
+            RecordingSession session,
+            List<ChunkProcessingJob> processing,
+            SessionEndCause endCause,
+            List<FailedChunk> failed)?
         finalizing,
     required TResult orElse(),
   }) {
@@ -453,7 +585,11 @@ abstract class _$$RecordingStateRecordingImplCopyWith<$Res> {
       __$$RecordingStateRecordingImplCopyWithImpl<$Res>;
   @useResult
   $Res call(
-      {RecordingSession session, int sequenceIndex, DateTime chunkStartedAt});
+      {RecordingSession session,
+      int sequenceIndex,
+      DateTime chunkStartedAt,
+      List<ChunkProcessingJob> processing,
+      List<FailedChunk> failed});
 
   $RecordingSessionCopyWith<$Res> get session;
 }
@@ -473,6 +609,8 @@ class __$$RecordingStateRecordingImplCopyWithImpl<$Res>
     Object? session = null,
     Object? sequenceIndex = null,
     Object? chunkStartedAt = null,
+    Object? processing = null,
+    Object? failed = null,
   }) {
     return _then(_$RecordingStateRecordingImpl(
       session: null == session
@@ -487,6 +625,14 @@ class __$$RecordingStateRecordingImplCopyWithImpl<$Res>
           ? _value.chunkStartedAt
           : chunkStartedAt // ignore: cast_nullable_to_non_nullable
               as DateTime,
+      processing: null == processing
+          ? _value._processing
+          : processing // ignore: cast_nullable_to_non_nullable
+              as List<ChunkProcessingJob>,
+      failed: null == failed
+          ? _value._failed
+          : failed // ignore: cast_nullable_to_non_nullable
+              as List<FailedChunk>,
     ));
   }
 
@@ -505,23 +651,51 @@ class _$RecordingStateRecordingImpl extends RecordingStateRecording {
   const _$RecordingStateRecordingImpl(
       {required this.session,
       required this.sequenceIndex,
-      required this.chunkStartedAt})
-      : super._();
+      required this.chunkStartedAt,
+      final List<ChunkProcessingJob> processing = const <ChunkProcessingJob>[],
+      final List<FailedChunk> failed = const <FailedChunk>[]})
+      : _processing = processing,
+        _failed = failed,
+        super._();
 
   @override
   final RecordingSession session;
 
-  /// The index this chunk will be stamped with (Volume 4 Chapter 4.4).
+  /// The index of the chunk being captured now.
   @override
   final int sequenceIndex;
 
-  /// When this chunk began — the 10-minute timer's origin.
+  /// When this chunk began — the BR-06 timer's origin.
   @override
   final DateTime chunkStartedAt;
 
+  /// Chunks whose capture has ended and whose processing is in flight.
+  final List<ChunkProcessingJob> _processing;
+
+  /// Chunks whose capture has ended and whose processing is in flight.
+  @override
+  @JsonKey()
+  List<ChunkProcessingJob> get processing {
+    if (_processing is EqualUnmodifiableListView) return _processing;
+    // ignore: implicit_dynamic_type
+    return EqualUnmodifiableListView(_processing);
+  }
+
+  /// Chunks that failed terminally earlier in this session.
+  final List<FailedChunk> _failed;
+
+  /// Chunks that failed terminally earlier in this session.
+  @override
+  @JsonKey()
+  List<FailedChunk> get failed {
+    if (_failed is EqualUnmodifiableListView) return _failed;
+    // ignore: implicit_dynamic_type
+    return EqualUnmodifiableListView(_failed);
+  }
+
   @override
   String toString() {
-    return 'RecordingState.recording(session: $session, sequenceIndex: $sequenceIndex, chunkStartedAt: $chunkStartedAt)';
+    return 'RecordingState.recording(session: $session, sequenceIndex: $sequenceIndex, chunkStartedAt: $chunkStartedAt, processing: $processing, failed: $failed)';
   }
 
   @override
@@ -533,12 +707,20 @@ class _$RecordingStateRecordingImpl extends RecordingStateRecording {
             (identical(other.sequenceIndex, sequenceIndex) ||
                 other.sequenceIndex == sequenceIndex) &&
             (identical(other.chunkStartedAt, chunkStartedAt) ||
-                other.chunkStartedAt == chunkStartedAt));
+                other.chunkStartedAt == chunkStartedAt) &&
+            const DeepCollectionEquality()
+                .equals(other._processing, _processing) &&
+            const DeepCollectionEquality().equals(other._failed, _failed));
   }
 
   @override
-  int get hashCode =>
-      Object.hash(runtimeType, session, sequenceIndex, chunkStartedAt);
+  int get hashCode => Object.hash(
+      runtimeType,
+      session,
+      sequenceIndex,
+      chunkStartedAt,
+      const DeepCollectionEquality().hash(_processing),
+      const DeepCollectionEquality().hash(_failed));
 
   @JsonKey(ignore: true)
   @override
@@ -550,48 +732,78 @@ class _$RecordingStateRecordingImpl extends RecordingStateRecording {
   @override
   @optionalTypeArgs
   TResult when<TResult extends Object?>({
-    required TResult Function(RecordingSession? lastCompletedSession) idle,
+    required TResult Function(RecordingSession? lastCompletedSession,
+            List<FailedChunk> failed, SessionEndCause? endCause)
+        idle,
     required TResult Function(RecordingSession session) ready,
-    required TResult Function(RecordingSession session, int sequenceIndex,
-            DateTime chunkStartedAt)
+    required TResult Function(
+            RecordingSession session,
+            int sequenceIndex,
+            DateTime chunkStartedAt,
+            List<ChunkProcessingJob> processing,
+            List<FailedChunk> failed)
         recording,
-    required TResult Function(RecordingSession session, int sequenceIndex,
-            ChunkBoundaryReason reason)
+    required TResult Function(
+            RecordingSession session,
+            List<ChunkProcessingJob> processing,
+            SessionEndCause endCause,
+            List<FailedChunk> failed)
         finalizing,
   }) {
-    return recording(session, sequenceIndex, chunkStartedAt);
+    return recording(
+        session, sequenceIndex, chunkStartedAt, processing, failed);
   }
 
   @override
   @optionalTypeArgs
   TResult? whenOrNull<TResult extends Object?>({
-    TResult? Function(RecordingSession? lastCompletedSession)? idle,
+    TResult? Function(RecordingSession? lastCompletedSession,
+            List<FailedChunk> failed, SessionEndCause? endCause)?
+        idle,
     TResult? Function(RecordingSession session)? ready,
-    TResult? Function(RecordingSession session, int sequenceIndex,
-            DateTime chunkStartedAt)?
+    TResult? Function(
+            RecordingSession session,
+            int sequenceIndex,
+            DateTime chunkStartedAt,
+            List<ChunkProcessingJob> processing,
+            List<FailedChunk> failed)?
         recording,
-    TResult? Function(RecordingSession session, int sequenceIndex,
-            ChunkBoundaryReason reason)?
+    TResult? Function(
+            RecordingSession session,
+            List<ChunkProcessingJob> processing,
+            SessionEndCause endCause,
+            List<FailedChunk> failed)?
         finalizing,
   }) {
-    return recording?.call(session, sequenceIndex, chunkStartedAt);
+    return recording?.call(
+        session, sequenceIndex, chunkStartedAt, processing, failed);
   }
 
   @override
   @optionalTypeArgs
   TResult maybeWhen<TResult extends Object?>({
-    TResult Function(RecordingSession? lastCompletedSession)? idle,
+    TResult Function(RecordingSession? lastCompletedSession,
+            List<FailedChunk> failed, SessionEndCause? endCause)?
+        idle,
     TResult Function(RecordingSession session)? ready,
-    TResult Function(RecordingSession session, int sequenceIndex,
-            DateTime chunkStartedAt)?
+    TResult Function(
+            RecordingSession session,
+            int sequenceIndex,
+            DateTime chunkStartedAt,
+            List<ChunkProcessingJob> processing,
+            List<FailedChunk> failed)?
         recording,
-    TResult Function(RecordingSession session, int sequenceIndex,
-            ChunkBoundaryReason reason)?
+    TResult Function(
+            RecordingSession session,
+            List<ChunkProcessingJob> processing,
+            SessionEndCause endCause,
+            List<FailedChunk> failed)?
         finalizing,
     required TResult orElse(),
   }) {
     if (recording != null) {
-      return recording(session, sequenceIndex, chunkStartedAt);
+      return recording(
+          session, sequenceIndex, chunkStartedAt, processing, failed);
     }
     return orElse();
   }
@@ -638,16 +850,24 @@ abstract class RecordingStateRecording extends RecordingState {
   const factory RecordingStateRecording(
       {required final RecordingSession session,
       required final int sequenceIndex,
-      required final DateTime chunkStartedAt}) = _$RecordingStateRecordingImpl;
+      required final DateTime chunkStartedAt,
+      final List<ChunkProcessingJob> processing,
+      final List<FailedChunk> failed}) = _$RecordingStateRecordingImpl;
   const RecordingStateRecording._() : super._();
 
   RecordingSession get session;
 
-  /// The index this chunk will be stamped with (Volume 4 Chapter 4.4).
+  /// The index of the chunk being captured now.
   int get sequenceIndex;
 
-  /// When this chunk began — the 10-minute timer's origin.
+  /// When this chunk began — the BR-06 timer's origin.
   DateTime get chunkStartedAt;
+
+  /// Chunks whose capture has ended and whose processing is in flight.
+  List<ChunkProcessingJob> get processing;
+
+  /// Chunks that failed terminally earlier in this session.
+  List<FailedChunk> get failed;
   @JsonKey(ignore: true)
   _$$RecordingStateRecordingImplCopyWith<_$RecordingStateRecordingImpl>
       get copyWith => throw _privateConstructorUsedError;
@@ -662,8 +882,9 @@ abstract class _$$RecordingStateFinalizingImplCopyWith<$Res> {
   @useResult
   $Res call(
       {RecordingSession session,
-      int sequenceIndex,
-      ChunkBoundaryReason reason});
+      List<ChunkProcessingJob> processing,
+      SessionEndCause endCause,
+      List<FailedChunk> failed});
 
   $RecordingSessionCopyWith<$Res> get session;
 }
@@ -681,22 +902,27 @@ class __$$RecordingStateFinalizingImplCopyWithImpl<$Res>
   @override
   $Res call({
     Object? session = null,
-    Object? sequenceIndex = null,
-    Object? reason = null,
+    Object? processing = null,
+    Object? endCause = null,
+    Object? failed = null,
   }) {
     return _then(_$RecordingStateFinalizingImpl(
       session: null == session
           ? _value.session
           : session // ignore: cast_nullable_to_non_nullable
               as RecordingSession,
-      sequenceIndex: null == sequenceIndex
-          ? _value.sequenceIndex
-          : sequenceIndex // ignore: cast_nullable_to_non_nullable
-              as int,
-      reason: null == reason
-          ? _value.reason
-          : reason // ignore: cast_nullable_to_non_nullable
-              as ChunkBoundaryReason,
+      processing: null == processing
+          ? _value._processing
+          : processing // ignore: cast_nullable_to_non_nullable
+              as List<ChunkProcessingJob>,
+      endCause: null == endCause
+          ? _value.endCause
+          : endCause // ignore: cast_nullable_to_non_nullable
+              as SessionEndCause,
+      failed: null == failed
+          ? _value._failed
+          : failed // ignore: cast_nullable_to_non_nullable
+              as List<FailedChunk>,
     ));
   }
 
@@ -714,24 +940,51 @@ class __$$RecordingStateFinalizingImplCopyWithImpl<$Res>
 class _$RecordingStateFinalizingImpl extends RecordingStateFinalizing {
   const _$RecordingStateFinalizingImpl(
       {required this.session,
-      required this.sequenceIndex,
-      required this.reason})
-      : super._();
+      required final List<ChunkProcessingJob> processing,
+      required this.endCause,
+      final List<FailedChunk> failed = const <FailedChunk>[]})
+      : _processing = processing,
+        _failed = failed,
+        super._();
 
   @override
   final RecordingSession session;
 
-  /// The index of the chunk being finalized.
-  @override
-  final int sequenceIndex;
+  /// Jobs still in flight. `Idle` is reached when this empties.
+  final List<ChunkProcessingJob> _processing;
 
-  /// Which branch of §2's diagram this finalization returns to.
+  /// Jobs still in flight. `Idle` is reached when this empties.
   @override
-  final ChunkBoundaryReason reason;
+  List<ChunkProcessingJob> get processing {
+    if (_processing is EqualUnmodifiableListView) return _processing;
+    // ignore: implicit_dynamic_type
+    return EqualUnmodifiableListView(_processing);
+  }
+
+  /// Why capture ended — carried through to [RecordingStateIdle].
+  ///
+  /// `Finalizing` is reachable two ways: a Collector-initiated stop, and a
+  /// capacity-forced end. They look identical without this, which is the
+  /// defect Mission 3.4.5.1 found. It is also the field amendment A-059's
+  /// C-10 rule branches on.
+  @override
+  final SessionEndCause endCause;
+
+  /// Chunks that failed terminally during this session.
+  final List<FailedChunk> _failed;
+
+  /// Chunks that failed terminally during this session.
+  @override
+  @JsonKey()
+  List<FailedChunk> get failed {
+    if (_failed is EqualUnmodifiableListView) return _failed;
+    // ignore: implicit_dynamic_type
+    return EqualUnmodifiableListView(_failed);
+  }
 
   @override
   String toString() {
-    return 'RecordingState.finalizing(session: $session, sequenceIndex: $sequenceIndex, reason: $reason)';
+    return 'RecordingState.finalizing(session: $session, processing: $processing, endCause: $endCause, failed: $failed)';
   }
 
   @override
@@ -740,13 +993,20 @@ class _$RecordingStateFinalizingImpl extends RecordingStateFinalizing {
         (other.runtimeType == runtimeType &&
             other is _$RecordingStateFinalizingImpl &&
             (identical(other.session, session) || other.session == session) &&
-            (identical(other.sequenceIndex, sequenceIndex) ||
-                other.sequenceIndex == sequenceIndex) &&
-            (identical(other.reason, reason) || other.reason == reason));
+            const DeepCollectionEquality()
+                .equals(other._processing, _processing) &&
+            (identical(other.endCause, endCause) ||
+                other.endCause == endCause) &&
+            const DeepCollectionEquality().equals(other._failed, _failed));
   }
 
   @override
-  int get hashCode => Object.hash(runtimeType, session, sequenceIndex, reason);
+  int get hashCode => Object.hash(
+      runtimeType,
+      session,
+      const DeepCollectionEquality().hash(_processing),
+      endCause,
+      const DeepCollectionEquality().hash(_failed));
 
   @JsonKey(ignore: true)
   @override
@@ -758,48 +1018,75 @@ class _$RecordingStateFinalizingImpl extends RecordingStateFinalizing {
   @override
   @optionalTypeArgs
   TResult when<TResult extends Object?>({
-    required TResult Function(RecordingSession? lastCompletedSession) idle,
+    required TResult Function(RecordingSession? lastCompletedSession,
+            List<FailedChunk> failed, SessionEndCause? endCause)
+        idle,
     required TResult Function(RecordingSession session) ready,
-    required TResult Function(RecordingSession session, int sequenceIndex,
-            DateTime chunkStartedAt)
+    required TResult Function(
+            RecordingSession session,
+            int sequenceIndex,
+            DateTime chunkStartedAt,
+            List<ChunkProcessingJob> processing,
+            List<FailedChunk> failed)
         recording,
-    required TResult Function(RecordingSession session, int sequenceIndex,
-            ChunkBoundaryReason reason)
+    required TResult Function(
+            RecordingSession session,
+            List<ChunkProcessingJob> processing,
+            SessionEndCause endCause,
+            List<FailedChunk> failed)
         finalizing,
   }) {
-    return finalizing(session, sequenceIndex, reason);
+    return finalizing(session, processing, endCause, failed);
   }
 
   @override
   @optionalTypeArgs
   TResult? whenOrNull<TResult extends Object?>({
-    TResult? Function(RecordingSession? lastCompletedSession)? idle,
+    TResult? Function(RecordingSession? lastCompletedSession,
+            List<FailedChunk> failed, SessionEndCause? endCause)?
+        idle,
     TResult? Function(RecordingSession session)? ready,
-    TResult? Function(RecordingSession session, int sequenceIndex,
-            DateTime chunkStartedAt)?
+    TResult? Function(
+            RecordingSession session,
+            int sequenceIndex,
+            DateTime chunkStartedAt,
+            List<ChunkProcessingJob> processing,
+            List<FailedChunk> failed)?
         recording,
-    TResult? Function(RecordingSession session, int sequenceIndex,
-            ChunkBoundaryReason reason)?
+    TResult? Function(
+            RecordingSession session,
+            List<ChunkProcessingJob> processing,
+            SessionEndCause endCause,
+            List<FailedChunk> failed)?
         finalizing,
   }) {
-    return finalizing?.call(session, sequenceIndex, reason);
+    return finalizing?.call(session, processing, endCause, failed);
   }
 
   @override
   @optionalTypeArgs
   TResult maybeWhen<TResult extends Object?>({
-    TResult Function(RecordingSession? lastCompletedSession)? idle,
+    TResult Function(RecordingSession? lastCompletedSession,
+            List<FailedChunk> failed, SessionEndCause? endCause)?
+        idle,
     TResult Function(RecordingSession session)? ready,
-    TResult Function(RecordingSession session, int sequenceIndex,
-            DateTime chunkStartedAt)?
+    TResult Function(
+            RecordingSession session,
+            int sequenceIndex,
+            DateTime chunkStartedAt,
+            List<ChunkProcessingJob> processing,
+            List<FailedChunk> failed)?
         recording,
-    TResult Function(RecordingSession session, int sequenceIndex,
-            ChunkBoundaryReason reason)?
+    TResult Function(
+            RecordingSession session,
+            List<ChunkProcessingJob> processing,
+            SessionEndCause endCause,
+            List<FailedChunk> failed)?
         finalizing,
     required TResult orElse(),
   }) {
     if (finalizing != null) {
-      return finalizing(session, sequenceIndex, reason);
+      return finalizing(session, processing, endCause, failed);
     }
     return orElse();
   }
@@ -844,19 +1131,27 @@ class _$RecordingStateFinalizingImpl extends RecordingStateFinalizing {
 
 abstract class RecordingStateFinalizing extends RecordingState {
   const factory RecordingStateFinalizing(
-          {required final RecordingSession session,
-          required final int sequenceIndex,
-          required final ChunkBoundaryReason reason}) =
-      _$RecordingStateFinalizingImpl;
+      {required final RecordingSession session,
+      required final List<ChunkProcessingJob> processing,
+      required final SessionEndCause endCause,
+      final List<FailedChunk> failed}) = _$RecordingStateFinalizingImpl;
   const RecordingStateFinalizing._() : super._();
 
   RecordingSession get session;
 
-  /// The index of the chunk being finalized.
-  int get sequenceIndex;
+  /// Jobs still in flight. `Idle` is reached when this empties.
+  List<ChunkProcessingJob> get processing;
 
-  /// Which branch of §2's diagram this finalization returns to.
-  ChunkBoundaryReason get reason;
+  /// Why capture ended — carried through to [RecordingStateIdle].
+  ///
+  /// `Finalizing` is reachable two ways: a Collector-initiated stop, and a
+  /// capacity-forced end. They look identical without this, which is the
+  /// defect Mission 3.4.5.1 found. It is also the field amendment A-059's
+  /// C-10 rule branches on.
+  SessionEndCause get endCause;
+
+  /// Chunks that failed terminally during this session.
+  List<FailedChunk> get failed;
   @JsonKey(ignore: true)
   _$$RecordingStateFinalizingImplCopyWith<_$RecordingStateFinalizingImpl>
       get copyWith => throw _privateConstructorUsedError;

@@ -1259,7 +1259,11 @@ The shape of it: a session longer than ten minutes crosses a boundary automatica
 
 ### How often C-10 appears — decided 2026-08-15
 
-**Decision: C-10 is shown only when `Finalizing.reason == collectorStop`. Automatic chunk boundaries are invisible to the Collector.**
+~~**Decision: C-10 is shown only when `Finalizing.reason == collectorStop`.**~~ **Field renamed 2026-08-15 — see below.** Automatic chunk boundaries are invisible to the Collector.
+
+**Corrected 2026-08-15 (Mission 3.4.5.1).** `Finalizing.reason` no longer exists. Mission 3.4.5 removed it, on the assumption that `Finalizing` meant "the Collector stopped" — which stopped being true in the same change, because a capacity-forced end also lands there.
+
+**The rule now reads: show C-10 when `RecordingState.sessionEndCause == SessionEndCause.collectorStop`.** The decision is unchanged; only the field it branches on is. `SessionEndCause` is carried on both `Finalizing` and `Idle`, so the check works during the drain and after it.
 
 So the duration above is a **once-per-session** cost, not a five-or-six-times-an-hour one. That materially lowers the pressure behind the product question above, and it is the reason the native SHA-256 channel stays unbuilt.
 
@@ -1288,9 +1292,46 @@ It matters more here than it would on most products. Volume 5's whole premise is
 
 The gap follows from two decisions that are each individually correct. BR-05 forbids mid-stream slicing, so a chunk boundary must be a real Stop; and BR-07 requires a chunk be fully persisted before anything proceeds, which is what the machine waits for. Neither should be reversed to close this.
 
-**This needs its own architectural decision and does not get one here.** The question to answer is whether a new capture session may begin before the previous chunk's finalization completes — for example by starting the next recording as soon as the file handle is closed and letting checksumming proceed in parallel, rather than serialising finalization ahead of the next chunk. That reaches into Chapters 5.3, 5.4 and 5.5 together, changes what `Finalizing` means in the lifecycle, and may not be achievable with a single `CameraController` at all.
+~~**This needs its own architectural decision and does not get one here.** The question to answer is whether a new capture session may begin before the previous chunk's finalization completes — for example by starting the next recording as soon as the file handle is closed and letting checksumming proceed in parallel, rather than serialising finalization ahead of the next chunk. That reaches into Chapters 5.3, 5.4 and 5.5 together, changes what `Finalizing` means in the lifecycle, and may not be achievable with a single `CameraController` at all.~~
 
-Recorded now, unresolved, and deliberately not designed inside an amendment. **It should be settled before Mission 3.8 builds a UI on a lifecycle whose timing may change.**
+~~Recorded now, unresolved, and deliberately not designed inside an amendment.~~
+
+### Corrected 2026-08-15 — the gap is not what the paragraphs above say it is
+
+**This supersedes the framing above rather than replacing it.** The original text is committed in `390c170` and is left struck through, in the same way an Accepted ADR is corrected: it was wrong in a way worth being able to find later.
+
+**Two things it got wrong.**
+
+**The ~12 seconds is checksum time, not camera-blocked time.** It was attributed to the camera being unavailable throughout `Finalizing`. It is not. By the moment `stopVideoRecording()` returns, the moov atom is written, the file handle is closed, the file is fully persisted on disk, and CameraX has unbound the `videoCapture` use case. **The camera is free at that instant.** What follows is Mission 3.4's SHA-256 running while Mission 3.2's lifecycle holds the machine in `Finalizing` before re-entering `Recording`.
+
+**And that serialisation is this project's choice, not the plugin's constraint — and it is stricter than BR-07 requires.** BR-07 reads *"Every chunk shall be persisted to local storage before any **upload** of that chunk begins"*. It governs upload, not the next recording. Chapter 5.3 §2's diagram labels the edge `chunk persisted + queued (BR-07)` and gates chunk N+1 on it, but persistence has already happened at `stopVideoRecording`; only queueing has not.
+
+**What was investigated, and what the plugin actually forbids.** Overlapping capture sessions are genuinely impossible here, confirmed in `camera_android_camerax 0.7.4+5`'s source rather than inferred:
+
+- `startVideoCapturing` opens with `if (recording != null) { /* There is currently an active recording, so do not start a new one. */ return; }`, and `recording` is cleared only after `stopVideoRecording` awaits `VideoRecordEventFinalize`. There is no window in which two recordings coexist.
+- Two `CameraController`s would not help: `CameraPlatform.instance` is a single static instance and `AndroidCameraCameraX` holds `videoCapture`, `recorder`, `pendingRecording` and `recording` as fields on it, so two controllers share one mutable object. Beneath that, the Android camera device is exclusive.
+
+**But overlap is not what closing the gap requires**, which is why the question as originally posed had no useful answer.
+
+**The real residual gap** is one use-case bind cycle: `stopVideoRecording` (write moov, close, unbind `videoCapture`) followed by `startVideoRecording` (re-bind `videoCapture`, `prepareRecording`). **Unmeasured** — the test handset was disconnected — but a bind cycle rather than a 610 MB hash, so plausibly sub-second. *That* residue is structural under this plugin and cannot be removed without a native path.
+
+**One detail that makes the gap worse than it sounds.** `stopVideoRecording` unbinds only `videoCapture`; the **preview use case stays bound**. The screen does not go black, so the Collector sees live camera throughout and has no cue that capture has stopped — which compounds the decision above to hide C-10 at automatic boundaries.
+
+### The fix, and Mission 3.4.5
+
+**Restart capture immediately after `stopVideoRecording()` returns, and run checksumming, metadata generation and upload queueing concurrently against the already-closed file.** Same controller, sequential camera calls, no unsupported API, and no reversal of BR-05 or BR-07.
+
+**Scoped as its own sub-mission, 3.4.5, to run before Mission 3.8.** Not implemented here — it changes committed behaviour in Mission 3.2 and deserves its own trace-and-decide pass rather than an amendment's closing paragraph.
+
+Mission 3.3's pipeline needs little or no change: `stopChunk()` and `startChunk()` are already separate calls on a persistent controller. Mission 3.4's processor needs none — it already runs on an isolate and takes a path. **The work is Mission 3.2's.** `RecordingLifecycle.onChunkPersisted` currently means "finalization finished, resume", and it would split into two independent facts — capture restarted, and chunk processed. The machine would be recording chunk N+1 while chunk N is still processing, which the current four states cannot express.
+
+**Three problems 3.4.5 must resolve**, none of which the current design has an answer for:
+
+1. **Failure attribution.** Chunk N's checksum fails while chunk N+1 is recording. Mission 3.2's parked-`Finalizing` dead end currently stops the whole machine, but with overlap there is a live recording that should not necessarily stop. Where that failure surfaces, and what it stops, is undesigned.
+2. **Concurrency bound.** Boundaries arrive every 600 s and processing takes roughly 12 s, so queueing is not a practical risk — but nothing would enforce it, and a slow device plus a low-storage forced boundary (Chapter 5.4 §2) could stack them.
+3. **Ordering against `sequence_index`.** Chapter 5.6 §2 increments it *"once per Finalizing transition"*. With overlap, increment timing and processing-completion order diverge, and the S3 key is deterministic and UNIQUE on that index (Chapter 5.14 §1).
+
+**It should still be settled before Mission 3.8 builds a UI on a lifecycle whose timing may change.**
 
 ### Recorded for Volume 9's device matrix
 
@@ -1351,6 +1392,73 @@ That is the same state A-059 already schedules Mission 3.4.5 to restructure for 
 **Building `chunk_id` now would mean opening that state twice** — once to add a field, and again weeks later to change what the state means — with the second change landing on top of the first and re-testing the same union. It is folded into 3.4.5 instead.
 
 The two also touch the same key. A-059 records that under overlap *"increment timing and processing-completion order diverge, and the S3 key is deterministic and UNIQUE on that index"*; `chunk_id` is the other component of that key. Deciding both together is more likely to produce a coherent answer than deciding them a mission apart.
+
+**Closed 2026-08-15 by Mission 3.4.5.** `chunk_id` is minted at capture-stop, in the same call that fixes `sequence_index`, and stored on the `ChunkProcessingJob` that carries the chunk until it is named. Generated through a `ChunkIdGenerator` port — `uuid` is still absent from the dependency tree, so no package was added. See A-061.
+
+### A-061 — Capture and chunk processing are separated; Chapter 5.3's Finalizing is redefined
+
+| | |
+|---|---|
+| **Volume** | 5 — Recording Engine, Chapter 5.3 §2 and §3; Chapter 5.13 §1; Chapter 5.14 §3 |
+| **Says** | Ch. 5.3 §2's diagram routes every chunk boundary through `Finalizing` before the next `Recording`, labelling the edge *"chunk persisted + queued (BR-07)"*. §3 defines `Finalizing` as *"the brief Local Processing state (C-10) — video is finalized, metadata is generated, and the chunk enters the Upload Queue"* |
+| **Should say** | An **automatic** boundary returns to `Recording` immediately and never enters `Finalizing`; the chunk it just closed is processed in the background. `Finalizing` is entered only by a Collector-initiated stop, and means *the session is draining* |
+| **Reason** | The serialisation was this project's, not the chapter's, and it cost roughly twelve seconds of lost capture at every boundary — see A-059's corrected capture-gap section |
+
+**BR-07 is not weakened.** It reads *"Every chunk shall be persisted to local storage before any **upload** of that chunk begins"*, and persistence is complete before this change does anything: `stopVideoRecording()` returns only after `VideoRecordEventFinalize`, so the `.mp4` is closed on disk. What used to happen before the next chunk — checksumming — was never what BR-07 required.
+
+### The state shape, and why there is no fifth state
+
+**Four states, unchanged: `Idle`, `Ready`, `Recording`, `Finalizing`.** Processing is carried as a **field** on the states that can hold it, not as a variant.
+
+The obvious move was a fifth state for "recording while processing". It is wrong because **capture and processing are orthogonal**: what the camera is doing and how many closed files are being hashed are independent facts, so encoding their combination as variants multiplies them — `recordingWithOnePending`, `recordingWithTwoPending`, and so on. A field says the same thing without the product, and keeps Chapter 5.3 §2's four names intact.
+
+**The exhaustive transition matrix moved from four legal edges to five, deliberately.** Mission 3.2 wrote that test specifically to catch an unplanned state addition, so the revision was treated as a signal rather than a chore. What it caught is exactly one change: `onChunkProcessed` is now legal from `Recording` as well as `Finalizing`, because a background job can complete while the next chunk is being captured. The **state count is still four**, and a test now asserts that too.
+
+### Failure attribution — cited, not invented
+
+**A terminal processing failure marks the chunk and leaves the session alone.**
+
+Chapter 5.13 §1 classifies *"Local file missing/corrupted, disk full"* as **Terminal (device-side)**, handled as *"Not retried automatically — surfaces immediately as Failed with a specific, named cause (Chapter 2.9's copy rules)"*. A checksum that cannot be computed is that class of failure, and the chapter puts the outcome on the **chunk**, not the session: a Failed chunk waits for the Collector's Retry (C-11, FR-UPL-07).
+
+Chapter 5.13 is written about upload rather than local processing, so this applies its classification by analogy — stated plainly rather than presented as a direct ruling. Nothing in Volume 5 addresses a pre-upload processing failure explicitly.
+
+The alternative — an emergency Stop of the live recording — was rejected because it destroys footage that is still being captured correctly in order to report footage that is not. That is a strictly worse outcome for a product whose output is the recording.
+
+**This retires Mission 3.2's parked-`Finalizing` dead end.** That behaviour was correct while capture could not continue past a failure; it cannot survive a design where capture already has. The test asserting it said in its own comment that it was *"expected to change when that lands"*, and has been replaced rather than deleted quietly — two tests now assert the new outcome, and one records why the old assertion is gone.
+
+### The concurrency bound — three, and why a bound exists at all
+
+Normal operation has at most one job in flight: a boundary every 600 s against roughly 12 s of processing. That ratio does not justify a cap.
+
+**A different path does.** Chapter 5.4 §2 forces an early boundary whenever free space is critically low, and Mission 3.3 polls that every 5 seconds. A device that stays below the threshold therefore produces a boundary *every poll*, each starting a job that outlives the next two boundaries. Nothing else bounds that, and the condition that triggers it — a nearly-full disk — is exactly when adding more files is most harmful.
+
+At the cap, an automatic boundary is converted into a stop.
+
+### What that means for the Collector, stated plainly
+
+**The session ends. Involuntarily, mid-walkthrough, without them asking.** The camera is released (`closeSession`), the storage watch is cancelled, outstanding chunks drain, and the machine reaches `Idle`. The low-storage boundary is *not* refused or deferred until a slot frees — recording genuinely stops.
+
+**Why a stop rather than a refuse-or-defer, stated precisely so it is not re-derived wrongly.** It is **not** to free disk space, and any future reader tempted by that explanation should stop: BR-08 keeps every chunk on disk until its upload is confirmed, so ending the session frees nothing at all. The actual justification is narrower — a device that is already losing the processing/recording race, on a disk already near its limit, risks an out-of-space write failure corrupting the **in-progress** chunk. Chapter 5.4 §2 forces the early boundary for exactly that reason. A clean forced stop loses the remainder of a session; a corrupted active file loses a chunk and leaves an ambiguous half-registered artefact, which Chapter 5.6 §3 names as the thing to avoid.
+
+**The Collector must be told**, and Mission 3.4.5 originally made that impossible: both endings landed in `Finalizing` and the state recorded neither, so a forced stop was indistinguishable from a chosen one. Corrected by `SessionEndCause`, carried on `Finalizing` and through to `Idle` — the explanation is needed *after* draining, which is when the Collector is looking at a stopped recording. Volume 2 Chapter 2.9 §4.3 requires *"a plain-language cause with a single, specific recovery action"*; the domain now supplies the cause, and Mission 3.8 maps it to copy the way `AuthErrorCopy` maps `ErrorCode`.
+
+**Three is chosen, not transcribed** — no chapter gives a number. One is normal, two is a transient hiccup, three sustained means processing is durably behind capture.
+
+### Identity is minted at capture-stop
+
+`sequence_index` and `chunk_id` are both fixed in the same call, at the moment capture stops, and neither depends on when processing finishes.
+
+**Increment timing and completion timing are now different events**, which A-059 flagged as a risk to the deterministic S3 key. It is not one, and the reason is structural rather than defended: the index is read from the `Recording` state, which exists once per captured chunk, and captures are strictly serial because the plugin permits exactly one recording at a time — `startVideoCapturing` returns early while `recording != null`, and `stopVideoRecording` clears it only after finalization. One capture, one stop, one increment, in order. **No collision and no skip is possible**, and completion order may differ from start order without touching the index. Tests assert contiguity, uniqueness, and that out-of-order completion leaves the index alone.
+
+`chunk_id` closes A-060's deferral. Chapter 5.14 §3 asks for *"a UUID generated locally the moment a chunk begins finalizing"* — the same instant under this design — and Chapter 5.13 §4 requires every retry to reuse *"the exact same `chunk_id`"*, so it is minted once and never recomputed.
+
+**No dependency was added.** `uuid` is absent from the tree entirely, so generation goes through a `ChunkIdGenerator` port, exactly as Mission 3.2 did for `SessionIdGenerator` after the same check.
+
+### No new ADR, and the reasoning rather than the default
+
+Considered, because a tracked set of concurrent background jobs is a pattern this codebase did not previously have. Declined for three reasons: it introduces no new technology, dependency or layer rule; it is confined to one feature, where ADR-001 and ADR-022 already govern placement; and it refines a decision Volume 5 Chapter 5.3 already owns rather than taking a new one.
+
+That makes it an amendment, which is the same instrument A-057, A-058 and A-059 used for the same relationship. An ADR would be right if this became a cross-feature convention — for example if the Upload Queue adopted the same shape — and that is the trigger to revisit.
 
 ---
 

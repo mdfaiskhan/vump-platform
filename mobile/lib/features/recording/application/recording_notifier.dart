@@ -3,12 +3,15 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:mobile/core/errors/app_exception.dart';
+import 'package:mobile/core/errors/error_codes.dart';
 import 'package:mobile/core/errors/failure.dart';
 import 'package:mobile/features/recording/domain/entities/chunk_boundary_reason.dart';
+import 'package:mobile/features/recording/domain/entities/chunk_processing_job.dart';
 import 'package:mobile/features/recording/domain/entities/recording_session.dart';
 import 'package:mobile/features/recording/domain/entities/recording_state.dart';
 import 'package:mobile/features/recording/domain/recording_lifecycle.dart';
 import 'package:mobile/features/recording/domain/repositories/chunk_finalizer.dart';
+import 'package:mobile/features/recording/domain/repositories/chunk_id_generator.dart';
 import 'package:mobile/features/recording/domain/repositories/free_space_reader.dart';
 import 'package:mobile/features/recording/domain/repositories/recording_pipeline.dart';
 import 'package:mobile/features/recording/domain/repositories/session_id_generator.dart';
@@ -72,6 +75,20 @@ final Provider<PeriodicTimerFactory> storageTimerFactoryProvider =
 typedef PeriodicTimerFactory =
     Timer Function(Duration interval, void Function(Timer timer) callback);
 
+/// The chunk-id source, overridden at the composition root.
+///
+/// A port rather than a package: `uuid` is not in this project's dependency
+/// tree at all, and adding it would be a full ADR-030 admission. Same
+/// inversion Mission 3.2 used for session ids after the same check.
+final Provider<ChunkIdGenerator> chunkIdGeneratorProvider =
+    Provider<ChunkIdGenerator>(
+      (Ref ref) => throw UnimplementedError(
+        'chunkIdGeneratorProvider must be overridden with a '
+        'ChunkIdGenerator. See Volume 5 Ch. 5.14 §3 for the UUID '
+        'requirement, and Ch. 5.13 §4 for why it is never recomputed.',
+      ),
+    );
+
 /// The session-id source, overridden at the composition root.
 final Provider<SessionIdGenerator> sessionIdGeneratorProvider =
     Provider<SessionIdGenerator>(
@@ -113,15 +130,21 @@ class RecordingNotifier extends Notifier<RecordingState> {
   Timer? _boundaryTimer;
   Timer? _storageTimer;
 
-  /// True while a finalization is in flight, so a second one cannot start.
+  /// True while a chunk's capture is being handed over, so a second attempt
+  /// cannot start one.
   ///
   /// Chapter 5.6 §3 requires that *"a chunk is never accidentally
   /// double-finalized"* when a manual Stop and the automatic boundary land
   /// together. Cancelling the timer closes most of that race; this closes the
   /// rest, where the timer's callback had already been scheduled.
-  bool _finalizing = false;
+  ///
+  /// It guards the **capture handover only**, not background processing —
+  /// since Mission 3.4.5 several chunks may legitimately be processing at
+  /// once, bounded by [RecordingLifecycle.maximumConcurrentProcessing].
+  bool _endingChunk = false;
 
   ChunkFinalizer get _finalizer => ref.read(chunkFinalizerProvider);
+  RecordingPipeline get _pipeline => ref.read(recordingPipelineProvider);
 
   @override
   RecordingState build() {
@@ -165,9 +188,18 @@ class RecordingNotifier extends Notifier<RecordingState> {
   /// decided by the Checklist. The lifecycle takes the number and does not
   /// revisit the verdict (Chapter 5.1 §3).
   ///
-  /// Returns false if the machine was not `Idle`, in which case nothing
-  /// changed.
-  bool checklistPassed({required double zoomFactor, required DateTime now}) {
+  /// Opens the camera as part of the transition, because Chapter 5.3 §3
+  /// defines `Ready` as *"Checklist (C-07) has passed; **camera is
+  /// initialized** (Chapter 5.1) but not yet recording"*. Asynchronous since
+  /// Mission 3.4.5 for that reason.
+  ///
+  /// Returns null on success, or the [Failure] to render. The machine stays
+  /// `Idle` if the camera cannot be opened — a `Ready` whose camera is not
+  /// open would be a claim the rest of the machine trusts and acts on.
+  Future<Failure?> checklistPassed({
+    required double zoomFactor,
+    required DateTime now,
+  }) async {
     final RecordingSession session = RecordingSession(
       sessionId: ref.read(sessionIdGeneratorProvider).newSessionId(),
       zoomFactor: zoomFactor,
@@ -179,101 +211,160 @@ class RecordingNotifier extends Notifier<RecordingState> {
       session,
     );
     if (next == null) {
-      return false;
+      return null;
+    }
+
+    try {
+      await _pipeline.openSession(zoomFactor: zoomFactor);
+    } on AppException catch (exception) {
+      return Failure.fromException(exception);
     }
     state = next;
-    return true;
+    return null;
   }
 
   /// The Collector tapped Start.
   ///
   /// Begins chunk [RecordingLifecycle.firstSequenceIndex] and starts the
   /// 10-minute timer that produces the internal Stop.
-  bool start({required DateTime now}) {
+  Future<Failure?> start({required DateTime now}) async {
     final RecordingState? next = RecordingLifecycle.onStart(state, now);
     if (next == null) {
-      return false;
+      return null;
+    }
+
+    try {
+      await _pipeline.startChunk();
+    } on AppException catch (exception) {
+      return Failure.fromException(exception);
     }
     state = next;
     _startBoundaryTimer();
     _startStorageWatch();
-    return true;
+    return null;
   }
 
   /// The Collector tapped Stop — finalize this chunk and end the session.
   ///
   /// Returns null on success, or the [Failure] to render.
   Future<Failure?> stop({required DateTime now}) {
-    return _finalizeCurrentChunk(ChunkBoundaryReason.collectorStop, now);
+    return _endChunk(ChunkBoundaryReason.collectorStop, now);
   }
 
-  /// Runs one finalization and takes the edge out the other side.
+  /// Ends the current chunk's capture and, if the session continues, starts
+  /// the next one immediately.
   ///
-  /// The single path for both kinds of Stop, because Chapter 5.3 §3 says
-  /// finalization is *"the same finalization path whether triggered
-  /// automatically or manually"*. Only [reason] differs, and it is consulted
-  /// once, at the end, by [RecordingLifecycle.onChunkPersisted].
-  Future<Failure?> _finalizeCurrentChunk(
-    ChunkBoundaryReason reason,
-    DateTime now,
-  ) async {
-    if (_finalizing) {
+  /// **This is the method Mission 3.4.5 rewrote.** Mission 3.2 awaited the
+  /// whole of finalization here before resuming, which left the camera idle
+  /// for its duration — roughly twelve seconds of checksum, measured in
+  /// Mission 3.4. Mission 3.4.4 established that the wait was never a hardware
+  /// constraint: `stopVideoRecording()` returns only after
+  /// `VideoRecordEventFinalize`, so the `.mp4` is closed and complete and the
+  /// camera is free before any processing starts. BR-07 requires persistence
+  /// before **upload**, not before the next recording.
+  ///
+  /// So the order here is: stop capture, mint the chunk's identity, restart
+  /// capture, and only then hand the closed file to background processing. The
+  /// gap a Collector loses is one use-case bind cycle rather than a checksum.
+  Future<Failure?> _endChunk(ChunkBoundaryReason reason, DateTime now) async {
+    if (_endingChunk) {
       return null;
     }
-
-    final RecordingState? finalizing = RecordingLifecycle.onStop(state, reason);
-    if (finalizing == null) {
+    final RecordingState current = state;
+    if (current is! RecordingStateRecording) {
       // Not recording — a double tap, or a timer that fired as the state was
-      // already leaving Recording. Ignoring is the specified outcome.
+      // already leaving Recording. Ignoring is the specified outcome
+      // (Chapter 5.6 §3).
       return null;
     }
 
-    // Cancelled before the await, not after: Chapter 5.6 §3 requires the timer
-    // to stop "the instant a manual Stop begins finalization", and the instant
-    // it begins is here, not when it completes.
+    // Cancelled before the first await: Chapter 5.6 §3 requires the timer stop
+    // "the instant a manual Stop begins finalization", and that instant is
+    // here, not when the work completes.
     _cancelBoundaryTimer();
-    _finalizing = true;
-    state = finalizing;
+    _endingChunk = true;
 
-    final RecordingStateFinalizing current = finalizing
-        as RecordingStateFinalizing;
-
+    final String filePath;
     try {
-      await _finalizer.finalizeChunk(
-        session: current.session,
-        sequenceIndex: current.sequenceIndex,
-      );
+      filePath = await _pipeline.stopChunk();
     } on AppException catch (exception) {
-      // The chunk did not reach disk, so BR-07's precondition for advancing is
-      // unmet and the machine must not take the edge. It stays in Finalizing:
-      // the alternative is resuming Recording over a chunk that was never
-      // persisted, which is the exact failure BR-07 exists to prevent.
-      //
-      // Recovering from here — retry, or discard and continue — is Chapter
-      // 5.13's retry strategy and Chapter 5.3 §5's crash-recovery rule, both
-      // of which need the local storage layer that does not exist yet.
-      _finalizing = false;
+      _endingChunk = false;
       return Failure.fromException(exception);
     }
 
-    _finalizing = false;
+    final ChunkProcessingJob? job = RecordingLifecycle.nextJob(
+      current,
+      chunkId: ref.read(chunkIdGeneratorProvider).newChunkId(),
+      filePath: filePath,
+      now: now,
+    );
+    final RecordingState? next = job == null
+        ? null
+        : RecordingLifecycle.onCaptureStopped(current, reason, job, now);
 
-    final RecordingState? next = RecordingLifecycle.onChunkPersisted(
+    if (job == null || next == null) {
+      _endingChunk = false;
+      return null;
+    }
+    state = next;
+
+    Failure? failure;
+    if (next is RecordingStateRecording) {
+      // Chunk N+1 of the same session, starting now rather than in twelve
+      // seconds. The storage watch is session-scoped and left running.
+      try {
+        await _pipeline.startChunk();
+        _startBoundaryTimer();
+      } on AppException catch (exception) {
+        failure = Failure.fromException(exception);
+      }
+    } else {
+      // The session is draining. Capture has ended, so the camera is released
+      // and nothing is writing to the volume.
+      _cancelStorageTimer();
+      try {
+        await _pipeline.closeSession();
+      } on AppException catch (exception) {
+        failure = Failure.fromException(exception);
+      }
+    }
+
+    _endingChunk = false;
+
+    // Deliberately unawaited — this is the whole point of the mission. The
+    // caller's chunk is closed and the next one is already recording.
+    unawaited(_processChunk(next.activeSession ?? current.session, job));
+    return failure;
+  }
+
+  /// Processes one closed chunk, off the capture path.
+  ///
+  /// A terminal failure marks the chunk and leaves the session alone. Chapter
+  /// 5.13 §1 classifies *"Local file missing/corrupted, disk full"* as
+  /// **Terminal (device-side)** — *"not retried automatically … surfaces
+  /// immediately as Failed with a specific, named cause"* — which is a status
+  /// on the chunk, not on the recording. Ending a live capture because an
+  /// earlier chunk's checksum failed would destroy footage that is still being
+  /// recorded correctly.
+  Future<void> _processChunk(
+    RecordingSession session,
+    ChunkProcessingJob job,
+  ) async {
+    ErrorCode? cause;
+    try {
+      await _finalizer.finalizeChunk(session: session, job: job);
+    } on AppException catch (exception) {
+      cause = exception.errorCode;
+    }
+
+    final RecordingState? next = RecordingLifecycle.onChunkProcessed(
       state,
-      now,
+      chunkId: job.chunkId,
+      cause: cause,
     );
     if (next != null) {
       state = next;
-      if (next is RecordingStateRecording) {
-        // Chunk N+1 of the same session — re-arm the chunk timer. The
-        // storage watch is session-scoped and left running.
-        _startBoundaryTimer();
-      } else {
-        // The session ended; nothing is writing to the volume now.
-        _cancelStorageTimer();
-      }
     }
-    return null;
   }
 
   /// Arms the BR-06 timer for the chunk that just began.
@@ -287,7 +378,7 @@ class RecordingNotifier extends Notifier<RecordingState> {
         // failure is already reported through the return value rather than by
         // throwing out of a callback nobody can catch.
         unawaited(
-          _finalizeCurrentChunk(
+          _endChunk(
             ChunkBoundaryReason.automaticBoundary,
             DateTime.now(),
           ),
@@ -348,7 +439,7 @@ class RecordingNotifier extends Notifier<RecordingState> {
     if (available >= _lowStorageThresholdBytes) {
       return;
     }
-    await _finalizeCurrentChunk(
+    await _endChunk(
       ChunkBoundaryReason.automaticBoundary,
       DateTime.now(),
     );

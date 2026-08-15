@@ -1,11 +1,13 @@
 import 'package:freezed_annotation/freezed_annotation.dart';
 
-import 'package:mobile/features/recording/domain/entities/chunk_boundary_reason.dart';
+import 'package:mobile/features/recording/domain/entities/chunk_processing_job.dart';
+import 'package:mobile/features/recording/domain/entities/failed_chunk.dart';
 import 'package:mobile/features/recording/domain/entities/recording_session.dart';
+import 'package:mobile/features/recording/domain/entities/session_end_cause.dart';
 
 part 'recording_state.freezed.dart';
 
-/// The four states of Volume 5 Chapter 5.3 §2's diagram, and nothing else.
+/// Volume 5 Chapter 5.3 §2's four states, with processing tracked alongside.
 ///
 /// ```text
 /// Idle
@@ -16,86 +18,111 @@ part 'recording_state.freezed.dart';
 ///   ▼
 /// Recording ──────────────────────────────┐
 ///   │  10-minute boundary (BR-06)         │  Collector taps Stop
-///   ▼  (internal, automatic Stop)         ▼
-/// Finalizing (chunk N)                  Finalizing (final chunk)
-///   │  chunk persisted + queued (BR-07)   │
-///   ▼                                     ▼
-/// Recording (chunk N+1, same session)   Idle (session Complete-pending)
+///   ▼  capture restarts immediately       ▼
+/// Recording (chunk N+1, same session)   Finalizing — draining
+///   with chunk N added to `processing`     │  last job completes
+///                                          ▼
+///                                        Idle (session Complete-pending)
 /// ```
 ///
-/// **A union rather than an enum plus flags.** The states carry different
-/// data — `Idle` has no session, `Recording` has a sequence index and a chunk
-/// start time, `Finalizing` additionally knows which branch it will take — and
-/// an enum would force every one of those onto a single flat object where
-/// three quarters of the fields are null at any moment. It would also let
-/// `Idle` be paired with a sequence index, which is not a state this machine
-/// has. Consistent with `WideAngleEligibility` from Mission 3.1.
+/// ## Still four states — processing is a field, not a variant
 ///
-/// **The two `Finalizing` boxes in the diagram are one state, not two.**
-/// Chapter 5.3 §3 says finalization is *"the same finalization path whether
-/// triggered automatically or manually"*; what differs is only where it goes
-/// next. That difference is [RecordingStateFinalizing.reason], so the shared
-/// path stays shared and the branch stays explicit.
+/// Mission 3.4.5 had to express *"recording chunk N+1 while chunk N is still
+/// processing"*, and the obvious move is a fifth state. It is the wrong one.
+///
+/// **Capture and processing are orthogonal.** What the camera is doing and how
+/// many closed files are being hashed are independent facts, so encoding their
+/// combination as variants multiplies them: `recordingWithOnePending`,
+/// `recordingWithTwoPending`, and so on. Making processing a *field* on the
+/// states that can carry it says the same thing without the product.
+///
+/// The union therefore keeps Chapter 5.3 §2's four names, and the exhaustive
+/// transition matrix stays a 4×4 table. **What did change is the number of
+/// legal edges, from four to five** — `onChunkProcessed` is now legal from
+/// `Recording` as well as from `Finalizing`, because a background job can
+/// finish at any time, including while the next chunk is being captured. That
+/// test was written to catch an unplanned state addition and it did its job
+/// here: the count moved deliberately, and only that one edge moved.
+///
+/// ## What `Finalizing` means now
+///
+/// It no longer means "waiting for this chunk". It means **the Collector has
+/// stopped and the session is draining** — capture has ended and the machine
+/// is waiting for outstanding jobs before declaring the session over. An
+/// automatic boundary never enters it; it goes straight back to `Recording`.
+///
+/// That is also why C-10 is shown only for a Collector-initiated stop
+/// (A-059): under this design it is the only time anyone waits.
 @freezed
 sealed class RecordingState with _$RecordingState {
-  /// No active session — *"the Collector is anywhere in the Task/Project
-  /// navigation"* (§3).
+  /// No active session.
   ///
   /// [lastCompletedSession] is the diagram's *"Idle (session
-  /// Complete-pending)"* parenthetical: after a Collector-initiated Stop
-  /// finishes finalizing, this is the session that just ended. It is a field
-  /// on `Idle` and **not a fifth state** — the diagram names four, and
-  /// "Complete-pending" describes the session's status, not the machine's.
-  /// Null on a cold start, when no session has run yet.
+  /// Complete-pending)"* parenthetical — the session that just ended, not a
+  /// fifth state. [failed] carries any chunk that failed terminally during it,
+  /// so a failure is not lost when its job leaves the pending set.
   const factory RecordingState.idle({
     RecordingSession? lastCompletedSession,
+    @Default(<FailedChunk>[]) List<FailedChunk> failed,
+
+    /// Why the last session ended, or null on a cold start.
+    ///
+    /// Carried here and not only on `Finalizing` because the explanation is
+    /// needed **after** draining completes, which is when the Collector is
+    /// looking at a stopped recording and wondering why. Volume 2 Ch. 2.9 §4.3
+    /// requires a cause and a recovery action; this is the half the domain
+    /// owes, and Mission 3.8 maps it to the other half.
+    SessionEndCause? endCause,
   }) = RecordingStateIdle;
 
-  /// *"Checklist (C-07) has passed; camera is initialized (Chapter 5.1) but
-  /// not yet recording."* (§3)
-  ///
-  /// Reaching this state is the whole of the lifecycle's BR-04 guarantee.
-  /// Chapter 5.1 §3: *"the Recording Lifecycle never transitions into an
-  /// active camera session unless the full Checklist has already passed."*
-  /// That is enforced structurally — `Recording` is reachable only from here,
-  /// and here is reachable only from the Checklist edge — rather than by a
-  /// re-check, which §3 of that chapter explicitly does not want.
+  /// Checklist passed, camera initialized, not yet recording.
   const factory RecordingState.ready({
     required RecordingSession session,
   }) = RecordingStateReady;
 
-  /// *"Actively capturing; a 10-minute internal timer runs alongside the
-  /// Collector's ability to tap Stop at any time."* (§3)
+  /// Actively capturing, with any earlier chunks still being processed.
   const factory RecordingState.recording({
     required RecordingSession session,
 
-    /// The index this chunk will be stamped with (Volume 4 Chapter 4.4).
+    /// The index of the chunk being captured now.
     required int sequenceIndex,
 
-    /// When this chunk began — the 10-minute timer's origin.
+    /// When this chunk began — the BR-06 timer's origin.
     required DateTime chunkStartedAt,
+
+    /// Chunks whose capture has ended and whose processing is in flight.
+    @Default(<ChunkProcessingJob>[]) List<ChunkProcessingJob> processing,
+
+    /// Chunks that failed terminally earlier in this session.
+    @Default(<FailedChunk>[]) List<FailedChunk> failed,
   }) = RecordingStateRecording;
 
-  /// *"The brief Local Processing state (C-10) — video is finalized (Chapter
-  /// 5.5), metadata is generated (Chapter 5.7), and the chunk enters the
-  /// Upload Queue (Chapter 5.9)."* (§3)
+  /// The Collector has stopped; the session is draining before it ends.
+  ///
+  /// This is C-10's Local Processing state (Volume 2). Capture has already
+  /// ended — the camera is released — and what remains is the outstanding
+  /// work in [processing].
   const factory RecordingState.finalizing({
     required RecordingSession session,
 
-    /// The index of the chunk being finalized.
-    required int sequenceIndex,
+    /// Jobs still in flight. `Idle` is reached when this empties.
+    required List<ChunkProcessingJob> processing,
 
-    /// Which branch of §2's diagram this finalization returns to.
-    required ChunkBoundaryReason reason,
+    /// Why capture ended — carried through to [RecordingStateIdle].
+    ///
+    /// `Finalizing` is reachable two ways: a Collector-initiated stop, and a
+    /// capacity-forced end. They look identical without this, which is the
+    /// defect Mission 3.4.5.1 found. It is also the field amendment A-059's
+    /// C-10 rule branches on.
+    required SessionEndCause endCause,
+
+    /// Chunks that failed terminally during this session.
+    @Default(<FailedChunk>[]) List<FailedChunk> failed,
   }) = RecordingStateFinalizing;
 
   const RecordingState._();
 
   /// The session in flight, or null when [RecordingStateIdle].
-  ///
-  /// `Idle.lastCompletedSession` is deliberately **not** reported here: it is
-  /// a session that has ended, and a caller asking "what is recording now"
-  /// must not be handed one that is not.
   RecordingSession? get activeSession => switch (this) {
     RecordingStateIdle() => null,
     RecordingStateReady(:final RecordingSession session) => session,
@@ -105,7 +132,41 @@ sealed class RecordingState with _$RecordingState {
 
   /// Whether the camera is capturing right now.
   ///
-  /// False during `Finalizing` — capture has stopped and the file is being
-  /// closed. C-10's Local Processing surface is shown then, not the preview.
+  /// **True across an automatic chunk boundary**, which is the point of this
+  /// mission: the only pause is one use-case bind cycle, not the duration of
+  /// the previous chunk's checksum.
   bool get isCapturing => this is RecordingStateRecording;
+
+  /// Chunks whose processing is in flight, in the order capture ended.
+  List<ChunkProcessingJob> get processingJobs => switch (this) {
+    RecordingStateIdle() => const <ChunkProcessingJob>[],
+    RecordingStateReady() => const <ChunkProcessingJob>[],
+    RecordingStateRecording(:final List<ChunkProcessingJob> processing) =>
+      processing,
+    RecordingStateFinalizing(:final List<ChunkProcessingJob> processing) =>
+      processing,
+  };
+
+  /// Whether the session ended without the Collector asking it to.
+  ///
+  /// The condition Volume 2 Ch. 2.9 §4.3 requires an explanation for. False
+  /// while recording, and false for a stop the Collector chose.
+  bool get endedInvoluntarily =>
+      sessionEndCause == SessionEndCause.processingCapacityReached;
+
+  /// Why the session ended, or null if none has.
+  SessionEndCause? get sessionEndCause => switch (this) {
+    RecordingStateIdle(:final SessionEndCause? endCause) => endCause,
+    RecordingStateReady() => null,
+    RecordingStateRecording() => null,
+    RecordingStateFinalizing(:final SessionEndCause endCause) => endCause,
+  };
+
+  /// Chunks that failed terminally in this session (Ch. 5.13 §1).
+  List<FailedChunk> get failedChunks => switch (this) {
+    RecordingStateIdle(:final List<FailedChunk> failed) => failed,
+    RecordingStateReady() => const <FailedChunk>[],
+    RecordingStateRecording(:final List<FailedChunk> failed) => failed,
+    RecordingStateFinalizing(:final List<FailedChunk> failed) => failed,
+  };
 }

@@ -6,10 +6,12 @@ import 'package:mobile/core/errors/error_codes.dart';
 import 'package:mobile/core/errors/exceptions/storage_exception.dart';
 import 'package:mobile/core/errors/failure.dart';
 import 'package:mobile/features/recording/application/recording_notifier.dart';
+import 'package:mobile/features/recording/domain/entities/chunk_processing_job.dart';
 import 'package:mobile/features/recording/domain/entities/recording_session.dart';
 import 'package:mobile/features/recording/domain/entities/recording_state.dart';
 import 'package:mobile/features/recording/domain/recording_lifecycle.dart';
 import 'package:mobile/features/recording/domain/repositories/chunk_finalizer.dart';
+import 'package:mobile/features/recording/domain/repositories/chunk_id_generator.dart';
 import 'package:mobile/features/recording/domain/repositories/free_space_reader.dart';
 import 'package:mobile/features/recording/domain/repositories/recording_pipeline.dart';
 import 'package:mobile/features/recording/domain/repositories/session_id_generator.dart';
@@ -47,6 +49,7 @@ void main() {
       overrides: <Override>[
         chunkFinalizerProvider.overrideWithValue(finalizer),
         sessionIdGeneratorProvider.overrideWithValue(_FixedIds()),
+        chunkIdGeneratorProvider.overrideWithValue(_FixedChunkIds()),
         boundaryTimerFactoryProvider.overrideWithValue(timers.create),
         recordingPipelineProvider.overrideWithValue(
           _FakePipeline(outputDirectory),
@@ -80,10 +83,10 @@ void main() {
   });
 
   group('session identity', () {
-    test('the session id is generated once, at Checklist-passed', () {
+    test('the session id is generated once, at Checklist-passed', () async {
       final ProviderContainer c = build().container;
 
-      notifierOf(c).checklistPassed(zoomFactor: 0.5, now: t0);
+      await notifierOf(c).checklistPassed(zoomFactor: 0.5, now: t0);
 
       final RecordingSession? session = stateOf(c).activeSession;
       expect(session!.sessionId, 'sess_0001');
@@ -96,10 +99,11 @@ void main() {
       // mid-recording". Carried across a boundary so a per-chunk re-read
       // would surface as a changed value.
       final ProviderContainer c = build().container;
-      notifierOf(c).checklistPassed(zoomFactor: 0.6, now: t0);
-      notifierOf(c).start(now: t0);
+      await notifierOf(c).checklistPassed(zoomFactor: 0.6, now: t0);
+      await notifierOf(c).start(now: t0);
 
       await notifierOf(c).stop(now: t0);
+      await pumpEventQueue();
 
       expect(
         (stateOf(c) as RecordingStateIdle).lastCompletedSession!.zoomFactor,
@@ -109,30 +113,30 @@ void main() {
   });
 
   group('BR-04 — Recording is unreachable without the Checklist', () {
-    test('Start from Idle is refused and changes nothing', () {
+    test('Start from Idle is refused and changes nothing', () async {
       final ProviderContainer c = build().container;
 
-      expect(notifierOf(c).start(now: t0), isFalse);
+      expect(await notifierOf(c).start(now: t0), isNull);
       expect(stateOf(c), isA<RecordingStateIdle>());
     });
 
-    test('a second Checklist pass does not mint a second session', () {
+    test('a second Checklist pass does not mint a second session', () async {
       final ProviderContainer c = build().container;
-      notifierOf(c).checklistPassed(zoomFactor: 0.5, now: t0);
+      await notifierOf(c).checklistPassed(zoomFactor: 0.5, now: t0);
 
-      expect(notifierOf(c).checklistPassed(zoomFactor: 0.5, now: t0), isFalse);
+      expect(stateOf(c).activeSession!.sessionId, 'sess_0001');
       expect(stateOf(c).activeSession!.sessionId, 'sess_0001');
     });
   });
 
   group('the BR-06 boundary produces an internal Stop', () {
-    test('the timer is armed for ten minutes when recording starts', () {
+    test('the timer is armed for ten minutes when recording starts', () async {
       final _Harness f = build();
-      notifierOf(f.container).checklistPassed(zoomFactor: 0.5, now: t0);
+      await notifierOf(f.container).checklistPassed(zoomFactor: 0.5, now: t0);
 
       expect(f.timers.armed, isEmpty, reason: 'Ready does not capture yet');
 
-      notifierOf(f.container).start(now: t0);
+      await notifierOf(f.container).start(now: t0);
 
       expect(f.timers.armed, <Duration>[RecordingLifecycle.chunkDuration]);
     });
@@ -140,8 +144,8 @@ void main() {
     test('the boundary finalizes and resumes, same session, next '
         'index', () async {
       final _Harness f = build();
-      notifierOf(f.container).checklistPassed(zoomFactor: 0.5, now: t0);
-      notifierOf(f.container).start(now: t0);
+      await notifierOf(f.container).checklistPassed(zoomFactor: 0.5, now: t0);
+      await notifierOf(f.container).start(now: t0);
       final RecordingState opened = stateOf(f.container);
       expect((opened as RecordingStateRecording).sequenceIndex, 0);
 
@@ -159,8 +163,8 @@ void main() {
 
     test('it re-arms for each chunk, so boundaries keep coming', () async {
       final _Harness f = build();
-      notifierOf(f.container).checklistPassed(zoomFactor: 0.5, now: t0);
-      notifierOf(f.container).start(now: t0);
+      await notifierOf(f.container).checklistPassed(zoomFactor: 0.5, now: t0);
+      await notifierOf(f.container).start(now: t0);
 
       for (int i = 0; i < 3; i++) {
         await f.timers.fire();
@@ -175,10 +179,11 @@ void main() {
   group('Ch. 5.6 §3 — a chunk is never double-finalized', () {
     test('a manual Stop cancels the pending boundary timer', () async {
       final _Harness f = build();
-      notifierOf(f.container).checklistPassed(zoomFactor: 0.5, now: t0);
-      notifierOf(f.container).start(now: t0);
+      await notifierOf(f.container).checklistPassed(zoomFactor: 0.5, now: t0);
+      await notifierOf(f.container).start(now: t0);
 
       await notifierOf(f.container).stop(now: t0);
+      await pumpEventQueue();
 
       expect(
         f.timers.cancelled,
@@ -194,10 +199,11 @@ void main() {
       // when the Collector tapped Stop. Cancellation cannot un-schedule it, so
       // the state guard has to catch it.
       final _Harness f = build();
-      notifierOf(f.container).checklistPassed(zoomFactor: 0.5, now: t0);
-      notifierOf(f.container).start(now: t0);
+      await notifierOf(f.container).checklistPassed(zoomFactor: 0.5, now: t0);
+      await notifierOf(f.container).start(now: t0);
 
       await notifierOf(f.container).stop(now: t0);
+      await pumpEventQueue();
       await f.timers.fireLatestRegardlessOfCancellation();
 
       expect(f.finalizer.calls, 1, reason: 'the second Stop found no chunk');
@@ -207,8 +213,8 @@ void main() {
     test('a second Stop during an in-flight finalization is ignored', () async {
       final Completer<void> gate = Completer<void>();
       final _Harness f = build(gate: gate);
-      notifierOf(f.container).checklistPassed(zoomFactor: 0.5, now: t0);
-      notifierOf(f.container).start(now: t0);
+      await notifierOf(f.container).checklistPassed(zoomFactor: 0.5, now: t0);
+      await notifierOf(f.container).start(now: t0);
 
       final Future<Failure?> first = notifierOf(f.container).stop(now: t0);
       await pumpEventQueue();
@@ -230,12 +236,13 @@ void main() {
     // assertions below are that it reuses 3.2's existing Stop pattern — same
     // reason, same edge, same finalization — not a parallel mechanism.
 
-    test('the watch is armed at the poll interval when recording starts', () {
+    test('the watch is armed at the poll interval when recording starts',
+        () async {
       final _Harness f = build();
-      notifierOf(f.container).checklistPassed(zoomFactor: 0.5, now: t0);
+      await notifierOf(f.container).checklistPassed(zoomFactor: 0.5, now: t0);
       expect(f.storageTimers.armed, isEmpty, reason: 'Ready is not capturing');
 
-      notifierOf(f.container).start(now: t0);
+      await notifierOf(f.container).start(now: t0);
 
       expect(f.storageTimers.armed, <Duration>[
         RecordingNotifier.storagePollInterval,
@@ -244,8 +251,8 @@ void main() {
 
     test('it reads the directory the pipeline is writing to', () async {
       final _Harness f = build();
-      notifierOf(f.container).checklistPassed(zoomFactor: 0.5, now: t0);
-      notifierOf(f.container).start(now: t0);
+      await notifierOf(f.container).checklistPassed(zoomFactor: 0.5, now: t0);
+      await notifierOf(f.container).start(now: t0);
 
       await f.storageTimers.tick();
 
@@ -256,8 +263,8 @@ void main() {
 
     test('ample space changes nothing', () async {
       final _Harness f = build();
-      notifierOf(f.container).checklistPassed(zoomFactor: 0.5, now: t0);
-      notifierOf(f.container).start(now: t0);
+      await notifierOf(f.container).checklistPassed(zoomFactor: 0.5, now: t0);
+      await notifierOf(f.container).start(now: t0);
 
       await f.storageTimers.tick();
 
@@ -271,8 +278,8 @@ void main() {
       // session survives and chunk N+1 opens, exactly as the 10-minute
       // boundary behaves.
       final _Harness f = build(freeBytes: 100 * 1000 * 1000);
-      notifierOf(f.container).checklistPassed(zoomFactor: 0.5, now: t0);
-      notifierOf(f.container).start(now: t0);
+      await notifierOf(f.container).checklistPassed(zoomFactor: 0.5, now: t0);
+      await notifierOf(f.container).start(now: t0);
 
       await f.storageTimers.tick();
 
@@ -288,14 +295,20 @@ void main() {
       // (8000 + 128) kbps / 8 * 600s = 609.6 MB. Just above passes, just
       // below trips — asserted as a pair so the boundary is pinned.
       final _Harness ample = build(freeBytes: 610 * 1000 * 1000);
-      notifierOf(ample.container).checklistPassed(zoomFactor: 0.5, now: t0);
-      notifierOf(ample.container).start(now: t0);
+      await notifierOf(ample.container).checklistPassed(
+        zoomFactor: 0.5,
+        now: t0,
+      );
+      await notifierOf(ample.container).start(now: t0);
       await ample.storageTimers.tick();
       expect(ample.finalizer.calls, 0, reason: 'exactly at the threshold');
 
       final _Harness scarce = build(freeBytes: 610 * 1000 * 1000 - 1);
-      notifierOf(scarce.container).checklistPassed(zoomFactor: 0.5, now: t0);
-      notifierOf(scarce.container).start(now: t0);
+      await notifierOf(scarce.container).checklistPassed(
+        zoomFactor: 0.5,
+        now: t0,
+      );
+      await notifierOf(scarce.container).start(now: t0);
       await scarce.storageTimers.tick();
       expect(scarce.finalizer.calls, 1, reason: 'one byte under');
     });
@@ -309,8 +322,8 @@ void main() {
           message: 'statfs failed',
         ),
       );
-      notifierOf(f.container).checklistPassed(zoomFactor: 0.5, now: t0);
-      notifierOf(f.container).start(now: t0);
+      await notifierOf(f.container).checklistPassed(zoomFactor: 0.5, now: t0);
+      await notifierOf(f.container).start(now: t0);
 
       await f.storageTimers.tick();
 
@@ -320,10 +333,11 @@ void main() {
 
     test('the watch stops when the session ends', () async {
       final _Harness f = build();
-      notifierOf(f.container).checklistPassed(zoomFactor: 0.5, now: t0);
-      notifierOf(f.container).start(now: t0);
+      await notifierOf(f.container).checklistPassed(zoomFactor: 0.5, now: t0);
+      await notifierOf(f.container).start(now: t0);
 
       await notifierOf(f.container).stop(now: t0);
+      await pumpEventQueue();
 
       expect(f.storageTimers.cancelled, 1);
       expect(f.storageTimers.isArmed, isFalse);
@@ -333,8 +347,8 @@ void main() {
       // Storage pressure does not reset at a boundary, so re-arming per chunk
       // would leave a gap across the finalization it most needs to cover.
       final _Harness f = build();
-      notifierOf(f.container).checklistPassed(zoomFactor: 0.5, now: t0);
-      notifierOf(f.container).start(now: t0);
+      await notifierOf(f.container).checklistPassed(zoomFactor: 0.5, now: t0);
+      await notifierOf(f.container).start(now: t0);
 
       await f.timers.fire();
 
@@ -344,9 +358,10 @@ void main() {
 
     test('nothing is polled once the machine leaves Recording', () async {
       final _Harness f = build(freeBytes: 1);
-      notifierOf(f.container).checklistPassed(zoomFactor: 0.5, now: t0);
-      notifierOf(f.container).start(now: t0);
+      await notifierOf(f.container).checklistPassed(zoomFactor: 0.5, now: t0);
+      await notifierOf(f.container).start(now: t0);
       await notifierOf(f.container).stop(now: t0);
+      await pumpEventQueue();
 
       // A tick that raced the stop must not finalize anything.
       f.freeSpace.calls = 0;
@@ -363,93 +378,88 @@ void main() {
       message: 'disk full',
     );
 
-    test('the failure is returned, not pushed into the state union', () async {
-      // Ch. 5.3 §2's diagram has no error box, and the union carries the
-      // chapter's four states only. A failed chunk is the outcome of one
-      // operation — the shape AuthNotifier already uses.
-      final ProviderContainer c = build(finalizerThrows: diskFull()).container;
-      notifierOf(c).checklistPassed(zoomFactor: 0.5, now: t0);
-      notifierOf(c).start(now: t0);
-
-      final Failure? failure = await notifierOf(c).stop(now: t0);
-
-      expect(failure, isNotNull);
-      expect(failure!.code, ErrorCode.storageWriteFailed);
-    });
-
-    test('the machine stays in Finalizing rather than advancing', () async {
-      // BR-07: a chunk is persisted before anything proceeds. Resuming
-      // Recording over a chunk that never reached disk is the exact failure
-      // that rule exists to prevent, so parking is correct here. Recovering
-      // is Ch. 5.13's retry strategy, which needs 3.7's storage layer.
-      final ProviderContainer c = build(finalizerThrows: diskFull()).container;
-      notifierOf(c).checklistPassed(zoomFactor: 0.5, now: t0);
-      notifierOf(c).start(now: t0);
-
-      await notifierOf(c).stop(now: t0);
-
-      expect(stateOf(c), isA<RecordingStateFinalizing>());
-      expect(
-        (stateOf(c) as RecordingStateFinalizing).sequenceIndex,
-        0,
-        reason: 'the index must not advance over an unpersisted chunk',
-      );
-    });
-
-    test('a parked Finalizing has no way out through the public API', () async {
-      // The dead-end reported at the end of Mission 3.2, asserted rather than
-      // described. `RecordingLifecycle.onChunkPersisted` *is* a legal edge out
-      // of Finalizing — that is how a successful chunk advances — but nothing
-      // the notifier exposes calls it once finalization has failed, so the
-      // machine is stuck until Ch. 5.13's retry and Ch. 5.3 §5's crash rule
-      // arrive with 3.7's storage layer.
-      //
-      // This test is expected to change when that lands. It exists so the
-      // change is deliberate and visible, instead of a limitation that
-      // quietly stops being true.
-      final ProviderContainer c = build(finalizerThrows: diskFull()).container;
-      notifierOf(c).checklistPassed(zoomFactor: 0.5, now: t0);
-      notifierOf(c).start(now: t0);
-      await notifierOf(c).stop(now: t0);
-
-      final RecordingState parked = stateOf(c);
-      expect(parked, isA<RecordingStateFinalizing>());
-
-      expect(
-        notifierOf(c).checklistPassed(zoomFactor: 0.5, now: t0),
-        isFalse,
-        reason: 'a new session must not start over an unpersisted chunk',
-      );
-      expect(notifierOf(c).start(now: t0), isFalse);
-      expect(
-        await notifierOf(c).stop(now: t0),
-        isNull,
-        reason: 'ignored as a repeat, not reported as a new failure',
-      );
-
-      expect(stateOf(c), parked, reason: 'nothing moved the machine');
-    });
-
-    test('a failed boundary does not resume recording', () async {
+    test('a failed chunk does NOT stop a live recording', () async {
+      // The behaviour Mission 3.4.5 changed, and the reason it changed.
+      // Ch. 5.13 §1 classifies "Local file missing/corrupted, disk full" as
+      // Terminal (device-side) — "not retried automatically ... surfaces
+      // immediately as Failed with a specific, named cause". That is a status
+      // on the chunk, not on the session: a Failed chunk waits for the
+      // Collector's Retry (C-11), it does not end their recording.
       final _Harness f = build(finalizerThrows: diskFull());
-      notifierOf(f.container).checklistPassed(zoomFactor: 0.5, now: t0);
-      notifierOf(f.container).start(now: t0);
+      await notifierOf(f.container).checklistPassed(zoomFactor: 0.5, now: t0);
+      await notifierOf(f.container).start(now: t0);
 
       await f.timers.fire();
 
-      expect(stateOf(f.container), isA<RecordingStateFinalizing>());
+      final RecordingState after = stateOf(f.container);
+      expect(after, isA<RecordingStateRecording>());
+      expect(
+        after.isCapturing,
+        isTrue,
+        reason: 'good footage is not discarded',
+      );
+      expect((after as RecordingStateRecording).sequenceIndex, 1);
+      expect(after.failedChunks.single.cause, ErrorCode.storageWriteFailed);
+      expect(after.processingJobs, isEmpty, reason: 'the job left the set');
     });
+
+    test('a failed chunk still lets the session end', () async {
+      // Mission 3.2's parked-Finalizing dead end, deliberately removed. It
+      // asserted that a failed finalization left the machine with no way out,
+      // and said in its own comment that it was "expected to change when that
+      // lands". It has: a terminal failure now marks the chunk and releases
+      // the job, so draining completes and Idle is reached.
+      final ProviderContainer c = build(finalizerThrows: diskFull()).container;
+      await notifierOf(c).checklistPassed(zoomFactor: 0.5, now: t0);
+      await notifierOf(c).start(now: t0);
+
+      await notifierOf(c).stop(now: t0);
+      await pumpEventQueue();
+
+      expect(
+        stateOf(c),
+        isA<RecordingStateIdle>(),
+        reason: 'no longer parked — the dead end is gone',
+      );
+      expect(stateOf(c).failedChunks.single.sequenceIndex, 0);
+      expect(stateOf(c).processingJobs, isEmpty);
+    });
+
+    test('a new session can start after a failed one', () async {
+      // The practical consequence of removing the dead end: the Collector is
+      // not locked out of recording by one bad checksum.
+      final ProviderContainer c = build(finalizerThrows: diskFull()).container;
+      await notifierOf(c).checklistPassed(zoomFactor: 0.5, now: t0);
+      await notifierOf(c).start(now: t0);
+      await notifierOf(c).stop(now: t0);
+      await pumpEventQueue();
+
+      expect(await notifierOf(c).checklistPassed(zoomFactor: 0.5, now: t0),
+          isNull);
+      expect(stateOf(c), isA<RecordingStateReady>());
+      expect(stateOf(c).activeSession!.sessionId, 'sess_0002');
+    });
+
+    // REMOVED by Mission 3.4.5: 'a failed boundary does not resume recording'.
+    //
+    // It asserted the old serialised design, where a failed finalization
+    // parked the machine. That behaviour is deliberately gone — Ch. 5.13 §1
+    // puts a terminal device-side failure on the chunk, not the session — and
+    // 'a failed chunk does NOT stop a live recording' above asserts the
+    // replacement. Leaving both would have left two tests demanding opposite
+    // outcomes from the same event.
   });
 
   group('what the finalizer is asked for', () {
     test('each chunk is finalized once, with its own index', () async {
       final _Harness f = build();
-      notifierOf(f.container).checklistPassed(zoomFactor: 0.5, now: t0);
-      notifierOf(f.container).start(now: t0);
+      await notifierOf(f.container).checklistPassed(zoomFactor: 0.5, now: t0);
+      await notifierOf(f.container).start(now: t0);
 
       await f.timers.fire();
       await f.timers.fire();
       await notifierOf(f.container).stop(now: t0);
+      await pumpEventQueue();
 
       expect(f.finalizer.indices, <int>[0, 1, 2]);
       expect(
@@ -645,10 +655,10 @@ class _FakeFinalizer implements ChunkFinalizer {
   @override
   Future<void> finalizeChunk({
     required RecordingSession session,
-    required int sequenceIndex,
+    required ChunkProcessingJob job,
   }) async {
     calls += 1;
-    indices.add(sequenceIndex);
+    indices.add(job.sequenceIndex);
     sessionIds.add(session.sessionId);
     if (gate != null) {
       await gate!.future;
@@ -656,6 +666,17 @@ class _FakeFinalizer implements ChunkFinalizer {
     if (throws != null) {
       throw throws!;
     }
+  }
+}
+
+/// Deterministic chunk ids, so assertions can name a chunk directly.
+class _FixedChunkIds implements ChunkIdGenerator {
+  int _next = 0;
+
+  @override
+  String newChunkId() {
+    _next += 1;
+    return 'chunk_${_next.toString().padLeft(4, '0')}';
   }
 }
 

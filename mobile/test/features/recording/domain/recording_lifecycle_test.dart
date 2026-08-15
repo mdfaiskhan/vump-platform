@@ -1,14 +1,18 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mobile/core/errors/error_codes.dart';
 import 'package:mobile/features/recording/domain/entities/chunk_boundary_reason.dart';
+import 'package:mobile/features/recording/domain/entities/chunk_processing_job.dart';
+import 'package:mobile/features/recording/domain/entities/failed_chunk.dart';
 import 'package:mobile/features/recording/domain/entities/recording_session.dart';
 import 'package:mobile/features/recording/domain/entities/recording_state.dart';
+import 'package:mobile/features/recording/domain/entities/session_end_cause.dart';
 import 'package:mobile/features/recording/domain/recording_lifecycle.dart';
 
-/// Volume 5 Chapter 5.3 §2's diagram, edge by edge.
+/// Volume 5 Chapter 5.3 §2's diagram, as revised by Mission 3.4.5.
 ///
-/// The machine is pure, so every transition — including the internal-Stop
-/// pattern that is the chapter's key design point — is asserted here with no
-/// timer, no camera and no widget tree.
+/// The machine is pure, so every transition — including the capture/processing
+/// overlap this mission introduced — is asserted with no timer, no camera and
+/// no widget tree.
 void main() {
   final DateTime t0 = DateTime.utc(2026, 8, 15, 9);
   final DateTime t1 = t0.add(RecordingLifecycle.chunkDuration);
@@ -20,24 +24,39 @@ void main() {
     startedAt: t0,
   );
 
-  RecordingState recordingAt(int index, DateTime at) =>
-      RecordingState.recording(
-        session: session,
-        sequenceIndex: index,
-        chunkStartedAt: at,
-      );
+  ChunkProcessingJob jobFor(int index, {String? id}) => ChunkProcessingJob(
+    chunkId: id ?? 'chunk_$index',
+    sequenceIndex: index,
+    filePath: '/recordings/sess_e810/000$index.mp4',
+    startedAt: t0,
+  );
 
-  group('BR-06 and the first index', () {
-    test('a chunk is exactly ten minutes', () {
+  RecordingState recordingAt(
+    int index,
+    DateTime at, {
+    List<ChunkProcessingJob> processing = const <ChunkProcessingJob>[],
+    List<FailedChunk> failed = const <FailedChunk>[],
+  }) => RecordingState.recording(
+    session: session,
+    sequenceIndex: index,
+    chunkStartedAt: at,
+    processing: processing,
+    failed: failed,
+  );
+
+  group('constants', () {
+    test('a chunk is exactly ten minutes (BR-06)', () {
       expect(RecordingLifecycle.chunkDuration, const Duration(minutes: 10));
     });
 
     test('the first chunk of a session is index 0', () {
-      // Ch. 5.6 §2 defers the base to "Volume 4's convention", which does not
-      // exist; the chapter's stated default stands. Pinned here because the
-      // S3 object key is {sequence_index:04d} and UNIQUE — an off-by-one
-      // renames every object in the system.
       expect(RecordingLifecycle.firstSequenceIndex, 0);
+    });
+
+    test('at most three chunks may process concurrently', () {
+      // Not a defensive default: Ch. 5.4 §2's low-storage path forces a
+      // boundary every 5-second poll, which is the only way jobs stack.
+      expect(RecordingLifecycle.maximumConcurrentProcessing, 3);
     });
   });
 
@@ -52,218 +71,446 @@ void main() {
       expect(next!.activeSession, session);
     });
 
-    test('Ready is the only way in, from Idle only', () {
-      // The whole of the lifecycle's BR-04 guarantee is structural: there is
-      // no other edge into Ready, and no edge into Recording except from it.
+    test('Ready is reachable from Idle only', () {
       for (final RecordingState from in <RecordingState>[
         RecordingState.ready(session: session),
         recordingAt(0, t0),
         RecordingState.finalizing(
           session: session,
-          sequenceIndex: 0,
-          reason: ChunkBoundaryReason.automaticBoundary,
+          processing: <ChunkProcessingJob>[jobFor(0)],
+          endCause: SessionEndCause.collectorStop,
         ),
       ]) {
-        expect(
-          RecordingLifecycle.onChecklistPassed(from, session),
-          isNull,
-          reason: '$from must not re-enter Ready',
-        );
+        expect(RecordingLifecycle.onChecklistPassed(from, session), isNull);
       }
     });
   });
 
-  group('Ready → Recording — the Collector taps Start', () {
-    test('recording opens at the first index', () {
+  group('Ready → Recording — Start', () {
+    test('recording opens at the first index, nothing processing', () {
       final RecordingState? next = RecordingLifecycle.onStart(
         RecordingState.ready(session: session),
         t0,
       );
 
-      expect(next, isA<RecordingStateRecording>());
-      final RecordingStateRecording recording =
-          next! as RecordingStateRecording;
-      expect(recording.sequenceIndex, RecordingLifecycle.firstSequenceIndex);
-      expect(recording.chunkStartedAt, t0);
-      expect(recording.session.sessionId, 'sess_e810');
+      final RecordingStateRecording rec = next! as RecordingStateRecording;
+      expect(rec.sequenceIndex, RecordingLifecycle.firstSequenceIndex);
+      expect(rec.chunkStartedAt, t0);
+      expect(rec.processing, isEmpty);
     });
 
-    test('Start does nothing from Idle — the Checklist has not run', () {
+    test('Start does nothing from Idle — BR-04', () {
       expect(
         RecordingLifecycle.onStart(const RecordingState.idle(), t0),
         isNull,
-        reason: 'BR-04: recording is not permitted until the Checklist passes',
       );
-    });
-
-    test('Start does nothing while already recording', () {
-      expect(RecordingLifecycle.onStart(recordingAt(0, t0), t1), isNull);
     });
   });
 
-  group('Recording → Finalizing — both kinds of Stop', () {
-    test('a manual Stop finalizes the current chunk', () {
-      final RecordingState? next = RecordingLifecycle.onStop(
-        recordingAt(3, t0),
-        ChunkBoundaryReason.collectorStop,
+  group('capture stops — the edge Mission 3.4.5 changed', () {
+    test('an automatic boundary returns to Recording, NOT Finalizing', () {
+      // The whole point: capture resumes immediately, and the chunk that just
+      // ended moves into the processing set rather than blocking the machine.
+      final RecordingState? next = RecordingLifecycle.onCaptureStopped(
+        recordingAt(0, t0),
+        ChunkBoundaryReason.automaticBoundary,
+        jobFor(0),
+        t1,
       );
 
-      final RecordingStateFinalizing finalizing =
-          next! as RecordingStateFinalizing;
-      expect(
-        finalizing.sequenceIndex,
-        3,
-        reason: 'the index does not move yet',
-      );
-      expect(finalizing.reason, ChunkBoundaryReason.collectorStop);
+      final RecordingStateRecording rec = next! as RecordingStateRecording;
+      expect(rec.sequenceIndex, 1, reason: 'chunk N+1 of the same session');
+      expect(rec.session.sessionId, 'sess_e810');
+      expect(rec.chunkStartedAt, t1);
+      expect(rec.processing.single.chunkId, 'chunk_0');
     });
 
-    test('an automatic boundary produces the identical state but for the '
-        'reason', () {
-      // §1: the boundary is "identical in every way to a manual Stop, except
-      // it is immediately followed by a new Recording state". This asserts
-      // the "identical in every way" half; the group below asserts the except.
-      final RecordingStateFinalizing manual =
-          RecordingLifecycle.onStop(
-                recordingAt(3, t0),
-                ChunkBoundaryReason.collectorStop,
-              )!
-              as RecordingStateFinalizing;
-      final RecordingStateFinalizing automatic =
-          RecordingLifecycle.onStop(
-                recordingAt(3, t0),
-                ChunkBoundaryReason.automaticBoundary,
-              )!
-              as RecordingStateFinalizing;
+    test('a Collector stop enters Finalizing to drain', () {
+      final RecordingState? next = RecordingLifecycle.onCaptureStopped(
+        recordingAt(3, t0),
+        ChunkBoundaryReason.collectorStop,
+        jobFor(3),
+        t1,
+      );
 
-      expect(manual.session, automatic.session);
-      expect(manual.sequenceIndex, automatic.sequenceIndex);
-      expect(manual.reason, isNot(automatic.reason));
+      final RecordingStateFinalizing fin = next! as RecordingStateFinalizing;
+      expect(fin.processing.single.sequenceIndex, 3);
     });
 
     test('a short final chunk is neither padded nor discarded', () {
-      // §4: the lifecycle "does not pad or discard a short final chunk", and
-      // Ch. 5.6 §3: "there is no minimum chunk duration below which footage
-      // is discarded". No duration is consulted, so a one-second chunk
-      // finalizes exactly like a ten-minute one.
-      final RecordingState? next = RecordingLifecycle.onStop(
-        recordingAt(0, t0),
-        ChunkBoundaryReason.collectorStop,
+      // Ch. 5.3 §4 and Ch. 5.6 §3 — no duration is consulted anywhere here.
+      expect(
+        RecordingLifecycle.onCaptureStopped(
+          recordingAt(0, t0),
+          ChunkBoundaryReason.collectorStop,
+          jobFor(0),
+          t0,
+        ),
+        isA<RecordingStateFinalizing>(),
       );
-
-      expect(next, isA<RecordingStateFinalizing>());
     });
 
-    test('Stop does nothing unless recording', () {
+    test('earlier jobs are preserved, not replaced', () {
+      final RecordingState? next = RecordingLifecycle.onCaptureStopped(
+        recordingAt(1, t0, processing: <ChunkProcessingJob>[jobFor(0)]),
+        ChunkBoundaryReason.automaticBoundary,
+        jobFor(1),
+        t1,
+      );
+
+      expect(
+        (next! as RecordingStateRecording).processing
+            .map((ChunkProcessingJob j) => j.sequenceIndex)
+            .toList(),
+        <int>[0, 1],
+      );
+    });
+
+    test('capture stop does nothing unless recording', () {
       for (final RecordingState from in <RecordingState>[
         const RecordingState.idle(),
         RecordingState.ready(session: session),
         RecordingState.finalizing(
           session: session,
-          sequenceIndex: 0,
-          reason: ChunkBoundaryReason.collectorStop,
+          processing: <ChunkProcessingJob>[jobFor(0)],
+          endCause: SessionEndCause.collectorStop,
         ),
       ]) {
         expect(
-          RecordingLifecycle.onStop(from, ChunkBoundaryReason.collectorStop),
+          RecordingLifecycle.onCaptureStopped(
+            from,
+            ChunkBoundaryReason.collectorStop,
+            jobFor(9),
+            t1,
+          ),
           isNull,
-          reason: '$from has no chunk to finalize',
         );
       }
     });
   });
 
-  group('Finalizing → the two branches — the internal-Stop pattern', () {
-    test('an automatic boundary re-enters Recording, same session, next '
-        'index', () {
-      final RecordingState? next = RecordingLifecycle.onChunkPersisted(
-        RecordingState.finalizing(
-          session: session,
-          sequenceIndex: 0,
-          reason: ChunkBoundaryReason.automaticBoundary,
+  group('the concurrency bound', () {
+    test('reaching the cap converts an automatic boundary into a stop', () {
+      // If processing cannot keep up, continuing to capture makes it worse —
+      // more files on a device already failing to keep up, and in the case
+      // that causes it, a disk already near its limit.
+      final RecordingState? next = RecordingLifecycle.onCaptureStopped(
+        recordingAt(
+          2,
+          t0,
+          processing: <ChunkProcessingJob>[jobFor(0), jobFor(1)],
         ),
+        ChunkBoundaryReason.automaticBoundary,
+        jobFor(2),
         t1,
       );
 
-      final RecordingStateRecording resumed = next! as RecordingStateRecording;
-      expect(resumed.sequenceIndex, 1);
       expect(
-        resumed.session.sessionId,
-        'sess_e810',
-        reason: 'Ch. 5.6 §2: chunking never creates a new session_id',
+        next,
+        isA<RecordingStateFinalizing>(),
+        reason: 'three in flight is the cap',
       );
-      expect(resumed.chunkStartedAt, t1);
+      expect((next! as RecordingStateFinalizing).processing, hasLength(3));
     });
 
-    test('a manual Stop returns to Idle carrying the completed session', () {
-      final RecordingState? next = RecordingLifecycle.onChunkPersisted(
+    test('a capacity-forced end is distinguishable from a Collector stop', () {
+      // Mission 3.4.5.1's defect: both endings landed in Finalizing and the
+      // state recorded neither, so nothing could tell a Collector why their
+      // recording had stopped without them asking.
+      final RecordingState forced = RecordingLifecycle.onCaptureStopped(
+        recordingAt(
+          2,
+          t0,
+          processing: <ChunkProcessingJob>[jobFor(0), jobFor(1)],
+        ),
+        ChunkBoundaryReason.automaticBoundary,
+        jobFor(2),
+        t1,
+      )!;
+      final RecordingState chosen = RecordingLifecycle.onCaptureStopped(
+        recordingAt(2, t0),
+        ChunkBoundaryReason.collectorStop,
+        jobFor(2),
+        t1,
+      )!;
+
+      expect(forced, isA<RecordingStateFinalizing>());
+      expect(chosen, isA<RecordingStateFinalizing>());
+      expect(
+        forced.sessionEndCause,
+        SessionEndCause.processingCapacityReached,
+      );
+      expect(chosen.sessionEndCause, SessionEndCause.collectorStop);
+      expect(forced.endedInvoluntarily, isTrue);
+      expect(chosen.endedInvoluntarily, isFalse);
+    });
+
+    test('the cause survives the drain and reaches Idle', () {
+      // Volume 2 Ch. 2.9 §4.3 needs a cause and a recovery action, and the
+      // Collector reads it *after* draining — looking at a stopped recording.
+      RecordingState state = RecordingLifecycle.onCaptureStopped(
+        recordingAt(
+          2,
+          t0,
+          processing: <ChunkProcessingJob>[jobFor(0), jobFor(1)],
+        ),
+        ChunkBoundaryReason.automaticBoundary,
+        jobFor(2),
+        t1,
+      )!;
+      for (final String id in <String>['chunk_0', 'chunk_1', 'chunk_2']) {
+        state = RecordingLifecycle.onChunkProcessed(state, chunkId: id)!;
+      }
+
+      expect(state, isA<RecordingStateIdle>());
+      expect(
+        state.sessionEndCause,
+        SessionEndCause.processingCapacityReached,
+        reason: '3.8 must be able to explain this without guessing',
+      );
+      expect(state.endedInvoluntarily, isTrue);
+    });
+
+    test('a Collector stop reaches Idle reporting itself as chosen', () {
+      RecordingState state = RecordingLifecycle.onCaptureStopped(
+        recordingAt(0, t0),
+        ChunkBoundaryReason.collectorStop,
+        jobFor(0),
+        t1,
+      )!;
+      state = RecordingLifecycle.onChunkProcessed(state, chunkId: 'chunk_0')!;
+
+      expect(state, isA<RecordingStateIdle>());
+      expect(state.sessionEndCause, SessionEndCause.collectorStop);
+      expect(state.endedInvoluntarily, isFalse);
+    });
+
+    test('a fresh Idle has no end cause to explain', () {
+      expect(const RecordingState.idle().sessionEndCause, isNull);
+      expect(const RecordingState.idle().endedInvoluntarily, isFalse);
+    });
+
+    test('below the cap it keeps recording', () {
+      final RecordingState? next = RecordingLifecycle.onCaptureStopped(
+        recordingAt(1, t0, processing: <ChunkProcessingJob>[jobFor(0)]),
+        ChunkBoundaryReason.automaticBoundary,
+        jobFor(1),
+        t1,
+      );
+
+      expect(next, isA<RecordingStateRecording>());
+    });
+  });
+
+  group('a job completes — the fifth legal edge', () {
+    test('while recording, the job leaves and capture continues', () {
+      final RecordingState? next = RecordingLifecycle.onChunkProcessed(
+        recordingAt(1, t1, processing: <ChunkProcessingJob>[jobFor(0)]),
+        chunkId: 'chunk_0',
+      );
+
+      final RecordingStateRecording rec = next! as RecordingStateRecording;
+      expect(rec.processing, isEmpty);
+      expect(rec.sequenceIndex, 1, reason: 'capture is untouched');
+      expect(rec.chunkStartedAt, t1);
+    });
+
+    test('while draining, the last job ends the session', () {
+      final RecordingState? next = RecordingLifecycle.onChunkProcessed(
         RecordingState.finalizing(
           session: session,
-          sequenceIndex: 7,
-          reason: ChunkBoundaryReason.collectorStop,
+          processing: <ChunkProcessingJob>[jobFor(4)],
+          endCause: SessionEndCause.collectorStop,
         ),
-        t1,
+        chunkId: 'chunk_4',
       );
 
       expect(next, isA<RecordingStateIdle>());
       expect((next! as RecordingStateIdle).lastCompletedSession, session);
-      expect(next.activeSession, isNull, reason: 'it is no longer active');
+      expect(next.activeSession, isNull);
     });
 
-    test('the index increments once per Finalizing transition, and only '
-        'there', () {
-      // §4 assigns the increment here and nowhere else. Driven across three
-      // chunks so an increment in the wrong place would show as a gap or a
-      // repeat.
-      RecordingState state = RecordingState.ready(session: session);
-      final List<int> recorded = <int>[];
+    test('while draining, an earlier job leaves the rest', () {
+      final RecordingState? next = RecordingLifecycle.onChunkProcessed(
+        RecordingState.finalizing(
+          session: session,
+          processing: <ChunkProcessingJob>[jobFor(4), jobFor(5)],
+          endCause: SessionEndCause.collectorStop,
+        ),
+        chunkId: 'chunk_4',
+      );
 
-      state = RecordingLifecycle.onStart(state, t0)!;
-      recorded.add((state as RecordingStateRecording).sequenceIndex);
+      expect(next, isA<RecordingStateFinalizing>());
+      expect((next! as RecordingStateFinalizing).processing.single.chunkId,
+          'chunk_5');
+    });
+
+    test('an unknown chunk id is ignored', () {
+      // A duplicate completion, or one from a session already ended.
+      expect(
+        RecordingLifecycle.onChunkProcessed(
+          recordingAt(1, t1, processing: <ChunkProcessingJob>[jobFor(0)]),
+          chunkId: 'chunk_nope',
+        ),
+        isNull,
+      );
+    });
+  });
+
+  group('terminal failure — Ch. 5.13 §1', () {
+    test('a failed chunk is recorded and recording continues', () {
+      // "Terminal (device-side) ... surfaces immediately as Failed" is a
+      // status on the chunk, not on the session.
+      final RecordingState? next = RecordingLifecycle.onChunkProcessed(
+        recordingAt(1, t1, processing: <ChunkProcessingJob>[jobFor(0)]),
+        chunkId: 'chunk_0',
+        cause: ErrorCode.storageNotFound,
+      );
+
+      expect(next, isA<RecordingStateRecording>());
+      expect(
+        next!.isCapturing,
+        isTrue,
+        reason: 'good footage is not thrown away',
+      );
+      final FailedChunk failed = next.failedChunks.single;
+      expect(failed.chunkId, 'chunk_0');
+      expect(failed.sequenceIndex, 0);
+      expect(failed.cause, ErrorCode.storageNotFound);
+    });
+
+    test('a failed chunk still leaves the pending set, so draining ends', () {
+      // Otherwise Finalizing would wait forever on a job that already failed.
+      final RecordingState? next = RecordingLifecycle.onChunkProcessed(
+        RecordingState.finalizing(
+          session: session,
+          processing: <ChunkProcessingJob>[jobFor(7)],
+          endCause: SessionEndCause.collectorStop,
+        ),
+        chunkId: 'chunk_7',
+        cause: ErrorCode.storageNotFound,
+      );
+
+      expect(next, isA<RecordingStateIdle>());
+      expect(next!.failedChunks.single.sequenceIndex, 7);
+    });
+
+    test('failures accumulate across a session', () {
+      RecordingState state = recordingAt(
+        2,
+        t1,
+        processing: <ChunkProcessingJob>[jobFor(0), jobFor(1)],
+      );
+      state = RecordingLifecycle.onChunkProcessed(
+        state,
+        chunkId: 'chunk_0',
+        cause: ErrorCode.storageNotFound,
+      )!;
+      state = RecordingLifecycle.onChunkProcessed(
+        state,
+        chunkId: 'chunk_1',
+        cause: ErrorCode.storageWriteFailed,
+      )!;
+
+      expect(state.failedChunks, hasLength(2));
+    });
+  });
+
+  group('identity is minted at capture-stop', () {
+    test('nextJob takes the index of the chunk being captured', () {
+      final ChunkProcessingJob? job = RecordingLifecycle.nextJob(
+        recordingAt(4, t0),
+        chunkId: 'chunk_abc',
+        filePath: '/tmp/0004.mp4',
+        now: t1,
+      );
+
+      expect(job!.sequenceIndex, 4, reason: 'not 5 — that is the next chunk');
+      expect(job.chunkId, 'chunk_abc');
+      expect(job.filePath, '/tmp/0004.mp4');
+      expect(job.startedAt, t1);
+    });
+
+    test('nextJob refuses when not recording', () {
+      expect(
+        RecordingLifecycle.nextJob(
+          const RecordingState.idle(),
+          chunkId: 'x',
+          filePath: '/tmp/x.mp4',
+          now: t1,
+        ),
+        isNull,
+      );
+    });
+
+    test('indices are contiguous and unique across a session', () {
+      // The property Ch. 5.14 §1 depends on: the S3 key is UNIQUE on this
+      // index. Captures are strictly serial — the plugin permits one recording
+      // at a time — so one capture yields one stop yields one increment.
+      RecordingState state = RecordingLifecycle.onStart(
+        RecordingState.ready(session: session),
+        t0,
+      )!;
+      final List<int> minted = <int>[];
 
       for (final DateTime at in <DateTime>[t1, t2]) {
-        state = RecordingLifecycle.onStop(
+        final ChunkProcessingJob job = RecordingLifecycle.nextJob(
+          state,
+          chunkId: 'chunk_${minted.length}',
+          filePath: '/tmp/${minted.length}.mp4',
+          now: at,
+        )!;
+        minted.add(job.sequenceIndex);
+        state = RecordingLifecycle.onCaptureStopped(
           state,
           ChunkBoundaryReason.automaticBoundary,
+          job,
+          at,
         )!;
-        state = RecordingLifecycle.onChunkPersisted(state, at)!;
-        recorded.add((state as RecordingStateRecording).sequenceIndex);
       }
+      minted.add((state as RecordingStateRecording).sequenceIndex);
 
-      expect(recorded, <int>[0, 1, 2]);
+      expect(minted, <int>[0, 1, 2], reason: 'no gap, no repeat');
+      expect(minted.toSet(), hasLength(minted.length));
     });
 
-    test('nothing advances unless finalizing', () {
-      for (final RecordingState from in <RecordingState>[
-        const RecordingState.idle(),
-        RecordingState.ready(session: session),
-        recordingAt(0, t0),
-      ]) {
-        expect(RecordingLifecycle.onChunkPersisted(from, t1), isNull);
-      }
+    test('completion order does not disturb the index', () {
+      // Chunk 0 finishes after chunk 1 was already captured. The index is
+      // derived from capture, never from completion, so nothing shifts.
+      RecordingState state = recordingAt(
+        2,
+        t2,
+        processing: <ChunkProcessingJob>[jobFor(0), jobFor(1)],
+      );
+      state = RecordingLifecycle.onChunkProcessed(state, chunkId: 'chunk_1')!;
+      state = RecordingLifecycle.onChunkProcessed(state, chunkId: 'chunk_0')!;
+
+      expect((state as RecordingStateRecording).sequenceIndex, 2);
+      expect(state.processing, isEmpty);
     });
   });
 
   group('the state union itself', () {
-    test('only Recording reports capturing', () {
+    test('only Recording reports capturing — including across a boundary', () {
       expect(const RecordingState.idle().isCapturing, isFalse);
       expect(RecordingState.ready(session: session).isCapturing, isFalse);
-      expect(recordingAt(0, t0).isCapturing, isTrue);
+      expect(
+        recordingAt(1, t1, processing: <ChunkProcessingJob>[jobFor(0)])
+            .isCapturing,
+        isTrue,
+        reason: 'the camera runs while an earlier chunk is hashed',
+      );
       expect(
         RecordingState.finalizing(
           session: session,
-          sequenceIndex: 0,
-          reason: ChunkBoundaryReason.automaticBoundary,
+          processing: <ChunkProcessingJob>[jobFor(0)],
+          endCause: SessionEndCause.collectorStop,
         ).isCapturing,
         isFalse,
-        reason: 'capture has stopped; C-10 Local Processing is showing',
       );
     });
 
     test('a completed session is not reported as active', () {
-      // The trap this guards: Idle carries lastCompletedSession, and a caller
-      // asking "what is recording now" must not be handed a session that has
-      // ended.
       final RecordingState idle = RecordingState.idle(
         lastCompletedSession: session,
       );
@@ -274,21 +521,23 @@ void main() {
   });
 
   group('the full transition matrix', () {
-    // The groups above assert each rule where it is easiest to read. This
-    // asserts the *shape* of the machine: every state crossed with every
-    // action, so a newly added state or action cannot slip in untested, and
-    // the count of legal edges is pinned at exactly four.
-    //
-    // It also fixes a hole the per-rule groups left: onStart from Finalizing
-    // was the one illegal pair with no assertion anywhere.
+    // Mission 3.2 pinned this at four legal edges specifically to catch an
+    // unplanned state addition. Mission 3.4.5 moved it deliberately: the state
+    // COUNT is unchanged at four, and exactly one edge became legal —
+    // onChunkProcessed from Recording, because a background job can now finish
+    // while the next chunk is being captured. Nothing else moved.
     final Map<String, RecordingState> states = <String, RecordingState>{
       'idle': const RecordingState.idle(),
       'ready': RecordingState.ready(session: session),
-      'recording': recordingAt(0, t0),
+      'recording': recordingAt(
+        1,
+        t1,
+        processing: <ChunkProcessingJob>[jobFor(0)],
+      ),
       'finalizing': RecordingState.finalizing(
         session: session,
-        sequenceIndex: 0,
-        reason: ChunkBoundaryReason.automaticBoundary,
+        processing: <ChunkProcessingJob>[jobFor(0)],
+        endCause: SessionEndCause.collectorStop,
       ),
     };
 
@@ -297,23 +546,27 @@ void main() {
           'onChecklistPassed': (RecordingState s) =>
               RecordingLifecycle.onChecklistPassed(s, session),
           'onStart': (RecordingState s) => RecordingLifecycle.onStart(s, t1),
-          'onStop': (RecordingState s) => RecordingLifecycle.onStop(
-            s,
-            ChunkBoundaryReason.collectorStop,
-          ),
-          'onChunkPersisted': (RecordingState s) =>
-              RecordingLifecycle.onChunkPersisted(s, t1),
+          'onCaptureStopped': (RecordingState s) =>
+              RecordingLifecycle.onCaptureStopped(
+                s,
+                ChunkBoundaryReason.collectorStop,
+                jobFor(9),
+                t2,
+              ),
+          'onChunkProcessed': (RecordingState s) =>
+              RecordingLifecycle.onChunkProcessed(s, chunkId: 'chunk_0'),
         };
 
-    /// The four edges of Chapter 5.3 §2's diagram, and nothing else.
+    /// Five edges. Four states, unchanged.
     const Set<String> legalEdges = <String>{
       'idle → onChecklistPassed',
       'ready → onStart',
-      'recording → onStop',
-      'finalizing → onChunkPersisted',
+      'recording → onCaptureStopped',
+      'recording → onChunkProcessed',
+      'finalizing → onChunkProcessed',
     };
 
-    test('exactly four edges are legal; the other twelve return null', () {
+    test('exactly five edges are legal; the other eleven return null', () {
       final Set<String> accepted = <String>{};
 
       states.forEach((String stateName, RecordingState state) {
@@ -321,12 +574,8 @@ void main() {
           String actionName,
           RecordingState? Function(RecordingState) action,
         ) {
-          final String edge = '$stateName → $actionName';
-          // Returning rather than throwing is the pattern itself: a null here
-          // is the machine declining a race, not swallowing a failure. If any
-          // pair threw, this call would fail the test rather than return.
           if (action(state) != null) {
-            accepted.add(edge);
+            accepted.add('$stateName → $actionName');
           }
         });
       });
@@ -334,9 +583,13 @@ void main() {
       expect(accepted, legalEdges);
     });
 
+    test('the state count is still four', () {
+      // Processing is a field, not a variant — the reason the matrix stayed
+      // 4x4 while gaining an edge.
+      expect(states, hasLength(4));
+    });
+
     test('no action throws from any state', () {
-      // Asserted separately so a throw reads as "the machine threw" rather
-      // than as an unexpected edge count.
       states.forEach((String stateName, RecordingState state) {
         actions.forEach((
           String actionName,
