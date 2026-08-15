@@ -234,6 +234,7 @@ jobs:
           #   cloud_firestore        → features/auth/data      (ADR-036)
           #   battery_plus           → features/recording/data (FR-CHK-03)
           #   connectivity_plus      → features/recording/data (FR-CHK-04)
+          #   flutter_foreground_task → features/upload/data   (V5 Ch. 5.11)
           #
           # The last two are owned by a feature rather than by core/. ADR-010
           # keeps the Firebase *platform* in core/firebase/; a Firebase
@@ -305,6 +306,21 @@ jobs:
           check crypto                 lib/features/recording/data/
           check battery_plus           lib/features/recording/data/
           check connectivity_plus      lib/features/recording/data/
+
+          # The fourteenth rule, added by Mission 4.3. Volume 3 Ch. 3.1 §2
+          # names the package; Volume 5 Ch. 5.11 §1 is what it implements.
+          #
+          # Owned by a feature rather than by core/, on ADR-034's line: an OS
+          # capability belongs to the module that consumes it, which is what
+          # keeps features/upload/ the replaceable unit. UploadDispatcher lives
+          # in application/ and reaches the service only through
+          # UploadServiceHost, so this rule is what keeps that indirection real
+          # rather than nominal.
+          #
+          # Open item 41's question, asked of this mission: adding a package
+          # wakes a dormant rule, and a rule with no subject passes trivially.
+          # Verified by deliberate breakage before this line was committed.
+          check flutter_foreground_task lib/features/upload/data/
 
           # -----------------------------------------------------------------
           # ADR-022 R3 — no cross-feature imports, in either direction.
