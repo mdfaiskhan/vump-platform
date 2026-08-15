@@ -303,7 +303,14 @@ jobs:
           check cloud_functions        lib/features/auth/data/
           check cloud_firestore        lib/features/auth/data/
           check camera                 lib/features/recording/data/
-          check shared_preferences     'lib/features/recording/data/|lib/main\.dart'
+          # main_cleanup_probe.dart joins main.dart as an owner for the same
+          # A-067 reason, not a weaker one: it is a second composition root.
+          # It builds its own ProviderContainer and binds recordingOverrides,
+          # which needs a resolved SharedPreferences instance, and resolving
+          # one is asynchronous. Both files are named individually - the
+          # permission is two FILES, not a directory or a glob, so a third
+          # entrypoint cannot acquire it by being added nearby.
+          check shared_preferences     'lib/features/recording/data/|lib/main\.dart|lib/main_cleanup_probe\.dart'
           check crypto                 lib/features/recording/data/
           check battery_plus           lib/features/recording/data/
           # connectivity_plus gains main.dart as a second owner, on exactly the
