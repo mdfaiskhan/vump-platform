@@ -26,6 +26,18 @@ Chapter 11.5 §4 also states that pre-1.0.0 builds *"may log only against `[Unre
 
 ### Security
 
+- **2026-08-15** — Volume 5 Chapter 5.10's Upload Pipeline is built, and it is the **first code in this project to make an HTTP request**. Four consequences worth recording as security, not as features.
+
+  **Chunk bytes go direct to S3 and carry no Vump credential.** A presigned URL authorises itself, and S3 rejects a request that also presents a conflicting `Authorization` header — so the transfer runs on a separate client with **no token source at all**, which structurally cannot send a Firebase ID token to Amazon. A test asserts the S3 `PUT` carries no `Authorization` header while the same run's backend calls all do; it was verified to fail when the header is deliberately added.
+
+  **A presigned URL is a bearer credential in a query string, and is never logged.** `LoggingInterceptor` writes URIs in full and this project redacts headers only, so the transfer client installs no interceptors and reduces every URL to scheme, host and path before logging. Error messages and `ChunkRegistration.toString()` omit it too. Design-time mitigation, flagged for re-verification in Mission 4.8. A-074.
+
+  **A-068 Guard 1 is closed.** A chunk whose `identity` group does not name real things is refused before any network call and marked `failed` with a named terminal cause — not silently skipped, not silently sent. It currently refuses every chunk recorded on a device, because four of five identity fields still have no source; that is the guard working. Guard 2 (server-side) remains open. A-068.
+
+  **The client never composes the S3 key.** The Lambda does, and returns it (V4 Ch. 4.10 §2). No `org_id`, `project_id` or `task_id` is sent at registration. The register carried the opposite premise since Mission 3.7 and is corrected. A-071.
+
+  Also: `dio` stays confined to `core/network/` under its first real consumer, via neutral published types rather than a widened rule (ADR-041); backend refusals now keep their specific error code instead of a bare HTTP status, per Ch. 4.6 §1; and the confinement check now matches import directives rather than any mention of a package name (A-075). Mission 4.2, ADR-041.
+
 - **2026-08-15** — Volume 5 Chapter 5.9's Upload Queue reads the locally stored chunk rows as a live view. It is read-only over data handling: no network call, no upload, and no new stored field. `features/upload/` reaches those rows through a contract in `core/queue/` rather than by importing `features/recording/`, so neither feature can see the other's schema — the projection carries a chunk id, session id, sequence index, session start time, status and byte count, and deliberately no file path or checksum. Soft-deleted rows (BR-08) are excluded from the view. ADR-022 R3 is now enforced in CI for every feature pair, having been binding in writing only since Mission 0.18. Mission 4.1, ADR-040.
 
 - **2026-08-15** — `shared_preferences` gains the composition root as a second permitted owner, and the `Architecture boundaries` CI job is enforcing again. It had been failing since Mission 3.8 introduced the import in `main.dart` without widening the rule. Mission 3.11.1, A-067. (`958c0d8`)

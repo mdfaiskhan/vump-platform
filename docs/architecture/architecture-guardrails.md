@@ -128,6 +128,8 @@ Every architectural invariant in force, with its authority and how it is checked
 | **I44** | `battery_plus` only in `features/recording/data/` | FR-CHK-03, ADR-030 | CI `Architecture boundaries` |
 | **I45** | `connectivity_plus` only in `features/recording/data/` | FR-CHK-04, ADR-030 | CI `Architecture boundaries` |
 | **I46** | `core/queue/` imports no feature | ADR-040 | CI `Architecture boundaries` |
+| **I47** | `core/upload/` imports no feature | ADR-040, ADR-041 | CI `Architecture boundaries` |
+| **I48** | No layer outside `core/network/` names a Dio type — including through `DioClient`'s return values | ADR-007, ADR-041 | CI `Architecture boundaries` (the `dio` rule, now matching directives) |
 
 **I2 widened at Mission 3.7 and is enforced again.** It read `isar` only in `core/database/` until Volume 5 Chapter 5.8's three collections were placed in the feature that owns them — a collection cannot be declared without importing the package, so the tables could satisfy the old rule or live with their feature, not both. ADR-039 supersedes ADR-009 on that clause alone and the CI check was widened to match; the job passes. **The rule did not weaken.** The engine, its lifecycle and its migrations are still `core/database/`'s exclusively, the two feature locations are a directory and a filename prefix rather than a layer, and nothing above `data/` may name an Isar type.
 
@@ -138,6 +140,12 @@ ADR-040 is what forced the issue: `features/upload/` needed rows `features/recor
 Both were verified by deliberately breaking them before being reported as passing, per the standard A-067 set after a rule living only in prose went unenforced for two missions.
 
 **I42 and I43 are temporary**, and are the only invariants in this register with an expiry: both packages leave the project when ADR-036's runtime is retired at Mission 6/7. They are registered anyway — an unenforced boundary is not cheaper for being short-lived, and the confinement is what keeps the retirement a deletion of one directory rather than a hunt.
+
+**I47 is I46's second instance, and the check is now a loop rather than a copy.** `core/upload/` holds Chapter 5.10's three contracts — two implemented by `features/recording/`, one owed to `features/projects_tasks/` — and the same argument applies: a contract that imported either side would stop being neutral ground. Written as `for module in queue upload`, so a third contract module is one word rather than ten lines someone can forget to keep in step.
+
+**I48 is not a new rule — it is the old one, finally under load.** `dio` has been confined to `core/network/` since ADR-007, and the check passed for eleven missions because nothing outside `core/network/` had ever made an HTTP request. `DioClient`'s verb methods return `Response<T>`, a Dio type, so the rule and the code were in conflict the whole time and nothing surfaced it. Mission 4.2's first feature consumer did, immediately. The resolution is ADR-041's neutral types — `VumpApi`, `TransferHandle`, `TransferProgress` — not a widened rule. A-076 records what this says about checks over empty sets.
+
+**The `check()` matcher was corrected at the same time.** It grepped for the package name anywhere in a file, so two files whose comments said *"this file does not import X"* failed for saying so. It now anchors on `import`/`export` directives; no coverage is lost, since a package can only be used by importing it. A-075.
 
 **I41 was implicit until ADR-035 tested it.** ADR-022 states the rule; nothing checked it, because `core/` had no reason to want anything from a feature until `AuthInterceptor` needed a token. The resolution — `core/network/` declares `AuthTokenSource` and the composition root supplies the implementation — is the pattern every later `core/` module with the same problem should follow, and this invariant is what stops the shortcut being taken instead.
 
@@ -196,7 +204,7 @@ Verified by running each check against the working tree, not asserted. Commands 
 
 | Checked | Result |
 |---|---|
-| Package confinement (I1–I4, I39–I40, I42–I43) | 8 of 8 pass |
+| Package confinement (I1–I4, I39–I40, I42–I43, I48) | 13 of 13 pass — full sweep, never a subset (item 26) |
 | AWS SDK dependency, credential references, hardcoded endpoints (I5–I6) | none present |
 | Credential-bearing files, AWS keys, private keys, service-account keys (I7) | none tracked |
 | Environment sets across Dart / JSON / shell (I8) | agree — `development`/`staging`/`production` |
@@ -206,7 +214,7 @@ Verified by running each check against the working tree, not asserted. Commands 
 | `dart format` on 59 hand-written files (I12) | 0 changed |
 | `flutter analyze` (I13) | no issues |
 | Cross-feature imports (I25) | none — enforced in CI for every ordered feature pair since Mission 4.1 (ADR-040) |
-| `core/` importing `features/` (I41) | none |
+| `core/` importing `features/` (I41, I46, I47) | none |
 | `app/` importing `features/` (I30) | none |
 | `core/` importing `app/theme/` (I31) | none |
 | `app/config/` importing `core/` (I32) | none |

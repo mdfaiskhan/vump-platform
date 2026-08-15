@@ -1642,7 +1642,26 @@ Three things are therefore true and are recorded rather than resolved:
 
 </details>
 
-#### `local_chunks.s3_object_key` is stored null
+#### ~~`local_chunks.s3_object_key` is stored null~~ — PREMISE CORRECTED
+
+> **Corrected 2026-08-15 by Mission 4.2. The column is still null; the reason recorded below is wrong.**
+>
+> This entry, and open item 3, both assume **the client composes the S3 key**. It does not, and no chapter ever said it did.
+>
+> - **Volume 4 Chapter 4.10 §2 step 1:** *"Mobile app calls `POST /v1/sessions/{id}/chunks` (Chapter 4.6); **the Lambda computes the deterministic key (Volume 5.14)** and returns a set of presigned multipart upload URLs."*
+> - **Volume 4 Chapter 4.6 §5** shows `s3_object_key` as a **response** field. The request body is `{ "sequence_index", "file_size_bytes", "checksum_sha256" }` — no `org_id`, no `project_id`, no `task_id`.
+> - **Volume 5 Chapter 5.14 §1** is authoritative for the pattern *on both sides*, but §2 gives the client's own use of it: `<app-documents>/recordings/{session_id}/{sequence_index:04d}.mp4`, which *"omits org/project/task since those are already implied by the session (a lookup, not a duplication)"*.
+>
+> So the missing `org_id`/`project_id`/`task_id` were never a blocker for the key. **The column is null because registration has not happened yet**, and `ChunkUploadSource.recordObjectKey` fills it from the response.
+>
+> **The gap is real but it sits one level up, and it is harder than the one described.** Chapter 5.10 §1 step 1's URL needs a *backend* session id, from `POST /v1/tasks/{id}/sessions` (Ch. 4.6 §4) — an endpoint Chapter 5.10 never mentions, nested under a Task. `LocalSession.taskId` is null on every row this application has written. `SessionRegistrar` names that port; nothing in `lib/` implements it, and `features/projects_tasks/` still owns closing it.
+>
+> The "Blocked on" row below is therefore right about the blocker and wrong about the mechanism. `org_id` in particular is **not** the harder half — it is not the client's problem at all.
+>
+> `ChunkRecordMapper.toLocalChunk`'s doc carried the same wrong premise and is corrected in place, struck through, at the same date.
+
+<details>
+<summary>Original entry, retained</summary>
 
 | | |
 |---|---|
@@ -1651,6 +1670,8 @@ Three things are therefore true and are recorded rather than resolved:
 | **Owner** | **Chapter 5.10 (Upload Pipeline) §1 step 1**, *"Register `POST /v1/sessions/{id}/chunks` → presigned multipart URLs"* — the step that needs the key and the first that cannot proceed without it. Projected Mission 3.9. |
 | **Blocked on** | `features/projects_tasks/`, which is unbuilt — its `domain/`, `data/` and `application/` are still `.gitkeep`. `TaskContext` is the port that would supply `project_id` and `task_id`; `org_id` has no identified source at all and is the harder half. |
 | **Consequence of leaving it** | The column is unreadable by anything today, because no upload path exists. It becomes blocking exactly when Chapter 5.10 runs, and not before. |
+
+</details>
 
 ---
 
@@ -1874,13 +1895,22 @@ Until both hold, LiDAR depth capture is out of scope. If only the second arrives
 >
 > Mission 4.1's own new code is covered: `core/queue/` 100% (30/30), `features/upload/application/` 96.15% (25/26 — the uncovered line is the port's `UnimplementedError`, which by design nothing reaches).
 >
+>
+> **Re-measured 2026-08-15 by Mission 4.2, and the number moved again.** `recording/data` is now **63.82% (284/445)**. Same cause, larger: `IsarChunkStore` grew from 52 lines to **146** implementing `ChunkUploadSource` and `ChunkMetadataSource`, and measures **2.74% (4/146)**. Every one of those lines needs a live Isar engine.
+>
+> **Excluding that file the data layer is 93.65% (280/299)** — *higher* than the 92.02% recorded at 4.1, because `ChunkMetadataDocumentMapper` landed at 100% (50/50). So the layer's testable half improved while its headline fell, which is exactly the shape this entry has described since Mission 3.10.
+>
+> Mission 4.2's own new code: `core/upload/` **92.50% (111/120)** — the nine uncovered lines are `upload_ports.dart`'s three `UnimplementedError` throws, which by design nothing reaches; `core/network/` **89.90%**, with `vump_api.dart`, `transfer_handle.dart` and every `core/upload/metadata/` file at **100%**; `features/upload/` **83.08%**, of which `chunk_registration.dart` is 100% and the remainder is presentation screens Mission 4.4 owns.
+>
+> **Two gaps were found by reading uncovered lines rather than accepting a percentage, and closed rather than excused**: `chunk_registration.dart` was at 11.76% (2/17) — a `domain/` file, against Chapter 9.5 §2's 90% target — and `vump_api.dart` at 64.58%. Both are now 100%. This is the third re-measurement and the second time the read found real gaps; open item 23's argument holds.
+>
 > This is the **second** time the register cross-check has found drift, after A-057 and A-063 §5 at Mission 3.10. It is the argument for open item 23: a percentage recorded in prose goes stale the moment anyone adds a test, and only a scheduled re-check catches it.
 
 **Chapter 9.5 §2 names three layers and gives `application/` no numeric target.** Chapter 9.6 §1 instead requires *"every Riverpod Notifier's state transitions, using ProviderContainer overrides"*, which is a completeness rule and is satisfied — `RecordingNotifier` and `ChecklistNotifier` both have transition suites built that way. The 86.36% is reported for information, not against a target.
 
 ### The whole shortfall is one file
 
-`isar_chunk_store.dart` measures **7.69% (4/52)**. Excluding it, the data layer is **92.02% (219/238)** — comfortably past the target, and error-path-weighted as Chapter 9.1 requires.
+~~`isar_chunk_store.dart` measures **7.69% (4/52)**. Excluding it, the data layer is **92.02% (219/238)**~~ — **as of Mission 4.2, 2.74% (4/146) and 93.65% (280/299)** — comfortably past the target either way, and error-path-weighted as Chapter 9.1 requires. The file has tripled in size across 4.1 and 4.2 and its coverage has fallen accordingly; the cause has not changed.
 
 Covering it needs a live Isar. `Isar.initializeIsarCore(download: true)` **fetches native binaries over the network**, so a unit test over this class would make the build depend on the internet. That dependency is not added.
 
@@ -1960,9 +1990,27 @@ The real precedent is ADR-039's regex owner for `isar`, which this reuses. Recor
 
 That matters because BR-22 makes system-generated metadata immutable and rejected on any subsequent PATCH. **A chunk stored with a blank attribution could not be corrected afterwards** — it would be permanently unattributable evidence, which is the opposite of what Ch. 8.6 §2 collects identity for.
 
-### Guard 1 — client-side, owed to Mission 4
+### Guard 1 — client-side, owed to Mission 4 — **CLOSED 2026-08-15 by Mission 4.2**
 
-`ChunkMetadata.isIdentityComplete` exists for exactly this and **has no caller**. Volume 5 Chapter 5.10 §1 step 1 is *"Register `POST /v1/sessions/{id}/chunks` → presigned multipart URLs"*, and Chapter 5.14 §1's key embeds `project_id`, `task_id` and `session_id`. Registration must check `isIdentityComplete` before composing a key or sending a metadata document, and refuse rather than send blanks.
+~~`ChunkMetadata.isIdentityComplete` exists for exactly this and **has no caller**. Volume 5 Chapter 5.10 §1 step 1 is *"Register `POST /v1/sessions/{id}/chunks` → presigned multipart URLs"*, and Chapter 5.14 §1's key embeds `project_id`, `task_id` and `session_id`. Registration must check `isIdentityComplete` **before composing a key** or sending a metadata document, and refuse rather than send blanks.~~
+
+> **Corrected and closed 2026-08-15, Mission 4.2.**
+>
+> **The wording above is wrong in one clause.** *"Before composing a key"* assumes the client composes the S3 key. It does not — Volume 4 Chapter 4.10 §2 step 1 has the Lambda compute it and return it, and Chapter 4.6 §5's registration body carries no ids at all. See A-063 §5's correction.
+>
+> **Restated:** the check happens **before registration** — before Chapter 5.10 §1 step 1, and therefore before any network call of any kind.
+>
+> **As built.** `ChunkUploadPipeline._run` claims the chunk, loads its metadata document, and checks `ChunkMetadataDocument.isIdentityComplete` before touching `SessionRegistrar` or the API. A chunk that fails is marked `failed` with the named cause `UploadFailureCause.identityIncomplete` — Chapter 5.13 §1's **terminal, device-side** class, *"not retried automatically … surfaces immediately as Failed with a specific, named cause"*. Not silently skipped, not silently sent, exactly as this entry required.
+>
+> The refusal names each missing field individually (`project_id, task_id, collector_id, device_id`), because Chapter 2.9 §2 treats a failure that does not *"name the specific cause"* as a defect.
+>
+> **The check is on the projection, not on `ChunkMetadata`.** `ChunkMetadataDocument.identity` carries nullable fields, so a stored blank stays blank and a stored null stays null; nothing is substituted anywhere on the read path. That is what let the reverse mapper `ChunkRecordMapper` refused to write be written safely — see A-071.
+>
+> **So `ChunkMetadata.isIdentityComplete` — the domain getter this entry originally pointed at — still has no caller, and that is correct rather than an oversight.** It guards the object at generation time, where every field is non-null by construction and the check can only ever be about the sentinel. The upload path reads a stored row, not a generated object, and `features/upload/` may not name `ChunkMetadata` at all under ADR-022 R3. Two getters, one rule, two sides of the storage boundary. Verified uncalled by grep at Mission 4.2's close.
+>
+> **It currently refuses 100% of chunks recorded on a device**, because four of `MetadataIdentity`'s five fields still carry the unsourced sentinel. That is the guard working, and it is the honest state of the feature. Tested against both a synthetic complete-identity chunk and a real unsourced one.
+>
+> **Guard 2 remains open.** Client-side checks are a correctness measure, not a security boundary; this closing does not discharge the server-side rule below.
 
 ### Guard 2 — server-side, owed whenever Lambda handlers exist
 
@@ -2107,9 +2155,210 @@ It may be ordinary teardown noise, or it may mean the capture session closes unc
 
 ---
 
-## Consolidated open items — A-057 through A-070
+### A-071 — Chapter 5.10 §1 step 1 does not compose the S3 key, and the register said it did
 
-Every carried-forward item, in one place, accurate as of Mission 3.10. This is the seed for Mission 3.12's status report.
+| | |
+|---|---|
+| **Volume** | 5, Chapter 5.10 §1 step 1 and Chapter 5.14 §1/§2; Volume 4, Chapter 4.6 §5 and Chapter 4.10 §2/§5 |
+| **Says** | Ch. 5.14 §1 gives the key as `{org_id}/{project_id}/{task_id}/{session_id}/{sequence_index:04d}_{chunk_id}.mp4` and calls itself *"its authoritative source, since it must be computed identically on the mobile client … and the backend"* |
+| **Should say** | Nothing — **the chapters are correct**. What was wrong is this register's reading of them |
+| **Class** | Correction to A-063 §5 and open item 3 |
+| **Status** | Corrected; the underlying gap re-scoped and still open |
+
+**Found by Mission 4.2 while tracing Chapter 5.10 before writing any code.**
+
+Ch. 5.14 §1's sentence about computing the key identically on both sides was read as *"the client composes the key"*. It does not. Both sides compute the **pattern** identically; they use it for different things. Ch. 5.14 §2 gives the client's use — a local path that *"omits org/project/task since those are already implied by the session (a lookup, not a duplication)"*.
+
+Volume 4 settles it twice, unambiguously:
+
+- **Ch. 4.10 §2 step 1:** *"the Lambda computes the deterministic key (Volume 5.14) and returns a set of presigned multipart upload URLs."*
+- **Ch. 4.6 §5:** `s3_object_key` is a **response** field. The request body is three fields — `sequence_index`, `file_size_bytes`, `checksum_sha256`.
+
+So `org_id`, `project_id` and `task_id` were never inputs the client had to supply for the key. `org_id` in particular was recorded as *"the harder half"* and is not the client's problem at all.
+
+### The gap is real, and it moved up a level
+
+`s3_object_key` is still null locally, because registration has not happened. What blocks registration is not the key:
+
+**Chapter 5.10 §1 step 1's URL is `POST /v1/sessions/{id}/chunks`, and `{id}` is a backend session id.** That comes from `POST /v1/tasks/{id}/sessions` — Volume 4 Ch. 4.6 §4, an endpoint Chapter 5.10 never mentions — which is nested under a Task. `LocalSession.taskId` is nullable and null on every row this application has ever written.
+
+`SessionRegistrar` (`core/upload/interfaces/`) names that port. Nothing in `lib/` implements it; `sessionRegistrarProvider` throws, a fake satisfies it in the test suite, and `features/projects_tasks/` owns closing it.
+
+### Two places carrying the wrong premise, both corrected at the same date
+
+- **A-063 §5 / open item 3** — struck through with the correction above them, entries retained.
+- **`ChunkRecordMapper.toLocalChunk`'s doc comment** — the paragraph explaining why `s3ObjectKey` stays null is struck through in place and replaced.
+
+### What this changes about Mission 4.2's design
+
+Nothing was built on the wrong premise, because the trace ran first. `UploadableChunk.s3ObjectKey` is documented as *received*, `ChunkUploadSource.recordObjectKey` stores it from the registration response, and a test asserts the request body carries no `org_id`, `project_id` or `task_id`.
+
+**The reason this was worth catching before writing code**: composing a key from four unsourced ids would have produced a plausible-looking value, and Chapter 5.13 §4 makes every retry reuse *"the exact same deterministic S3 key"* — so a wrong key minted once would be reused forever, by design.
+
+### The read-back mapper `ChunkRecordMapper` declined to write
+
+Separate finding, recorded here because it was resolved by the same work. That class states there is no `fromLocal*` *"and that is a decision"*, because a reverse mapper *"would have to substitute empty strings, and an empty `collector_id` that reached an upload would be indistinguishable from a real one"*, naming the Upload Queue as the consumer that would eventually need one.
+
+Mission 4.2 is that consumer, and the hazard was answered rather than overruled: `ChunkMetadataDocumentMapper` produces a `ChunkMetadataDocument` whose identity fields are **nullable**, so a stored null arrives as null and a stored blank arrives as blank. Nothing is substituted, and A-068 Guard 1 is what refuses it. The unsafe direction — a domain object with five required fields built from a row with five nullable ones — is still unwritten, and should stay that way. `ChunkRecordMapper`'s doc carries a dated note saying so.
+
+---
+
+### A-072 — No field bandwidth-floor NFR exists, so the S3 upload has no send timeout
+
+| | |
+|---|---|
+| **Volume** | 1, Chapter 1.4 (the whole NFR table); Volume 9, Chapter 9.4 §1; Volume 5, Chapter 5.13 §1 |
+| **Says** | Nothing. The word *timeout* appears **once in all fifteen Volumes** — Ch. 5.13 §1's failure table, as an example of a transient failure, with no value |
+| **Should say** | A minimum field connection speed, from which a transfer timeout could be derived |
+| **Class** | Missing requirement — a product decision, deferred |
+| **Status** | Open, deliberately not raised inside an implementation mission |
+
+**Searched before implementing, at Mission 4.2's explicit instruction: all fifteen PDFs, for `mbps`, `kbps`, `bandwidth`, `throughput`, `connection speed`, `upload speed`, `minimum connection`, `2G`/`3G`/`4G`/`LTE`, and `timeout`.** Nothing.
+
+The nearest requirements answer different questions. **NFR-AVL-02**'s *"< 30 seconds"* is how fast an upload **resumes** after connectivity returns, not how fast it transfers. **Volume 9 Ch. 9.4 §1** has no throughput row at all. **Volume 0 Ch. 0.1 §4** lists chunk upload latency as a metric to be *measured after launch* *"under normal network conditions"* — a phrase it never defines. Volume 1 Ch. 1.4's own preamble concedes its targets are *"initial engineering targets … tightened or relaxed once a pilot cohort of Collectors provides real usage data"*.
+
+### It could not have come from a byte count either
+
+Volume 4 Ch. 4.6 §5 returns `upload_urls` as a **list**, and Ch. 4.10 §2 confirms the Lambda generates the set. **The backend chooses the part count**, so part size is `fileSizeBytes / uploadUrls.length` — a runtime value, different per chunk. No compile-time constant can describe it.
+
+### The decision, and why a guess would have been worse than none
+
+`NetworkConstants.uploadSendTimeout` is `null` — Dio's "no send timeout". `connectTimeout` still bounds reaching the host, `receiveTimeout` still bounds S3's response, and `TransferHandle` gives explicit cancellation.
+
+Ch. 5.13 §1 classifies a timeout as **transient**, and §2 grants six automatic attempts. A value set too low against a slow but working field connection would not present as a configuration mistake — it would silently consume the retry budget and surface to the Collector as *"Failed"*, with the true cause invisible. An absent timeout fails visibly, when it fails at all.
+
+**What is genuinely unbounded**: a socket that accepts bytes forever without completing. Named, not solved.
+
+### Deferred, not resolved
+
+Establishing a field bandwidth floor is a product decision about the conditions Collectors work in, not an engineering one, and it belongs in its own conversation rather than inside an implementation mission. This constant becomes derivable the moment that NFR exists. **No number was proposed and none was guessed.**
+
+---
+
+### A-073 — The local `complete` is written after step 4, and Chapter 5.10 §1 puts it at step 3
+
+| | |
+|---|---|
+| **Volume** | 5, Chapter 5.10 §1 steps 3–5; Volume 4, Chapter 4.6 §4; Volume 1, BR-08; Volume 5, Chapter 5.15 |
+| **Says** | Step 3: *"Confirm `PATCH /v1/chunks/{id}/status` `'uploading'` → `'complete'`"*. Step 5: the device's queue *"observes `chunks.status='complete'` via its next sync and updates the local row to match"* |
+| **Should say** | The **local** row reaches `complete` only after step 4's metadata POST succeeds |
+| **Class** | Deliberate divergence from the chapter's literal ordering |
+| **Status** | Implemented and recorded |
+
+**Two problems with following §1 literally.**
+
+First, **step 5's "next sync" does not exist**. No sync mechanism is built and none is in Chapter 5.10's scope. Read strictly, nothing would ever write the local `complete` at all.
+
+Second, and the reason for the divergence: **BR-08 makes `complete` the point a chunk becomes eligible for local deletion**, and Chapter 5.15 owns acting on that. If the local row were marked `complete` at step 3 and the step 4 metadata POST then failed, the chunk's file would become deletable while its metadata had never reached the backend. Volume 4 Ch. 4.5 §4 makes that unrecoverable: BR-22 rejects any later PATCH of system-generated metadata, so the record could not be completed afterwards.
+
+### Why this is a divergence and not a contradiction
+
+Volume 4 Ch. 4.6 §4 makes `'complete'` *"gated server-side"*, so a success on step 3's PATCH **is** the backend confirming — the chapter is right that step 3 is where the authoritative transition happens. What Mission 4.2 changes is only when the **device** writes its copy of that fact, and it costs nothing to wait one call.
+
+`ChunkUploadPipeline` therefore calls `markComplete` after step 4. A metadata failure leaves the chunk `failed`, retryable, with its file intact. Two tests pin it: one asserts `complete` is the last transition and follows the metadata call; the other scripts a step 4 failure and asserts the chunk is `failed` and never `complete`.
+
+### What this does not do
+
+It does not invent a reconciliation pass. Step 5's sync — reconciling a local row against the backend after a dropped response — is still unbuilt, and belongs to Chapter 5.12 or Chapter 5.15 rather than here.
+
+---
+
+### A-074 — A presigned S3 URL is a bearer credential, and nothing in this project strips a query string
+
+| | |
+|---|---|
+| **Volume** | 4, Chapter 4.10 §2/§3; Volume 8, Chapter 8.2; Volume 5, Chapter 5.10 §1 step 2 |
+| **Says** | Ch. 4.10 §2: *"the mobile app never holds a raw AWS credential"*. Ch. 4.10 §3: *"presigned URLs are HTTPS and time-limited"* |
+| **Should say** | And they must never be logged — a presigned URL **is** a credential, in the query string |
+| **Class** | Security consideration, designed against before the risk existed |
+| **Status** | Mitigated at design time; **flagged for re-verification in Mission 4.8's security review** |
+
+**Raised in Mission 4.2's design report, before any code was written, and recorded here at the mission's instruction rather than left as design-report prose.**
+
+### The exposure
+
+`LoggingInterceptor` writes `options.uri` **in full** — query string included — on request (line 42), response (line 58) and error (line 72). A presigned S3 URL carries `X-Amz-Signature` and `X-Amz-Credential` as **query parameters**. Anyone holding that URL can write to the bucket until it expires.
+
+`NetworkConstants.redactedHeaders` redacts seven header names. **Nothing in this project redacts a query string**, and nothing ever needed to before: no code outside `core/network/` had made an HTTP request.
+
+There is a second path to the same leak. `ErrorInterceptor.mapToNetworkException` builds its message from `err.requestOptions.uri`, and `AppException.toString()` writes its `cause` — which for a `DioException` prints the request URI again. Either would put a live signature into a log line or an error surface.
+
+### The mitigation
+
+`S3TransferClient` installs **no interceptors at all**:
+
+- **No `AuthInterceptor`** — for a different reason: S3 rejects a presigned request carrying a conflicting `Authorization` header. It also means the client structurally cannot send a Vump credential to Amazon.
+- **No `LoggingInterceptor`** — it logs through `AppLogger` directly, with every URL passed through `S3TransferClient.redactUrl`, which reduces it to scheme, host and path.
+- **No `ErrorInterceptor`** — `_convert` reuses `mapToNetworkException` for its **classification only**, then rebuilds the exception with a redacted message and **no `cause`**.
+
+**Dropping `cause` is a real diagnostic loss and is deliberate.** The status code, the Dio failure type and the redacted URL are kept, which is what a failed upload is actually diagnosed from.
+
+`ChunkRegistration.toString()` prints the part count and never the URL list, for the same reason.
+
+### Why this is recorded rather than treated as a finding
+
+No shipped code leaked anything: this is a design decision taken before the surface existed. It is written down so it can be **re-verified against real code later rather than assumed from the mission that wrote it** — the same discipline open item 32 argues for.
+
+**Owed to Mission 4.8's security review as a confirmed-safe item**, with the reasoning above to check against. What it must re-verify: that `redactUrl` is still applied at every log site in `S3TransferClient`; that no interceptor has been added to it; that no other code path prints a presigned URL, including through an exception's `cause`; and that `ChunkRegistration.toString()` still omits the list.
+
+### A related gap this leaves open
+
+**`LoggingInterceptor` still logs full URIs for every other request.** No Vump endpoint puts a secret in a query string today, and Ch. 4.6 §1 uses cursor pagination rather than tokens-in-URLs, so nothing is exposed. But the redaction mechanism is header-only, and a future endpoint taking a signed parameter would leak it silently. Not fixed in Mission 4.2 — out of scope, and a change to a verified path — but named here so 4.8 can decide.
+
+---
+
+### A-075 — The confinement check matched text, not imports, and failed on a true statement
+
+| | |
+|---|---|
+| **Volume** | Not a Volume finding — a defect in this repository's own CI |
+| **Class** | Enforcement precision |
+| **Status** | Fixed 2026-08-15 by Mission 4.2, verified by deliberate breakage |
+
+The `Architecture boundaries` job's `check()` grepped for the bare string `package:<name>` anywhere in a `.dart` file.
+
+Mission 4.2's full sweep tripped it **twice in one run**, on two files whose **doc comments stated that they deliberately do not import the confined package**:
+
+- `features/upload/data/chunk_upload_api_impl.dart` — a comment stating the file imports no dio
+- `features/recording/data/chunk_metadata_document_mapper.dart` — a comment stating it names the `Embedded*` types but never isar itself
+
+Both statements were true, and both failed the check.
+
+**A rule that fails on a true statement about itself teaches people to stop writing the statement** — which is exactly the documentation this project relies on to explain why a boundary holds.
+
+The matcher now anchors on `import`/`export` directives. No coverage is lost: a package can only be used by importing it, and `export` is checked so a re-export cannot smuggle one across a boundary. Verified by injecting a real dio import into `features/upload/data/` — still `EXIT=1` — and removing it — back to `EXIT=0`.
+
+**Worth noting for the register's own sake**: this is a false *positive*, the opposite of S1 (A-067)'s false negative. Both come from the same place — a rule whose implementation is not quite the rule it states.
+
+---
+
+### A-076 — `DioClient`'s own signature leaked Dio, and the rule was green only because nothing used it
+
+| | |
+|---|---|
+| **Volume** | Not a Volume finding — ADR-007 and ADR-030's confinement, against Mission 0.10's client |
+| **Class** | Latent boundary violation, surfaced by the first real consumer |
+| **Status** | Resolved by ADR-041's `VumpApi`; recorded because of what it says about the check |
+
+`DioClient.post` and its siblings return `Future<Response<T>>`. `Response` is a Dio type, so **any caller outside `core/network/` must import `package:dio`** — which the confinement job forbids.
+
+This has been true since Mission 0.10. It was never detected because **nothing outside `core/network/` had ever called `DioClient`**: `features/auth/data/` talks to Firebase, and Mission 3.11's review confirmed the recording feature makes *"no `dio`, no `http`, no socket"*. Mission 4.2 is the first feature consumer and hit it immediately.
+
+### The pattern this belongs to
+
+**Fourth instance of "a whole checked in parts"** (cf. open items 23, 26, 32). The confinement rule was not holding — it was untested, and a rule with no subject passes trivially. Same shape as ADR-022 R3, which A-040 recorded as *"binding in writing and unenforced in fact"* while there were no features to check.
+
+The general lesson, stated once: **a green check over an empty set is not evidence.** Worth asking, at each mission that introduces a first consumer of anything, which dormant rules that consumer has just woken up.
+
+### The resolution, not a widening
+
+`core/network/` publishes `VumpApi`, which returns plain maps. `DioClient` is unchanged. ADR-041 has the full argument, including why widening `dio`'s confinement to `features/upload/data/` was rejected.
+
+---
+
+## Consolidated open items — A-057 through A-076
+
+Every carried-forward item, in one place. Accurate as of **Mission 4.2**; originally the seed for Mission 3.12's status report, and re-checked at the close of each sub-mission block per item 23.
 
 ### Blocked on an unbuilt feature module
 
@@ -2117,7 +2366,7 @@ Every carried-forward item, in one place, accurate as of Mission 3.10. This is t
 |---|---|---|---|
 | 1 | `project_id`, `task_id` unsourced — stored as `MetadataIdentity.unsourced` | `features/projects_tasks/` (unbuilt) | A-062 §1, A-064 §3 |
 | 2 | `local_task_cache` table not implemented | `features/projects_tasks/` | A-063 §2, ADR-039 §3 |
-| 3 | `s3_object_key` stored null — key needs `org_id`/`project_id`/`task_id` | Ch. 5.10 §1 step 1 | A-063 §5 |
+| 3 | ~~`s3_object_key` stored null — key needs `org_id`/`project_id`/`task_id`~~ **Premise corrected 2026-08-15 (Mission 4.2): the client never composes the key — the Lambda does and returns it (V4 Ch. 4.10 §2). The column is null because registration has not happened.** The real blocker is one level up: Ch. 5.10 §1 step 1's URL needs a **backend session id** from `POST /v1/tasks/{id}/sessions`, which needs a `task_id`. `SessionRegistrar` names the port; nothing implements it. | `features/projects_tasks/` (unbuilt) | A-063 §5, A-071 |
 
 ### Blocked on a decision, not on work
 
@@ -2155,7 +2404,7 @@ Every carried-forward item, in one place, accurate as of Mission 3.10. This is t
 | 18 | Data-layer coverage 76.90% vs 80% | Missed; cause named; device evidence stronger | A-066 |
 | 19 | Golden tests for Design System components | None; `golden_toolkit` not installed | A-066, Ch. 9.5 §2 |
 | 20 | `integration_test` end-to-end flows (Ch. 9.7 §1's five) | Package not installed | A-028 |
-| 21 | `recoverableChunkIds()` has no caller | Ch. 5.9's queue is its consumer | A-064 §2 |
+| 21 | `recoverableChunkIds()` has no caller | **Still uncalled after 4.1 and 4.2, and deliberately.** Ch. 5.9 §3 has the queue *"simply resume reading the same rows"*, and Ch. 5.10 claims a chunk by status rather than by recoverability. The method answers a different question — which queued chunks still have a file on disk — and `orphanedChunkIds()` is its natural pair. Owed to Ch. 5.15 (Storage Cleanup) or a dedicated integrity pass, not to the queue. | A-064 §2, Mission 4.2 |
 | 22 | No iOS toolchain — no macOS host, no Xcode, no iOS device | Blocks any iOS verification | A-065 §3 |
 
 ### Process and specification
@@ -2172,13 +2421,20 @@ Every carried-forward item, in one place, accurate as of Mission 3.10. This is t
 | # | Finding | State | Source |
 |---|---|---|---|
 | 27 | **S1** — `shared_preferences` imported outside its confined layer; `Architecture boundaries` job failing since Mission 3.8 | **CLOSED** by Mission 3.11.1 (`958c0d8`) — `main.dart` named as a second owner, full 13-package sweep green | A-067 |
-| 28 | **S2** — the empty-string identity sentinel is ambiguous on the wire | **Open.** Two guards owed: `isIdentityComplete` checked at Ch. 5.10 §1's registration (Mission 4), and a Ch. 8.3 §2 server-side rule rejecting blank identity fields (whenever Lambda handlers exist). Neither surface exists; no network call is made by this feature at all. | A-068 |
+| 28 | **S2** — the empty-string identity sentinel is ambiguous on the wire | **Half closed.** **Guard 1 CLOSED 2026-08-15 by Mission 4.2** — `ChunkMetadataDocument.isIdentityComplete` is checked before Ch. 5.10 §1 step 1, and a failing chunk is marked `failed` with a named terminal cause. It refuses every chunk recorded on a device today, which is the guard working. **Guard 2 remains open**: Ch. 8.3 §2's server-side rule rejecting blank identity fields, owed whenever Lambda handlers exist. A client-side check is a correctness measure, not a security boundary — V4 Ch. 4.8's *"never client-trusted"* applies to attribution too. | A-068 |
 | 29 | **S3** — no changelog existed, despite Ch. 11.5 §2 requiring Security entries for storage and data handling | **CLOSED** by Mission 3.11.2 (`4f992da`) — `docs/CHANGELOG.md` started and Missions 3.1–3.10 backfilled. The backfill is itself the batching Ch. 11.5 §4 warns against, done once to establish the file. | Ch. 11.5, A-068 |
 | 30 | Volume 8 Ch. 8.2 §3's inline "ADR-011" collides with this repository's ADR-011 | **Open** — documentation hazard. Cite it as "Volume 8 Chapter 8.2 §3", never as ADR-011. The decision itself is satisfied: OS-level sandbox encryption, no app-level layer owed. | A-069 |
 | 31 | CameraX `GRAPH_ERROR(ERROR_GRAPH_CONFIG)` on every session close | **Open, uninvestigated.** Fires after a successful `stopChunk()`, during `closeSession()`. Affected no run — chunk written, row committed, session completed each time. May be teardown noise or an unclean close that leaks across repeated sessions. Not assumed harmless. | A-070 §6 |
 | 32 | A device harness that drives the notifier cannot see UI wiring | **CLOSED for this case** by Mission 3.12-PRE (`09f40ac`)'s widget test; the general lesson stays open. **Third instance of "a whole checked in parts"** (cf. items 23, 26). Mission 3.8.1 returned `RESULT pass` twice while nothing in `lib/` called `start()`. Closed for this case by a widget test that taps the button; the general lesson is that an unattended harness proves the layer it drives and silently assumes the layer above calls it. | A-070 §3 |
 | 33 | `flutter install` deploys a stale artifact | **Use `flutter run`, or `flutter build` immediately before `flutter install`.** It installed Mission 3.8's pre-fix APK and reported success, causing a fix to be reported as on-device when it was not. "Install succeeded" is not evidence the change is on the device. | A-070 §4 |
-| 34 | Volumes' inline ADR citations collide with this repository's ADR numbers | **Sweep all Volumes, rather than fixing each as it is hit.** Confirmed in Volume 8 Ch. 8.2 §3 and across Volume 3 Ch. 3.2's whole inline sequence; Volume 5 Ch. 5.8's header inherits one. Each has been caught only when a mission happened to read that chapter. A single pass listing every inline `ADR-NNN` and what it actually means would turn a recurring trap into a lookup table. Not attempted in Mission 4.1 — out of scope. | A-069 |
+| 34 | Volumes' inline ADR citations collide with this repository's ADR numbers | **Sweep all Volumes, rather than fixing each as it is hit.** Confirmed in Volume 8 Ch. 8.2 §3, across Volume 3 Ch. 3.2's whole inline sequence, and inherited by Volume 5 Ch. 5.8's header. **Second instance found 2026-08-15 by Mission 4.2: Volume 5 Ch. 5.10 §2 and §4 both cite "ADR-004" for Dio's progress callbacks and cancellation tokens — this repository's ADR-004 is GoRouter; the real record is ADR-007 (network configuration).** Two missions running, a citation collision has been found by whichever chapter happened to be read, which is the pattern rather than the exception. A single pass listing every inline `ADR-NNN` and what it actually means would turn a recurring trap into a lookup table. Not attempted in 4.1 or 4.2 — out of scope for both. | A-069 |
+| 35 | **No field bandwidth-floor NFR exists** (Volume 1 Ch. 1.4) — `S3TransferClient` consequently has no send timeout | **Raising this NFR is a product decision, not an engineering one, and belongs in its own conversation rather than inside an implementation mission.** Deferred, not resolved. No number was proposed and none was guessed. The constant becomes derivable the moment the NFR exists. | A-072 |
+| 36 | Backend session registration has no implementation — `SessionRegistrar` is a named, unowned port | **Owed to whichever mission builds `features/projects_tasks/`.** Ch. 5.10 §1 step 1's URL needs a backend session id from `POST /v1/tasks/{id}/sessions`, which needs a `task_id`. `sessionRegistrarProvider` throws; a fake satisfies it in tests only. **Until this lands the pipeline cannot upload anything**, which is why 4.2's verification is against the fake rather than a real endpoint. | A-071, Ch. 4.6 §4 |
+| 37 | Guard 1 refuses 100% of chunks recorded on a device | **Correct behaviour, not a defect — and the reason it fires is items 1, 5 and 11.** Four of `MetadataIdentity`'s five fields carry the unsourced sentinel, so no real chunk can be uploaded until `features/projects_tasks/`, the `collector_id` inversion and a `device_id` source all exist. Named here so nobody reads an empty upload log as a broken pipeline. | A-068 Guard 1, A-062 §1 |
+| 38 | `LoggingInterceptor` logs full request URIs, and redaction is header-only | **Decide in Mission 4.8.** No Vump endpoint puts a secret in a query string today and Ch. 4.6 §1 uses cursor pagination, so nothing is exposed. But a future endpoint taking a signed parameter would leak it silently. `S3TransferClient` avoids the problem by not installing the interceptor at all; the general mechanism is unchanged. Not fixed in 4.2 — a change to a verified path, out of scope. | A-074 |
+| 39 | Presigned-URL redaction is a design-time mitigation and has not been re-verified against shipped code | **Mission 4.8 must confirm it as a confirmed-safe item, not assume it from Mission 4.2's report.** Four things to check: `redactUrl` applied at every log site in `S3TransferClient`; no interceptor added to it; no other path prints a presigned URL, including via an exception's `cause`; `ChunkRegistration.toString()` still omits the URL list. | A-074 |
+| 40 | `integration_test` and Ch. 9.7 §1's local mock server are still not installed | **Belongs in Mission 4.7**, and **M6's "Upload Engine Working E2E" claim in the 4.9 report depends on 4.7 actually building it.** Mission 4.2's two-tier fake is the nearest available substitute — a scripted `HttpClientAdapter` under the real client stack — but it runs in `flutter_test`, not against a server, and it is not what Ch. 9.7 §1 specifies. Explicitly not built in 4.2. | Ch. 9.7 §1, open item 20 |
+| 41 | A green check over an empty set is not evidence | **Ask, at each mission that introduces a first consumer of anything, which dormant rules it has just woken up.** `dio`'s confinement passed for eleven missions because nothing outside `core/network/` made an HTTP request; ADR-022 R3 was *"binding in writing and unenforced in fact"* while there were no features. **Fourth instance of "a whole checked in parts"** (cf. items 23, 26, 32). | A-076 |
 
 ---
 
