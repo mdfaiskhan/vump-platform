@@ -245,9 +245,9 @@ forecloses, and what must now be maintained.
 
 ## Current State
 
-`decisions/` holds ADR-001 through ADR-037.
+`decisions/` holds ADR-001 through ADR-039.
 
-All are Accepted and therefore binding.
+All are Accepted and therefore binding, except ADR-021 (**Superseded** by ADR-038) and ADR-009 (**Superseded** by ADR-039).
 
 | ADR | Decision |
 |---|---|
@@ -259,7 +259,7 @@ All are Accepted and therefore binding.
 | ADR-006 | Centralised application configuration |
 | ADR-007 | Network configuration and environment selection |
 | ADR-008 | Secure storage for secrets |
-| ADR-009 | Local database architecture |
+| ADR-009 | Local database architecture (**superseded by ADR-039**) |
 | ADR-010 | Firebase platform integration |
 | ADR-011 | S3 storage architecture |
 | ADR-012 | S3 lifecycle and retention |
@@ -271,7 +271,7 @@ All are Accepted and therefore binding.
 | ADR-018 | Environment profile as the single read surface |
 | ADR-019 | Branching strategy |
 | ADR-020 | Commit convention |
-| ADR-021 | Static analysis configuration |
+| ADR-021 | Static analysis configuration (**superseded by ADR-038**) |
 | ADR-022 | Folder architecture and import rules |
 | ADR-023 | Naming conventions |
 | ADR-024 | Documentation standards |
@@ -288,6 +288,12 @@ All are Accepted and therefore binding.
 | ADR-035 | Authenticated requests and token refresh |
 | ADR-036 | Invite-code redemption runtime (**temporary**) |
 | ADR-037 | Route guards |
+| ADR-038 | Static analysis for generated collections |
+| ADR-039 | Feature-owned Isar collections |
+
+ADR-038 supersedes ADR-021 solely to correct one section. ADR-021 claimed `isar_generator` emits its own `ignore_for_file` header; it emits none, and the claim was verified only in a directory where the rule it would have tripped is not enabled. ADR-021 is marked Superseded and left otherwise untouched, incorrect paragraph included, so the error stays legible. Everything else it decided is carried forward unchanged.
+
+ADR-039 supersedes ADR-009 on two points: the `isar` confinement now covers `core/database/` plus a feature's `data/collections/` and its `data/isar_*.dart`, and `local_task_cache` is assigned to `features/projects_tasks/`. It follows the line ADR-034 drew for Firebase — the engine belongs to `core/`, the collections belong to the feature that consumes them, which is what keeps the feature the replaceable unit. Everything else ADR-009 decided is carried forward and still binding; it is marked Superseded and left otherwise untouched.
 
 ADR-007 supersedes the networking assumptions of ADR-006 in part. ADR-006 remains Accepted and binding in every other respect.
 

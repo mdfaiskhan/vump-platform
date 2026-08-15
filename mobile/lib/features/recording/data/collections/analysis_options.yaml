@@ -1,0 +1,59 @@
+# Does not apply `public_member_api_docs` in this directory. See ADR-038.
+#
+# `isar_generator` emits no `ignore_for_file` header — unlike `freezed`, whose
+# output carries `// ignore_for_file: type=lint`. So every public member it
+# generates (schema constants, serializers, filter and sort extensions, one per
+# field) trips the rule that `../analysis_options.yaml` enables for this layer
+# under amendment A-025.
+#
+# ADR-021 assumed the opposite and said so; it was verified only against
+# `core/database/`, which has no nested configuration, so the assumption was
+# never tested where the rule is actually on. ADR-038 supersedes it.
+#
+# NOTHING IS EXCLUDED FROM ANALYSIS. `analyzer.exclude` stays empty, and every
+# other rule and the whole tightened type system still apply to the generated
+# files here. Only this one documentation lint is not applied, because a
+# generator cannot document members nobody wrote. That mattered concretely:
+# analysing this directory caught three real generator errors during Mission
+# 3.7 — an undefined `EmbeddedGpsFixSchema` and two const-map failures it
+# caused — which a blanket `*.g.dart` exclusion would have hidden.
+#
+# The scope is a directory rather than a file glob because
+# `analysis_options.yaml` offers no way to disable a rule for `*.g.dart` alone:
+# the choices are `analyzer.exclude` (globs, but removes files from analysis
+# entirely) or a nested file (scopes by directory). This directory holds only
+# the collections and the generated output they produce.
+#
+# The hand-written declarations here are documented regardless, member by
+# member — verified, not assumed.
+#
+# Five `../` segments from `lib/features/<feature>/data/collections/`:
+# collections -> data -> recording -> features -> lib -> mobile.
+include: ../../../../../analysis_options.yaml
+
+# The same root cause, a second time — see ADR-038's extension.
+#
+# `isar_generator` emits calls to Isar APIs marked `@experimental`
+# (`getByIndex`, `getByIndexSync`, `deleteByIndex`, ...) whenever a collection
+# declares `@Index`. It suppresses those the same way it suppresses everything
+# else: not at all.
+#
+# This argument is WEAKER than the documentation one above, and that is worth
+# saying plainly. Undocumented generated members are noise. An experimental-API
+# warning is a real risk signal, and this one is pointed at a genuine problem:
+# Isar 3 is unmaintained (A-029), so the experimental API cannot be expected to
+# stabilise and there is no upstream to fix it if it changes.
+#
+# It is silenced anyway because the alternative is worse. The warnings come from
+# `@Index(unique: true)` on `LocalChunk.chunkId`, which exists because Chapter
+# 5.13 §4 requires every retry to reuse the same `chunk_id` — a second row per
+# chunk breaks BR-11's duplicate prevention. Dropping the index to quiet a
+# linter would move a correctness guarantee out of the database and into
+# hand-written repository code. A uniqueness constraint the engine enforces is
+# worth more than a clean warning count.
+#
+# The residual risk is named, not resolved: ADR-038 records it alongside A-058's
+# software-encoder and flush-interval unknowns.
+analyzer:
+  errors:
+    experimental_member_use: ignore

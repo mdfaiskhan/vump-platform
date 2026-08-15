@@ -219,7 +219,9 @@ jobs:
           # ADRs; a violation is a defect, not a style preference.
           #
           #   dio                    → core/network            (ADR-007)
-          #   isar                   → core/database           (ADR-009)
+          #   isar                   → core/database
+          #                            + features/*/data/collections/
+          #                            + features/*/data/isar_*.dart   (ADR-039)
           #   flutter_secure_storage → core/storage            (ADR-008)
           #   firebase_core          → core/firebase           (ADR-010)
           #   firebase_auth          → features/auth/data      (ADR-034)
@@ -234,6 +236,19 @@ jobs:
           # keeps the Firebase *platform* in core/firebase/; a Firebase
           # *product* belongs to the module that consumes it, which is what
           # makes features/auth/ the replaceable unit rather than core/.
+          #
+          # isar has three owners, which is why its owner argument is an
+          # extended regex rather than a literal prefix. ADR-039 draws the same
+          # platform/product line inside one package: core/database/ owns the
+          # engine, its lifecycle, its migrations and its own infrastructure
+          # collections; a feature owns the collections it defines, in
+          # data/collections/, plus the one engine-named file at its data/ root
+          # that opens transactions over them. Nowhere else in data/, and
+          # nothing above data/ may name an Isar type at all.
+          #
+          # The naming prefix is deliberate: the permission is visible in the
+          # filename, the way shared_preferences_*.dart and camera_*.dart
+          # already are, rather than in a directory anyone can add a file to.
 
           status=0
 
@@ -241,7 +256,7 @@ jobs:
             package="$1"
             owner="$2"
             hits=$(grep -rl "package:${package}" lib/ --include='*.dart' 2>/dev/null \
-              | grep -v "^${owner}" || true)
+              | grep -Ev "^(${owner})" || true)
             if [ -n "$hits" ]; then
               echo "::error::${package} is imported outside ${owner}:"
               echo "$hits" | sed 's/^/  /'
@@ -252,7 +267,7 @@ jobs:
           }
 
           check dio                    lib/core/network/
-          check isar                   lib/core/database/
+          check isar                   'lib/core/database/|lib/features/[^/]+/data/collections/|lib/features/[^/]+/data/isar_[^/]*\.dart'
           check flutter_secure_storage lib/core/storage/
           check firebase_core          lib/core/firebase/
           check firebase_auth          lib/features/auth/data/

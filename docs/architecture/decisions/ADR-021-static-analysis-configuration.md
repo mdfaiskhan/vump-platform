@@ -1,6 +1,7 @@
 # ADR-021 — Static Analysis Configuration
 
-- **Status:** Accepted
+- **Status:** Superseded by ADR-038 (2026-08-15)
+- **Superseded because:** its §"Generated code is analysed, not excluded" states that `isar_generator` emits its own `ignore_for_file` header. It does not. The body below is left exactly as accepted, per governance — ADR-038 carries the correction and every other decision here forward unchanged.
 - **Date:** 2026-08-10
 - **Supersedes:** none. Widens Volume 3, Chapter 3.7 §2 — see `docs/architecture/volume-amendments.md`, amendment A-031.
 

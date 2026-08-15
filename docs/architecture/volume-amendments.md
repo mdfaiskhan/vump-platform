@@ -1509,13 +1509,117 @@ Recorded now so that whoever implements `CaptureConditionsReader` does not silen
 
 Separately, the requirement is atomic: *"in the same transaction as the chunk's own local record — both succeed or both fail together, so a chunk file can never exist locally without its metadata already alongside it"*. That transaction spans two records in a layer Mission 3.7 owns and which does not exist.
 
-**So FR-META-09 is not satisfied by this mission**, and no substitute was invented — in particular, no JSON file is written to disk, because the chapter never asks for one and inventing a second persistence mechanism would be worse than having none.
+~~**So FR-META-09 is not satisfied by this mission**~~, and no substitute was invented — in particular, no JSON file is written to disk, because the chapter never asks for one and inventing a second persistence mechanism would be worse than having none.
+
+**Section 4 closed 2026-08-15 by Mission 3.7.** The storage layer exists and **FR-META-09 is satisfied**: `IsarChunkStore.saveChunk` writes the chunk row and the metadata row in one Isar `writeTxn`, and the file is moved into Chapter 5.8 §2's layout before that transaction commits. The stale Drift name is carried forward into A-063, which finds it in Chapter 5.8 and Chapter 5.9 as well. **Sections 1, 2 and 3 above remain open** — the unsourced fields, the missing location permission, and the GPS/NFR-META-01 conflict are untouched by this mission.
 
 ### Not amendment-worthy, recorded for completeness
 
 **The codec spelling differs between volumes.** Ch. 5.2 §1's capture table says `H.264 (AVC)` and `CameraSpecification.videoCodec` transcribes `'H.264'`; Ch. 4.5 §2's wire format says `"codec": "h264"`. Both are correct for their own side — one describes an encoder, the other fixes a JSON value a backend parses — so it is translated at the boundary by `CodecWireName` rather than changing either source.
 
 **No LiDAR fields exist in Ch. 4.5's schema.** Checked because Mission 3.9 has not run: the canonical JSON contains no LiDAR group and no `has_lidar` field, so there is no forward dependency and nothing was stubbed.
+
+### A-063 — Chapter 5.8 names the wrong engine, specifies a crash-recovery mechanism this project cannot build, and Chapter 5.3 contradicts Chapter 5.6 about discarding short chunks
+
+| | |
+|---|---|
+| **Volume** | 5 — Recording Engine, Chapter 5.8 (all four sections); Ch. 5.3 §5; Ch. 5.6 §3; Ch. 5.7 §3 |
+| **Says** | The tables are *"Local Drift Tables"* on an engine header reading *"Drift (SQLite) — ADR-002, Volume 3, Chapter 3.2"*; §2 specifies a `.mp4.tmp`-until-renamed layout as *"the concrete mechanism behind Chapter 5.3's crash-recovery rule"*; Ch. 5.3 §5 discards an unrecoverable partial *"per a minimum-duration threshold"* |
+| **Should say** | The engine is **Isar** (ADR-009); the `.tmp` mechanism is **not implementable** with the camera plugin this project uses, so crash recovery covers completed chunks only; and the minimum-duration threshold both contradicts Ch. 5.6 §3 and has no number |
+| **Authority** | ADR-009 (engine), ADR-038 (collection placement), A-058 (the plugin-boundary precedent) |
+| **Class** | Documentation update, plus one unresolved product decision |
+| **Status** | Open |
+
+### 1. Drift, again — the same stale name A-062 §4 found in Chapter 5.7
+
+Chapter 5.8's header names the engine as *"Drift (SQLite)"* and cites *"ADR-002, Volume 3, Chapter 3.2"*. **ADR-009 chose Isar**, and Volume 3 Chapter 3.1's stack table naming Drift is a decision ADR-009 already superseded. Chapter 5.8 inherits the stale name from the same source Chapter 5.7 §3 did, and Chapter 5.9 §3 repeats it a third time (*"a live view … over `local_chunks.status` in Drift"*).
+
+Nothing else in the chapter depends on the engine. The three tables, their columns and the *"identical field shape to Volume 4, Chapter 4.5's JSON"* requirement all transfer unchanged — Isar stores the seven metadata groups as embedded objects, which preserves that shape more directly than a relational flattening would have.
+
+**A-062 §4 is now discharged in part.** Its two complaints were the wrong engine name and the missing storage layer. The layer exists as of Mission 3.7 and **FR-META-09 is satisfied**: `IsarChunkStore.saveChunk` writes the chunk row and the metadata row inside one `writeTxn`, and the `.mp4` is moved into place before that transaction commits, so a committed row never names a file that is not there. A-062's other three sections — the unsourced fields, the permission gap and the GPS/NFR-META-01 conflict — remain open and untouched.
+
+### 2. `local_task_cache` is not this feature's table
+
+Chapter 5.8 §1 lists four tables. Three are implemented. The fourth, `local_task_cache`, mirrors `tasks` and `task_assignments` and exists so *"C-03–C-06 render offline from last-synced data"* — screens that belong to `features/projects_tasks/`, whose `domain/`, `data/` and `application/` are still `.gitkeep`.
+
+Placing it in `features/recording/` would put one feature's read cache inside another's data layer, which is the cross-feature coupling ADR-022 R3 exists to prevent. It is **deliberately absent**, not overlooked, and it is assigned in the ADR-009 successor proposed by this mission.
+
+### 3. §2's `.tmp` crash recovery cannot be built here — a structural limit, not an implementation gap
+
+§2's layout is precise:
+
+> `{sequence_index:04d}.mp4.tmp` — in-progress write (Ch.5.4) — never treated as a valid chunk until renamed … on app relaunch, any `.tmp` file is either completed (if enough of the encode is salvageable) or deleted.
+
+**Every clause of that assumes this application chooses the in-progress path.** It does not. Chapter 5.4's encode is `camera`'s `startVideoRecording()`, and A-058 already established that the pipeline stages Chapter 5.4 describes are the plugin's internals rather than this project's code. The same boundary decides this: `VideoCaptureOptions` exposes **no output-path parameter**, so the plugin writes to a directory and a filename of its own choosing, and returns the path only when `stopVideoRecording()` completes. A partial file left by a crash therefore sits in the plugin's temp directory under a name carrying no `session_id` and no `sequence_index`.
+
+There is consequently nothing to scan for and nothing to link a found file back to. **No `.tmp` scan was implemented**, because it would search this application's tree for files that can never appear in it — a check that always passes and proves nothing is worse than no check, since it reads as coverage.
+
+What crash recovery does cover, and this is the honest split:
+
+| Chunk state at crash | Recoverable? | Why |
+|---|---|---|
+| `stopChunk()` returned before the crash | **Yes, fully** | The file is at a deterministic path, its row and metadata are committed, and `recoverableChunkIds()` returns it for re-queueing on next launch. |
+| Still recording at the crash | **No** | Unnamed, unlinked, in the plugin's temp directory. Nothing identifies it. |
+
+The second row means NFR-REL-04's *"queue state fully restored on next launch"* holds for everything that reached the queue, and the in-flight chunk is lost. **At most one chunk per crash**, bounded by Chapter 5.6's ten-minute boundary. That is the real exposure and it is not reduced by pretending otherwise.
+
+Closing it requires either an upstream `camera` change that admits an output path, a platform-channel recording implementation this project does not have, or a different plugin — the same class of choice A-058 recorded for the software-encoder guarantee, and not a decision Mission 3.7 can make alone.
+
+### 4. The minimum-duration threshold — Ch. 5.3 §5 and Ch. 5.6 §3 contradict each other, and neither states a number — ESCALATED, NOT RESOLVED
+
+Chapter 5.3 §5:
+
+> … the in-progress chunk's partial file is either recovered and finalized on next launch (if enough of the encode is intact) or **discarded per a minimum-duration threshold** — never silently uploaded as if it were a complete, valid chunk.
+
+Chapter 5.6 §3:
+
+> … a very short final chunk is still valid and still fully processed (Chapter 5.5) — **there is no minimum chunk duration below which footage is discarded**, since even a short clip may be usable data.
+
+Both cannot hold. §3's reasoning is also the stronger of the two and matches the Constitution's *"never lose a take"*: `error-handling.md` §1 states *"a failure that discards a recording is the worst outcome available"* and §"Never recover by discarding data" makes it absolute.
+
+**No number is stated anywhere in Volume 5.** "A threshold" is not a specification, and a value invented in this mission would become the de facto rule the moment it shipped.
+
+Three things are therefore true and are recorded rather than resolved:
+
+- **It is moot today.** §5's threshold governs a partial file that, per §3 above, this project can never obtain. Nothing in the code needs a number to run.
+- **It becomes live the moment recovery becomes possible.** Whoever closes §3 inherits this immediately.
+- **The conflict is a product decision, not an implementation one.** The candidate readings — that §5 is scoped only to salvaged partials and §3 to intentionally-stopped ones, or that §5 is simply wrong and should be struck — differ in what happens to real footage, which makes it the project owner's call.
+
+**Escalated. No threshold is implemented, and none is defaulted.**
+
+**Status of this sub-item, stated separately because it outlives the mission that found it:**
+
+| | |
+|---|---|
+| **Decided?** | **No.** Escalated to the project owner. Nothing in the codebase encodes a threshold, a default, or a placeholder constant. |
+| **Blocking today?** | **No.** §5's threshold applies to a salvaged partial file, and §3 above establishes that this project cannot obtain one. There is no code path that would consult a number if it existed. |
+| **When it becomes live** | The moment crash recovery for an **in-flight** chunk becomes achievable — which requires a native recording path (a platform channel that chooses its own output file, or a plugin that admits one). That work is **not deferred to a numbered mission**: no chapter assigns it and no mission owns it, so it is undeferred rather than scheduled. |
+| **What must be decided then** | Whether Ch. 5.3 §5 is scoped only to salvaged partials while Ch. 5.6 §3 governs intentionally-stopped chunks, or whether §5 is simply wrong and should be struck. The readings differ in what happens to real footage. |
+| **Default if never decided** | **Ch. 5.6 §3 governs** — no minimum, nothing discarded. It is the clause with stated reasoning, and it agrees with the Constitution's *"never lose a take"* and `error-handling.md`'s *"never recover by discarding data"*. This is the safe reading, not a decision. |
+
+### 5. Two gaps this mission leaves open — why each is deferred, and who owns closing it
+
+**Note on mission numbers below.** Missions have tracked Volume 5's chapters one for one — 5.1/5.2 → 3.1, 5.3 → 3.2, 5.4 → 3.3, 5.5 → 3.4, 5.6 → 3.5, 5.7 → 3.6, 5.8 → 3.7. Numbers given for unrun missions are **projections from that pattern, not assignments**; the chapter named in each row is the authoritative owner.
+
+#### `local_sessions.status` never becomes `complete`
+
+| | |
+|---|---|
+| **Why deferred** | Not a choice about the column — a consequence of what calls this layer. `saveChunk` is invoked per chunk and receives a `RecordingSession`, which carries `sessionId`, `zoomFactor` and `startedAt` and **nothing about whether the session has ended**. The store cannot infer completion from a chunk write; the last chunk of a session is indistinguishable from a middle one at this boundary. |
+| **Why the row is not rewritten** | Deliberate, and separate from the above. Re-putting the session on every chunk would discard any `task_id` and `collector_id` back-filled by another path — they are null today only because their sources are unbuilt (A-062) and are stored nullable precisely so they can be filled in later. |
+| **Owner** | **Chapter 5.3 (Recording Lifecycle), already implemented as Missions 3.2 and 3.4.5.** No chapter defers this; it is a gap in built code, not unbuilt work. FR-SES-02's transition belongs at the lifecycle's return to `Idle`, which is where the end of a session is actually known. |
+| **What closes it** | A wiring mission. **`ChunkStore` is not injected anywhere yet** — verified: no file outside the port, its implementation and the schema list names `ChunkStore`, `IsarChunkStore` or `RecordingSchemas`. Nothing calls `saveChunk`, and `RecordingSchemas.all` is not yet passed to `DatabaseConfig`. The same mission that connects the lifecycle to this store is the one that can also mark a session complete, because it is the first point where both halves exist. |
+| **Consequence of leaving it** | Bounded. No consumer reads the column: Chapter 5.9's queue reads `local_chunks.status`, not the session's. A stale `in_progress` misreports history rather than affecting any chunk's fate. |
+
+#### `local_chunks.s3_object_key` is stored null
+
+| | |
+|---|---|
+| **Why deferred** | Chapter 5.14 §1's key is `{org_id}/{project_id}/{task_id}/{session_id}/{sequence_index:04d}_{chunk_id}.mp4`. Three of the five components — `org_id`, `project_id`, `task_id` — have no source in this application (A-062). |
+| **Why null rather than a placeholder** | A key composed from placeholders would look deterministic, index as unique, and be wrong — and Chapter 5.13 §4 requires every retry to reuse *"the exact same deterministic S3 key"*, so a wrong key minted once would be reused forever by design. Null is the value that cannot be mistaken for a real key. Volume 4 Chapter 4.4 §6 marks the column UNIQUE and NOT NULL, which is a **backend** constraint; the row is only sent once the key exists. |
+| **Owner** | **Chapter 5.10 (Upload Pipeline) §1 step 1**, *"Register `POST /v1/sessions/{id}/chunks` → presigned multipart URLs"* — the step that needs the key and the first that cannot proceed without it. Projected Mission 3.9. |
+| **Blocked on** | `features/projects_tasks/`, which is unbuilt — its `domain/`, `data/` and `application/` are still `.gitkeep`. `TaskContext` is the port that would supply `project_id` and `task_id`; `org_id` has no identified source at all and is the harder half. |
+| **Consequence of leaving it** | The column is unreadable by anything today, because no upload path exists. It becomes blocking exactly when Chapter 5.10 runs, and not before. |
 
 ---
 

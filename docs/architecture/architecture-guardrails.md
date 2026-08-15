@@ -71,7 +71,7 @@ Every architectural invariant in force, with its authority and how it is checked
 | # | Invariant | Authority | Enforced by |
 |---|---|---|---|
 | **I1** | `dio` only in `core/network/` | ADR-007, ADR-022 §2.3 | CI `Architecture boundaries` |
-| **I2** | `isar` only in `core/database/` | ADR-009 | CI `Architecture boundaries` |
+| **I2** | `isar` only in `core/database/`, a feature's `data/collections/`, or its `data/isar_*.dart` | ADR-039 | CI `Architecture boundaries` |
 | **I3** | `flutter_secure_storage` only in `core/storage/` | ADR-008 | CI `Architecture boundaries` |
 | **I4** | `firebase_core` only in `core/firebase/` | ADR-010 | CI `Architecture boundaries` |
 | **I5** | The mobile app declares no AWS SDK package | Volume 4 Ch. 4.10 §2 | CI `AWS credential isolation` |
@@ -125,6 +125,8 @@ Every architectural invariant in force, with its authority and how it is checked
 | **I41** | `core/` never imports `features/` | ADR-022 §2, ADR-035 | A grep — **checkable now** |
 | **I42** | `cloud_functions` only in `features/auth/data/` | ADR-036 | CI `Architecture boundaries` |
 | **I43** | `cloud_firestore` only in `features/auth/data/` | ADR-036 | CI `Architecture boundaries` |
+
+**I2 widened at Mission 3.7 and is enforced again.** It read `isar` only in `core/database/` until Volume 5 Chapter 5.8's three collections were placed in the feature that owns them — a collection cannot be declared without importing the package, so the tables could satisfy the old rule or live with their feature, not both. ADR-039 supersedes ADR-009 on that clause alone and the CI check was widened to match; the job passes. **The rule did not weaken.** The engine, its lifecycle and its migrations are still `core/database/`'s exclusively, the two feature locations are a directory and a filename prefix rather than a layer, and nothing above `data/` may name an Isar type.
 
 **I42 and I43 are temporary**, and are the only invariants in this register with an expiry: both packages leave the project when ADR-036's runtime is retired at Mission 6/7. They are registered anyway — an unenforced boundary is not cheaper for being short-lived, and the confinement is what keeps the retirement a deletion of one directory rather than a hunt.
 
@@ -253,14 +255,20 @@ check() {  # check <label> <grep output>
 }
 
 # I1–I4, I39–I43 · each third-party package confined to the module that owns it
-for p in "dio core/network" "isar core/database" \
-         "flutter_secure_storage core/storage" "firebase_core core/firebase" \
-         "firebase_auth features/auth/data" \
-         "google_sign_in features/auth/data"; do
+for p in "dio lib/core/network/" \
+         "flutter_secure_storage lib/core/storage/" \
+         "firebase_core lib/core/firebase/" \
+         "firebase_auth lib/features/auth/data/" \
+         "google_sign_in lib/features/auth/data/"; do
   set -- $p
-  check "$1 confined to lib/$2/" \
-    "$(grep -rl "package:$1" lib --include='*.dart' | grep -v "^lib/$2/" || true)"
+  check "$1 confined to $2" \
+    "$(grep -rl "package:$1" lib --include='*.dart' | grep -Ev "^$2" || true)"
 done
+
+# I2 · isar has three owners (ADR-039), so its owner is a regex
+check "isar confined to its three owners" \
+  "$(grep -rl 'package:isar' lib --include='*.dart' \
+     | grep -Ev '^(lib/core/database/|lib/features/[^/]+/data/collections/|lib/features/[^/]+/data/isar_[^/]*\.dart)' || true)"
 
 # I41 · core/ never imports features/
 check "core/ does not import features/" \
