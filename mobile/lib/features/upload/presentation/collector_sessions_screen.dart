@@ -2,11 +2,14 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:mobile/app/theme/app_status_colors.dart';
 import 'package:mobile/core/queue/queued_chunk.dart';
 import 'package:mobile/core/time/providers/clock_provider.dart';
+import 'package:mobile/features/upload/application/upload_dispatcher_status_notifier.dart';
 import 'package:mobile/features/upload/application/upload_progress_notifier.dart';
 import 'package:mobile/features/upload/application/upload_queue_notifier.dart';
 import 'package:mobile/features/upload/domain/entities/chunk_upload_progress_snapshot.dart';
+import 'package:mobile/features/upload/domain/entities/upload_dispatcher_status.dart';
 import 'package:mobile/features/upload/presentation/widgets/chunk_row.dart';
 
 /// C-11 — Upload / Sync Status.
@@ -69,9 +72,21 @@ class _CollectorSessionsScreenState
       uploadProgressNotifierProvider,
     );
     final DateTime now = ref.read(clockProvider).now();
+    final UploadDispatcherStatus dispatcher = ref.watch(
+      uploadDispatcherStatusProvider,
+    );
+
     return Scaffold(
       appBar: AppBar(title: const Text('Upload status')),
-      body: _body(queue, progress, now),
+      body: Column(
+        children: <Widget>[
+          // Above the list, never inside a row. A dispatcher that cannot run
+          // is a fact about the screen, not about any one chunk - painting it
+          // onto the pills would say something false about each of them.
+          if (dispatcher.isHalted) const _UploadsHaltedBanner(),
+          Expanded(child: _body(queue, progress, now)),
+        ],
+      ),
     );
   }
 
@@ -137,6 +152,74 @@ class _CollectorSessionsScreenState
           ],
         );
       },
+    );
+  }
+}
+
+/// Says that uploads are not running at all, without inventing a chunk cause.
+///
+/// ## What it can honestly claim, and what it cannot
+///
+/// The system-level fact is knowable and true: the dispatcher stopped and no
+/// chunk will be attempted this launch. So the banner says exactly that, and
+/// states the guarantee BR-08 and NFR-REL-04 actually make — nothing is lost,
+/// the files stay on the device.
+///
+/// **It does not fully satisfy Chapter 2.9.** §2 principle 1 wants *"the
+/// specific cause and the specific fix"* and §4.3 wants *"a single, specific
+/// recovery action"*. Neither exists here: the cause is that the upload path
+/// is unbuilt (open item 36) and there is nothing a Collector can do about it.
+/// Naming the real cause would put `sessionRegistrarProvider` in front of a
+/// Collector, which is a log line rather than copy.
+///
+/// So it names what is and is not working, gives the only true action
+/// available — keep recording, it is safe — and stops there. Amendment A-094
+/// records the shortfall rather than papering over it.
+class _UploadsHaltedBanner extends StatelessWidget {
+  const _UploadsHaltedBanner();
+
+  @override
+  Widget build(BuildContext context) {
+    final AppStatusColors status = Theme.of(
+      context,
+    ).extension<AppStatusColors>()!;
+    return Semantics(
+      liveRegion: true,
+      container: true,
+      child: Container(
+        width: double.infinity,
+        color: status.warning,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Icon(Icons.cloud_off_outlined, size: 18, color: status.onWarning),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Text(
+                    "Uploads aren't running.",
+                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                      color: status.onWarning,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    'Nothing is lost — recorded chunks stay on this device '
+                    'until uploads can start again. You can keep recording.',
+                    style: Theme.of(
+                      context,
+                    ).textTheme.bodySmall?.copyWith(color: status.onWarning),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

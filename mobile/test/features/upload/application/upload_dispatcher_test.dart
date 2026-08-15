@@ -54,6 +54,7 @@ void main() {
   late _FakeUploadSource source;
   late _FakeConnectivity connectivity;
   late FakeClock clock;
+  late int halted;
 
   UploadDispatcher build({
     int concurrency = UploadDispatcher.defaultConcurrency,
@@ -64,6 +65,7 @@ void main() {
       connectivity: connectivity,
       clock: clock,
       serviceHost: host,
+      onHalted: () => halted += 1,
       uploadNext: uploads.next,
       logger: AppLogger(environment: AppEnvironment.production),
       concurrency: concurrency,
@@ -80,6 +82,7 @@ void main() {
     source = _FakeUploadSource();
     connectivity = _FakeConnectivity();
     clock = FakeClock();
+    halted = 0;
   });
 
   group('concurrency — Ch. 5.11 §3', () {
@@ -666,6 +669,52 @@ void main() {
       await pumpEventQueue();
 
       expect(uploads.calls, 1, reason: 'uploads continue');
+    });
+  });
+  group('open item 60 — a fault is reported, a teardown is not', () {
+    test('a wiring fault reports halted', () async {
+      uploads.throwOnCall = true;
+      final UploadDispatcher dispatcher = build();
+      dispatcher.start();
+
+      queue.push(queued(1));
+      await pumpEventQueue();
+
+      expect(halted, 1, reason: 'the Collector must be able to see this');
+      expect(dispatcher.inFlight, 0);
+    });
+
+    test('a broken queue stream reports halted', () async {
+      build().start();
+
+      queue.fail(StateError('the watch died'));
+      await pumpEventQueue();
+
+      expect(halted, 1);
+    });
+
+    test('a deliberate shutDown does NOT report halted', () async {
+      // Normal teardown runs on every dispose. A banner there would be noise,
+      // and worse, it would teach the Collector to ignore the real one.
+      final UploadDispatcher dispatcher = build();
+      dispatcher.start();
+      await pumpEventQueue();
+
+      await dispatcher.shutDown();
+
+      expect(halted, 0);
+    });
+
+    test('a normal run reports nothing', () async {
+      final UploadDispatcher dispatcher = build(concurrency: 1);
+      dispatcher.start();
+
+      queue.push(queued(1));
+      await pumpEventQueue();
+      uploads.complete(const UploadOutcome.complete(chunkId: 'chunk-0'));
+      await pumpEventQueue();
+
+      expect(halted, 0);
     });
   });
 }

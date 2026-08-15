@@ -14,6 +14,7 @@ import 'package:mobile/core/time/providers/clock_provider.dart';
 import 'package:mobile/core/upload/interfaces/chunk_upload_source.dart';
 import 'package:mobile/core/upload/providers/upload_ports.dart';
 import 'package:mobile/features/upload/application/chunk_upload_pipeline.dart';
+import 'package:mobile/features/upload/application/upload_dispatcher_status_notifier.dart';
 import 'package:mobile/features/upload/application/upload_progress_notifier.dart';
 import 'package:mobile/features/upload/application/upload_queue_notifier.dart';
 import 'package:mobile/features/upload/domain/entities/retry_schedule.dart';
@@ -80,6 +81,7 @@ class UploadDispatcher {
     required this._uploadNext,
     required this._logger,
     required this._source,
+    this.onHalted,
     required this._connectivity,
     required this._clock,
     RetrySchedule? schedule,
@@ -98,6 +100,18 @@ class UploadDispatcher {
   /// `core/` and `shared/` by ADR-022, not to a feature, and reaching for it
   /// here to render one string would be the wrong trade.
   static const String notificationTitle = 'Upload in progress';
+
+  /// Called when the dispatcher stops on a **fault**, so something can tell
+  /// the Collector uploads are not running.
+  ///
+  /// Deliberately not called by [shutDown], which is also how the app tears
+  /// down normally — a banner on every dispose would be noise, and worse, it
+  /// would teach the Collector to ignore it. Only the two unrecoverable paths
+  /// report: a pipeline that cannot be constructed, and a broken queue stream.
+  ///
+  /// Open item 60: before this existed the dispatcher stopped silently and a
+  /// real chunk showed an amber "Queued" pill indefinitely.
+  final void Function()? onHalted;
 
   final ChunkQueueSource _queue;
   final ChunkUploadSource _source;
@@ -155,6 +169,9 @@ class UploadDispatcher {
           error: error,
           stackTrace: stackTrace,
         );
+        if (!_shutDown) {
+          onHalted?.call();
+        }
         unawaited(shutDown());
       },
     );
@@ -333,6 +350,13 @@ class UploadDispatcher {
         error: failure,
         stackTrace: trace,
       );
+      // Guarded on `_shutDown` so a fault that both in-flight runners hit
+      // reports once rather than once each. The notifier behind this is
+      // idempotent, but a system-level signal firing per runner is a shape
+      // that misleads whoever reads it next.
+      if (!_shutDown) {
+        onHalted?.call();
+      }
       await shutDown();
       return;
     }
@@ -564,6 +588,11 @@ final Provider<UploadDispatcher> uploadDispatcherProvider =
       (Ref ref) => UploadDispatcher(
         queue: ref.watch(chunkQueueSourceProvider),
         source: ref.watch(chunkUploadSourceProvider),
+        // Bridges the dispatcher's own knowledge to something C-11 can watch.
+        // The class stays framework-free; this closure owns the seam, exactly
+        // as it does for progress reporting below.
+        onHalted: () =>
+            ref.read(uploadDispatcherStatusProvider.notifier).markHalted(),
         connectivity: ref.watch(connectivitySourceProvider),
         clock: ref.watch(clockProvider),
         serviceHost: ref.watch(uploadServiceHostProvider),

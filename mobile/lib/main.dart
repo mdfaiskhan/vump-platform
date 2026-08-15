@@ -43,6 +43,7 @@ import 'package:mobile/features/recording/data/shared_preferences_wide_angle_eli
 import 'package:mobile/features/recording/data/unavailable_capture_conditions_reader.dart';
 import 'package:mobile/features/recording/data/unsourced_task_context.dart';
 import 'package:mobile/features/upload/application/upload_dispatcher.dart';
+import 'package:mobile/features/upload/application/upload_dispatcher_status_notifier.dart';
 import 'package:mobile/features/upload/application/upload_queue_notifier.dart';
 import 'package:mobile/features/upload/data/foreground_upload_service_host.dart';
 import 'package:path_provider/path_provider.dart';
@@ -460,6 +461,9 @@ void _startUploadDispatcher(ProviderContainer container, AppLogger logger) {
       error: error,
       stackTrace: stackTrace,
     );
+    // The dispatcher never ran, so it cannot report its own fault. C-11 must
+    // still be able to say uploads are not running - open item 60.
+    container.read(uploadDispatcherStatusProvider.notifier).markHalted();
   }
 }
 

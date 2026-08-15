@@ -10,7 +10,9 @@ import 'package:mobile/core/queue/interfaces/chunk_queue_source.dart';
 import 'package:mobile/core/queue/queued_chunk.dart';
 import 'package:mobile/core/time/interfaces/clock.dart';
 import 'package:mobile/core/time/providers/clock_provider.dart';
+import 'package:mobile/features/upload/application/upload_dispatcher_status_notifier.dart';
 import 'package:mobile/features/upload/application/upload_queue_notifier.dart';
+import 'package:mobile/features/upload/domain/entities/upload_dispatcher_status.dart';
 import 'package:mobile/features/upload/presentation/collector_sessions_screen.dart';
 
 import '../../../core/time/fakes/fake_clock.dart';
@@ -42,7 +44,11 @@ void main() {
 
   late ProviderContainer container;
 
-  Future<void> pump(WidgetTester tester, _FakeQueue queue) async {
+  Future<void> pump(
+    WidgetTester tester,
+    _FakeQueue queue, {
+    bool halted = false,
+  }) async {
     opened.add(queue);
     container = ProviderContainer(
       overrides: <Override>[
@@ -51,6 +57,9 @@ void main() {
       ],
     );
     addTearDown(container.dispose);
+    if (halted) {
+      container.read(uploadDispatcherStatusProvider.notifier).markHalted();
+    }
     await tester.pumpWidget(
       UncontrolledProviderScope(
         container: container,
@@ -203,6 +212,66 @@ void main() {
 
     expect(find.byType(LinearProgressIndicator), findsNothing);
     expect(find.text('Retry Chunk'), findsNothing);
+  });
+  group('open item 60 — a halted dispatcher is visible, not silent', () {
+    testWidgets('no banner while the dispatcher is running', (
+      WidgetTester tester,
+    ) async {
+      await pump(
+        tester,
+        _FakeQueue(<QueuedChunk>[chunk(0, ChunkUploadStatus.queued)]),
+      );
+
+      expect(find.textContaining("Uploads aren't running"), findsNothing);
+    });
+
+    testWidgets('a banner appears once it halts', (WidgetTester tester) async {
+      await pump(
+        tester,
+        _FakeQueue(<QueuedChunk>[chunk(0, ChunkUploadStatus.queued)]),
+        halted: true,
+      );
+
+      expect(find.text("Uploads aren't running."), findsOneWidget);
+      expect(find.textContaining('Nothing is lost'), findsOneWidget);
+    });
+
+    testWidgets('the chunk keeps its own status — no fifth pill state', (
+      WidgetTester tester,
+    ) async {
+      // The banner is a screen-level fact. Painting it onto the pill would
+      // say something false about the chunk, which is queued and fine.
+      await pump(
+        tester,
+        _FakeQueue(<QueuedChunk>[chunk(0, ChunkUploadStatus.queued)]),
+        halted: true,
+      );
+
+      expect(find.text('Queued'), findsOneWidget);
+    });
+
+    testWidgets('it shows over an empty queue too', (
+      WidgetTester tester,
+    ) async {
+      // The Collector should learn uploads are down *before* recording more,
+      // not only once something is waiting.
+      await pump(tester, _FakeQueue(<QueuedChunk>[]), halted: true);
+
+      expect(find.text("Uploads aren't running."), findsOneWidget);
+      expect(find.text('Nothing to upload yet.'), findsOneWidget);
+    });
+
+    testWidgets('once halted it stays halted', (WidgetTester tester) async {
+      await pump(tester, _FakeQueue(<QueuedChunk>[]), halted: true);
+
+      container.read(uploadDispatcherStatusProvider.notifier).markHalted();
+      await tester.pump();
+
+      expect(
+        container.read(uploadDispatcherStatusProvider),
+        UploadDispatcherStatus.halted,
+      );
+    });
   });
 }
 
