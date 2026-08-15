@@ -18,6 +18,7 @@ import 'package:mobile/features/recording/data/collections/local_chunk_metadata.
 import 'package:mobile/features/recording/data/collections/local_session.dart';
 import 'package:mobile/features/recording/domain/entities/chunk_metadata.dart';
 import 'package:mobile/features/recording/domain/entities/chunk_processing_job.dart';
+import 'package:mobile/features/recording/domain/entities/cleanable_chunk.dart';
 import 'package:mobile/features/recording/domain/entities/recording_session.dart';
 import 'package:mobile/features/recording/domain/repositories/chunk_store.dart';
 
@@ -227,9 +228,118 @@ class IsarChunkStore
   Future<List<String>> orphanedChunkIds() async {
     final List<LocalChunk> rows = await _isar.localChunks.where().findAll();
     return rows
+        // Chapter 5.15's sweep deliberately removes files and records the
+        // removal on the row. Without this exclusion every successful cleanup
+        // would report itself as an orphan, and the one signal that means
+        // "something deleted a file behind our back" would be buried under
+        // the deletions this application performed on purpose.
+        .where((LocalChunk row) => row.localDeletedAt == null)
         .where((LocalChunk row) => !File(row.localFilePath).existsSync())
         .map((LocalChunk row) => row.chunkId)
         .toList();
+  }
+
+  @override
+  Future<List<CleanableChunk>> cleanableChunks({required int limit}) async {
+    try {
+      final List<LocalChunk> rows = await _isar.localChunks
+          .filter()
+          .statusEqualTo(ChunkUploadStatus.complete.wireName)
+          .localDeletedAtIsNull()
+          .findAll();
+
+      // Chapter 5.9 §2's order, so a backlog drains in the order it built up.
+      // Session start times live on the session rows; Isar has no joins, so
+      // they are resolved here exactly as claimNext does.
+      final List<LocalSession> sessions = await _isar.localSessions
+          .where()
+          .findAll();
+      final Map<String, DateTime> startedAt = <String, DateTime>{
+        for (final LocalSession session in sessions)
+          session.sessionId: session.startedAt,
+      };
+
+      rows.sort((LocalChunk a, LocalChunk b) {
+        final DateTime? aStart = startedAt[a.sessionId];
+        final DateTime? bStart = startedAt[b.sessionId];
+        if (aStart != null && bStart != null) {
+          final int bySession = aStart.compareTo(bStart);
+          if (bySession != 0) {
+            return bySession;
+          }
+        }
+        return a.sequenceIndex.compareTo(b.sequenceIndex);
+      });
+
+      return rows
+          .take(limit)
+          .map(
+            (LocalChunk row) => CleanableChunk(
+              chunkId: row.chunkId,
+              localFilePath: row.localFilePath,
+              fileSizeBytes: row.fileSizeBytes,
+            ),
+          )
+          .toList();
+    } catch (error, stackTrace) {
+      throw StorageException(
+        errorCode: ErrorCode.storageReadFailed,
+        message: 'The chunks eligible for cleanup could not be read.',
+        cause: error,
+        stackTrace: stackTrace,
+      );
+    }
+  }
+
+  @override
+  Future<bool> deleteChunkFile(String chunkId) async {
+    final LocalChunk? row = await _isar.localChunks.getByChunkId(chunkId);
+
+    // BR-08, enforced at the last possible moment rather than trusted from the
+    // caller. Chapter 5.15 §5: never on age, never on disk pressure, never on
+    // any heuristic that is not backend-confirmed Complete. A caller that
+    // passed the wrong id gets a no-op, not a deleted file.
+    if (row == null ||
+        row.status != ChunkUploadStatus.complete.wireName ||
+        row.localDeletedAt != null) {
+      return false;
+    }
+
+    // The file goes first, and the row is marked only if that succeeded.
+    //
+    // The other order would be worse in the way that matters. A row marked
+    // deleted whose file survived is a permanent leak: nothing looks at that
+    // file again, because `cleanableChunks` excludes soft-deleted rows and
+    // `orphanedChunkIds` now excludes them too. A file deleted whose row was
+    // not marked is picked up by the next sweep and marked then — the failure
+    // costs one retry rather than one orphaned 610 MB file.
+    final File file = File(row.localFilePath);
+    try {
+      // existsSync rather than exists: `avoid_slow_async_io` (ADR-021) and
+      // `orphanedChunkIds` above already takes the same route.
+      if (file.existsSync()) {
+        await file.delete();
+      }
+    } on FileSystemException catch (error, stackTrace) {
+      throw StorageException(
+        errorCode: ErrorCode.storageWriteFailed,
+        message: 'The chunk file could not be deleted.',
+        cause: error,
+        stackTrace: stackTrace,
+      );
+    }
+
+    await _write(chunkId, 'The chunk could not be marked cleaned.', (
+      LocalChunk target,
+    ) {
+      // Chapter 5.15 §2 removes "the raw video file (and its local_chunks
+      // row's file reference)". localFilePath is left as written and
+      // localDeletedAt is the authoritative marker — blanking the path would
+      // put an empty-string sentinel in a column that is otherwise always a
+      // real path, which is the ambiguity A-068 exists to condemn. A-087.
+      target.localDeletedAt = DateTime.now();
+    });
+    return true;
   }
 
   // ---------------------------------------------------------------------
