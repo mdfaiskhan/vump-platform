@@ -958,7 +958,7 @@ So the chapter whose stated purpose is turning Volume 1's prose into measurable 
 | **Should say** | HTTP **429 Too Many Requests** is a 4xx that is explicitly a "try later", and is retryable with backoff, honouring `Retry-After`. Every other 4xx is terminal as the chapter states |
 | **Authority** | ADR-025 |
 | **Class** | Documentation update |
-| **Status** | Open |
+| **Status** | **CLOSED in code 2026-08-16 by Mission 4.4.** `ChunkUploadPipeline._classify` now maps HTTP 429 to `transportFailure` — transient — ahead of the blanket 4xx branch, so it takes Chapter 5.13 §2's backoff instead of surfacing as Failed. Two halves remain open: the Volume text still reads as a blanket 4xx rule, and `Retry-After` is **not** honoured because Dio's exception does not carry response headers through the S3 transfer path. §2's jitter already separates a batch that rate-limited together, so the header would refine the delay rather than enable the retry |
 
 `error-handling.md` §16 classifies `NETWORK_RATE_LIMITED` — the code `ErrorInterceptor` maps HTTP 429 to — as **retryable**, on the ground that a 429 is *"explicitly a 'try later'"*. Chapter 5.13 §1's rule is written as a blanket statement about 4xx and would make it terminal.
 
@@ -2463,7 +2463,120 @@ Recorded so the gap is visible rather than inferred from an absence.
 
 ---
 
-## Consolidated open items — A-057 through A-080
+### A-081 — Chapter 5.12 §2's ConnectivityService is implemented by the feature that does not consume it
+
+| | |
+|---|---|
+| **Volume** | 5, Chapter 5.12 §2 |
+| **Says** | *"A dedicated platform service (Volume 3, Chapter 3.4) subscribes to the OS-level network reachability API and exposes a simple online/offline signal to the rest of the app — the Upload Queue (Chapter 5.9) and Background Upload dispatcher (Chapter 5.11) both listen to it, but neither polls it independently, avoiding duplicated battery cost"* |
+| **Class** | Placement decision, recorded rather than corrected |
+| **Date** | 2026-08-16, Mission 4.4 |
+
+`connectivity_plus` has been confined to `features/recording/data/` since Mission 3.3, because FR-CHK-04's Pre-Recording Checklist was its only consumer. Chapter 5.12's consumer is `features/upload/`, and ADR-022 R3 forbids it importing a sibling feature.
+
+**Resolution: ADR-040's pattern, a fifth time.** `core/connectivity/` holds `ConnectivityStatus` and `ConnectivitySource`; `features/recording/data/ConnectivityPlusConnectivitySource` satisfies it; `features/upload/`'s dispatcher consumes it; neither feature imports the other. `core/connectivity/` is added to the CI check that a contract module names no feature, verified by deliberate breakage.
+
+### The asymmetry, stated rather than glossed
+
+**`features/recording/` now supplies a signal it does not itself consume through this contract.** That is the most lopsided instance of ADR-040 so far — the other four had the implementing feature as a genuine stakeholder in the data.
+
+It was accepted rather than corrected. The alternative is moving the package to `core/connectivity/`, which V3 Chapter 3.4's "Platform Services" layer would suggest — except that layer is the five-layer model **A-038 already superseded**, and the move would edit the checklist path Mission 3 verified on hardware in order to relocate a dependency that is already behind a port. The asymmetry is a naming discomfort; the edit is a risk to working code.
+
+### §2's "neither polls it independently" is satisfied at the plugin, not at the port
+
+There are two ports above `connectivity_plus`, and they ask different questions. `NetworkReader.current()` returns a *kind* (wifi/cellular/none) once, because FR-CHK-04's sentence differs by kind. `ConnectivitySource.watch()` streams a *transition*, because §4's trigger is reconnection and nothing in 5.12 or 5.13 branches on kind.
+
+The composition root passes **one `Connectivity` instance to both**, so there is a single plugin channel and a single platform subscription beneath the two ports. That is the cost §2 is actually about. `connectivity_plus` therefore gains `main.dart` as a second owner in the confinement rule, on exactly the precedent `shared_preferences` set in A-067.
+
+---
+
+### A-082 — Two fields were added to `local_chunks` without a schemaVersion bump
+
+| | |
+|---|---|
+| **Volume** | Not a Volume finding — `DatabaseConstants.schemaVersion` against ADR-009's migration mechanism |
+| **Class** | Decision recorded, so the absent migration is not read as an oversight |
+| **Date** | 2026-08-16, Mission 4.4 |
+
+Chapter 5.13 §2's six-attempt budget needs somewhere to live. `local_chunks` gains `uploadAttemptCount` (defaulted `0`) and `nextAttemptAt` (nullable).
+
+**No `schemaVersion` bump, and no migration**, because `DatabaseConstants.schemaVersion`'s own doc says not to: *"Increment only when a change requires existing data to be transformed. Adding a collection or a nullable property does not qualify — Isar handles those implicitly."* Both additions are that kind — Isar returns the default for a property absent from an existing record.
+
+The mission's brief originally specified a bump to 2 with a migration, and it was withdrawn on the ground above. Two further reasons made the withdrawal easy: there are **zero** `Migration` implementations in this project, so the first would have been a no-op written to satisfy a version number and would have established the precedent that additive fields bump the version; and it would have run untested against real chunk rows already on a device Mission 3 verified.
+
+### Why the counter is persisted at all
+
+In-memory would have needed no schema change. It was rejected because the budget would reset on every launch: a chunk that had spent all six attempts would silently receive six more after a restart, which on a crash-looping device is an unbounded retry loop wearing a bounded one's clothes. NFR-REL-04 already requires the queue's state to survive a force-close, and the attempt count is part of that state.
+
+---
+
+### A-083 — Chapter 5.13 §2's five-minute cap cannot be reached, and must not be "fixed"
+
+| | |
+|---|---|
+| **Volume** | 5, Chapter 5.13 §2 |
+| **Says** | *"Exponential backoff: 5s, 10s, 20s, 40s, capped at 5 minutes between attempts. Up to 6 automatic attempts per chunk"* |
+| **Class** | Inert clause, recorded so it is not repaired into a behaviour change |
+| **Date** | 2026-08-16, Mission 4.4 |
+
+Six attempts have **five** gaps between them, so the delays actually drawn are 5, 10, 20, 40 and 80 seconds. The largest is **80 s against a 300 s cap**. The cap is unreachable by construction.
+
+It is implemented exactly as written anyway. The clause is not wrong, it is inert — and a schedule that ever grew past six attempts would need it. This entry exists because the natural reaction to noticing a dead clause is to make it live, and doing that here would mean stretching agreed retry behaviour to satisfy an arithmetic curiosity. A test pins the largest reachable delay at 80 s and asserts it is below the cap.
+
+**An off-by-one was found and fixed by writing that test.** The first implementation treated `attemptsSoFar` as a zero-based index, so the first failure waited 10 s rather than §2's 5 s. The chapter's own sequence is what caught it.
+
+---
+
+### A-084 — NFR-REL-02's "resume without restarting from zero" is not satisfied
+
+| | |
+|---|---|
+| **Volume** | 1, Chapter 1.4 §2 (NFR-REL-02); Volume 5, Chapter 5.13 §4 |
+| **Says** | NFR-REL-02: *"Chunk uploads shall be resumable after any interruption (app kill, network loss, device restart) — 100% of interrupted uploads resume without restarting from zero."* Ch. 5.13 §4: every retry reuses *"where possible the same in-progress multipart upload ID"* |
+| **Reality** | Every retry restarts from part 1 |
+| **Class** | Requirement not met, named rather than discovered later |
+| **Date** | 2026-08-16, Mission 4.4 |
+
+Nothing stores a multipart upload ID or a record of which parts completed. `ChunkRegistration` carries `uploadUrls` and nothing else, and `ChunkUploadApiImpl` uploads from index 0 on every attempt.
+
+**Deliberately not built in Mission 4.4.** Resuming a multipart upload requires the backend to return an existing `uploadId` and the set of parts it already holds — Volume 4 territory, reachable only through `SessionRegistrar`, which has no implementation (open item 36). Local part-tracking alone would be state with no counterpart on the other side, which is the state-without-policy mistake `ChunkUploadSource`'s own contract warns against.
+
+**What *is* satisfied**: the retry reuses the exact same `chunk_id` and the same deterministic S3 key, so BR-11's no-duplicate guarantee holds. What is missed is only the "without restarting from zero" half — a retry re-sends bytes it already sent. On a 610 MB chunk over a field connection that is the expensive half.
+
+### Two chapter-level citation drifts found alongside it
+
+Distinct from open item 34, which is about inline `ADR-NNN` numbers colliding with this repository's ADRs. These are Volume-to-Volume **chapter** references that point at the wrong chapter:
+
+| Where | Points at | Should point at |
+|---|---|---|
+| V3 Ch. 3.3 §6 — *"Exact retry/backoff timing and duplicate-prevention mechanism"* | Volume 5.10 | **5.13** (retry) and **5.14** (the key) |
+| V1 NFR-REL-03's Target column — *"Verified via idempotency checks"* | Volume 5.10 | **5.13 §4** and **5.14 §3** |
+
+Volume 5.10 is the Upload Pipeline and contains neither the backoff schedule nor the key derivation. Two independent documents making the same wrong reference suggests a single stale source rather than two typos. Recorded here rather than as a new open item, because the fix is a documentation pass someone will do once.
+
+---
+
+### A-085 — Connectivity does not revive a `failed` chunk, because nothing stores why it failed
+
+| | |
+|---|---|
+| **Volume** | 5, Chapter 5.13 §2; Chapter 5.12 §4 |
+| **Says** | An exhausted chunk *"waits for either connectivity/context to change (Chapter 5.12) or a manual retry (FR-UPL-07)"* |
+| **Implemented** | An online transition clears backoff deadlines on **`queued`** rows only |
+| **Class** | Partial implementation, with the blocker named |
+| **Date** | 2026-08-16, Mission 4.4 |
+
+§2's wording reads as connectivity reviving a `failed` chunk as well as releasing a deferred one. Only the second is implemented.
+
+**The reason is that `local_chunks` stores a status but not a failure cause.** Reviving every `failed` chunk on every reconnection would re-attempt the terminal ones too — a 4xx rejection, a missing local file, A-068's incomplete identity — against Chapter 5.13 §1's *"not retried automatically"*. Reviving only the transiently-failed ones needs a stored cause, and adding one now would be a third field with no consumer beyond a clause this mission is not otherwise implementing.
+
+**The Collector is not stuck.** FR-UPL-07's manual Retry Chunk resets the counter and clears the deadline (§3), which is the escape §2 offers alongside connectivity. What is missing is the automatic half.
+
+Closing it needs a `failureCause` column on `local_chunks` and a rule for which causes are revivable — which is the same information C-11 would need to render a specific cause per row, so the two are worth doing together rather than separately.
+
+---
+
+## Consolidated open items — A-057 through A-085
 
 Every carried-forward item, in one place. Accurate as of **Mission 4.3**; originally the seed for Mission 3.12's status report, and re-checked at the close of each sub-mission block per item 23.
 
@@ -2552,6 +2665,11 @@ Every carried-forward item, in one place. Accurate as of **Mission 4.3**; origin
 | 49 | ~~The `Environment consistency` job has never been capable of passing~~ | **RESOLVED 2026-08-16 by Mission 4.3.10 (`3eec42e`)** — the job now overrides the workflow default with `working-directory: .`, so its repo-root-relative paths resolve. Broken from the commit that created it (`63d97e5`) until now: `infrastructure/aws/config/environments.json` became `mobile/infrastructure/…` and `mobile/lib/app/config/app_environment.dart` became `mobile/mobile/lib/…`, and it died on `FileNotFoundError` before evaluating a single assertion — so across ~78 commits it never once compared Dart, JSON and shell. **Now verified to actually check**, not merely to pass: a planted region drift (`ap-south-1`→`us-east-1`) and a planted bucket drift (staging→production) are each caught, and the clean tree passes either side. The model it guards was correct all along. | Mission 4.3.7, 4.3.10, `63d97e5` |
 | 50 | ~~SECURITY — the `Secret scan` job reports green while scanning 79% of the repository~~ | **RESOLVED 2026-08-16 by Mission 4.3.10 (`3eec42e`)** — same one-line override. `git ls-files` and `git grep -- .` are both cwd-scoped, so under the `mobile` default the job saw **444 of 561** tracked files and **zero** under `infrastructure/`, where the AWS configuration lives, while reporting green. It now sees **561 files, 18 of them under `infrastructure/`**. **Verified by planting secrets where the job previously could not look**: a fake `AKIA…` key and a PEM private-key banner line, each added to `infrastructure/aws/env.sh`, are each caught; both removed and the tree re-verified clean. (The banner is described rather than quoted: spelling it out here made this file itself match the scan — the same self-matching fault as A-075 and item 47, and the third time a check has fired on a true statement about itself.) No real credential was ever present — the finding was the absent coverage. Item 41's *"a green check over an empty set is not evidence"* in its most literal form, and the reason a hollow green is worse than a red. | Mission 4.3.7, 4.3.10, ADR-016 |
 | 51 | ~~Root cause of 49 and 50 — the workflow-level `working-directory` default~~ **Root cause of 49, 50 and a third manifestation: `Commit convention`** | **RESOLVED 2026-08-16 by Mission 4.3.10 (`3eec42e`), option (a).** Each of the three repo-scoped jobs overrides the default with `working-directory: .`; the default is untouched for the six Flutter jobs. **The third manifestation, found 2026-08-16 by Mission 4.3.9**: `Commit convention` is the only job with no checkout — by design, with `permissions: {}` — so `mobile/` did not exist on the runner and the step **could not start at all**. It failed with a process-start error that reads as *"your PR title is wrong"*, and the title (`feat(features/upload): implement Volume 5 Chapters 5.9-5.11`) was confirmed byte-for-byte correct against the validator extracted verbatim from `ci.yml` — 59 chars, no non-ASCII, exit 0. **A check that reports the author's mistake when the fault is its own is worse than one that simply crashes.** Option (b), dropping the default, would have touched all nine jobs to fix three. Option (c), mobile-relative paths, would not have fixed `Commit convention` at all and would have encoded the repo layout into a security scan's path strings — which is how item 50 happened. **No checkout was added**: `$GITHUB_WORKSPACE` is created by the runner before any step, so `.` is a real directory with nothing checked out, and adding one would have forced `permissions: {}` to widen to `contents: read`, contradicting the job's stated design. Verified in an empty temp directory containing no repository. All three fixes were verified by deliberate breakage in both directions, as this item required. | Mission 4.3.7, 4.3.9, 4.3.10 |
+| 52 | **NFR-REL-02 is not met — every retry re-sends the whole chunk** | **Blocked on open item 36**, the same `SessionRegistrar`/backend gap that blocks the pipeline itself. Resuming a multipart upload needs the backend to return an existing `uploadId` and the parts it already holds; local part-tracking alone would be state with no counterpart. BR-11's no-duplicate guarantee **is** met — same `chunk_id`, same deterministic key. What is missed is the cost half: a 610 MB chunk re-sends from byte zero on every attempt. | A-084, open item 36 |
+| 53 | Connectivity does not revive a `failed` chunk | **Needs a `failureCause` column on `local_chunks`** and a rule for which causes are revivable. Ch. 5.13 §2 says an exhausted chunk waits for *"connectivity/context to change … or a manual retry"*; only the manual half is automatic-free today. Reviving blindly would re-attempt terminal failures against §1. Worth doing together with C-11's per-row cause display, which needs the same column. | A-085 |
+| 54 | The `Volume 5.10` chapter reference is wrong in two documents | **A documentation pass, distinct from open item 34.** V3 Ch. 3.3 §6 and V1's NFR-REL-03 Target both cite *Volume 5.10* for retry/backoff and duplicate prevention; those live in **5.13** and **5.14**. Item 34 is about inline `ADR-NNN` collisions — this is a chapter-number drift, and two documents sharing one wrong reference suggests a single stale source. | A-084 |
+| 55 | `dart format` over `lib/` and `test/` silently reformats generated sources | **Format only the CI file list, never the whole tree.** The `Format` job excludes `*.g.dart` and `*.freezed.dart`, but `Generated code drift` compares them — so a blanket `dart format lib test` turns a green format run into a red drift run. Cost 33 files and ~6,200 lines of spurious diff in Mission 4.4 before it was caught and reverted. The safe command is the job's own: `git ls-files '*.dart' \| grep -v '\.g\.dart$' \| grep -v '\.freezed\.dart$' \| xargs dart format`. | Mission 4.4 verification |
+| 56 | **Chapter 5.13 §2's six-attempt exhaustion path has not been seen on hardware** | **Noted and deferred, not skipped.** Mission 4.4's device pass reconnected before the ladder ran out — reaching attempt 6 needs roughly 155 s of continuous offline (5+10+20+40+80 s), and the pass covered attempts 2 through 5 with their jitter. The transition to `failed` after the sixth attempt, and the `Failed` pill C-11 would then show, are unit-tested but unobserved on a device. Cheap to close: run `lib/main_upload_probe.dart`, queue chunks, and leave the radio off for ~3 minutes. Worth folding into whichever mission next needs a device session rather than booking one for it. | Mission 4.4.3, A-083 |
 
 ---
 
