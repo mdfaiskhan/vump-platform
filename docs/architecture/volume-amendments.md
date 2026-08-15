@@ -2657,7 +2657,144 @@ Observed on device: nine chunks and 27.4 MB cleared in a single sweep with `more
 
 ---
 
-## Consolidated open items — A-057 through A-088
+### A-089 — The status palette is separate from the Material 3 scheme
+
+| | |
+|---|---|
+| **Volume** | 2, Chapter 2.10 §2.2 against ADR-005's theme |
+| **Class** | Placement decision |
+| **Date** | 2026-08-16, Mission 4.6 |
+
+Chapter 2.10 §2.2 publishes four validated status colours — good `#0CA30C`, warning `#FAB219`, info/accent `#2A78D6`, critical `#D03B3B`. **Every one differs from the existing token that looks like its counterpart**: `successLight` is `#1B7F4B`, `warningLight` is `#8A5A00`, `primaryLight` is `#2D5BE3`, `errorLight` is `#BA1A1A`.
+
+The existing values are ADR-005's Material 3 tonal palette, chosen before anyone read §2.2. They were **not** overwritten. The four are a *status palette* for Chapter 2.8 §6's pills, not the application's colour scheme: repainting `primary` and `error` app-wide would change every existing screen and re-open ADR-005 to satisfy a pill. `AppStatusColors` carries them as a separate `ThemeExtension` beside `AppSemanticColors`.
+
+---
+
+### A-090 — Chapter 2.8's Design System is not in this repository
+
+| | |
+|---|---|
+| **Volume** | 2 — TOC, and every *"Component (Ch. 2.8)"* reference in Chapter 2.7 |
+| **Says** | Chapters 2.6 and 2.8 are *"delivered as standalone interactive HTML mockups"* — `wireframes.html`, `design_system.html` |
+| **Reality** | Neither file exists anywhere in this repository |
+| **Class** | Missing authoritative source |
+| **Date** | 2026-08-16, Mission 4.6 |
+
+Chapter 2.8 is described as *"the living reference for every color, type style, spacing value, and component (buttons, pills, form fields, checklist items)"*. Chapter 2.7 names its components throughout — `pill-queued`, `pill-uploading`, `progress-track`, `progress-fill`, `btn-secondary` — and none of them can be looked up.
+
+### What survived anyway, and what did not
+
+**Survived.** Chapter 2.7's C-11 table fixes the *behaviour* of each pill, and Chapter 2.10 §2.2 preserves the four hex values. Together they were enough to build C-11 without guessing a colour.
+
+**Did not.** No light/dark variants, and **no statement of whether a hue is the pill's fill, its text, or its border**. That is the rule this mission had to invent, and it is marked as invention in `AppStatusColors` rather than dressed as a citation.
+
+### The measurement that shows the hues were validated for something else
+
+§2.2 says the four were *"checked against color-vision-deficiency separation and contrast requirements"*. Used as **fills carrying body text**, three of the four fail WCAG AA:
+
+| Hue | vs white |
+|---|---|
+| `#0CA30C` good | **3.35:1** ✗ |
+| `#FAB219` warning | **1.79:1** ✗ |
+| `#2A78D6` accent | **4.42:1** ✗ |
+| `#D03B3B` critical | 4.62:1 ✓ |
+
+The accent is the awkward one: white misses by 0.08, and every tinted near-black tried also lands below 4.5 — `#000B18` gives 4.48 — so pure black is the only foreground that clears it.
+
+So the contrast check §2.2 refers to was for a different application, most likely the hue as text or as an accent **on** a light surface rather than as the surface. Found by the contrast test, not by eye; the test now pins all eight foreground/fill pairs at ≥ 4.5:1 in both themes.
+
+---
+
+### A-091 — Mission 4.4 created a conflict between Ch. 2.9 §4.3 and Ch. 5.13 §1; Mission 4.6 resolves it
+
+| | |
+|---|---|
+| **Volume** | 2, Chapter 2.9 §4.3 against Volume 5, Chapter 5.13 §1 |
+| **Date** | 2026-08-16, Mission 4.6 |
+
+Ch. 2.9 §4.3: *"A failed upload never silently retries in a way the Collector can't see."*
+Ch. 5.13 §1: a transient failure is *"never surfaced to the Collector as Failed until attempts are exhausted."*
+
+Mission 4.4 implemented the second, and thereby created the first. A chunk in backoff sits at `queued` for up to 80 seconds while retrying — invisibly, because `queued` is also what an untried chunk looks like.
+
+**Resolved rather than recorded.** `QueuedChunk` gains `attemptCount` and `nextAttemptAt`, and the pill reads *"Retrying in 18s"* instead of *"Queued"* whenever a deadline is pending. No schema change — Mission 4.4 already added both columns; this widened the *projection*.
+
+ADR-040 required that widening be deliberate and named a failure cause and an attempt count as the likely candidates. This is that moment for the attempt count, and it is here to satisfy a chapter rather than because it was available.
+
+**The countdown ticks on a one-second timer** — the only polling in this project. A chunk waiting out a backoff changes nothing in the database, so nothing wakes the screen; the timer polls a clock rather than storage.
+
+---
+
+### A-092 — Live progress is in memory; `QueuedChunk` carries only what survives a restart
+
+| | |
+|---|---|
+| **Volume** | 2, Chapter 2.7's C-11 — *"accent-hue pill with live percentage; progress bar beneath the row, not inside the pill"* |
+| **Date** | 2026-08-16, Mission 4.6 |
+
+Byte progress arrives from Dio's send callback many times a second and is meaningless after a restart. Persisting it would be a write storm against a database whose queue is a live watch, and would put a field on `QueuedChunk` that is stale the moment it is read.
+
+So `UploadProgressNotifier` holds it in memory, keyed by chunk id, cleared when a chunk stops uploading. `QueuedChunk` carries what survives a restart; this carries what does not.
+
+`ChunkUploadProgress` is `core/network/`'s neutral stand-in for Dio's callback (ADR-041) and carries **two counters and no identity**, so the pipeline gained `onChunkProgress`, which binds the chunk id known only after the claim. The neutral type was not widened.
+
+---
+
+### A-093 — C-11 renders two of Chapter 2.9 §4.1's three states, deliberately
+
+| | |
+|---|---|
+| **Volume** | 2, Chapter 2.9 §4.1 |
+| **Says** | Network-dependent screens *"distinguish 'loading current status' from 'no data yet' from 'you're offline' as three distinct visual states, never collapsed into one spinner"* |
+| **Built** | Loading and empty. **No offline state** |
+| **Date** | 2026-08-16, Mission 4.6 |
+
+Offline is not a state of this screen, and Chapter 5.12 §3 is why: offline *"is not a blocked state, only a waiting one"*. The queue keeps every row, and every row still shows its true status. A banner saying *"you're offline"* over a list that is already accurate adds a mode without adding information.
+
+§4.1's rule is written for a screen whose data comes **from the network**. C-11's data is local — Chapter 5.9 §3 makes the queue *"a live view … over `local_chunks.status`"* — so the state §4.1 guards against, a screen that cannot say whether it is empty or merely disconnected, cannot arise here.
+
+Recorded rather than silently skipped. If the Collector should be told the difference anyway, the signal exists: `ConnectivitySource` from Mission 4.4 is already in `core/`.
+
+---
+
+### A-094 — C-11's "uploads aren't running" banner cannot name a cause or a fix
+
+| | |
+|---|---|
+| **Volume** | 2, Chapter 2.9 §2 principle 1 and §4.3 |
+| **Says** | §2: *"Every failure state … must name the specific cause and the specific fix. A generic 'Something went wrong' is treated as a defect, not an acceptable fallback."* §4.3: *"Every error state pairs a plain-language cause with a single, specific recovery action … never an error with no action attached."* |
+| **Shortfall** | The banner names what is not working, and can name neither why nor a fix |
+| **Date** | 2026-08-16, Mission 4.6.5 |
+
+Open item 60 was the defect this banner fixes: the dispatcher stopped on a wiring fault, logged it, and told the Collector nothing — a real chunk showed an amber `Queued` pill indefinitely, indistinguishable from one waiting its turn.
+
+The banner now says:
+
+> **Uploads aren't running.**
+> Nothing is lost — recorded chunks stay on this device until uploads can start again. You can keep recording.
+
+### Why it stops there
+
+**The specific cause is not Collector-facing.** It is that `sessionRegistrarProvider` throws because `features/projects_tasks/` is unbuilt (open item 36). Putting a provider name in front of a Collector is a log line wearing copy's clothes, and it names an internal that will disappear the moment item 36 closes.
+
+**There is no specific fix.** Nothing a Collector does — retrying, reconnecting, restarting — changes it. §4.3 assumes every error has a Collector-side action; this one has none, because the fault is that a feature has not been written yet.
+
+### What it does honour
+
+The system-level fact is knowable and stated exactly: uploads are not running, and no chunk will be attempted. The guarantee BR-08 and NFR-REL-04 actually make is stated too — nothing is lost, the files stay on the device — and the only true action available is given: keep recording.
+
+It is also **not** a fifth chunk status. Chapter 5.9 §1 fixes four states and Chapter 2.10 §2.2 four colours; a dispatcher that cannot start is not a property of any chunk, and painting it onto every pill would say something false about each. The banner sits above the list, and every pill below keeps its own meaning — verified on device.
+
+### Fork C's discipline is intact
+
+Mission 4.6 ships a failed chunk as "Failed" plus Retry with **no** invented cause, because `local_chunks` stores none (open item 53). This banner is a different fact at a different level, not an exception to that rule: it says the *pipeline* is not running, never why a *chunk* failed.
+
+**This shortfall closes with open item 36, not before.** When the upload path exists, the banner stops appearing in normal operation, and a genuine backend failure will have a real cause to name.
+
+---
+
+## Consolidated open items — A-057 through A-094
 
 Every carried-forward item, in one place. Accurate as of **Mission 4.3**; originally the seed for Mission 3.12's status report, and re-checked at the close of each sub-mission block per item 23.
 
@@ -2703,7 +2840,7 @@ Every carried-forward item, in one place. Accurate as of **Mission 4.3**; origin
 | # | Item | State | Source |
 |---|---|---|---|
 | 18 | Data-layer coverage 76.90% vs 80% | Missed; cause named; device evidence stronger | A-066 |
-| 19 | Golden tests for Design System components | None; `golden_toolkit` not installed | A-066, Ch. 9.5 §2 |
+| 19 | Golden tests for Design System components | **Now non-vacuous, and still not built.** Mission 4.6 built this project's first Design System components — four status pills and a progress row — so Chapter 9.5 §2's *"golden tests for every Design System component"* finally has a subject. `golden_toolkit` is discontinued (A-027) and no replacement has been adopted; that is an ADR-030 admission nobody has taken. Mitigating: the pills are covered by widget tests asserting label, icon shape and themed colour in both brightnesses, plus a contrast test pinning all eight fill/foreground pairs at AA — which is most of what a golden would catch, without pixel comparison. | A-027, A-066, Ch. 9.5 §2, Mission 4.6 |
 | 20 | `integration_test` end-to-end flows (Ch. 9.7 §1's five) | Package not installed | A-028 |
 | 21 | ~~`recoverableChunkIds()` has no caller~~ **Half closed 2026-08-16 by Mission 4.5** | `orphanedChunkIds()` now has a caller and a fixed bug: Chapter 5.15's sweep reports it, and the method excluded nothing before, so **every successfully cleaned chunk would have reported itself as an orphan**. Verified on device — after nine cleaned rows and one file deleted behind the store, it reports exactly **1**, not 10. `recoverableChunkIds()` is still uncalled and still deliberately so: it answers which *queued* chunks still have a file, which is neither the queue's question (Ch. 5.9 §3 just re-reads the rows) nor cleanup's. It is owed to a dedicated integrity pass, and nothing has needed one yet. | A-064 §2, Mission 4.2, Mission 4.5 |
 | 22 | No iOS toolchain — no macOS host, no Xcode, no iOS device | Blocks any iOS verification | A-065 §3 |
@@ -2754,6 +2891,9 @@ Every carried-forward item, in one place. Accurate as of **Mission 4.3**; origin
 | 57 | Cleanup's batch size is 10, chosen rather than measured | **Replace with a measurement, not a different guess.** NFR-SCL-01's 50-chunk depth is the anchor it was chosen against; what is unmeasured is whether ten unlinks per sweep ever competes with the Recording Pipeline for I/O, which is the thing §2 asks the batching to prevent. Constructor-injected. The interval needs no such item — it is derived from `RecordingLifecycle.chunkDuration`. | A-088 |
 | 58 | **`IsarChunkStore` has no unit tests at all — the store layer is device-verified only** | **The most under-tested layer in the project, and now the one that deletes files.** `flutter test` cannot load `isar_flutter_libs` natives without `Isar.initializeIsarCore(download: true)`, which this repo has never used, so `isar_chunk_store_test.dart` covers only pure static helpers. Every transaction, every status transition and now `deleteChunkFile` are verified on a device or not at all. Mission 4.5's probe is the first that had to carry a whole layer rather than confirm one. Closing it means adopting the Isar test-core download in CI, or accepting device verification as the standard for this file and saying so. | A-066, Mission 4.5 |
 | 59 | The cleanup probe claims and deletes **pre-existing** queued chunks | **Observed, not theoretical.** Mission 4.5's device run seeded 4 chunks and marked **9** complete: five real chunks from Mission 3's recording sessions were still `queued` on the device, and `claimNext` legitimately claimed them too. It then deleted all nine. Harmless on a test device and it made the evidence stronger — real recorded files, 27.4 MB, not just 4 KB placeholders — but the probe is destructive to anything already queued, and a device holding footage someone wanted should not run it. | Mission 4.5.4 |
+| 60 | ~~A real chunk shows `Queued` forever, never `Failed`~~ | **FIXED 2026-08-16 by Mission 4.6.5.** The dispatcher now publishes when it halts, and C-11 shows a system-level banner — *"Uploads aren't running."* — above the list. Wired to the two real fault paths (pipeline construction, broken queue stream) and deliberately **not** to `shutDown()`, so normal teardown is silent. `main.dart`'s start-failure path reports too. The underlying cause is unchanged: Guard 1 still never runs, because `chunkUploadPipelineProvider` throws at construction before any chunk is claimed. What changed is that the Collector can see it. The banner names no cause and no fix, because neither exists while open item 36 is open — A-094. Confirmed on device. | Mission 4.6.3, 4.6.5, A-068, A-094, open item 36 |
+| 61 | Cleaned chunks disappear from C-11 entirely | `watchQueue` excludes rows soft-deleted per BR-08, so once Chapter 5.15's sweep runs a completed chunk vanishes from the Collector's Upload status rather than staying visible as `Complete`. Observed on device: after Mission 4.5's sweep the screen was empty. Chapter 2.7 does not say how long a completed chunk stays on C-11, and Chapter 5.15 §3 keeps *metadata* queryable without saying anything about this screen. A product question — how long should 'done' remain visible — not a defect. | Mission 4.6.3, Ch. 5.15 §3 |
+| 62 | Three of C-11's four pill states have never been seen on a device | Only `Queued` is reachable today (item 60). `Uploading`, `Failed`, `Complete` and the *"Retrying in Ns"* countdown are covered by widget tests and by nothing else — the same shape as item 58, one layer up. All four become reachable the moment open item 36 closes, so this is a note to re-run the device pass then rather than work to schedule now. | Mission 4.6.3 |
 
 ---
 
