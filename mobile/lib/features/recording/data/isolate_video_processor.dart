@@ -105,10 +105,7 @@ class IsolateVideoProcessor implements VideoProcessor {
     }
     input.close();
 
-    return ChunkIntegrity(
-      checksumSha256: digest.value,
-      byteCount: byteCount,
-    );
+    return ChunkIntegrity(checksumSha256: digest.value, byteCount: byteCount);
   }
 }
 

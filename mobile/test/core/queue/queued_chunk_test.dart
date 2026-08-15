@@ -54,10 +54,7 @@ void main() {
         chunk(id: 'b', session: 's1', seq: 1, startedAt: earlier),
       ]..sort();
 
-      expect(
-        queue.map((QueuedChunk c) => c.sequenceIndex),
-        <int>[0, 1, 2],
-      );
+      expect(queue.map((QueuedChunk c) => c.sequenceIndex), <int>[0, 1, 2]);
     });
 
     test('a full two-session queue sorts as the chapter describes', () {
@@ -68,10 +65,12 @@ void main() {
         chunk(id: 'e1', session: 's1', seq: 1, startedAt: earlier),
       ]..sort();
 
-      expect(
-        queue.map((QueuedChunk c) => c.chunkId),
-        <String>['e0', 'e1', 'l0', 'l1'],
-      );
+      expect(queue.map((QueuedChunk c) => c.chunkId), <String>[
+        'e0',
+        'e1',
+        'l0',
+        'l1',
+      ]);
     });
 
     test('the order is total, so sorting is stable across emissions', () {

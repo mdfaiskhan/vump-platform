@@ -35,9 +35,7 @@ void main() {
 
   ProviderContainer build(_FakeQueueSource source) {
     final ProviderContainer container = ProviderContainer(
-      overrides: <Override>[
-        chunkQueueSourceProvider.overrideWithValue(source),
-      ],
+      overrides: <Override>[chunkQueueSourceProvider.overrideWithValue(source)],
     );
     addTearDown(container.dispose);
     return container;
@@ -56,10 +54,11 @@ void main() {
         uploadQueueNotifierProvider.future,
       );
 
-      expect(
-        queue.map((QueuedChunk q) => q.chunkId),
-        <String>['e0', 'e1', 'l0'],
-      );
+      expect(queue.map((QueuedChunk q) => q.chunkId), <String>[
+        'e0',
+        'e1',
+        'l0',
+      ]);
     });
 
     test('a later push is observed without any polling', () async {
@@ -160,8 +159,9 @@ void main() {
       ]);
       await pumpEventQueue();
 
-      final List<QueuedChunk> queue =
-          c.read(uploadQueueNotifierProvider).value!;
+      final List<QueuedChunk> queue = c
+          .read(uploadQueueNotifierProvider)
+          .value!;
       expect(queue.map((QueuedChunk q) => q.chunkId), <String>['a', 'b', 'c']);
       expect(queue[1].status, ChunkUploadStatus.queued);
     });
@@ -223,13 +223,12 @@ void main() {
 
   group('grouping for C-11', () {
     test('sessions come out in queue order, chunks in sequence order', () {
-      final List<UploadQueueSession> groups = UploadQueueSession.group(
-        <QueuedChunk>[
-          chunk(id: 'e0', session: 's1', seq: 0, startedAt: earlier),
-          chunk(id: 'e1', session: 's1', seq: 1, startedAt: earlier),
-          chunk(id: 'l0', session: 's2', seq: 0, startedAt: later),
-        ],
-      );
+      final List<UploadQueueSession> groups =
+          UploadQueueSession.group(<QueuedChunk>[
+            chunk(id: 'e0', session: 's1', seq: 0, startedAt: earlier),
+            chunk(id: 'e1', session: 's1', seq: 1, startedAt: earlier),
+            chunk(id: 'l0', session: 's2', seq: 0, startedAt: later),
+          ]);
 
       expect(groups.map((UploadQueueSession g) => g.sessionId), <String>[
         's1',
@@ -270,12 +269,11 @@ void main() {
     test('it does not re-sort what it was given', () {
       // Re-deriving order here would be a second place for it to be wrong.
       // Given a deliberately unsorted list, grouping preserves it verbatim.
-      final List<UploadQueueSession> groups = UploadQueueSession.group(
-        <QueuedChunk>[
-          chunk(id: 'l0', session: 's2', seq: 0, startedAt: later),
-          chunk(id: 'e0', session: 's1', seq: 0, startedAt: earlier),
-        ],
-      );
+      final List<UploadQueueSession> groups =
+          UploadQueueSession.group(<QueuedChunk>[
+            chunk(id: 'l0', session: 's2', seq: 0, startedAt: later),
+            chunk(id: 'e0', session: 's1', seq: 0, startedAt: earlier),
+          ]);
 
       expect(groups.map((UploadQueueSession g) => g.sessionId), <String>[
         's2',
@@ -289,13 +287,12 @@ void main() {
       // adjacent runs, not a merge. That is correct for the ordered input it
       // is documented to take, and this pins the behaviour rather than
       // leaving it to be discovered.
-      final List<UploadQueueSession> groups = UploadQueueSession.group(
-        <QueuedChunk>[
-          chunk(id: 'a', session: 's1', seq: 0, startedAt: earlier),
-          chunk(id: 'b', session: 's2', seq: 0, startedAt: later),
-          chunk(id: 'c', session: 's1', seq: 1, startedAt: earlier),
-        ],
-      );
+      final List<UploadQueueSession> groups =
+          UploadQueueSession.group(<QueuedChunk>[
+            chunk(id: 'a', session: 's1', seq: 0, startedAt: earlier),
+            chunk(id: 'b', session: 's2', seq: 0, startedAt: later),
+            chunk(id: 'c', session: 's1', seq: 1, startedAt: earlier),
+          ]);
 
       expect(groups, hasLength(3));
     });

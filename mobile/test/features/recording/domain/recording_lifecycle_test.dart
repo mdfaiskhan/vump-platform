@@ -236,10 +236,7 @@ void main() {
 
       expect(forced, isA<RecordingStateFinalizing>());
       expect(chosen, isA<RecordingStateFinalizing>());
-      expect(
-        forced.sessionEndCause,
-        SessionEndCause.processingCapacityReached,
-      );
+      expect(forced.sessionEndCause, SessionEndCause.processingCapacityReached);
       expect(chosen.sessionEndCause, SessionEndCause.collectorStop);
       expect(forced.endedInvoluntarily, isTrue);
       expect(chosen.endedInvoluntarily, isFalse);
@@ -341,8 +338,10 @@ void main() {
       );
 
       expect(next, isA<RecordingStateFinalizing>());
-      expect((next! as RecordingStateFinalizing).processing.single.chunkId,
-          'chunk_5');
+      expect(
+        (next! as RecordingStateFinalizing).processing.single.chunkId,
+        'chunk_5',
+      );
     });
 
     test('an unknown chunk id is ignored', () {
@@ -495,8 +494,11 @@ void main() {
       expect(const RecordingState.idle().isCapturing, isFalse);
       expect(RecordingState.ready(session: session).isCapturing, isFalse);
       expect(
-        recordingAt(1, t1, processing: <ChunkProcessingJob>[jobFor(0)])
-            .isCapturing,
+        recordingAt(
+          1,
+          t1,
+          processing: <ChunkProcessingJob>[jobFor(0)],
+        ).isCapturing,
         isTrue,
         reason: 'the camera runs while an earlier chunk is hashed',
       );

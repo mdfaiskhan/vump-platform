@@ -76,9 +76,8 @@ sealed class RecordingState with _$RecordingState {
   }) = RecordingStateIdle;
 
   /// Checklist passed, camera initialized, not yet recording.
-  const factory RecordingState.ready({
-    required RecordingSession session,
-  }) = RecordingStateReady;
+  const factory RecordingState.ready({required RecordingSession session}) =
+      RecordingStateReady;
 
   /// Actively capturing, with any earlier chunks still being processed.
   const factory RecordingState.recording({

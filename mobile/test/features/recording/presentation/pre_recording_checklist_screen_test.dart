@@ -310,8 +310,6 @@ class _FakePipeline implements RecordingPipeline {
   Future<void> closeSession() async {}
 }
 
-
-
 class _FixedIds implements SessionIdGenerator, ChunkIdGenerator {
   const _FixedIds();
   @override

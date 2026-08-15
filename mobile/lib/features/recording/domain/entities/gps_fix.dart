@@ -12,8 +12,6 @@ part 'gps_fix.freezed.dart';
 @freezed
 class GpsFix with _$GpsFix {
   /// Creates a fix.
-  const factory GpsFix({
-    required double latitude,
-    required double longitude,
-  }) = _GpsFix;
+  const factory GpsFix({required double latitude, required double longitude}) =
+      _GpsFix;
 }

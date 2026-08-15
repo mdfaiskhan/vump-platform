@@ -159,10 +159,7 @@ void main() {
     });
 
     test('capturing before openSession is refused, not a null crash', () async {
-      await expectLater(
-        build().startChunk(),
-        throwsA(isA<DeviceException>()),
-      );
+      await expectLater(build().startChunk(), throwsA(isA<DeviceException>()));
     });
   });
 }

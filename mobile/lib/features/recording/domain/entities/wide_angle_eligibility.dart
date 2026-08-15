@@ -30,14 +30,12 @@ part 'wide_angle_eligibility.freezed.dart';
 @freezed
 sealed class WideAngleEligibility with _$WideAngleEligibility {
   /// Tier 1 — a dedicated ultra-wide lens was found.
-  const factory WideAngleEligibility.optical({
-    required double zoomFactor,
-  }) = WideAngleEligibilityOptical;
+  const factory WideAngleEligibility.optical({required double zoomFactor}) =
+      WideAngleEligibilityOptical;
 
   /// Tier 2 — the primary sensor reaches the required factor by zooming out.
-  const factory WideAngleEligibility.hybrid({
-    required double zoomFactor,
-  }) = WideAngleEligibilityHybrid;
+  const factory WideAngleEligibility.hybrid({required double zoomFactor}) =
+      WideAngleEligibilityHybrid;
 
   /// Tier 3 — neither path is available, and recording must be blocked.
   const factory WideAngleEligibility.ineligible({

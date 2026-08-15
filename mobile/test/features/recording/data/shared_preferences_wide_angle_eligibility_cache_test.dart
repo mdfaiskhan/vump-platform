@@ -127,13 +127,12 @@ void main() {
 
   group('a store written by a different version of the code', () {
     test('an unrecognised tier key re-probes rather than guessing', () async {
-      final SharedPreferencesWideAngleEligibilityCache cache = await build(
-        <String, Object>{
-          'flutter.recording.wideAngle.tier': 'SOME_RETIRED_TIER',
-          'flutter.recording.wideAngle.appVersion': '1.0.0+1',
-          'flutter.recording.wideAngle.osVersion': 'Android 14',
-        },
-      );
+      final SharedPreferencesWideAngleEligibilityCache cache =
+          await build(<String, Object>{
+            'flutter.recording.wideAngle.tier': 'SOME_RETIRED_TIER',
+            'flutter.recording.wideAngle.appVersion': '1.0.0+1',
+            'flutter.recording.wideAngle.osVersion': 'Android 14',
+          });
 
       expect(await cache.read(v1), isNull);
     });
@@ -141,12 +140,11 @@ void main() {
     test('a fingerprint with no tier reads as absent', () async {
       // The half-written state `write` is ordered to produce if it is
       // interrupted: versions stored, tier not yet.
-      final SharedPreferencesWideAngleEligibilityCache cache = await build(
-        <String, Object>{
-          'flutter.recording.wideAngle.appVersion': '1.0.0+1',
-          'flutter.recording.wideAngle.osVersion': 'Android 14',
-        },
-      );
+      final SharedPreferencesWideAngleEligibilityCache cache =
+          await build(<String, Object>{
+            'flutter.recording.wideAngle.appVersion': '1.0.0+1',
+            'flutter.recording.wideAngle.osVersion': 'Android 14',
+          });
 
       expect(await cache.read(v1), isNull);
     });
@@ -209,14 +207,8 @@ void main() {
   group('the error taxonomy', () {
     test('StorageException codes are the write/delete ones', () {
       // Asserted as a pair so the two paths cannot silently share one code.
-      expect(
-        ErrorCode.storageWriteFailed.code,
-        'STORAGE_WRITE_FAILED',
-      );
-      expect(
-        ErrorCode.storageDeleteFailed.code,
-        'STORAGE_DELETE_FAILED',
-      );
+      expect(ErrorCode.storageWriteFailed.code, 'STORAGE_WRITE_FAILED');
+      expect(ErrorCode.storageDeleteFailed.code, 'STORAGE_DELETE_FAILED');
     });
   });
 }

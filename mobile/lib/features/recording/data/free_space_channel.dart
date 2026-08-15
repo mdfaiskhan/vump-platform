@@ -37,19 +37,17 @@ class FreeSpaceChannel implements FreeSpaceReader {
   /// Creates a reader over the platform channel, or over a fake one in tests.
   const FreeSpaceChannel({this._channel = _defaultChannel});
 
-  static const MethodChannel _defaultChannel = MethodChannel(
-    'vump/free_space',
-  );
+  static const MethodChannel _defaultChannel = MethodChannel('vump/free_space');
 
   final MethodChannel _channel;
 
   @override
   Future<int> availableBytes(String path) async {
     try {
-      final int? bytes = await _channel.invokeMethod<int>('availableBytes', <
-        String,
-        Object?
-      >{'path': path});
+      final int? bytes = await _channel.invokeMethod<int>(
+        'availableBytes',
+        <String, Object?>{'path': path},
+      );
 
       if (bytes == null) {
         throw const StorageException(

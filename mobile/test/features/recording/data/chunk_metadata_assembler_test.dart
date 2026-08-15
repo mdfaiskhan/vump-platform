@@ -49,16 +49,17 @@ void main() {
         MetadataCaptureConditions.unavailable,
     TaskContext taskContext = const _FakeTask(),
     DeviceContext deviceContext = const _FakeDevice(),
-  }) => ChunkMetadataAssembler(
-    taskContext: taskContext,
-    deviceContext: deviceContext,
-    conditionsReader: _FakeConditions(conditions),
-  ).generate(
-    session: session,
-    job: job,
-    integrity: integrity,
-    chunkStartedAt: startedAt,
-  );
+  }) =>
+      ChunkMetadataAssembler(
+        taskContext: taskContext,
+        deviceContext: deviceContext,
+        conditionsReader: _FakeConditions(conditions),
+      ).generate(
+        session: session,
+        job: job,
+        integrity: integrity,
+        chunkStartedAt: startedAt,
+      );
 
   group('sourced fields — traced to Ch. 5.7 §2', () {
     test('chunk_id comes from the job, minted at capture-stop', () async {
@@ -93,17 +94,19 @@ void main() {
       expect(m.capture.camera, 'rear-wide');
     });
 
-    test('capture.zoom_factor is the ladder verdict, not the default',
-        () async {
-      // 0.6 is what the CPH2707 actually resolved to. A metadata object that
-      // reported 0.5 because that is the specification's first value would
-      // misdescribe the footage.
-      expect((await assemble()).capture.zoomFactor, 0.6);
-      expect(
-        (await assemble()).capture.zoomFactor,
-        isNot(CameraSpecification.zoomFactorOptical),
-      );
-    });
+    test(
+      'capture.zoom_factor is the ladder verdict, not the default',
+      () async {
+        // 0.6 is what the CPH2707 actually resolved to. A metadata object that
+        // reported 0.5 because that is the specification's first value would
+        // misdescribe the footage.
+        expect((await assemble()).capture.zoomFactor, 0.6);
+        expect(
+          (await assemble()).capture.zoomFactor,
+          isNot(CameraSpecification.zoomFactorOptical),
+        );
+      },
+    );
 
     test('integrity is Mission 3.4s object, unmodified', () async {
       final ChunkMetadata m = await assemble();
@@ -192,27 +195,33 @@ void main() {
       expect(m.isComplete, isTrue);
     });
 
-    test('complete conditions with an unsourced identity is NOT complete',
-        () async {
-      // The half Mission 3.8 added, and the half the fakes hid: before 3.10
-      // this file only ever varied captureConditions, so `isComplete` passed
-      // on identity by accident. These are the production stand-ins, so this
-      // is what the application actually assembles today.
-      final ChunkMetadata m = await assemble(
-        conditions: const MetadataCaptureConditions(
-          gps: GpsFix(latitude: 51.5, longitude: -0.12),
-          batteryPercent: 82,
-          networkType: 'wifi',
-        ),
-        taskContext: const UnsourcedTaskContext(),
-        deviceContext: const PlatformDeviceContext(appVersion: '1.0.0+1'),
-      );
+    test(
+      'complete conditions with an unsourced identity is NOT complete',
+      () async {
+        // The half Mission 3.8 added, and the half the fakes hid: before 3.10
+        // this file only ever varied captureConditions, so `isComplete` passed
+        // on identity by accident. These are the production stand-ins, so this
+        // is what the application actually assembles today.
+        final ChunkMetadata m = await assemble(
+          conditions: const MetadataCaptureConditions(
+            gps: GpsFix(latitude: 51.5, longitude: -0.12),
+            batteryPercent: 82,
+            networkType: 'wifi',
+          ),
+          taskContext: const UnsourcedTaskContext(),
+          deviceContext: const PlatformDeviceContext(appVersion: '1.0.0+1'),
+        );
 
-      expect(m.captureConditions.isComplete, isTrue, reason: 'one half holds');
-      expect(m.identity.isComplete, isFalse, reason: 'the other does not');
-      expect(m.isComplete, isFalse);
-      expect(m.isIdentityComplete, isFalse);
-    });
+        expect(
+          m.captureConditions.isComplete,
+          isTrue,
+          reason: 'one half holds',
+        );
+        expect(m.identity.isComplete, isFalse, reason: 'the other does not');
+        expect(m.isComplete, isFalse);
+        expect(m.isIdentityComplete, isFalse);
+      },
+    );
 
     test('isIdentityComplete is what must gate upload — A-064 §3', () async {
       // Ch. 5.14 §1's S3 key embeds project_id, task_id and session_id, so

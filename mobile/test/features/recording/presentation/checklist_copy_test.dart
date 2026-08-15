@@ -249,8 +249,7 @@ void main() {
         ChecklistCheck.freeStorage,
         measured,
       );
-      const double gb =
-          RecordingLifecycle.oneChunkBytes / (1000 * 1000 * 1000);
+      const double gb = RecordingLifecycle.oneChunkBytes / (1000 * 1000 * 1000);
 
       expect(remedy, contains(gb.toStringAsFixed(1)));
     });

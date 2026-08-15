@@ -229,9 +229,7 @@ void main() {
       // ladder has no rung left, so Tier 3 is correct — and this is the one
       // case where the Android gap can produce a wrong block, which A-057
       // records as the accepted cost until the platform channel lands.
-      final WideAngleEligibility result = WideAngleLadder.resolve(
-        capability(),
-      );
+      final WideAngleEligibility result = WideAngleLadder.resolve(capability());
 
       expect(result, isA<WideAngleEligibilityIneligible>());
       expect(

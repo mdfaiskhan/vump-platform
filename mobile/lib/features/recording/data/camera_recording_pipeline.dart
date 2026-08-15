@@ -184,9 +184,7 @@ class CameraRecordingPipeline implements RecordingPipeline {
   }
 
   /// Opens a controller at Chapter 5.2 §1's parameters.
-  static Future<CameraController> _defaultOpen(
-    CameraDescription camera,
-  ) async {
+  static Future<CameraController> _defaultOpen(CameraDescription camera) async {
     final CameraController controller = CameraController(
       camera,
       // veryHigh is the plugin's 1080p preset — CameraSpecification's

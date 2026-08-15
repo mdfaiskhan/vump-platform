@@ -312,9 +312,7 @@ void main() {
       // records that it is likely to change — a measured chunk came in 4%
       // above the derivation. Against a literal, this test would keep passing
       // while no longer testing the threshold it names.
-      final _Harness ample = build(
-        freeBytes: RecordingLifecycle.oneChunkBytes,
-      );
+      final _Harness ample = build(freeBytes: RecordingLifecycle.oneChunkBytes);
       await notifierOf(
         ample.container,
       ).checklistPassed(zoomFactor: 0.5, now: t0);
