@@ -228,7 +228,8 @@ jobs:
           #   google_sign_in         → features/auth/data      (ADR-034)
           #   cloud_functions        → features/auth/data      (ADR-036)
           #   camera                 → features/recording/data (V3 Ch. 3.1)
-          #   shared_preferences     → features/recording/data (A-057)
+          #   shared_preferences     → features/recording/data
+          #                            + main.dart              (A-057, A-067)
           #   crypto                 → features/recording/data (V5 Ch. 5.5)
           #   cloud_firestore        → features/auth/data      (ADR-036)
           #   battery_plus           → features/recording/data (FR-CHK-03)
@@ -251,6 +252,15 @@ jobs:
           # The naming prefix is deliberate: the permission is visible in the
           # filename, the way shared_preferences_*.dart and camera_*.dart
           # already are, rather than in a directory anyone can add a file to.
+          #
+          # shared_preferences names main.dart as a second owner for a
+          # different reason: SharedPreferences.getInstance() is asynchronous,
+          # and the composition root is where this project resolves async
+          # platform instances so a provider override can be supplied at
+          # container construction — the same shape ADR-009 Caveat 2 already
+          # forces for the database directory. The permission is one FILE, not
+          # a directory, so nothing else can acquire it by being added nearby.
+          # Recorded as A-067.
 
           status=0
 
@@ -277,7 +287,7 @@ jobs:
           check cloud_functions        lib/features/auth/data/
           check cloud_firestore        lib/features/auth/data/
           check camera                 lib/features/recording/data/
-          check shared_preferences     lib/features/recording/data/
+          check shared_preferences     'lib/features/recording/data/|lib/main\.dart'
           check crypto                 lib/features/recording/data/
           check battery_plus           lib/features/recording/data/
           check connectivity_plus      lib/features/recording/data/
