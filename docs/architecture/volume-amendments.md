@@ -2576,7 +2576,88 @@ Closing it needs a `failureCause` column on `local_chunks` and a rule for which 
 
 ---
 
-## Consolidated open items — A-057 through A-085
+### A-086 — Cleanup trusts the backend's PATCH response, not an observed `verified_at`
+
+| | |
+|---|---|
+| **Volume** | 5, Chapter 5.15 §2; Volume 4, Chapter 4.5 and 4.6 §4 |
+| **Says** | A chunk is eligible *"the instant the Upload Queue (Chapter 5.9) observes its status reach Complete — i.e. the backend has confirmed both the S3 object and its metadata (Volume 4, Chapter 4.5's `verified_at`)"* |
+| **Class** | Assumption made explicit, because it is the one place BR-08 could be violated by correct-looking code |
+| **Date** | 2026-08-16, Mission 4.5 |
+
+**The device never reads `verified_at`.** It writes `complete` itself, after Chapter 5.10 §1 step 4, on the strength of step 3's `PATCH /v1/chunks/{id}/status` having returned success. Chapter 5.10 §1 step 5 has verification observed *"via its next sync"*, and no sync mechanism exists or is planned in Volume 5.
+
+The chain is coherent on Volume 4's terms. The checksum is sent at registration, so the backend can verify after the S3 PUT; V4 p.15 has the backend set `chunk_metadata.verified_at` and only then allow `chunks.status` to become `'complete'`. A successful PATCH therefore *implies* verification happened.
+
+### The assumption, stated so future backend work must honour it
+
+**A 2xx on that PATCH is taken as permission to delete the only local copy.**
+
+If a Lambda is ever written that returns success on that endpoint without having verified the checksum — during development, behind a feature flag, as a stub — this application will delete the Collector's only copy of footage the backend never checked. BR-08 would be violated by client code that is doing exactly what it was told.
+
+Nothing is at risk today: `SessionRegistrar` has no implementation (open item 36), so no chunk has ever reached `complete` on a device and the sweep has never had anything to do.
+
+**BR-08 itself is satisfied on either reading.** BR-08 says only *"until its upload to S3 is confirmed"*; §2 is strictly tighter. Following §2 satisfies BR-08 with room to spare — the exposure is entirely in whether the backend's gate is real.
+
+### The contradiction this trace found in our own code
+
+`ChunkUploadStatus.complete` carried, since Mission 4.1: *"**Nothing writes this yet**, and nothing should until the backend actually confirms."* Mission 4.2 then wrote it, and the sentence was never updated.
+
+Two missions of drift in a doc comment that Chapter 5.15 keys **file deletion** off. Corrected in place rather than deleted, so the ordering decision (A-073) and the `verified_at` gap are both stated where the next reader will look. Behaviour unchanged: the pipeline still writes `complete` after step 4, for A-073's reason.
+
+---
+
+### A-087 — `localDeletedAt` is the authoritative marker; `localFilePath` is kept
+
+| | |
+|---|---|
+| **Volume** | 5, Chapter 5.15 §2 |
+| **Says** | *"Only the raw video file (and its `local_chunks` row's file reference) is removed"* |
+| **Divergence** | The path is left as written; `localDeletedAt` records that the file is gone |
+| **Date** | 2026-08-16, Mission 4.5 |
+
+`localFilePath` is `late String`. Blanking it would put an empty string in a column that is otherwise always a real path — the ambiguity A-068 exists to condemn, where a sentinel is indistinguishable from a real value. Making it nullable is a schema change for no gain.
+
+So the path is retained as a record of where the file *was*, and `localDeletedAt != null` is what every consumer tests. Both `cleanableChunks` and `orphanedChunkIds` filter on it, so no code path treats the retained path as live.
+
+**§2's intent is met**: the row no longer references a live file. Only its literal wording diverges.
+
+### A stale engine name, third instance in Volume 5
+
+§3 says *"the local **Drift** copy is retained defensively"*. It is Isar. A-062 §4 found the same name in Chapter 5.7 and A-063 §1 in Chapter 5.8; this is the third. Cosmetic here — §3 changes no behaviour — and recorded only so a fourth discovery is not filed as new.
+
+---
+
+### A-088 — Chapter 5.15 §2 gives no sweep interval and no batch size
+
+| | |
+|---|---|
+| **Volume** | 5, Chapter 5.15 §2 |
+| **Says** | *"a low-priority background sweep, not synchronously at the moment of eligibility … batching it avoids competing with an active Recording Pipeline (Ch.5.4) for I/O"* |
+| **Omits** | Both numbers. Nothing in any Volume supplies either |
+| **Date** | 2026-08-16, Mission 4.5 |
+
+### The interval is derived, and needs no open item
+
+`StorageCleanupSweep.defaultInterval` delegates to `RecordingLifecycle.chunkDuration`.
+
+The sweep's job is to keep pace with completions. A completion cannot arrive faster than a chunk is produced, and chunks are produced one per chunk boundary — so one sweep per that period keeps pace **by construction**, and §2's *"low-priority"* rules out running more often to do nothing.
+
+Delegated rather than restated, the way `ChecklistOutcome.minimumFreeBytes` already delegates to `RecordingLifecycle.oneChunkBytes`: if the chunk period changes, the sweep follows instead of drifting.
+
+### The batch size is chosen, and does
+
+`StorageCleanupSweep.defaultBatchSize = 10`, **provisional**.
+
+NFR-SCL-01 fixes the depth the system must absorb — *"queue depth of 50+ pending chunks without UI slowdown"* — and ten clears a fifty-chunk backlog in five sweeps while keeping each write short.
+
+**Ten is a fraction of fifty, not a consequence of it.** A file unlink is a directory-metadata operation whatever the 610 MB behind it, so the bound is precautionary rather than measured. Same shape as A-078's concurrency of two: a named constant, an entry saying it was chosen, and an open item for a real measurement. Constructor-injected, so a measurement lands without touching the sweep's logic.
+
+Observed on device: nine chunks and 27.4 MB cleared in a single sweep with `more: false`, so the bound was not even reached in the one real trial available.
+
+---
+
+## Consolidated open items — A-057 through A-088
 
 Every carried-forward item, in one place. Accurate as of **Mission 4.3**; originally the seed for Mission 3.12's status report, and re-checked at the close of each sub-mission block per item 23.
 
@@ -2624,7 +2705,7 @@ Every carried-forward item, in one place. Accurate as of **Mission 4.3**; origin
 | 18 | Data-layer coverage 76.90% vs 80% | Missed; cause named; device evidence stronger | A-066 |
 | 19 | Golden tests for Design System components | None; `golden_toolkit` not installed | A-066, Ch. 9.5 §2 |
 | 20 | `integration_test` end-to-end flows (Ch. 9.7 §1's five) | Package not installed | A-028 |
-| 21 | `recoverableChunkIds()` has no caller | **Still uncalled after 4.1 and 4.2, and deliberately.** Ch. 5.9 §3 has the queue *"simply resume reading the same rows"*, and Ch. 5.10 claims a chunk by status rather than by recoverability. The method answers a different question — which queued chunks still have a file on disk — and `orphanedChunkIds()` is its natural pair. Owed to Ch. 5.15 (Storage Cleanup) or a dedicated integrity pass, not to the queue. | A-064 §2, Mission 4.2 |
+| 21 | ~~`recoverableChunkIds()` has no caller~~ **Half closed 2026-08-16 by Mission 4.5** | `orphanedChunkIds()` now has a caller and a fixed bug: Chapter 5.15's sweep reports it, and the method excluded nothing before, so **every successfully cleaned chunk would have reported itself as an orphan**. Verified on device — after nine cleaned rows and one file deleted behind the store, it reports exactly **1**, not 10. `recoverableChunkIds()` is still uncalled and still deliberately so: it answers which *queued* chunks still have a file, which is neither the queue's question (Ch. 5.9 §3 just re-reads the rows) nor cleanup's. It is owed to a dedicated integrity pass, and nothing has needed one yet. | A-064 §2, Mission 4.2, Mission 4.5 |
 | 22 | No iOS toolchain — no macOS host, no Xcode, no iOS device | Blocks any iOS verification | A-065 §3 |
 
 ### Process and specification
@@ -2670,6 +2751,9 @@ Every carried-forward item, in one place. Accurate as of **Mission 4.3**; origin
 | 54 | The `Volume 5.10` chapter reference is wrong in two documents | **A documentation pass, distinct from open item 34.** V3 Ch. 3.3 §6 and V1's NFR-REL-03 Target both cite *Volume 5.10* for retry/backoff and duplicate prevention; those live in **5.13** and **5.14**. Item 34 is about inline `ADR-NNN` collisions — this is a chapter-number drift, and two documents sharing one wrong reference suggests a single stale source. | A-084 |
 | 55 | `dart format` over `lib/` and `test/` silently reformats generated sources | **Format only the CI file list, never the whole tree.** The `Format` job excludes `*.g.dart` and `*.freezed.dart`, but `Generated code drift` compares them — so a blanket `dart format lib test` turns a green format run into a red drift run. Cost 33 files and ~6,200 lines of spurious diff in Mission 4.4 before it was caught and reverted. The safe command is the job's own: `git ls-files '*.dart' \| grep -v '\.g\.dart$' \| grep -v '\.freezed\.dart$' \| xargs dart format`. | Mission 4.4 verification |
 | 56 | **Chapter 5.13 §2's six-attempt exhaustion path has not been seen on hardware** | **Noted and deferred, not skipped.** Mission 4.4's device pass reconnected before the ladder ran out — reaching attempt 6 needs roughly 155 s of continuous offline (5+10+20+40+80 s), and the pass covered attempts 2 through 5 with their jitter. The transition to `failed` after the sixth attempt, and the `Failed` pill C-11 would then show, are unit-tested but unobserved on a device. Cheap to close: run `lib/main_upload_probe.dart`, queue chunks, and leave the radio off for ~3 minutes. Worth folding into whichever mission next needs a device session rather than booking one for it. | Mission 4.4.3, A-083 |
+| 57 | Cleanup's batch size is 10, chosen rather than measured | **Replace with a measurement, not a different guess.** NFR-SCL-01's 50-chunk depth is the anchor it was chosen against; what is unmeasured is whether ten unlinks per sweep ever competes with the Recording Pipeline for I/O, which is the thing §2 asks the batching to prevent. Constructor-injected. The interval needs no such item — it is derived from `RecordingLifecycle.chunkDuration`. | A-088 |
+| 58 | **`IsarChunkStore` has no unit tests at all — the store layer is device-verified only** | **The most under-tested layer in the project, and now the one that deletes files.** `flutter test` cannot load `isar_flutter_libs` natives without `Isar.initializeIsarCore(download: true)`, which this repo has never used, so `isar_chunk_store_test.dart` covers only pure static helpers. Every transaction, every status transition and now `deleteChunkFile` are verified on a device or not at all. Mission 4.5's probe is the first that had to carry a whole layer rather than confirm one. Closing it means adopting the Isar test-core download in CI, or accepting device verification as the standard for this file and saying so. | A-066, Mission 4.5 |
+| 59 | The cleanup probe claims and deletes **pre-existing** queued chunks | **Observed, not theoretical.** Mission 4.5's device run seeded 4 chunks and marked **9** complete: five real chunks from Mission 3's recording sessions were still `queued` on the device, and `claimNext` legitimately claimed them too. It then deleted all nine. Harmless on a test device and it made the evidence stronger — real recorded files, 27.4 MB, not just 4 KB placeholders — but the probe is destructive to anything already queued, and a device holding footage someone wanted should not run it. | Mission 4.5.4 |
 
 ---
 
