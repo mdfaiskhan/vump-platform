@@ -120,22 +120,50 @@ class _PreRecordingChecklistScreenState
     }
 
     setState(() => _starting = true);
-    final Failure? failure = await ref
-        .read(recordingNotifierProvider.notifier)
-        .checklistPassed(zoomFactor: zoomFactor, now: DateTime.now());
+    final RecordingNotifier notifier = ref.read(
+      recordingNotifierProvider.notifier,
+    );
 
+    // Ready first: mints the session and opens the camera (Ch. 5.3 §3).
+    final Failure? readyFailure = await notifier.checklistPassed(
+      zoomFactor: zoomFactor,
+      now: DateTime.now(),
+    );
+    if (!mounted) {
+      return;
+    }
+    if (readyFailure != null) {
+      // Volume 2 Ch. 2.2 step 8: a camera error on the way in returns to Task
+      // Detail "without a partial session". The machine has stayed Idle, so
+      // there is no session to discard — only a message to show.
+      setState(() => _starting = false);
+      _showFailure(readyFailure);
+      return;
+    }
+
+    // Then Recording. **This tap is Chapter 2.2 step 8's "Record tapped".**
+    //
+    // C-09 lists Stop as "the only interactive element on screen", so there is
+    // no Record control there to press — which left `Idle → Ready → Recording`
+    // broken at its second edge until amendment A-070: the Checklist reached
+    // `Ready` and navigated, and the machine never left it. The Stop control
+    // reads `isCapturing`, which is false in `Ready`, so it rendered disabled
+    // and swallowed every tap.
+    //
+    // One tap, both edges. The Collector presses Start Recording once and the
+    // camera is genuinely recording before the chrome-free screen appears.
+    final Failure? startFailure = await notifier.start(now: DateTime.now());
     if (!mounted) {
       return;
     }
     setState(() => _starting = false);
 
-    if (failure != null) {
-      // Volume 2 Ch. 2.2 step 8: a camera error on the way in returns to Task
-      // Detail "without a partial session". The machine has stayed Idle, so
-      // there is no session to discard — only a message to show.
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(RecordingErrorCopy.forFailure(failure))),
-      );
+    if (startFailure != null) {
+      // Capture could not begin. The session exists and the camera is open,
+      // so this is not the same "no partial session" case as above — but the
+      // Collector stays here rather than being sent to a screen whose only
+      // control acts on a recording that never started.
+      _showFailure(startFailure);
       return;
     }
 
@@ -144,6 +172,12 @@ class _PreRecordingChecklistScreenState
     if (sessionId != null && mounted) {
       context.go('/recording/$sessionId');
     }
+  }
+
+  void _showFailure(Failure failure) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(RecordingErrorCopy.forFailure(failure))),
+    );
   }
 }
 

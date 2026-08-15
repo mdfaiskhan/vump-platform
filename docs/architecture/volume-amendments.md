@@ -1982,7 +1982,102 @@ The reopening trigger Volume 8 states — *"a future client contract or regulato
 
 ---
 
-## Consolidated open items — A-057 through A-069
+### A-070 — Chapter 2.2 step 8's "Record tapped" is the Checklist's own button, and nothing called `start()` until this was found by hand
+
+| | |
+|---|---|
+| **Volume** | 2 — Product Design, Chapter 2.2 §2 step 8; Chapter 2.7's C-09 |
+| **Says** | Ch. 2.2 step 8: *"Recording Screen — **Record tapped** → Recording in progress, timer running"*. Ch. 2.7's C-09 lists a recording indicator and a Stop control, and calls Stop *"the only interactive element on screen"* |
+| **Should say** | Both hold, under one reading: **"Record tapped" is the Checklist's own Start Recording button**, not a second control on the Recording Screen. C-09 keeps Stop as its only interactive element |
+| **Class** | Specification conflict resolved, plus a defect it concealed |
+| **Status** | Closed — fix confirmed on hardware |
+
+### 1. The conflict, and the reading taken
+
+Read literally, step 8 puts a Record control on the Recording Screen and C-09 forbids one. They cannot both be satisfied by a screen with two interactive elements.
+
+**Resolved in C-09's favour.** The Checklist's Start Recording button drives both lifecycle edges — `Idle → Ready` (session minted, camera opened) and `Ready → Recording` (capture begins) — before navigating. One tap, both edges, and the chrome-free screen is entered already recording.
+
+The alternative reading was rejected because C-09's design intent is the stronger claim: *"deliberately removes all navigation chrome so nothing can be tapped accidentally mid-recording"* (Ch. 2.4 §2). Adding a Record control to that screen would contradict the reason the screen exists. Step 8 is describing *when* recording begins in the flow, not *which widget* the tap lands on.
+
+### 2. The defect this concealed
+
+**Nothing in `lib/` ever called `RecordingNotifier.start()`.** Mission 3.8 wired `checklistPassed()` and navigation, and the second edge was simply never written — C-09 had no Record control to write it in, and the Checklist's button stopped at `Ready`.
+
+The failure was silent and looked like a UI bug:
+
+| Step | Value |
+|---|---|
+| State on arriving at the Recording Screen | `RecordingStateReady` |
+| `RecordingState.isCapturing` | `this is RecordingStateRecording` → **false** |
+| `_StopControl(enabled:)` | **false** |
+| `InkWell.onTap` | **`null`** |
+
+So the Stop button rendered, accepted presses, and discarded them before any handler ran. **Nothing was recording**, and with no live preview (A-064 §5) the only visual tell was that the REC dot was grey rather than red — while the timer, which derives from `session.startedAt`, ran normally. `logcat` showed no error because nothing failed; nothing executed.
+
+`RecordingGuard` was not involved — it explicitly admits `Ready` on `/recording/`, which is why the screen loaded at all.
+
+### 3. The verification-method lesson — the part worth keeping
+
+**Every automated check passed while this was broken**, and none of them could have caught it:
+
+- `recording_notifier_test.dart` calls `start()` itself. It proves the transition works *when invoked*; it cannot prove anything invokes it.
+- **Mission 3.8.1's device harness did the same** and returned `RESULT pass` twice on real hardware, including a full 600-second boundary. It bound the production `recordingOverrides` and drove the notifier directly — deliberately, because that was the only way to run unattended.
+- Mission 3.10's coverage audit measured `presentation/` at 22.22% and correctly declined to raise it, since Volume 9 Ch. 9.5 §2 asks for golden tests there rather than a percentage. Line coverage would not have found this either: the line was absent, not uncovered.
+
+**The defect lived in the one seam every method bypassed — the UI's call into the notifier.** A person tapping the real button found it in seconds.
+
+This is a gap in **how** verification was done, not in what was verified, and it generalises: *a harness that drives the layer beneath the UI proves that layer, and silently assumes the UI calls it.* Mission 3.10's item 23 recorded the same shape for amendment drift and item 26 for the confinement sweep — a whole checked in parts. This is the third instance.
+
+**Closed by a widget test that taps the button**, `pre_recording_checklist_screen_test.dart`: five cases asserting the machine reaches `RecordingStateRecording`, that the pipeline receives `openSession` then `startChunk`, that navigation follows, that a capture failure keeps the Collector on the Checklist, and that the button is disabled until every row passes.
+
+### 4. A tooling correction, recorded because it wasted a cycle
+
+`flutter install` **installs an already-built artifact; it does not rebuild from source.** Told to install the fix, it deployed the `app-debug.apk` left over from Mission 3.8's `flutter build apk` — a binary predating the fix — and reported success. The fix was then reported as "installed on the device" when it was not, and the next manual test reproduced the original symptom exactly.
+
+`flutter run` compiles from current source. **For verifying a change on a device, use `flutter run`, or `flutter build` immediately before `flutter install`.** "Install succeeded" is not evidence that the change is on the device.
+
+### 5. Confirmed on hardware — observed, not inferred
+
+CPH2707 / Android 16, session `da80b794-11e2-49c1-8f2c-eb2f36323b99`:
+
+```
+checklist after start()  failure=null state=Recording isCapturing=true
+stopControl TAPPED       enabled=true
+notifier._endChunk ENTER endingChunk=false state=Recording
+stopChunk() RETURNED     path=…/cache/REC…mp4
+notifier transitioning to Finalizing  →  navigated to /processing/…
+store ROW   id=1c44f8ca-… seq=0 status=queued storedBytes=13275128
+            sha=8af51048…bafc s3Key=null
+store FILE  path=…/app_flutter/recordings/da80b794-…/0000.mp4
+            exists=true actualBytes=13275128 sizeMatches=true pathAsExpected=true
+store META  present=true seq=0 durationSec=13 zoom=0.6 collectorId=""
+store SESSION-COMPLETE   status=complete
+```
+
+The row, the file, the size match, Chapter 5.8 §2's exact path, the 1:1 metadata pairing and FR-SES-02's `complete` were all **read back from the live database**, not deduced from the state machine. 13,275,128 bytes over 13 s ≈ 8.17 Mbps against Chapter 5.2 §1's 8.128 Mbps target.
+
+`s3Key=null` and `collectorId=""` confirm A-063 §5 and A-064 §3 are intact — nothing invented a value under real conditions.
+
+**One limit, stated rather than glossed:** these confirmation runs were seconds long, not the two minutes the verification asked for. They fully validate the row-and-file path; **sustained encoding rests on Mission 3.8.1's 600-second pass**, not on these.
+
+### 6. Open and uninvestigated — CameraX graph error on session close
+
+Every successful stop is followed immediately by:
+
+```
+GraphProcessor onGraphError(GRAPH_ERROR(cameraError=ERROR_GRAPH_CONFIG), willAttemptRetry=false)
+CameraGraph-N state updated to GRAPH_ERROR
+Updated current camera internal state to CombinedCameraState(state=CLOSING, error=StateError{code=4})
+```
+
+Native CameraX, not Dart. It appears **after** `stopChunk()` returns successfully, during `closeSession()`, and affected none of the runs — the chunk was written, the row committed and the session completed every time.
+
+It may be ordinary teardown noise, or it may mean the capture session closes uncleanly and leaks something across repeated sessions. **Not investigated, and not assumed harmless.** Recorded as open.
+
+---
+
+## Consolidated open items — A-057 through A-070
 
 Every carried-forward item, in one place, accurate as of Mission 3.10. This is the seed for Mission 3.12's status report.
 
@@ -2050,6 +2145,9 @@ Every carried-forward item, in one place, accurate as of Mission 3.10. This is t
 | 28 | **S2** — the empty-string identity sentinel is ambiguous on the wire | **Open.** Two guards owed: `isIdentityComplete` checked at Ch. 5.10 §1's registration (Mission 4), and a Ch. 8.3 §2 server-side rule rejecting blank identity fields (whenever Lambda handlers exist). Neither surface exists; no network call is made by this feature at all. | A-068 |
 | 29 | **S3** — no changelog existed, despite Ch. 11.5 §2 requiring Security entries for storage and data handling | **CLOSED** by Mission 3.11.2 — `docs/CHANGELOG.md` started and Missions 3.1–3.10 backfilled. The backfill is itself the batching Ch. 11.5 §4 warns against, done once to establish the file. | Ch. 11.5, A-068 |
 | 30 | Volume 8 Ch. 8.2 §3's inline "ADR-011" collides with this repository's ADR-011 | **Open** — documentation hazard. Cite it as "Volume 8 Chapter 8.2 §3", never as ADR-011. The decision itself is satisfied: OS-level sandbox encryption, no app-level layer owed. | A-069 |
+| 31 | CameraX `GRAPH_ERROR(ERROR_GRAPH_CONFIG)` on every session close | **Open, uninvestigated.** Fires after a successful `stopChunk()`, during `closeSession()`. Affected no run — chunk written, row committed, session completed each time. May be teardown noise or an unclean close that leaks across repeated sessions. Not assumed harmless. | A-070 §6 |
+| 32 | A device harness that drives the notifier cannot see UI wiring | **Third instance of "a whole checked in parts"** (cf. items 23, 26). Mission 3.8.1 returned `RESULT pass` twice while nothing in `lib/` called `start()`. Closed for this case by a widget test that taps the button; the general lesson is that an unattended harness proves the layer it drives and silently assumes the layer above calls it. | A-070 §3 |
+| 33 | `flutter install` deploys a stale artifact | **Use `flutter run`, or `flutter build` immediately before `flutter install`.** It installed Mission 3.8's pre-fix APK and reported success, causing a fix to be reported as on-device when it was not. "Install succeeded" is not evidence the change is on the device. | A-070 §4 |
 
 ---
 
