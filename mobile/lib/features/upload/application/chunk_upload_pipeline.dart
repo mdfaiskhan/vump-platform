@@ -272,6 +272,24 @@ class ChunkUploadPipeline {
       // "S3 5xx" — Chapter 5.13 §1's transient row, verbatim.
       return UploadFailureCause.transportFailure;
     }
+    if (status == NetworkConstants.tooManyRequests) {
+      // A-050. Chapter 5.13 §1 makes every 4xx terminal, and justifies it with
+      // "a repeated identical request would fail identically" — true of 400,
+      // 401, 403, 404 and 409, and false of 429, whose entire meaning is that
+      // the identical request succeeds later. The examples the chapter gives
+      // are "auth/permission error", so a 429 is outside what it meant; only
+      // its wording reaches it.
+      //
+      // `error-handling.md` §16 already classifies NETWORK_RATE_LIMITED as
+      // retryable, so treating it as terminal here would put two documents in
+      // this repository in direct contradiction.
+      //
+      // Retry-After is not honoured: Dio's exception does not carry response
+      // headers through this path, and Chapter 5.13 §2's backoff already
+      // separates a batch that failed together. Named in A-050 as the
+      // remaining half.
+      return UploadFailureCause.transportFailure;
+    }
     if (status != null && status >= NetworkConstants.clientErrorFloor) {
       return UploadFailureCause.rejectedByBackend;
     }
