@@ -1720,6 +1720,100 @@ Reconstructing a factor from it would hand a 0.5-capable device 0.6 on every ses
 
 ---
 
+### A-065 — LiDAR depth capture is dropped from Mission 3's scope
+
+| | |
+|---|---|
+| **Volume** | None. This is the only entry in this register that corrects no volume — no chapter in Volumes 1–5 mentions LiDAR, depth capture, ARKit, scene reconstruction or point clouds |
+| **Says** | Nothing |
+| **Should say** | Nothing. Recorded here because a **decision was taken not to build something**, and a decision with no artefact leaves no trace anywhere else |
+| **Class** | Scope decision |
+| **Status** | Closed — revisitable, see the conditions below |
+
+LiDAR depth capture was proposed as Mission 3.9, alongside the AVFoundation pipeline built by Missions 3.1–3.8. It is **not built**, and this records why, so the next person to suggest it starts from the finding rather than from the idea.
+
+### 1. The technical reason: ARKit requires exclusive camera ownership
+
+Depth from LiDAR is reachable only through an `ARSession` with the `.sceneDepth` or `.smoothedSceneDepth` frame semantic. An `ARSession` cannot run beside this project's capture session.
+
+**Apple Staff, January 2026** ([Developer Forums 812818](https://developer.apple.com/forums/thread/812818)):
+
+> There's no supported way for you to access the ultra wide camera while an ARSession is running with the APIs currently available.
+
+In the same thread the reporting developer describes precisely this project's arrangement and its outcome: *"when you run an AVCaptureSession and then run an ARSession, the AVCaptureSession stops."*
+
+**Apple Staff, DTS Engineer** ([Developer Forums 734782](https://developer.apple.com/forums/thread/734782)):
+
+> There is no supported way to access both the front and rear facing camera streams during an ARSession, please file an enhancement request using Feedback Assistant.
+
+**Both statements concern two *different* cameras, and this project's case is stricter still** — BR-01 fixes capture to the rear camera, so the `ARSession` and the recording session would contend for the *same* physical device. The underlying AVFoundation rule closes it: a plain `AVCaptureSession` takes one input per camera, and a physical capture device is actively used by one session at a time. `AVCaptureMultiCamSession` does not help — it multiplexes cameras *within* one AVFoundation session and cannot admit ARKit's session as a participant.
+
+**What this project owns, read from the plugin source rather than assumed.** `camera_avfoundation 0.10.2`, the package Volume 3 Ch. 3.1 names:
+
+- `CameraPlugin.swift:36` — `captureSessionFactory: { AVCaptureSession() }`
+- `CaptureSession.swift` — a protocol documented as *"a direct passthrough to AVCaptureSession"*, carrying `startRunning()` and `stopRunning()`
+
+The plugin **constructs, owns and runs its own `AVCaptureSession`** bound to the rear device. `captureSessionFactory` is an internal test seam and is not reachable from Dart. There is no API to give the plugin a foreign session and none to borrow its device. So starting an `ARSession` would stop capture mid-recording — from the operating system's point of view, silently.
+
+### 2. Why it is not merely deferred: the alternative is a second capture pipeline
+
+Concurrency being unavailable, LiDAR would require a **replacement** capture path on LiDAR-capable devices rather than an addition beside the existing one.
+
+ARKit supplies `ARFrame.capturedImage` as a `CVPixelBuffer`, frame by frame, and **no recording facility of any kind**. Everything Missions 3.3–3.8 obtained from `startVideoRecording()` / `stopVideoRecording()` would have to be rebuilt in Swift: encoder configuration, H.264 muxing to `.mp4`, the Chapter 5.6 ten-minute boundary, and file finalization — before Chapter 5.5's checksum, Chapter 5.7's metadata and Chapter 5.8's storage could be reached at all.
+
+That is a **second, iOS-only capture pipeline for one hardware tier**, and it would move A-058's boundary — *"Chapter 5.4's pipeline stages are the camera plugin's internals, not this project's code"* — back inside this project on iOS. Duplicating the encode/mux/chunk path is precisely the fork that would make every later recording change a two-implementation change.
+
+This is recorded as a cost, not as a refusal. It is a real option; it is simply much larger than "add depth capture", and taking it silently would have been the error.
+
+### 3. The second, independent reason: there is no iOS toolchain
+
+Even with the fork approved, it could not be built or verified today:
+
+| | |
+|---|---|
+| Development host | Windows. No macOS, no Xcode, no Swift toolchain |
+| `mobile/ios/` | Scaffolded, `IPHONEOS_DEPLOYMENT_TARGET = 13.0`, **no `Podfile`** — `pod install` has never run |
+| Physical devices | One: the CPH2707, **Android**, which has no LiDAR |
+
+An iOS-only feature therefore has no compiler and no test device. Every mission in this project has been held to real-API checks **and** real-device verification — Mission 3.8.1's two full end-to-end passes being the most recent — and neither is reachable for iOS work under the current arrangement. Shipping unverifiable Swift would break that standard rather than extend it.
+
+### 4. It costs nothing downstream — verified, not assumed
+
+Checked directly against the source PDFs rather than carried over from A-062's earlier note:
+
+| Volume | `lidar` | `arkit` | `scene reconstruction` | `point cloud` | `depth` |
+|---|---|---|---|---|---|
+| 1 — Product Planning | 0 | 0 | 0 | 0 | 1 — *"queue depth of 50+ pending chunks"* |
+| 2 — Product Design | 0 | 0 | 0 | 0 | 1 — *"Depth & Reachability Rules"* (navigation) |
+| 3 — Technical Architecture | 0 | 0 | 0 | 0 | 0 |
+| 4 — Backend Architecture | 0 | 0 | 0 | 0 | 0 |
+| 5 — Recording Engine | 0 | 0 | 0 | 0 | 0 |
+
+Both `depth` hits are unrelated to depth capture.
+
+**Volume 4 Chapter 4.5's canonical metadata schema contains no LiDAR group, no depth field and no `has_lidar` flag.** Its seven groups — `identity`, `timing`, `capture`, `device_context`, `capture_conditions`, `integrity`, `collector_authored` — are implemented in full by Mission 3.6 and stored by Mission 3.7, and none of them has a slot this decision leaves empty.
+
+A matching sweep of `mobile/lib/` and `mobile/test/` returns **zero** occurrences of lidar, depth, ARKit or scene-depth in any form. So:
+
+- **no stub**, because nothing calls into a depth port;
+- **no placeholder field**, because Chapter 4.5's shape does not have one;
+- **no forward dependency**, because nothing downstream — Chapter 5.9's queue, 5.10's upload, 5.14's key schema — reads or transmits depth.
+
+This is the difference between this entry and A-062 or A-063. Those record gaps where something *is* expected and absent. This records a capability that was never specified, so dropping it leaves the specification exactly satisfied.
+
+### 5. What would make this worth revisiting
+
+Neither condition is scheduled, and neither is assumed to arrive:
+
+- **Apple exposes a supported concurrent-access API** — an `ARSession` able to share, or to hand over, the capture device an `AVCaptureSession` is using. Both forum threads end with Apple staff directing developers to Feedback Assistant, which is the shape of a limitation Apple knows about and has not committed to changing.
+- **This project gains real iOS development infrastructure** — a macOS host, an Xcode toolchain, and at least one LiDAR-capable device to verify against. Without the third, an implementation could be compiled and still not checked.
+
+Until both hold, LiDAR depth capture is out of scope. If only the second arrives, the fork in §2 becomes buildable but stays expensive, and the decision to take it is still the project owner's.
+
+**No ADR accompanies this**, deliberately. An ADR records an architectural decision that shapes the code; nothing was built, no pattern was established, and no existing decision changed. ADR-024 §"an ADR is not a design document, a specification, a tutorial or a task list" applies — this is a scope decision, and the register is where scope decisions against the volumes belong.
+
+---
+
 ## Confirmed correct — no amendment
 
 Recorded so they are not re-litigated.
