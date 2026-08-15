@@ -1,16 +1,23 @@
 import 'dart:async';
+import 'dart:math';
 
 import 'package:flutter_test/flutter_test.dart';
-
 import 'package:mobile/app/config/app_environment.dart';
+import 'package:mobile/core/connectivity/connectivity_status.dart';
+import 'package:mobile/core/connectivity/interfaces/connectivity_source.dart';
 import 'package:mobile/core/logging/app_logger.dart';
 import 'package:mobile/core/queue/chunk_upload_status.dart';
 import 'package:mobile/core/queue/interfaces/chunk_queue_source.dart';
 import 'package:mobile/core/queue/queued_chunk.dart';
+import 'package:mobile/core/upload/interfaces/chunk_upload_source.dart';
+import 'package:mobile/core/upload/uploadable_chunk.dart';
 import 'package:mobile/features/upload/application/chunk_upload_pipeline.dart';
 import 'package:mobile/features/upload/application/upload_dispatcher.dart';
+import 'package:mobile/features/upload/domain/entities/retry_schedule.dart';
 import 'package:mobile/features/upload/domain/entities/upload_failure_cause.dart';
 import 'package:mobile/features/upload/domain/repositories/upload_service_host.dart';
+
+import '../../../core/time/fakes/fake_clock.dart';
 
 /// Volume 5 Chapter 5.11's dispatcher, driven through its three seams.
 ///
@@ -20,6 +27,13 @@ import 'package:mobile/features/upload/domain/repositories/upload_service_host.d
 /// pipeline is tested in `chunk_upload_pipeline_test.dart`.
 void main() {
   final DateTime startedAt = DateTime.utc(2026, 8, 16, 10);
+
+  UploadOutcome transient(String id, int attempts) => UploadOutcome.failed(
+    chunkId: id,
+    cause: UploadFailureCause.transportFailure,
+    detail: 'dropped',
+    attemptCount: attempts,
+  );
 
   QueuedChunk chunk(String id, ChunkUploadStatus status) => QueuedChunk(
     chunkId: id,
@@ -37,16 +51,25 @@ void main() {
   late _FakeQueue queue;
   late _FakeServiceHost host;
   late _FakeUploads uploads;
+  late _FakeUploadSource source;
+  late _FakeConnectivity connectivity;
+  late FakeClock clock;
 
   UploadDispatcher build({
     int concurrency = UploadDispatcher.defaultConcurrency,
   }) {
     return UploadDispatcher(
       queue: queue,
+      source: source,
+      connectivity: connectivity,
+      clock: clock,
       serviceHost: host,
       uploadNext: uploads.next,
       logger: AppLogger(environment: AppEnvironment.production),
       concurrency: concurrency,
+      // Seeded so the ±20 % jitter is a fixed draw rather than a sample: a
+      // test asserting the schedule must not be able to flake on randomness.
+      schedule: RetrySchedule(random: Random(20260816)),
     );
   }
 
@@ -54,6 +77,9 @@ void main() {
     queue = _FakeQueue();
     host = _FakeServiceHost();
     uploads = _FakeUploads();
+    source = _FakeUploadSource();
+    connectivity = _FakeConnectivity();
+    clock = FakeClock();
   });
 
   group('concurrency — Ch. 5.11 §3', () {
@@ -446,6 +472,202 @@ void main() {
       expect(uploads.calls, 0);
     });
   });
+  group('retry — Ch. 5.13 §1 and §2', () {
+    test('a transient failure is deferred, not failed — §1', () async {
+      final UploadDispatcher dispatcher = build(concurrency: 1);
+      dispatcher.start();
+
+      queue.push(queued(1));
+      await pumpEventQueue();
+      uploads.complete(transient('chunk-0', 1));
+      await pumpEventQueue();
+
+      expect(source.deferred, <String>['chunk-0']);
+      expect(source.failed, isEmpty, reason: 'never surfaced as Failed');
+      expect(source.deferredAttempts, <int>[1]);
+    });
+
+    test('the deadline is the jittered §2 delay from now', () async {
+      final UploadDispatcher dispatcher = build(concurrency: 1);
+      dispatcher.start();
+
+      queue.push(queued(1));
+      await pumpEventQueue();
+      uploads.complete(transient('chunk-0', 1));
+      await pumpEventQueue();
+
+      final Duration waited = source.deadlines.single.difference(clock.now());
+      expect(waited.inMilliseconds, inInclusiveRange(4000, 6000));
+    });
+
+    test('the sixth attempt exhausts the budget and fails the chunk', () async {
+      final UploadDispatcher dispatcher = build(concurrency: 1);
+      dispatcher.start();
+
+      queue.push(queued(1));
+      await pumpEventQueue();
+      uploads.complete(transient('chunk-0', RetrySchedule.maxAttempts));
+      await pumpEventQueue();
+
+      expect(source.failed, <String>['chunk-0']);
+      expect(source.deferred, isEmpty);
+    });
+
+    test('a terminal failure is never deferred', () async {
+      final UploadDispatcher dispatcher = build(concurrency: 1);
+      dispatcher.start();
+
+      queue.push(queued(1));
+      await pumpEventQueue();
+      uploads.complete(
+        const UploadOutcome.failed(
+          chunkId: 'chunk-0',
+          cause: UploadFailureCause.rejectedByBackend,
+          detail: 'refused',
+          attemptCount: 1,
+        ),
+      );
+      await pumpEventQueue();
+
+      expect(source.deferred, isEmpty);
+      expect(source.failed, isEmpty);
+    });
+
+    test('the backoff deadline wakes the dispatcher', () async {
+      final UploadDispatcher dispatcher = build(concurrency: 1);
+      dispatcher.start();
+
+      queue.push(queued(1));
+      await pumpEventQueue();
+      uploads.complete(transient('chunk-0', 1));
+      await pumpEventQueue();
+
+      // The deferral wrote a status, so the queue re-emitted and a runner
+      // already relaunched into the free slot. It finds nothing claimable —
+      // the chunk is behind its deadline — and retires.
+      uploads.complete(null);
+      await pumpEventQueue();
+      final int before = uploads.calls;
+      expect(clock.pendingDelays, 1, reason: 'the wake is armed');
+
+      clock.advance(const Duration(seconds: 10));
+      await pumpEventQueue();
+
+      expect(
+        uploads.calls,
+        greaterThan(before),
+        reason: 'a clock advancing emits no queue event; the timer must',
+      );
+    });
+
+    test('one timer covers a batch, and the earliest wake wins', () async {
+      final UploadDispatcher dispatcher = build();
+      dispatcher.start();
+
+      queue.push(queued(2));
+      await pumpEventQueue();
+      // Both in-flight runners fail before either continuation runs, so both
+      // deferrals land against the same free-slot state.
+      uploads.complete(transient('chunk-0', 1));
+      uploads.complete(transient('chunk-1', 5));
+      await pumpEventQueue();
+
+      expect(source.deferred.length, 2, reason: 'both chunks deferred');
+
+      // The second deferral's deadline (attempt 5 → ~80s) is later than the
+      // first's (attempt 1 → ~5s), so the guard declines to arm a second
+      // timer at all: the earlier wake already covers it. One timer, one
+      // scheduling call, for a batch of two.
+      expect(clock.scheduled, hasLength(1));
+      expect(clock.scheduled.single.inSeconds, lessThan(10));
+      expect(clock.pendingDelays, 1);
+    });
+
+    test('a storage failure while deferring does not kill the loop', () async {
+      source.throwOnDefer = true;
+      final UploadDispatcher dispatcher = build(concurrency: 1);
+      dispatcher.start();
+
+      queue.push(queued(1));
+      await pumpEventQueue();
+      uploads.complete(transient('chunk-0', 1));
+      await pumpEventQueue();
+
+      // The chunk is stranded `uploading` — that is the documented cost of a
+      // failed reschedule, and it is logged. What must NOT happen is the
+      // dispatcher dying with it.
+      expect(source.deferred, isEmpty);
+      queue.push(queued(1));
+      await pumpEventQueue();
+      expect(uploads.calls, greaterThan(1), reason: 'still dispatching');
+    });
+  });
+
+  group('offline mode — Ch. 5.12', () {
+    test('subscribes rather than polls — §2', () {
+      build().start();
+
+      expect(connectivity.watchCalls, 1);
+    });
+
+    test('an online transition clears the backoff — §4, NFR-AVL-02', () async {
+      final UploadDispatcher dispatcher = build(concurrency: 1);
+      dispatcher.start();
+      await pumpEventQueue();
+
+      connectivity.push(ConnectivityStatus.online);
+      await pumpEventQueue();
+
+      expect(source.clearBackoffCalls, 1);
+    });
+
+    test('and then claims without waiting for a queue event', () async {
+      final UploadDispatcher dispatcher = build(concurrency: 1);
+      dispatcher.start();
+
+      queue.push(queued(1));
+      await pumpEventQueue();
+      uploads.complete(transient('chunk-0', 1));
+      await pumpEventQueue();
+      uploads.complete(null);
+      await pumpEventQueue();
+      final int afterDefer = uploads.calls;
+
+      connectivity.push(ConnectivityStatus.online);
+      await pumpEventQueue();
+
+      expect(
+        uploads.calls,
+        greaterThan(afterDefer),
+        reason: 'no polling delay, no Collector action required',
+      );
+    });
+
+    test('going offline is not acted on — 5.12 defers that to 5.13', () async {
+      final UploadDispatcher dispatcher = build(concurrency: 1);
+      dispatcher.start();
+      await pumpEventQueue();
+
+      connectivity.push(ConnectivityStatus.offline);
+      await pumpEventQueue();
+
+      expect(source.clearBackoffCalls, 0);
+    });
+
+    test('a broken connectivity stream degrades rather than stops', () async {
+      final UploadDispatcher dispatcher = build(concurrency: 1);
+      dispatcher.start();
+      await pumpEventQueue();
+
+      connectivity.fail(StateError('radio gone'));
+      await pumpEventQueue();
+
+      queue.push(queued(1));
+      await pumpEventQueue();
+
+      expect(uploads.calls, 1, reason: 'uploads continue');
+    });
+  });
 }
 
 /// A queue whose emissions the test drives.
@@ -557,4 +779,75 @@ class _FakeUploads {
       completer.complete(outcome);
     }
   }
+}
+
+/// The pipeline's view of the same rows, recording what Chapter 5.13 asked of
+/// it. Only the methods the dispatcher itself calls do anything.
+class _FakeUploadSource implements ChunkUploadSource {
+  final List<String> deferred = <String>[];
+  final List<int> deferredAttempts = <int>[];
+  final List<DateTime> deadlines = <DateTime>[];
+  final List<String> failed = <String>[];
+  int clearBackoffCalls = 0;
+  bool throwOnDefer = false;
+
+  @override
+  Future<void> deferAttempt({
+    required String chunkId,
+    required int attemptCount,
+    required DateTime nextAttemptAt,
+  }) async {
+    if (throwOnDefer) {
+      throw StateError('scripted');
+    }
+    deferred.add(chunkId);
+    deferredAttempts.add(attemptCount);
+    deadlines.add(nextAttemptAt);
+  }
+
+  @override
+  Future<void> clearBackoff() async => clearBackoffCalls += 1;
+
+  @override
+  Future<void> markFailed(String chunkId) async => failed.add(chunkId);
+
+  @override
+  Future<UploadableChunk?> claimNext({required DateTime now}) async => null;
+
+  @override
+  Future<void> markComplete(String chunkId) async {}
+
+  @override
+  Future<void> release(String chunkId) async {}
+
+  @override
+  Future<void> recordObjectKey({
+    required String chunkId,
+    required String s3ObjectKey,
+  }) async {}
+}
+
+/// Chapter 5.12 §2's signal, driven by the test.
+class _FakeConnectivity implements ConnectivitySource {
+  final StreamController<ConnectivityStatus> _controller =
+      StreamController<ConnectivityStatus>.broadcast();
+
+  ConnectivityStatus status = ConnectivityStatus.online;
+  int watchCalls = 0;
+
+  void push(ConnectivityStatus next) {
+    status = next;
+    _controller.add(next);
+  }
+
+  void fail(Object error) => _controller.addError(error);
+
+  @override
+  Stream<ConnectivityStatus> watch() {
+    watchCalls += 1;
+    return _controller.stream;
+  }
+
+  @override
+  Future<ConnectivityStatus> current() async => status;
 }

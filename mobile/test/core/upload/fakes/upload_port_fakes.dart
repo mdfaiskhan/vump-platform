@@ -40,8 +40,22 @@ class FakeChunkUploadSource implements ChunkUploadSource {
   /// Set to make [claimNext] throw, for the storage-failure path.
   bool failOnClaim = false;
 
+  /// Every instant [claimNext] was asked to evaluate eligibility against.
+  ///
+  /// Chapter 5.13 §2's backoff window is enforced inside the store, so the
+  /// only thing observable from above is that the pipeline passes its clock
+  /// through rather than letting the store read the wall clock (A-045).
+  final List<DateTime> claimedAt = <DateTime>[];
+
+  /// Deferrals asked for — `'defer:id@attempt'`.
+  final List<String> deferrals = <String>[];
+
+  /// How many times Chapter 5.12 §4's reconnection cleared the deadlines.
+  int clearBackoffCalls = 0;
+
   @override
-  Future<UploadableChunk?> claimNext() async {
+  Future<UploadableChunk?> claimNext({required DateTime now}) async {
+    claimedAt.add(now);
     if (failOnClaim) {
       throw const StorageException(
         errorCode: ErrorCode.storageReadFailed,
@@ -54,6 +68,21 @@ class FakeChunkUploadSource implements ChunkUploadSource {
     final UploadableChunk chunk = _queued.removeAt(0);
     transitions.add('claim:${chunk.chunkId}');
     return chunk;
+  }
+
+  @override
+  Future<void> deferAttempt({
+    required String chunkId,
+    required int attemptCount,
+    required DateTime nextAttemptAt,
+  }) async {
+    deferrals.add('defer:$chunkId@$attemptCount');
+    transitions.add('deferred:$chunkId');
+  }
+
+  @override
+  Future<void> clearBackoff() async {
+    clearBackoffCalls += 1;
   }
 
   @override

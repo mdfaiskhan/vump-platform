@@ -9,6 +9,7 @@ import 'package:mobile/features/upload/domain/entities/chunk_registration.dart';
 import 'package:mobile/features/upload/domain/entities/upload_failure_cause.dart';
 import 'package:mobile/features/upload/domain/repositories/chunk_upload_api.dart';
 
+import '../../../core/time/fakes/fake_clock.dart';
 import '../../../core/upload/fakes/metadata_document_builders.dart';
 import '../../../core/upload/fakes/upload_port_fakes.dart';
 
@@ -42,6 +43,7 @@ void main() {
     final _RecordingApi backend = api ?? _RecordingApi();
     return (
       pipeline: ChunkUploadPipeline(
+        clock: FakeClock(),
         uploadSource: source,
         metadataSource: FakeChunkMetadataSource(
           documents: <String, ChunkMetadataDocument>{
@@ -121,6 +123,7 @@ void main() {
       );
       final _RecordingApi api = _RecordingApi();
       final ChunkUploadPipeline pipeline = ChunkUploadPipeline(
+        clock: FakeClock(),
         uploadSource: source,
         metadataSource: FakeChunkMetadataSource(),
         sessionRegistrar: FakeSessionRegistrar(),
@@ -254,8 +257,17 @@ void main() {
         final UploadOutcome outcome = (await t.pipeline.uploadNext())!;
 
         expect(outcome.isComplete, isFalse);
-        expect(t.source.transitions, contains('failed:chk_1'));
         expect(t.source.transitions, isNot(contains('complete:chk_1')));
+
+        // Mission 4.4 changed what happens next, and this assertion changed
+        // with it. A metadata POST failure is a transport failure, which
+        // Chapter 5.13 §1 classifies as **transient** — "never surfaced to the
+        // Collector as Failed until attempts are exhausted". The pipeline
+        // therefore leaves the row `uploading` and reports; whether six
+        // attempts are spent is UploadDispatcher's question.
+        expect(t.source.transitions, isNot(contains('failed:chk_1')));
+        expect(outcome.isRetryable, isTrue);
+        expect(outcome.attemptCount, 1);
       },
     );
   });
@@ -353,6 +365,7 @@ void main() {
       );
       final _RecordingApi api = _RecordingApi();
       final ChunkUploadPipeline pipeline = ChunkUploadPipeline(
+        clock: FakeClock(),
         uploadSource: source,
         metadataSource: FakeChunkMetadataSource(
           documents: <String, ChunkMetadataDocument>{
@@ -375,6 +388,7 @@ void main() {
     test('an empty queue returns null, not an outcome', () async {
       // "Idle" and "finished" must not be the same answer.
       final ChunkUploadPipeline pipeline = ChunkUploadPipeline(
+        clock: FakeClock(),
         uploadSource: FakeChunkUploadSource(),
         metadataSource: FakeChunkMetadataSource(),
         sessionRegistrar: FakeSessionRegistrar(),
@@ -388,6 +402,7 @@ void main() {
       'a storage failure while claiming is reported, not swallowed',
       () async {
         final ChunkUploadPipeline pipeline = ChunkUploadPipeline(
+          clock: FakeClock(),
           uploadSource: FakeChunkUploadSource()..failOnClaim = true,
           metadataSource: FakeChunkMetadataSource(),
           sessionRegistrar: FakeSessionRegistrar(),
@@ -408,6 +423,7 @@ void main() {
           queued: <UploadableChunk>[chunkFor('chk_1')],
         );
         final ChunkUploadPipeline pipeline = ChunkUploadPipeline(
+          clock: FakeClock(),
           uploadSource: source,
           metadataSource: FakeChunkMetadataSource()..failOnRead = true,
           sessionRegistrar: FakeSessionRegistrar(),
@@ -417,7 +433,13 @@ void main() {
         final UploadOutcome outcome = (await pipeline.uploadNext())!;
 
         expect(outcome.cause, UploadFailureCause.storageFailure);
-        expect(source.transitions, contains('failed:chk_1'));
+
+        // As above: `storageFailure` is transient (a device-storage fault
+        // rather than a fault in the chunk), so Chapter 5.13 §1 forbids
+        // surfacing it as Failed before the budget is spent. The row stays
+        // `uploading` for the dispatcher to settle.
+        expect(source.transitions, isNot(contains('failed:chk_1')));
+        expect(outcome.isRetryable, isTrue);
       },
     );
   });

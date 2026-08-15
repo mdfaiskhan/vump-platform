@@ -8,6 +8,8 @@ import 'package:mobile/core/network/network_constants.dart';
 import 'package:mobile/core/network/providers/dio_provider.dart';
 import 'package:mobile/core/network/vump_api.dart';
 import 'package:mobile/core/queue/chunk_upload_status.dart';
+import 'package:mobile/core/time/interfaces/clock.dart';
+import 'package:mobile/core/time/providers/clock_provider.dart';
 import 'package:mobile/core/upload/interfaces/chunk_metadata_source.dart';
 import 'package:mobile/core/upload/interfaces/chunk_upload_source.dart';
 import 'package:mobile/core/upload/interfaces/session_registrar.dart';
@@ -79,6 +81,7 @@ class ChunkUploadPipeline {
     required ChunkMetadataSource metadataSource,
     required SessionRegistrar sessionRegistrar,
     required ChunkUploadApi uploadApi,
+    required this._clock,
   }) : _source = uploadSource,
        _metadata = metadataSource,
        _registrar = sessionRegistrar,
@@ -88,6 +91,11 @@ class ChunkUploadPipeline {
   final ChunkMetadataSource _metadata;
   final SessionRegistrar _registrar;
   final ChunkUploadApi _api;
+
+  /// Supplies the instant `claimNext` compares Chapter 5.13 §2's backoff
+  /// deadline against. Injected rather than read here so the eligibility rule
+  /// is testable without waiting out a real delay (Volume 9 Ch. 9.6 §2).
+  final Clock _clock;
 
   /// Uploads the next queued chunk, or reports why it could not.
   ///
@@ -106,7 +114,7 @@ class ChunkUploadPipeline {
   }) async {
     final UploadableChunk? chunk;
     try {
-      chunk = await _source.claimNext();
+      chunk = await _source.claimNext(now: _clock.now());
     } on StorageException {
       // Nothing was claimed, so there is no chunk to mark failed. Reported
       // rather than swallowed: a dispatcher needs to know the difference
@@ -225,16 +233,42 @@ class ChunkUploadPipeline {
   }
 
   /// Records a failure and describes it.
+  ///
+  /// ## A transient failure is deliberately left `uploading`
+  ///
+  /// Chapter 5.13 §1 splits this. A **terminal** failure — either class —
+  /// *"surfaces immediately as Failed with a specific, named cause"*, and this
+  /// method writes that. A **transient** failure is *"never surfaced to the
+  /// Collector as Failed until attempts are exhausted"*, and whether they are
+  /// exhausted is Chapter 5.13 §2's six-attempt budget, which this class does
+  /// not own — its own contract says it *"never schedules a second attempt,
+  /// because the policy that would decide the delay"* belongs elsewhere.
+  ///
+  /// So a transient failure returns with the row still `uploading`, and
+  /// `UploadDispatcher` immediately either defers it back to `queued` with a
+  /// deadline or, on the sixth attempt, marks it `failed`. Writing `failed`
+  /// here and having the dispatcher undo it would put the chunk through a
+  /// state C-11 could render — a Collector watching the screen would see a red
+  /// pill flicker on every transient hiccup, which is exactly what §1's
+  /// "never surfaced" forbids.
+  ///
+  /// The row is therefore `uploading` with nothing working on it for one event
+  /// loop turn. If the process dies inside that window the chunk is stranded,
+  /// which is open item 16's existing class of risk rather than a new one, and
+  /// is bounded by the same relaunch behaviour.
   Future<UploadOutcome> _fail(
     UploadableChunk chunk,
     UploadFailureCause cause,
     String detail,
   ) async {
-    await _source.markFailed(chunk.chunkId);
+    if (!cause.isTransient) {
+      await _source.markFailed(chunk.chunkId);
+    }
     return UploadOutcome.failed(
       chunkId: chunk.chunkId,
       cause: cause,
       detail: detail,
+      attemptCount: chunk.attemptCount + 1,
     );
   }
 
@@ -308,6 +342,7 @@ class UploadOutcome {
   const UploadOutcome.complete({required this.chunkId})
     : cause = null,
       detail = null,
+      attemptCount = 0,
       isComplete = true,
       isCancelled = false;
 
@@ -315,6 +350,7 @@ class UploadOutcome {
   const UploadOutcome.cancelled({required this.chunkId})
     : cause = null,
       detail = null,
+      attemptCount = 0,
       isComplete = false,
       isCancelled = true;
 
@@ -323,6 +359,7 @@ class UploadOutcome {
     required this.chunkId,
     required this.cause,
     required this.detail,
+    this.attemptCount = 0,
   }) : isComplete = false,
        isCancelled = false;
 
@@ -341,6 +378,14 @@ class UploadOutcome {
 
   /// Whether it stopped because it was asked to.
   final bool isCancelled;
+
+  /// Attempts consumed by this chunk, **including** the one just reported.
+  ///
+  /// Chapter 5.13 §2 budgets six. The dispatcher counts against that: a value
+  /// of 6 means the budget is spent and the chunk becomes `failed` rather than
+  /// being deferred again. Zero on a complete or cancelled outcome, which
+  /// consume nothing — §1's table has no row for a deliberate pause.
+  final int attemptCount;
 
   /// Whether Chapter 5.13 §2's automatic backoff applies to a retry.
   bool get isRetryable => cause?.isTransient ?? false;
@@ -386,5 +431,6 @@ final Provider<ChunkUploadPipeline> chunkUploadPipelineProvider =
         metadataSource: ref.watch(chunkMetadataSourceProvider),
         sessionRegistrar: ref.watch(sessionRegistrarProvider),
         uploadApi: ref.watch(chunkUploadApiProvider),
+        clock: ref.watch(clockProvider),
       ),
     );

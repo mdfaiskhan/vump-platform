@@ -4,10 +4,12 @@ import 'dart:io';
 // third-party-then-first-party grouping: `directives_ordering` (ADR-021) sorts
 // the whole section, and `path_provider` sorts after `mobile`, so the grouping
 // and the lint can no longer both hold.
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mobile/app/app.dart';
 import 'package:mobile/app/config/app_config.dart';
+import 'package:mobile/core/connectivity/providers/connectivity_ports.dart';
 import 'package:mobile/core/database/database_config.dart';
 import 'package:mobile/core/database/providers/database_provider.dart';
 import 'package:mobile/core/environment/environment_profile.dart';
@@ -29,6 +31,7 @@ import 'package:mobile/features/recording/data/camera_permission_probe_impl.dart
 import 'package:mobile/features/recording/data/camera_recording_pipeline.dart';
 import 'package:mobile/features/recording/data/chunk_metadata_assembler.dart';
 import 'package:mobile/features/recording/data/collections/recording_schemas.dart';
+import 'package:mobile/features/recording/data/connectivity_plus_connectivity_source.dart';
 import 'package:mobile/features/recording/data/connectivity_plus_network_reader.dart';
 import 'package:mobile/features/recording/data/free_space_channel.dart';
 import 'package:mobile/features/recording/data/isar_chunk_store.dart';
@@ -171,8 +174,19 @@ List<Override> recordingOverrides(
       (Ref ref) => SharedPreferencesWideAngleEligibilityCache(preferences),
     ),
     batteryReaderProvider.overrideWith((Ref ref) => BatteryPlusBatteryReader()),
+    // ONE Connectivity instance behind BOTH ports. Volume 5 Chapter 5.12 §2
+    // requires that the queue and the dispatcher "neither polls it
+    // independently, avoiding duplicated battery cost", and there are two
+    // ports above this plugin: NetworkReader answers FR-CHK-04's one-shot
+    // checklist question, ConnectivitySource carries §4's transition stream.
+    //
+    // Sharing the instance is what makes §2 true at the layer it is about —
+    // one plugin channel, one platform subscription — without editing the
+    // checklist path Mission 3 verified on hardware. A-081.
     networkReaderProvider.overrideWith(
-      (Ref ref) => ConnectivityPlusNetworkReader(),
+      (Ref ref) => ConnectivityPlusNetworkReader(
+        connectivity: ref.watch(_connectivityProvider),
+      ),
     ),
 
     // One IsarChunkStore behind both contracts it satisfies. It implements
@@ -259,8 +273,28 @@ List<Override> uploadOverrides() {
     uploadServiceHostProvider.overrideWith(
       (Ref ref) => ForegroundUploadServiceHost(),
     ),
+
+    // Chapter 5.12 §2's ConnectivityService. Declared in core/, implemented in
+    // features/recording/data/ because connectivity_plus is confined there --
+    // ADR-040's pattern applied a fifth time, and its most lopsided instance.
+    // A-081 records why the asymmetry was accepted rather than corrected.
+    connectivitySourceProvider.overrideWith(
+      (Ref ref) => ConnectivityPlusConnectivitySource(
+        connectivity: ref.watch(_connectivityProvider),
+      ),
+    ),
   ];
 }
+
+/// The single `connectivity_plus` handle, shared by both ports above.
+///
+/// Private because nothing outside this file should depend on the plugin type
+/// -- each layer sees only its own port. Declaring it here is what keeps one
+/// instance behind both overrides, which is the whole of Chapter 5.12 §2's
+/// "neither polls it independently".
+final Provider<Connectivity> _connectivityProvider = Provider<Connectivity>(
+  (Ref ref) => Connectivity(),
+);
 
 /// The one IsarChunkStore, shared by both contracts it satisfies.
 ///
