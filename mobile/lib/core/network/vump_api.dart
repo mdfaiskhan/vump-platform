@@ -64,9 +64,13 @@ class VumpApi {
     required String what,
     Object? body,
   }) async {
-    final Response<Map<String, dynamic>> response = await _http
-        .post<Map<String, dynamic>>('$versionPrefix$path', data: body);
-    return _unwrap(response, what);
+    try {
+      final Response<Map<String, dynamic>> response = await _http
+          .post<Map<String, dynamic>>('$versionPrefix$path', data: body);
+      return _unwrap(response, what);
+    } on NetworkException catch (error) {
+      throw _named(error, what);
+    }
   }
 
   /// `PATCH $versionPrefix$path`, returning the envelope's `data`.
@@ -75,9 +79,13 @@ class VumpApi {
     required String what,
     Object? body,
   }) async {
-    final Response<Map<String, dynamic>> response = await _http
-        .patch<Map<String, dynamic>>('$versionPrefix$path', data: body);
-    return _unwrap(response, what);
+    try {
+      final Response<Map<String, dynamic>> response = await _http
+          .patch<Map<String, dynamic>>('$versionPrefix$path', data: body);
+      return _unwrap(response, what);
+    } on NetworkException catch (error) {
+      throw _named(error, what);
+    }
   }
 
   /// `GET $versionPrefix$path`, returning the envelope's `data`.
@@ -86,12 +94,61 @@ class VumpApi {
     required String what,
     Map<String, dynamic>? queryParameters,
   }) async {
-    final Response<Map<String, dynamic>> response = await _http
-        .get<Map<String, dynamic>>(
-          '$versionPrefix$path',
-          queryParameters: queryParameters,
-        );
-    return _unwrap(response, what);
+    try {
+      final Response<Map<String, dynamic>> response = await _http
+          .get<Map<String, dynamic>>(
+            '$versionPrefix$path',
+            queryParameters: queryParameters,
+          );
+      return _unwrap(response, what);
+    } on NetworkException catch (error) {
+      throw _named(error, what);
+    }
+  }
+
+  /// Recovers the backend's named error from a non-2xx response.
+  ///
+  /// **This is the half of Chapter 4.6 §1 that a plain client loses.**
+  /// `ErrorInterceptor` converts a 400 into `NETWORK_BAD_REQUEST: Server
+  /// returned 400 for POST …` before anything reads the body — correct for a
+  /// general-purpose client, which knows nothing about envelopes, and wrong
+  /// here. The chapter requires that errors *"always carry a specific code,
+  /// never a bare HTTP status alone, mirroring Chapter 2.9's
+  /// named-cause-and-fix rule at the API layer"*, and Chapter 2.9 §2 calls a
+  /// generic failure message a defect rather than a fallback.
+  ///
+  /// Found by a test in Mission 4.2 that scripted a `CHUNK_ALREADY_REGISTERED`
+  /// refusal and got back a bare 400. `ErrorInterceptor` is deliberately not
+  /// changed — it sits in the verified request path and its behaviour is right
+  /// for what it knows. The envelope knowledge belongs here, which is the
+  /// class that has it.
+  ///
+  /// Returns [error] unchanged when the body carries no envelope error, so a
+  /// genuine transport failure keeps its own classification.
+  NetworkException _named(NetworkException error, String what) {
+    final Object? cause = error.cause;
+    if (cause is! DioException) {
+      return error;
+    }
+    final Object? body = cause.response?.data;
+    if (body is! Map) {
+      return error;
+    }
+    final Object? envelope = body['error'];
+    if (envelope is! Map) {
+      return error;
+    }
+
+    return NetworkException(
+      errorCode: error.errorCode,
+      message:
+          'The backend refused $what: '
+          '${envelope['code'] ?? 'no code'} — '
+          '${envelope['message'] ?? 'no message'}.',
+      statusCode: error.statusCode,
+      cause: cause,
+      stackTrace: error.stackTrace,
+    );
   }
 
   /// Reads Chapter 4.6 §1's envelope, or throws.
