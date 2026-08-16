@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mobile/features/projects_tasks/data/fake_project_task_repository.dart';
+import 'package:mobile/features/projects_tasks/data/in_memory_project_task_store.dart';
 import 'package:mobile/features/projects_tasks/domain/entities/project.dart';
 import 'package:mobile/features/projects_tasks/domain/entities/task.dart';
 
@@ -12,7 +13,14 @@ import 'package:mobile/features/projects_tasks/domain/entities/task.dart';
 /// and C-06's absent-examples branch ever had. These tests are what make that
 /// deletion fail loudly.
 void main() {
-  const FakeProjectTaskRepository repository = FakeProjectTaskRepository();
+  // A fresh store per test. It is mutable as of Mission 5.2.1, so a shared
+  // instance would let one test's write leak into another's assertions.
+  late FakeProjectTaskRepository repository;
+  setUp(
+    () => repository = FakeProjectTaskRepository(
+      store: InMemoryProjectTaskStore(),
+    ),
+  );
 
   group('fetchProjects — the seed FR-PT-03 and FR-PT-07 need', () {
     test('it returns three Projects, not one', () async {

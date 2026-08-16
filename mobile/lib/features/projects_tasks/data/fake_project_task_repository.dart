@@ -1,3 +1,4 @@
+import 'package:mobile/features/projects_tasks/data/in_memory_project_task_store.dart';
 import 'package:mobile/features/projects_tasks/domain/entities/project.dart';
 import 'package:mobile/features/projects_tasks/domain/entities/task.dart';
 import 'package:mobile/features/projects_tasks/domain/repositories/project_task_repository.dart';
@@ -30,29 +31,13 @@ import 'package:mobile/features/projects_tasks/domain/repositories/project_task_
 /// type: every consumer holds the interface, and the composition root is the
 /// only file that names this class.
 ///
-/// ## The seed data, and why it is shaped this way
+/// ## The seed lives in `InMemoryProjectTaskStore`, not here
 ///
-/// Three Projects and five Tasks, fixed at construction, no randomness and no
-/// artificial delay — a fake that varies between runs makes a widget test
-/// flaky for reasons that have nothing to do with the widget.
-///
-/// The shape is chosen to exercise the requirements 5.1.2's screens must
-/// satisfy, rather than to look plausible in a screenshot:
-///
-/// - **Three Projects, not one** — FR-PT-07, a Collector assigned to more
-///   than one Project at a time.
-/// - **A Project with no Tasks** — C-05's empty state, which a single-Project
-///   seed never reaches.
-/// - **A Task with no reference examples, and one with three** — C-06 has to
-///   render both an absent list and a multi-item one.
-/// - **An archived Project** — so `archivedAt` is non-null somewhere and no
-///   consumer quietly assumes it never is.
-/// - **A null and a non-null `description`** — Chapter 4.4 §2 makes that
-///   column nullable, so C-04 must handle both.
-///
-/// Timestamps are fixed literals rather than `DateTime.now()` offsets, for the
-/// reason Mission 4.4's injectable clock records: a value derived from the
-/// wall clock makes a golden test's output depend on when it ran.
+/// It moved at Mission 5.2.1, when a write path arrived. Two independent
+/// fakes would let `FakeProjectTaskAdminRepository.createProject` succeed
+/// while this repository never showed the result — Projects that vanish, in a
+/// way that looks like a bug in whichever screen was being built. The store's
+/// own doc carries the full argument and the seed's shape.
 ///
 /// ## It enforces no scoping, and that is correct
 ///
@@ -62,91 +47,19 @@ import 'package:mobile/features/projects_tasks/domain/repositories/project_task_
 /// locally would be modelling a rule the real repository does not implement
 /// either, and would hide the fact that nothing client-side enforces BR-19.
 class FakeProjectTaskRepository implements ProjectTaskRepository {
-  /// Creates the fake over its fixed seed.
-  const FakeProjectTaskRepository();
+  /// Creates the fake over [store].
+  ///
+  /// The store is supplied rather than constructed so the composition root can
+  /// hand the same instance to `FakeProjectTaskAdminRepository`. It was `const`
+  /// with a static seed until Mission 5.2.1; a shared mutable store cannot be.
+  const FakeProjectTaskRepository({required this.store});
 
-  static final DateTime _createdAt = DateTime.utc(2026, 8, 1);
-
-  static final List<Project> _projects = <Project>[
-    Project(
-      id: 'prj-riverside-survey',
-      orgId: 'org-vump-demo',
-      name: 'Riverside Corridor Survey',
-      description: 'Street-level capture along the eastern river corridor.',
-      createdBy: 'usr-admin-demo',
-      createdAt: _createdAt,
-    ),
-    Project(
-      id: 'prj-depot-inventory',
-      orgId: 'org-vump-demo',
-      name: 'Depot Inventory Walkthrough',
-      createdBy: 'usr-admin-demo',
-      createdAt: _createdAt,
-    ),
-    Project(
-      id: 'prj-northgate-retired',
-      orgId: 'org-vump-demo',
-      name: 'Northgate Pilot',
-      description: 'Completed pilot, retained for reference.',
-      createdBy: 'usr-admin-demo',
-      createdAt: _createdAt,
-      archivedAt: DateTime.utc(2026, 7, 15),
-    ),
-  ];
-
-  static final Map<String, List<Task>> _tasksByProject = <String, List<Task>>{
-    'prj-riverside-survey': <Task>[
-      Task(
-        id: 'tsk-riverside-embankment',
-        projectId: 'prj-riverside-survey',
-        title: 'East embankment, north to south',
-        instructions:
-            'Walk the embankment path at a steady pace. Keep the water line '
-            'in frame throughout. Do not stop recording at crossings.',
-        createdAt: _createdAt,
-        referenceExamples: const <String>[
-          'https://example.invalid/reference/embankment-pace.mp4',
-          'https://example.invalid/reference/embankment-framing.jpg',
-          'https://example.invalid/reference/embankment-crossing.jpg',
-        ],
-      ),
-      Task(
-        id: 'tsk-riverside-bridge',
-        projectId: 'prj-riverside-survey',
-        title: 'Bridge underside inspection',
-        instructions:
-            'Capture the underside of each of the three spans. One continuous '
-            'pass per span.',
-        createdAt: _createdAt,
-      ),
-    ],
-    'prj-depot-inventory': <Task>[
-      Task(
-        id: 'tsk-depot-bay-a',
-        projectId: 'prj-depot-inventory',
-        title: 'Bay A shelving, floor to ceiling',
-        instructions:
-            'Start at the aisle entrance. Pan up each shelving unit in turn.',
-        createdAt: _createdAt,
-        referenceExamples: const <String>[
-          'https://example.invalid/reference/bay-pan.mp4',
-        ],
-      ),
-      Task(
-        id: 'tsk-depot-loading',
-        projectId: 'prj-depot-inventory',
-        title: 'Loading dock approach',
-        instructions: 'Single pass from the gate to the dock door.',
-        createdAt: _createdAt,
-      ),
-    ],
-    // Seeded empty on purpose — C-05 needs a Project that lists no Tasks.
-    'prj-northgate-retired': <Task>[],
-  };
+  /// The shared store this reads. Written by `FakeProjectTaskAdminRepository`.
+  final InMemoryProjectTaskStore store;
 
   @override
   Future<List<Project>> fetchProjects() async =>
-      List<Project>.unmodifiable(_projects);
+      List<Project>.unmodifiable(store.projects);
 
   @override
   Future<List<Task>> fetchTasks(String projectId) async {
@@ -156,8 +69,6 @@ class FakeProjectTaskRepository implements ProjectTaskRepository {
     // error code — but modelling one specific status here would be inventing
     // a wire detail the fake has no basis for. Empty is the honest stand-in:
     // "no Tasks to show".
-    return List<Task>.unmodifiable(
-      _tasksByProject[projectId] ?? const <Task>[],
-    );
+    return List<Task>.unmodifiable(store.tasks[projectId] ?? const <Task>[]);
   }
 }

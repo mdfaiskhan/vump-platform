@@ -25,6 +25,7 @@ import 'package:mobile/features/auth/data/invite_code_repository_impl.dart';
 import 'package:mobile/features/auth/data/repositories/auth_repository_impl.dart';
 import 'package:mobile/features/projects_tasks/application/project_task_providers.dart';
 import 'package:mobile/features/projects_tasks/data/fake_project_task_repository.dart';
+import 'package:mobile/features/projects_tasks/data/in_memory_project_task_store.dart';
 import 'package:mobile/features/recording/application/checklist_notifier.dart';
 import 'package:mobile/features/recording/application/finalize_chunk_use_case.dart';
 import 'package:mobile/features/recording/application/recording_notifier.dart';
@@ -71,6 +72,10 @@ Future<void> main() async {
   // be awaited here rather than inside a widget. ADR-010 requires Firebase to
   // be initialised exactly once, off the widget tree; this is the only place
   // that satisfies both.
+  // TEMPORARY, with the fakes it backs. Retired at Mission 7's M8 gate.
+  final InMemoryProjectTaskStore fakeProjectTaskStore =
+      InMemoryProjectTaskStore();
+
   final ProviderContainer container = ProviderContainer(
     overrides: <Override>[
       databaseDirectoryProvider.overrideWithValue(documents.path),
@@ -106,8 +111,13 @@ Future<void> main() async {
       // This is the only file in `lib/` that names the class. Every consumer
       // holds `ProjectTaskRepository`, so the removal is one line here plus
       // one deleted file.
+      // ONE store behind the fake, so a write made through the Admin
+      // repository is visible to the Collector's reads. Two independent fakes
+      // would let a created Project vanish, which reads as a bug in whichever
+      // screen is being built rather than in either fake. Same arrangement as
+      // the single IsarChunkStore behind four contracts, below.
       projectTaskRepositoryProvider.overrideWithValue(
-        const FakeProjectTaskRepository(),
+        FakeProjectTaskRepository(store: fakeProjectTaskStore),
       ),
 
       // The recording feature's collections, contributed here rather than by
