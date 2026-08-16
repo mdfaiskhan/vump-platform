@@ -35,7 +35,7 @@ import 'package:mobile/features/projects_tasks/domain/entities/task.dart';
 /// no endpoint that does — only `POST` and `DELETE` on
 /// `/v1/tasks/{id}/assignments`. Volume 2 Chapter 2.7's A-06 nonetheless
 /// requires its checkboxes to *"reflect current assignment state on load"*,
-/// which is open item 88.
+/// which is open item 89.
 ///
 /// Tests inspect this field directly. That is deliberate: a fake's own state
 /// is a legitimate thing for a test to assert against, and inventing a domain

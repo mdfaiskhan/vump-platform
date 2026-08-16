@@ -32,14 +32,14 @@ import 'package:mobile/features/projects_tasks/domain/entities/task.dart';
 ///
 /// - **Remove a Task.** FR-ADM-02 says *"create, edit, and **remove** Tasks"*
 ///   and MVP §2.2 repeats it. Chapter 4.6 §3 has no `DELETE /v1/tasks/{id}`.
-///   Open item 85.
+///   Open item 86.
 /// - **Edit a Project.** MVP §2.2 says *"Create, edit, and remove Projects"*
 ///   and Chapter 2.5's **A-04 is literally named "Create / Edit Project"**.
 ///   There is no `PATCH /v1/projects/{id}` — and no FR either: FR-ADM-01 is
-///   create-only. Open item 86.
+///   create-only. Open item 87.
 /// - **Remove or archive a Project.** No route, no FR, and the word *archive*
 ///   appears nowhere in Volume 1 or Volume 2 — yet `projects.archived_at` is a
-///   live column that C-04 renders and A-104 reads. Open item 87.
+///   live column that C-04 renders and A-104 reads. Open item 88.
 ///
 /// ## Assignment is Task-level only — G3's resolution
 ///
@@ -60,7 +60,7 @@ import 'package:mobile/features/projects_tasks/domain/entities/task.dart';
 /// Collector to every Task in this Project, including ones created later"*. A
 /// Project-level assignment would be a rule; Task-level assignments are facts.
 /// An Admin adding a Task next month must assign Collectors again and nothing
-/// will remind them. That is a real product question, recorded as open item 84
+/// will remind them. That is a real product question, recorded as open item 85
 /// rather than answered by an interface.
 abstract interface class ProjectTaskAdminRepository {
   /// FR-ADM-01 — `POST /v1/projects`.
@@ -121,7 +121,7 @@ abstract interface class ProjectTaskAdminRepository {
   /// Task-scoped, per G3's resolution above. Idempotent by contract: assigning
   /// an already-assigned Collector is not an error, because Chapter 2.7's A-06
   /// saves a whole checkbox set at once and cannot know which boxes changed
-  /// without a read endpoint that does not exist (open item 88).
+  /// without a read endpoint that does not exist (open item 89).
   ///
   /// UC-07's exception flow requires that assigning a Collector who has no
   /// account or is deactivated is **blocked with an explanation** rather than

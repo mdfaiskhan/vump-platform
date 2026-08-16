@@ -65,7 +65,7 @@ void main() {
 
     test('a new Project is live, not archived', () async {
       // A-104: active means archivedAt == null. Nothing in Volume 1 or 2
-      // specifies who archives a Project or when (open item 87), so a created
+      // specifies who archives a Project or when (open item 88), so a created
       // one is simply not archived.
       final Project created = await admin.createProject(name: 'Harbour');
 
@@ -236,7 +236,7 @@ void main() {
 
     test('assigning twice is a no-op, not an error', () async {
       // A-06 saves a whole checkbox set at once and cannot know which boxes
-      // changed, because no read endpoint for assignments exists (item 88).
+      // changed, because no read endpoint for assignments exists (item 89).
       await admin.assignCollector(
         taskId: 'tsk-depot-bay-a',
         collectorId: 'usr-collector-1',
@@ -331,7 +331,7 @@ void main() {
 
   // NOT TESTED, and worth saying why rather than writing a test that looks
   // like a guard and is not: the ABSENCE of removeTask, editProject and
-  // archiveProject (open items 85, 86, 87) is a compile-time fact about the
+  // archiveProject (open items 86, 87, 88) is a compile-time fact about the
   // interface, and Dart offers no runtime assertion over a class's method set.
   // If a later mission adds one, nothing here breaks.
   //
