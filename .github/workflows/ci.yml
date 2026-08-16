@@ -465,6 +465,100 @@ jobs:
 
           exit $status
 
+      - name: Verify design tokens
+        run: |
+          # Every screen draws spacing, radius and size from lib/app/theme/'s
+          # transcribed scale rather than from a raw number, so the scale stays
+          # the one place a value changes.
+          #
+          # WHAT THIS DOES NOT CHECK, and the distinction is load-bearing:
+          # `lib/app/theme/` is a TRANSCRIPTION of Volume 2 Chapter 2.8, and
+          # Chapter 2.8 itself is not in this repository (open item 74). This
+          # job verifies INTERNAL consistency — that screens use the tokens the
+          # project has — and says nothing about whether those tokens match the
+          # design system they were copied from. A green run here does not
+          # close item 74 and is not a Chapter 2.8 compliance audit.
+          #
+          # Scoped to presentation/: `core/` and `data/` hold no layout, and
+          # `app/theme/` is where the literals are supposed to live.
+          #
+          # KNOWN LIMITATION, stated rather than discovered later: this is a
+          # line-based grep. A constructor `dart format` has split across
+          # several lines puts its numbers on their own lines, where no pattern
+          # here matches them: a fromLTRB whose arguments each sit on their
+          # own line passes silently. A raw value sitting beside a token on one line is also
+          # skipped, because the token exclusion is line-granular. The check
+          # therefore catches the common single-line case and is not a proof of
+          # absence — item 41's rule about a green check applies to this job as
+          # much as to any other.
+          #
+          # Duration is deliberately absent. AppDuration is a MOTION scale,
+          # while Duration(days: 7) for an invite-code expiry and
+          # Duration(seconds: 1) for a timer tick are business and behavioural
+          # values. Flagging them would be a false positive, and a check that
+          # cries wolf is one people learn to skip.
+
+          status=0
+
+          # Same as `scan`, with one file excluded by path and by argument, so
+          # the exemption is stated at the call site rather than buried.
+          scan_except() {
+            label="$1"
+            pattern="$2"
+            exempt="$3"
+            hits=$(grep -rnE "$pattern" mobile/lib/features/*/presentation/ \
+              --include='*.dart' 2>/dev/null \
+              | grep -vE 'AppSpacing|AppRadius|AppSizes|AppOpacity|AppElevation' \
+              | grep -vE 'DESIGN-TOKEN-EXEMPT' \
+              | grep -vF "$exempt" || true)
+            if [ -n "$hits" ]; then
+              echo "::error::${label} — use a token from lib/app/theme/."
+              echo "$hits" | sed 's/^/  /'
+              status=1
+            else
+              echo "ok  ${label} (except ${exempt})"
+            fi
+          }
+
+          scan() {
+            label="$1"
+            pattern="$2"
+            hits=$(grep -rnE "$pattern" mobile/lib/features/*/presentation/               --include='*.dart' 2>/dev/null               | grep -vE 'AppSpacing|AppRadius|AppSizes|AppOpacity|AppElevation'               | grep -vE 'DESIGN-TOKEN-EXEMPT' || true)
+            if [ -n "$hits" ]; then
+              echo "::error::${label} — use a token from lib/app/theme/, or mark the line DESIGN-TOKEN-EXEMPT with a reason if no token has that value."
+              echo "$hits" | sed 's/^/  /'
+              status=1
+            else
+              echo "ok  ${label}"
+            fi
+          }
+
+          # Raw numerics inside the constructors that carry layout values. A
+          # closed list rather than "any number", so maxLines, flex, itemCount
+          # and index arithmetic are not swept up.
+          scan "raw spacing in EdgeInsets"             "EdgeInsets\.(all|symmetric|only|fromLTRB)\([^)]*[0-9]"
+          scan "raw spacing in SizedBox"             "SizedBox\([^)]*(height|width):[[:space:]]*[0-9]"
+          scan "raw radius"             "(Radius|BorderRadius)\.circular\([[:space:]]*[0-9]"
+          scan "raw icon size"             "Icon\([^)]*size:[[:space:]]*[0-9]"
+
+          # Colour must come through the theme (ADR-005), never a literal or
+          # the raw Material palette.
+          #
+          # C-09 is exempt from the Material-palette rule as a whole file, not
+          # line by line, because its case is one argument rather than eight:
+          # the surround behind a full-bleed camera preview is black as an
+          # absence of light, and its red indicator is a question Chapter 2.7
+          # raises and open item 98 records. Naming the file here is more
+          # visible than eight scattered markers would be, and its own doc
+          # comment carries the reasoning.
+          scan "colour literal" "Color\(0x"
+          scan_except "raw Material colour" "Colors\.[a-z]" \
+            "recording/presentation/recording_screen.dart"
+          scan "raw font size" "fontSize:"
+
+          exit $status
+
+
   goldens:
     name: Golden tests
     runs-on: ubuntu-latest
