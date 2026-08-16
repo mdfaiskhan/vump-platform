@@ -79,11 +79,23 @@ class LocalProcessingScreen extends ConsumerWidget {
                   if (done) ...<Widget>[
                     const SizedBox(height: 32),
                     FilledButton(
-                      // C-12 returns to the Task List so the Collector's place
-                      // in their assigned work is preserved. That screen is
-                      // `features/projects_tasks/`'s and unbuilt, so this goes
-                      // to the Record tab's own root instead.
-                      onPressed: () => context.go('/collector/record'),
+                      // FR-SES-04: "return the Collector to the Task List or
+                      // Dashboard once a session is marked Complete." This
+                      // takes the Dashboard half, and stops there deliberately.
+                      //
+                      // The Task List half needs a projectId, and this screen
+                      // does not have one. The recording path carries a
+                      // sessionId; the session's taskId is never wired through
+                      // to anything (open item 79), and TaskContext is still
+                      // UnsourcedTaskContext, so there is no Project to return
+                      // to. Guessing one would send a Collector to somebody
+                      // else's work.
+                      //
+                      // Until Mission 5.1.3 this went to the Record tab
+                      // instead, because C-05 did not exist. It does now, so
+                      // the fallback is gone -- but "or Dashboard" is the half
+                      // that can be satisfied honestly today.
+                      onPressed: () => context.go('/collector/dashboard'),
                       child: const Text('Done'),
                     ),
                   ],
