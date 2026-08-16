@@ -446,14 +446,28 @@ jobs:
           # consumes and features/projects_tasks/ will eventually implement.
           # Three feature pairs, none of which may name each other.
           #
-          # Checked as a list rather than as two copies of one block, so
-          # adding a third contract module is one word rather than ten lines
-          # someone can forget to keep in step.
-          for module in queue upload connectivity; do
+          # DERIVED FROM THE FILESYSTEM, not from a list. It was a list —
+          # `queue upload connectivity` — written so that "adding a third
+          # contract module is one word rather than ten lines someone can
+          # forget to keep in step". Mission 5.4 then added a FOURTH,
+          # core/onboarding/, and the one word was forgotten anyway.
+          #
+          # Mission 5.7's security review found the gap: nine of core/'s twelve
+          # modules were unchecked. None of them leaked — verified by hand at
+          # the time — but the check could not have said so.
+          #
+          # Enumerating the directory removes the failure mode instead of
+          # patching this instance of it. It also widens the check from the
+          # three ADR-040 contract modules to all of core/, which is correct
+          # regardless: invariant I41 forbids ANY core/ module from importing
+          # features/, and the contract modules were only ever the loudest
+          # case rather than the only one.
+          for module in $(find lib/core -mindepth 1 -maxdepth 1 -type d \
+              -exec basename {} \; | sort); do
             leak=$(grep -rn "package:mobile/features/" "lib/core/${module}" \
               --include='*.dart' 2>/dev/null || true)
             if [ -n "$leak" ]; then
-              echo "::error::core/${module}/ imports a feature — a contract must not name either side (ADR-040, ADR-041)."
+              echo "::error::core/${module}/ imports a feature — core/ names no feature (invariant I41); for a contract module, neither side (ADR-040, ADR-041)."
               echo "$leak" | sed 's/^/  /'
               status=1
             else
