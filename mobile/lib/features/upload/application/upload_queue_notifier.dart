@@ -1,24 +1,8 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:mobile/core/queue/chunk_upload_status.dart';
-import 'package:mobile/core/queue/interfaces/chunk_queue_source.dart';
+import 'package:mobile/core/queue/providers/queue_ports.dart';
 import 'package:mobile/core/queue/queued_chunk.dart';
-
-/// The queue's rows, overridden at the composition root.
-///
-/// Unimplemented rather than defaulted, for the reason ADR-022 gives and
-/// every other port in this project already follows: a default would have to
-/// name a concrete class, and the only implementation lives in
-/// `features/recording/data/` — the import ADR-022 R3 forbids this feature
-/// from making. The composition root introduces the two (ADR-040).
-final Provider<ChunkQueueSource> chunkQueueSourceProvider =
-    Provider<ChunkQueueSource>(
-      (Ref ref) => throw UnimplementedError(
-        'chunkQueueSourceProvider must be overridden with a ChunkQueueSource. '
-        'features/recording/data/ provides IsarChunkStore, which implements '
-        'it. See ADR-040.',
-      ),
-    );
 
 /// Volume 5 Chapter 5.9's Upload Queue — a live view, not a list.
 ///

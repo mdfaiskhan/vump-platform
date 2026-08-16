@@ -7,11 +7,11 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mobile/app/theme/app_theme.dart';
 import 'package:mobile/core/queue/chunk_upload_status.dart';
 import 'package:mobile/core/queue/interfaces/chunk_queue_source.dart';
+import 'package:mobile/core/queue/providers/queue_ports.dart';
 import 'package:mobile/core/queue/queued_chunk.dart';
 import 'package:mobile/core/time/interfaces/clock.dart';
 import 'package:mobile/core/time/providers/clock_provider.dart';
 import 'package:mobile/features/upload/application/upload_dispatcher_status_notifier.dart';
-import 'package:mobile/features/upload/application/upload_queue_notifier.dart';
 import 'package:mobile/features/upload/domain/entities/upload_dispatcher_status.dart';
 import 'package:mobile/features/upload/presentation/collector_sessions_screen.dart';
 

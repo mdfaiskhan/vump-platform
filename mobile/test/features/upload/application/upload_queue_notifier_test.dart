@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mobile/core/queue/chunk_upload_status.dart';
 import 'package:mobile/core/queue/interfaces/chunk_queue_source.dart';
+import 'package:mobile/core/queue/providers/queue_ports.dart';
 import 'package:mobile/core/queue/queued_chunk.dart';
 import 'package:mobile/features/upload/application/upload_queue_notifier.dart';
 

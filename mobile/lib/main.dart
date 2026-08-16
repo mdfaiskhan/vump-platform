@@ -17,6 +17,7 @@ import 'package:mobile/core/errors/app_exception.dart';
 import 'package:mobile/core/firebase/providers/firebase_provider.dart';
 import 'package:mobile/core/logging/app_logger.dart';
 import 'package:mobile/core/logging/providers/logger_provider.dart';
+import 'package:mobile/core/queue/providers/queue_ports.dart';
 import 'package:mobile/core/upload/providers/upload_ports.dart';
 import 'package:mobile/features/auth/application/auth_notifier.dart';
 import 'package:mobile/features/auth/application/invite_code_notifier.dart';
@@ -46,7 +47,6 @@ import 'package:mobile/features/recording/data/unavailable_capture_conditions_re
 import 'package:mobile/features/recording/data/unsourced_task_context.dart';
 import 'package:mobile/features/upload/application/upload_dispatcher.dart';
 import 'package:mobile/features/upload/application/upload_dispatcher_status_notifier.dart';
-import 'package:mobile/features/upload/application/upload_queue_notifier.dart';
 import 'package:mobile/features/upload/data/foreground_upload_service_host.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
