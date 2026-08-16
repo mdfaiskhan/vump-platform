@@ -18,12 +18,14 @@ import 'package:mobile/core/firebase/providers/firebase_provider.dart';
 import 'package:mobile/core/logging/app_logger.dart';
 import 'package:mobile/core/logging/providers/logger_provider.dart';
 import 'package:mobile/core/queue/providers/queue_ports.dart';
+import 'package:mobile/core/time/providers/clock_provider.dart';
 import 'package:mobile/core/upload/providers/upload_ports.dart';
 import 'package:mobile/features/auth/application/auth_notifier.dart';
 import 'package:mobile/features/auth/application/invite_code_notifier.dart';
 import 'package:mobile/features/auth/data/invite_code_repository_impl.dart';
 import 'package:mobile/features/auth/data/repositories/auth_repository_impl.dart';
 import 'package:mobile/features/projects_tasks/application/project_task_providers.dart';
+import 'package:mobile/features/projects_tasks/data/fake_project_task_admin_repository.dart';
 import 'package:mobile/features/projects_tasks/data/fake_project_task_repository.dart';
 import 'package:mobile/features/projects_tasks/data/in_memory_project_task_store.dart';
 import 'package:mobile/features/recording/application/checklist_notifier.dart';
@@ -118,6 +120,12 @@ Future<void> main() async {
       // the single IsarChunkStore behind four contracts, below.
       projectTaskRepositoryProvider.overrideWithValue(
         FakeProjectTaskRepository(store: fakeProjectTaskStore),
+      ),
+      projectTaskAdminRepositoryProvider.overrideWith(
+        (Ref ref) => FakeProjectTaskAdminRepository(
+          store: fakeProjectTaskStore,
+          clock: ref.watch(clockProvider),
+        ),
       ),
 
       // The recording feature's collections, contributed here rather than by

@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:mobile/features/projects_tasks/domain/repositories/project_task_admin_repository.dart';
 import 'package:mobile/features/projects_tasks/domain/repositories/project_task_repository.dart';
 
 /// The repository this feature's notifiers drive.
@@ -27,5 +28,31 @@ final Provider<ProjectTaskRepository> projectTaskRepositoryProvider =
         'ProjectTaskRepository. features/projects_tasks/data/ provides '
         'FakeProjectTaskRepository until Mission 7 supplies a real one; see '
         'ADR-022 for why application/ cannot import it directly.',
+      ),
+    );
+
+/// The Admin's write path, overridden at the composition root.
+///
+/// Same inversion and the same reason as [projectTaskRepositoryProvider]:
+/// `application/` may not import `data/` (ADR-022 §5.3).
+///
+/// **Nothing reads this yet.** Mission 5.2.1 built the interface and the fake;
+/// Mission 5.2.2's Admin CRUD screens are the first consumers. It is declared
+/// now rather than with its first caller because A-099's whole argument for
+/// splitting read from write is that a Collector-side notifier must be unable
+/// to reach a write method — and that guarantee is only real once the two
+/// providers are distinct.
+///
+/// The throw matters more here than on the read side. An unwired read presents
+/// as an empty list; an unwired write would present as *"your Project was
+/// saved"* over nothing at all, which is the false confirmation Chapter 2.7's
+/// A-06 refuses by name.
+final Provider<ProjectTaskAdminRepository> projectTaskAdminRepositoryProvider =
+    Provider<ProjectTaskAdminRepository>(
+      (Ref ref) => throw UnimplementedError(
+        'projectTaskAdminRepositoryProvider must be overridden with a '
+        'ProjectTaskAdminRepository. features/projects_tasks/data/ provides '
+        'FakeProjectTaskAdminRepository until Mission 7 supplies a real one; '
+        'see ADR-022 for why application/ cannot import it directly.',
       ),
     );
