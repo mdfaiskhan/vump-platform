@@ -40,6 +40,13 @@ Mission 4.8's security review found it, by reading `git log` against this file r
 
 ### Added
 
+- **2026-08-17** — **Chapter 2.10's accessibility guidelines are now enforced by machine, not by review.** Three sweeps run across all ten screens Mission 5 built: `androidTapTargetGuideline`, whose `Size(48, 48)` is the same number Chapter 2.10 §3 states, so the threshold is not this project's to restate in a third place; `labeledTapTargetGuideline` for §4; and `textContrastGuideline` for §2.3, in **both themes**, because §2.3 asks for dark mode as *"a validated second pass … never an automatic filter"*.
+
+  All three ship inside `flutter_test`. **No dependency was added**, and a hand-rolled bounds assertion was rejected for the reason that it would restate a published threshold with nothing tying the copies together. This closes open item 105, where `AppSizes.minTouchTarget` held the number and nothing checked it.
+
+  Results: labelling **10/10**, contrast **20/20**, tap targets **9/10**. The one failure is real — C-06's `SelectableText` reference URLs measure 768×28dp and carry a `longPress` action, breaching both §3's table and §3's bullet forbidding *"a precise long-press"*. It is skipped with the reason in the test name so it prints on every run, and recorded as open item 108 rather than fixed, because every fix is a product decision entangled with open item 80. A-136. Mission 5.6. (`04dea7a`)
+
+
 - **2026-08-16** — A-01 Admin Dashboard, built as a placeholder given its specified job rather than as a partial dashboard. Volume 2 Chapter 2.2's Admin flow step 2 assigns it one concrete, fully satisfiable duty — *"Selects 'New Project' or an existing Project"*, with the branch *"No Projects yet → empty state prompting Project creation"* — and it is the screen the Role Router lands every Admin on. Until now it rendered its own name.
 
   It carries the one tile with an honest source: the managed-Projects count, from `fetchProjects()` under Chapter 4.6 §3's Admin scope. *"All managed"* rather than *"active"*, so unlike C-03 it needs no `archivedAt` reading.
@@ -103,6 +110,10 @@ Mission 4.8's security review found it, by reading `git log` against this file r
   **The upload runs in the app's main isolate, not in the service's task isolate**, and ADR-042 records why: the plugin's `TaskHandler` runs in a separate isolate that cannot hold the single `IsarChunkStore` instance ADR-040 requires, and `firebase_auth` does not serve tokens to a background isolate. An Android foreground service keeps its host process alive, which is the whole of what Chapter 5.11 §3 asks for.
 
   **Nothing uploads yet.** `sessionRegistrarProvider` still throws (open item 36) and A-068's Guard 1 refuses every chunk a device has recorded (open item 37), so the dispatcher logs a wiring fault and stops. That is the honest state of the feature and it fails visibly rather than silently. Mission 4.3, ADR-042.
+
+- **2026-08-15** — Pre-Recording Checklist (C-07/C-08) and the chrome-free Recording Screen (C-09), with Local Processing (C-10). BR-04 is enforced at the route by `RecordingGuard`, not only by a disabled button. Mission 3.8. (`83d2a48`)
+- **2026-08-15** — Recording lifecycle state machine, capture pipeline, 10-minute chunk boundary, and background chunk processing decoupled from capture. Missions 3.2, 3.3, 3.4, 3.4.5. (`09e7fbe`, `dd29abb`, `390c170`, `b37ebf2`)
+- **2026-08-15** — Camera module, capability ladder and fixed capture specification (BR-01/BR-02). Mission 3.1. (`4c7f3d1`)
 
 ### Security
 
@@ -175,13 +186,14 @@ Mission 4.8's security review found it, by reading `git log` against this file r
 - **2026-08-15** — SHA-256 integrity checksums are computed over every finalized chunk and stored alongside it (FR-META-10), off the UI isolate. Verified on real hardware by independent re-hash, including a 633 MB file. Mission 3.4. (`390c170`)
 - **2026-08-15** — Per-device wide-angle eligibility is cached in `shared_preferences` — a tier name and two version strings. No secret, no credential, and no identifier of any person or device; ADR-008 governs secrets and this holds none. Mission 3.1, A-057. (`4c7f3d1`)
 
-### Added
-
-- **2026-08-15** — Pre-Recording Checklist (C-07/C-08) and the chrome-free Recording Screen (C-09), with Local Processing (C-10). BR-04 is enforced at the route by `RecordingGuard`, not only by a disabled button. Mission 3.8. (`83d2a48`)
-- **2026-08-15** — Recording lifecycle state machine, capture pipeline, 10-minute chunk boundary, and background chunk processing decoupled from capture. Missions 3.2, 3.3, 3.4, 3.4.5. (`09e7fbe`, `dd29abb`, `390c170`, `b37ebf2`)
-- **2026-08-15** — Camera module, capability ladder and fixed capture specification (BR-01/BR-02). Mission 3.1. (`4c7f3d1`)
-
 ### Fixed
+
+- **2026-08-17** — **Four accessibility defects, and two more that only a physical device could find.** Against Chapter 2.10: auth error banners are now live regions so a failed sign-in is announced rather than silent on SH-02 — the first screen §8 names; C-11's upload progress exposes its percentage as a value a screen reader can read; C-09's Stop control announces *"Recording — tap to stop"* while capturing, where a constant label had said nothing about whether capture was running; and the checklist's unmeasured row says *"Checking"* where it had been silent between its pass and fail siblings.
+
+  **§5's modal focus trap needed no code.** Every screen Chapter 2.4 calls a modal is a full-screen route reached by `context.go`, so the triggering screen is not in the widget tree at all — stronger than a trap. A regression test holds the property instead of a `FocusScope` implying the framework was not already doing it. §5's *"return focus to the triggering element"* half is structurally unsatisfiable under `go` and is recorded as open item 104.
+
+  **The device pass then found two defects the entire suite could not see.** Every `ChunkStatusPill` announced its label twice — `Semantics(label:)` does not replace a child `Text`'s contribution, so all four states doubled — and the tab bar clipped its labels at 150% **and** 200% text scale, because `NavigationBar` is a fixed 80dp that does not grow. Both existed only outside Flutter's own representation: one in Android's accessibility tree, one at a text scale no test set. Both fixed and verified by the same method that found them. A-133, A-134. Mission 5.5. (`359d857`, `d901a9d`, `f25e12d`, `8399242`)
+
 
 - **2026-08-16** — C-06 ignored the `projectId` its own route carried. The route has been `/collector/projects/:projectId/tasks/:taskId` since Mission 1.3, but `CollectorTaskDetailScreen` took only the `taskId`, which made open item 70 — no `GET /v1/tasks/{id}` exists — look like it blocked the drill-down path too. It never did. Reading the parameter closes the narrow half of that item with no new endpoint, no cache and no client-side scan across every Project. `/checklist/:taskId` and Chapter 2.4 §2's Record tab still carry no Project and keep item 70 open. Mission 5.1.2, standalone commit.
 
@@ -196,6 +208,13 @@ Mission 4.8's security review found it, by reading `git log` against this file r
 - **2026-08-15** — Android build failure: `concurrent-futures` was missing from `camera_android_camerax`'s compile classpath. Mission 3.1.4. (`11d3ef4`)
 
 ### Changed
+
+- **2026-08-16** — **Thirty-eight raw spacing, radius, icon and colour values across eight files now read from `lib/app/theme/`**, and a CI step keeps them there. Six further values are exempted **in place, each with its reason**, because no token carries their value — recorded as open item 98 rather than rounded to the nearest token, since every substitution would change rendered pixels and two are covered by committed golden baselines.
+
+  **The goldens were run BEFORE any change to establish the real baseline, then again after**, and proved pixel-identical by MD5 on both themes rather than assumed to be. Every file touched was built by Missions 1, 3 and 4; the nine screens Missions 5.1 and 5.2 built were already clean.
+
+  **This verified INTERNAL consistency, which is not a Chapter 2.8 audit** — Chapter 2.8 is not in this repository, so no screen can be checked against the design system it was told to use. The two claims are easy to conflate and A-125 exists to keep them apart. Open item 74 stays open. Mission 5.3. (`b78d05a`)
+
 
 - **2026-08-16** — **C-11's session headings name a time instead of a UUID, and each session now summarises its own progress.** Chapter 2.7 asks for chunk rows *"grouped under the session name"*; nothing in this project gives a session a name — not `QueuedChunk`, not `LocalSession`, not Volume 4 Chapter 4.4 §5's `sessions` table — so the heading is when it was recorded: *"Today 09:05"*, *"Yesterday 14:30"*, *"3 Aug 07:15"*. `Session 7f3a1c2e-…` satisfied the clause's letter and told a Collector nothing they could match against their own day (A-112).
 
