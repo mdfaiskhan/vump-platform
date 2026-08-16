@@ -1,35 +1,57 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
-/// One Task, and the only route to the Pre-Recording Checklist (C-06).
+import 'package:mobile/app/theme/app_sizes.dart';
+import 'package:mobile/app/theme/app_spacing.dart';
+import 'package:mobile/features/projects_tasks/application/tasks_notifier.dart';
+import 'package:mobile/features/projects_tasks/domain/entities/task.dart';
+
+/// C-06 — Task Detail. FR-PT-05, and Chapter 2.3 §5's sole path toward
+/// capture.
 ///
-/// Still the placeholder Mission 1.3's navigation skeleton registered — it
-/// renders nothing but its own name. Volume 2 Chapter 2.3 §2 gives it
-/// Instructions, Examples and Requirements, and §5 makes it the sole path
-/// toward capture; building that is Mission 5.1.3's.
+/// ## It renders TWO of the three things Volume 2 names
 ///
-/// ## It now reads the `projectId` its route always carried
+/// FR-PT-05 and Chapter 2.5's C-06 row both ask for *"instructions, reference
+/// examples, **and requirements**"*. This screen shows **instructions and
+/// reference examples**. There is no requirements section, no empty slot
+/// implying one is coming, and `instructions` has not been relabelled
+/// "Instructions & Requirements" to cover the gap.
 ///
-/// **This is the narrow half of open item 70, and it closes here.**
+/// Volume 4 Chapter 4.4 §3's `tasks` table has six columns and none of them is
+/// `requirements`. Whether it is prose already inside `instructions` or a
+/// column the Data Dictionary omits is a product question, recorded as open
+/// item 69 and deliberately not answered by a screen (A-098). **So FR-PT-05 is
+/// partially satisfied, and the shortfall is visible here rather than hidden.**
 ///
-/// Volume 4 Chapter 4.6 §3 has no `GET /v1/tasks/{id}` — the three Task
-/// routes are `GET /v1/projects/{id}/tasks`, `POST /v1/projects/{id}/tasks`
-/// and `PATCH /v1/tasks/{id}` — so a single Task is reachable only through
-/// its Project's list, and `ProjectTaskRepository` declares no by-id fetch
-/// for that reason.
+/// ## Reference examples are plain text, and that is a real shortfall too
 ///
-/// That looked like it left this screen unable to resolve anything. It does
-/// not: the route is `/collector/projects/:projectId/tasks/:taskId`, so the
-/// owning Project has been in the path since Mission 1.3 and was simply never
-/// read. Taking it here means 5.1.3 can select this Task out of
-/// `tasksProvider(projectId)` with no new endpoint, no client-side scan across
-/// every Project, and no local cache.
+/// Chapter 4.4 §3 describes the column as *"Array of reference media URLs"*.
+/// They are rendered as selectable text and **nothing opens them**: a tappable
+/// link needs `url_launcher`, which is a new dependency and an ADR-030
+/// decision, and inline previews need the Chapter 2.8 component library that
+/// is not in this repository (open item 74).
 ///
-/// **What does NOT close is `/checklist/:taskId`**, a top-level modal route
-/// carrying no Project at all, and Chapter 2.4 §2's Record tab, which is
-/// specified to jump into *"the most relevant in-progress Task's checklist"*
-/// from a session. Both still need a `taskId → projectId` resolution that no
-/// endpoint and no cache provides. Open item 70 stays open for them.
-class CollectorTaskDetailScreen extends StatelessWidget {
+/// An unopenable URL is close to useless to a Collector standing in a field,
+/// so FR-PT-05's *"reference examples"* is not honestly met by printing a
+/// string. Open item 80 says so rather than letting the section look finished.
+///
+/// ## Start Recording is a route, and the Checklist is the gate
+///
+/// Chapter 2.3 §5: *"The Recording Screen is reachable only through the
+/// Pre-Recording Checklist — there is no direct path to it from the Dashboard
+/// or Task List."* So this navigates to `/checklist/:taskId` and never to
+/// `/recording/`. `RecordingGuard` enforces the same rule at the router, so
+/// the button is the affordance and the guard is the gate.
+///
+/// **The `taskId` handed over is not used by anything downstream.**
+/// `PreRecordingChecklistScreen` declares the parameter and reads it nowhere,
+/// and neither does `ChecklistNotifier`, `RecordingNotifier` or
+/// `RecordingGuard`. A recording started here is still attributed to nothing,
+/// because `TaskContext` is bound to `UnsourcedTaskContext` — open items 1 and
+/// 79. **This screen being a real Task picker does not change that**, and the
+/// doc says so because the proximity invites exactly the opposite assumption.
+class CollectorTaskDetailScreen extends ConsumerWidget {
   /// Creates the screen for [taskId] inside [projectId].
   const CollectorTaskDetailScreen({
     required this.projectId,
@@ -39,20 +61,108 @@ class CollectorTaskDetailScreen extends StatelessWidget {
 
   /// The owning Project, from the route path.
   ///
-  /// Required rather than nullable: every route that reaches this screen
-  /// nests it under `:projectId`, and accepting null would invite a second
-  /// route that does not — which is the shape that made open item 70 a
-  /// problem in the first place.
+  /// Required rather than nullable: every route that reaches this screen nests
+  /// it under `:projectId`, and accepting null would invite a second route
+  /// that does not — which is the shape that made open item 70 a problem.
   final String projectId;
 
   /// Identifier supplied by the route path.
   final String taskId;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final AsyncValue<List<Task>> tasks = ref.watch(tasksProvider(projectId));
+
+    // Selected from the Project's list rather than fetched by id, because
+    // Chapter 4.6 §3 has no `GET /v1/tasks/{id}` and `ProjectTaskRepository`
+    // therefore declares no by-id method. Open item 70's narrow half closed in
+    // 5.1.2, when this screen started reading the `projectId` its route
+    // already carried.
+    final Task? task = tasks.valueOrNull
+        ?.where((Task t) => t.id == taskId)
+        .firstOrNull;
+
     return Scaffold(
-      appBar: AppBar(title: const Text('Task')),
-      body: Center(child: Text('Collector Task $taskId in $projectId')),
+      appBar: AppBar(title: Text(task?.title ?? 'Task')),
+      body: switch (tasks) {
+        AsyncData<List<Task>>() when task == null => const _TaskMessage(
+          // BR-19 makes "not assigned" and "does not exist" indistinguishable
+          // from the client, deliberately, so the copy claims neither.
+          message: "This Task isn't available to you.",
+        ),
+        AsyncData<List<Task>>() => _TaskBody(task: task!),
+        AsyncError<List<Task>>() => const _TaskMessage(
+          message:
+              "This Task couldn't be loaded. Check your connection and try "
+              'again.',
+        ),
+        _ => const Center(child: CircularProgressIndicator()),
+      },
+      bottomNavigationBar: task == null
+          ? null
+          : SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.all(AppSpacing.lg),
+                child: SizedBox(
+                  width: double.infinity,
+                  height: AppSizes.buttonHeightLg,
+                  child: FilledButton(
+                    onPressed: () => context.go('/checklist/$taskId'),
+                    child: const Text('Start Recording'),
+                  ),
+                ),
+              ),
+            ),
+    );
+  }
+}
+
+class _TaskBody extends StatelessWidget {
+  const _TaskBody({required this.task});
+
+  final Task task;
+
+  @override
+  Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+
+    return ListView(
+      padding: const EdgeInsets.all(AppSpacing.lg),
+      children: <Widget>[
+        Text('Instructions', style: theme.textTheme.titleMedium),
+        const SizedBox(height: AppSpacing.sm),
+        Text(task.instructions, style: theme.textTheme.bodyLarge),
+        const SizedBox(height: AppSpacing.xl),
+        Text('Reference examples', style: theme.textTheme.titleMedium),
+        const SizedBox(height: AppSpacing.sm),
+        if (task.referenceExamples.isEmpty)
+          Text(
+            'This Task has no reference examples.',
+            style: theme.textTheme.bodyMedium,
+          )
+        else
+          for (final String example in task.referenceExamples)
+            Padding(
+              padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+              child: SelectableText(example, style: theme.textTheme.bodyMedium),
+            ),
+      ],
+    );
+  }
+}
+
+class _TaskMessage extends StatelessWidget {
+  const _TaskMessage({required this.message});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(AppSpacing.xl),
+        child: Text(message, textAlign: TextAlign.center),
+      ),
     );
   }
 }
