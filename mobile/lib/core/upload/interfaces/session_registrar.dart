@@ -32,8 +32,9 @@
 ///
 /// **No implementation exists in `lib/`, and `sessionRegistrarProvider` throws
 /// until one does.** A fake in `test/` satisfies it for the suite; nothing
-/// fake is bound in a build, because Volume 11's M12 gate makes a fake
-/// repository wired into a release build a defect in its own right.
+/// fake is bound in a build, because Volume 11 Chapter 11.1's **M8 — APIs
+/// Integrated** gate requires that *"no fake/mock repository remains wired
+/// into a release build"*.
 ///
 /// **Owed to whichever mission builds `features/projects_tasks/`.**
 abstract interface class SessionRegistrar {
