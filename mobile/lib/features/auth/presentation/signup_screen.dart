@@ -237,6 +237,22 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
 }
 
 /// The named, actionable error state Chapter 2.9 §2 requires.
+///
+/// ## It is announced, not merely shown — Chapter 2.10 §4
+///
+/// *"every error state (`field.error`) is announced when it appears — not just
+/// shown visually — so a Collector using VoiceOver/TalkBack hears \"Collector
+/// Email, error: enter a valid email address\" rather than silence."*
+///
+/// `liveRegion` is what turns the second half of that sentence into behaviour:
+/// the banner is built conditionally, so it enters the tree at the moment the
+/// failure is known, and a live region is announced on entry without stealing
+/// focus from wherever the person already is.
+///
+/// **Silence was the actual behaviour before Mission 5.5.** The banner
+/// rendered, the colour changed, and a screen-reader user submitting bad
+/// credentials was told nothing — on the first screen Chapter 2.10 §8 names
+/// for its TalkBack pass.
 class _ErrorBanner extends StatelessWidget {
   const _ErrorBanner({required this.message, super.key});
 
@@ -245,30 +261,34 @@ class _ErrorBanner extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final ThemeData theme = Theme.of(context);
-    return Container(
-      padding: const EdgeInsets.all(AppSpacing.md),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.errorContainer,
-        borderRadius: BorderRadius.circular(AppSpacing.sm),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Icon(
-            Icons.error_outline,
-            size: AppSizes.iconSm,
-            color: theme.colorScheme.onErrorContainer,
-          ),
-          const SizedBox(width: AppSpacing.sm),
-          Expanded(
-            child: Text(
-              message,
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: theme.colorScheme.onErrorContainer,
+    return Semantics(
+      liveRegion: true,
+      container: true,
+      child: Container(
+        padding: const EdgeInsets.all(AppSpacing.md),
+        decoration: BoxDecoration(
+          color: theme.colorScheme.errorContainer,
+          borderRadius: BorderRadius.circular(AppSpacing.sm),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Icon(
+              Icons.error_outline,
+              size: AppSizes.iconSm,
+              color: theme.colorScheme.onErrorContainer,
+            ),
+            const SizedBox(width: AppSpacing.sm),
+            Expanded(
+              child: Text(
+                message,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: theme.colorScheme.onErrorContainer,
+                ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

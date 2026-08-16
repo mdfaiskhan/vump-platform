@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
@@ -320,6 +321,52 @@ void main() {
         findsOneWidget,
       );
       expect(location(router), '/login', reason: 'a failure does not route');
+    });
+
+    testWidgets('the error is announced, not just shown — Ch. 2.10 §4', (
+      WidgetTester tester,
+    ) async {
+      // §4: "every error state (field.error) is announced when it appears —
+      // not just shown visually — so a Collector using VoiceOver/TalkBack
+      // hears ... rather than silence."
+      //
+      // Silence was the behaviour until Mission 5.5: the banner rendered and
+      // nothing reached the semantics layer, on the screen §8 lists FIRST for
+      // its TalkBack pass.
+      //
+      // What this asserts is the `liveRegion` flag, which is what Flutter
+      // translates into the platform announcement. That TalkBack actually
+      // speaks it is a device observation and stays in the device pass — no
+      // widget test can see it.
+      final SemanticsHandle handle = tester.ensureSemantics();
+      final GoRouter router = await pumpLogin(
+        tester,
+        _FakeAuthRepository(
+          signInThrows: const AuthenticationException(
+            errorCode: ErrorCode.authInvalidCredentials,
+            message: 'internal wording that must not be shown',
+          ),
+        ),
+      );
+
+      // The quiet baseline first. A live region already present at first paint
+      // announces nothing when the error arrives, so proving the banner is
+      // ABSENT before is what makes the assertion after it meaningful.
+      expect(find.byKey(const Key('login.error')), findsNothing);
+
+      await enterCredentials(tester);
+      await tester.tap(find.byKey(const Key('login.submit')));
+      await tester.pumpAndSettle();
+
+      final SemanticsNode banner = tester.getSemantics(
+        find.byKey(const Key('login.error')),
+      );
+      expect(banner.flagsCollection.isLiveRegion, isTrue);
+      // The announcement must carry the copy, not merely fire. A live region
+      // with an empty label announces nothing.
+      expect(banner.label, contains('do not match an account'));
+      expect(location(router), '/login');
+      handle.dispose();
     });
 
     testWidgets('the internal exception message is never rendered', (
