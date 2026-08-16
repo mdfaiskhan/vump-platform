@@ -3,7 +3,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-
+import 'package:mobile/app/theme/app_radius.dart';
+import 'package:mobile/app/theme/app_spacing.dart';
 import 'package:mobile/core/errors/failure.dart';
 import 'package:mobile/features/recording/application/recording_notifier.dart';
 import 'package:mobile/features/recording/domain/entities/recording_state.dart';
@@ -67,14 +68,14 @@ class RecordingScreen extends ConsumerWidget {
               Align(
                 alignment: Alignment.topCenter,
                 child: Padding(
-                  padding: const EdgeInsets.only(top: 24),
+                  padding: const EdgeInsets.only(top: AppSpacing.xl),
                   child: _RecordingIndicator(state: state),
                 ),
               ),
               Align(
                 alignment: Alignment.bottomCenter,
                 child: Padding(
-                  padding: const EdgeInsets.only(bottom: 48),
+                  padding: const EdgeInsets.only(bottom: AppSpacing.xxxl),
                   child: _StopControl(
                     enabled: state.isCapturing,
                     onStop: () => unawaited(_stop(context, ref)),
@@ -145,10 +146,13 @@ class _RecordingIndicatorState extends State<_RecordingIndicator> {
         : DateTime.now().difference(startedAt);
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.lg,
+        vertical: AppSpacing.sm,
+      ),
       decoration: BoxDecoration(
         color: Colors.black54,
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(AppRadius.xl),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -158,7 +162,7 @@ class _RecordingIndicatorState extends State<_RecordingIndicator> {
             color: widget.state.isCapturing ? Colors.red : Colors.white38,
             size: 14,
           ),
-          const SizedBox(width: 8),
+          const SizedBox(width: AppSpacing.sm),
           // "REC" disambiguates the red dot from an error, per C-09, and
           // satisfies Chapter 2.10's colour-not-alone rule.
           const Text(
@@ -169,7 +173,7 @@ class _RecordingIndicatorState extends State<_RecordingIndicator> {
               letterSpacing: 1.2,
             ),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: AppSpacing.md),
           Text(
             formatElapsed(elapsed),
             style: const TextStyle(

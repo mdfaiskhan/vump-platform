@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-
+import 'package:mobile/app/theme/app_radius.dart';
+import 'package:mobile/app/theme/app_spacing.dart';
 import 'package:mobile/features/recording/application/recording_notifier.dart';
 import 'package:mobile/features/recording/domain/entities/failed_chunk.dart';
 import 'package:mobile/features/recording/domain/entities/recording_state.dart';
@@ -53,31 +54,31 @@ class LocalProcessingScreen extends ConsumerWidget {
         body: SafeArea(
           child: Center(
             child: Padding(
-              padding: const EdgeInsets.all(24),
+              padding: const EdgeInsets.all(AppSpacing.xl),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: <Widget>[
                   if (!done) ...<Widget>[
                     const CircularProgressIndicator(),
-                    const SizedBox(height: 24),
+                    const SizedBox(height: AppSpacing.xl),
                   ],
                   Text(
                     _headline(state, remaining),
                     style: Theme.of(context).textTheme.titleLarge,
                     textAlign: TextAlign.center,
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: AppSpacing.md),
                   Text(
                     _detail(state, remaining),
                     style: Theme.of(context).textTheme.bodyMedium,
                     textAlign: TextAlign.center,
                   ),
                   if (state.failedChunks.isNotEmpty) ...<Widget>[
-                    const SizedBox(height: 16),
+                    const SizedBox(height: AppSpacing.lg),
                     _FailedChunks(failed: state.failedChunks),
                   ],
                   if (done) ...<Widget>[
-                    const SizedBox(height: 32),
+                    const SizedBox(height: AppSpacing.xxl),
                     FilledButton(
                       // FR-SES-04: "return the Collector to the Task List or
                       // Dashboard once a session is marked Complete." This
@@ -145,10 +146,10 @@ class _FailedChunks extends StatelessWidget {
   Widget build(BuildContext context) {
     final ThemeData theme = Theme.of(context);
     return Container(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(AppSpacing.md),
       decoration: BoxDecoration(
         color: theme.colorScheme.errorContainer,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(AppRadius.sm),
       ),
       child: Text(
         failed.length == 1

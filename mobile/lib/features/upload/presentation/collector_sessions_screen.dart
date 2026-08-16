@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:mobile/app/theme/app_spacing.dart';
 import 'package:mobile/app/theme/app_status_colors.dart';
 import 'package:mobile/core/queue/chunk_upload_status.dart';
 import 'package:mobile/core/queue/queued_chunk.dart';
@@ -125,7 +126,7 @@ class _CollectorSessionsScreenState
   ) {
     final List<UploadQueueSession> groups = UploadQueueSession.group(chunks);
     return ListView.builder(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(AppSpacing.lg),
       itemCount: groups.length,
       itemBuilder: (BuildContext context, int index) {
         final UploadQueueSession group = groups[index];
@@ -133,7 +134,10 @@ class _CollectorSessionsScreenState
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
             Padding(
-              padding: EdgeInsets.only(top: index == 0 ? 0 : 24, bottom: 8),
+              padding: EdgeInsets.only(
+                top: index == 0 ? 0 : AppSpacing.xl,
+                bottom: AppSpacing.sm,
+              ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
@@ -141,7 +145,7 @@ class _CollectorSessionsScreenState
                     sessionHeading(group, now),
                     style: Theme.of(context).textTheme.titleSmall,
                   ),
-                  const SizedBox(height: 2),
+                  const SizedBox(height: AppSpacing.xxs),
                   Text(
                     sessionSummary(group),
                     style: Theme.of(context).textTheme.bodySmall,
@@ -200,7 +204,10 @@ class _UploadsHaltedBanner extends StatelessWidget {
       child: Container(
         width: double.infinity,
         color: status.warning,
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.lg,
+          vertical: AppSpacing.md,
+        ),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
@@ -217,7 +224,7 @@ class _UploadsHaltedBanner extends StatelessWidget {
                       fontWeight: FontWeight.w700,
                     ),
                   ),
-                  const SizedBox(height: 2),
+                  const SizedBox(height: AppSpacing.xxs),
                   Text(
                     'Nothing is lost — recorded chunks stay on this device '
                     'until uploads can start again. You can keep recording.',
@@ -245,12 +252,12 @@ class _Message extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Center(
     child: Padding(
-      padding: const EdgeInsets.all(32),
+      padding: const EdgeInsets.all(AppSpacing.xxl),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: <Widget>[
           Text(title, style: Theme.of(context).textTheme.titleMedium),
-          const SizedBox(height: 8),
+          const SizedBox(height: AppSpacing.sm),
           Text(
             detail,
             textAlign: TextAlign.center,

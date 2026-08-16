@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-
+import 'package:mobile/app/theme/app_radius.dart';
+import 'package:mobile/app/theme/app_spacing.dart';
 import 'package:mobile/app/theme/app_status_colors.dart';
 import 'package:mobile/core/queue/chunk_upload_status.dart';
 import 'package:mobile/core/queue/queued_chunk.dart';
@@ -59,9 +60,9 @@ class ChunkRow extends StatelessWidget {
     final bool awaitingRetry = chunk.isAwaitingRetry(now);
 
     return Container(
-      margin: const EdgeInsets.symmetric(vertical: 4),
+      margin: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
       decoration: BoxDecoration(
-        borderRadius: const BorderRadius.all(Radius.circular(12)),
+        borderRadius: const BorderRadius.all(Radius.circular(AppRadius.md)),
         // Chapter 2.7: a failed row "gets a critical-colored border". Only a
         // failed row does — a border on every row would make the failure
         // ordinary.
@@ -70,7 +71,7 @@ class ChunkRow extends StatelessWidget {
             : null,
       ),
       child: Padding(
-        padding: const EdgeInsets.all(12),
+        padding: const EdgeInsets.all(AppSpacing.md),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
@@ -92,7 +93,7 @@ class ChunkRow extends StatelessWidget {
               ],
             ),
             if (isUploading) ...<Widget>[
-              const SizedBox(height: 8),
+              const SizedBox(height: AppSpacing.sm),
               // "progress bar beneath the row, not inside the pill".
               // An unknown total renders indeterminate rather than as 0%.
               LinearProgressIndicator(
@@ -102,7 +103,7 @@ class ChunkRow extends StatelessWidget {
               ),
             ],
             if (isFailed) ...<Widget>[
-              const SizedBox(height: 8),
+              const SizedBox(height: AppSpacing.sm),
               Align(
                 alignment: Alignment.centerLeft,
                 child: OutlinedButton(

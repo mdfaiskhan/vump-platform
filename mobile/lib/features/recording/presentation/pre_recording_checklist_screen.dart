@@ -3,7 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-
+import 'package:mobile/app/theme/app_spacing.dart';
 import 'package:mobile/core/errors/failure.dart';
 import 'package:mobile/features/recording/application/checklist_notifier.dart';
 import 'package:mobile/features/recording/application/recording_notifier.dart';
@@ -69,7 +69,7 @@ class _PreRecordingChecklistScreenState
       appBar: AppBar(title: const Text('Before you record')),
       body: SafeArea(
         child: ListView(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.all(AppSpacing.lg),
           children: <Widget>[
             Card(
               child: Column(
@@ -93,7 +93,7 @@ class _PreRecordingChecklistScreenState
       // Chapter 2.7: "primary action fixed to the bottom of the screen".
       bottomNavigationBar: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.all(AppSpacing.lg),
           child: FilledButton(
             onPressed: outcome.allPassed && !_starting ? _start : null,
             style: FilledButton.styleFrom(
@@ -219,7 +219,12 @@ class _ChecklistRow extends StatelessWidget {
         ),
         if (check == ChecklistCheck.network && measured)
           Padding(
-            padding: const EdgeInsets.fromLTRB(72, 0, 16, 12),
+            padding: const EdgeInsets.fromLTRB(
+              72,
+              0,
+              AppSpacing.lg,
+              AppSpacing.md,
+            ),
             child: Text(
               ChecklistCopy.uploadExpectation(outcome.network),
               style: theme.textTheme.bodySmall,
@@ -227,12 +232,20 @@ class _ChecklistRow extends StatelessWidget {
           ),
         if (measured && !passed)
           Container(
-            margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-            padding: const EdgeInsets.all(12),
+            margin: const EdgeInsets.fromLTRB(
+              AppSpacing.lg,
+              0,
+              AppSpacing.lg,
+              AppSpacing.lg,
+            ),
+            padding: const EdgeInsets.all(AppSpacing.md),
             decoration: BoxDecoration(
               color: theme.colorScheme.errorContainer,
               border: Border(
-                left: BorderSide(color: theme.colorScheme.error, width: 4),
+                left: BorderSide(
+                  color: theme.colorScheme.error,
+                  width: AppSpacing.xs,
+                ),
               ),
             ),
             child: Text(

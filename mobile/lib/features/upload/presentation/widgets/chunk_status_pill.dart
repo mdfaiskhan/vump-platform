@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-
+import 'package:mobile/app/theme/app_radius.dart';
+import 'package:mobile/app/theme/app_spacing.dart';
 import 'package:mobile/app/theme/app_status_colors.dart';
 import 'package:mobile/core/queue/chunk_upload_status.dart';
 
@@ -62,10 +63,13 @@ class ChunkStatusPill extends StatelessWidget {
       child: DecoratedBox(
         decoration: BoxDecoration(
           color: style.fill,
-          borderRadius: const BorderRadius.all(Radius.circular(999)),
+          borderRadius: const BorderRadius.all(Radius.circular(AppRadius.pill)),
         ),
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+          padding: const EdgeInsets.symmetric(
+            horizontal: 10,
+            vertical: AppSpacing.xs,
+          ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: <Widget>[
