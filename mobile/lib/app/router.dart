@@ -216,6 +216,8 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((Ref ref) {
                         path: 'tasks/:taskId',
                         builder: (BuildContext context, GoRouterState state) =>
                             CollectorTaskDetailScreen(
+                              projectId:
+                                  state.pathParameters['projectId'] ?? '',
                               taskId: state.pathParameters['taskId'] ?? '',
                             ),
                       ),
