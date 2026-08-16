@@ -114,6 +114,41 @@ void main() {
     await tester.pumpAndSettle();
   }
 
+  testWidgets('an unmeasured row says it is being checked — Ch. 2.10 §4', (
+    WidgetTester tester,
+  ) async {
+    // §4 names "checklist re-run" as a progress indicator that must expose its
+    // state rather than being "purely an animated visual".
+    //
+    // The pass and fail icons carried `semanticLabel` from Mission 3; the
+    // spinner between them carried nothing, so a row still being checked and a
+    // row with no result at all sounded identical to a screen reader.
+    final SemanticsHandle handle = tester.ensureSemantics();
+    final Completer<void> gate = Completer<void>();
+    final ProviderContainer c = build(gate: gate);
+
+    await tester.pumpWidget(harness(c));
+    await tester.pump();
+
+    // Matched as a PATTERN, not a string: `ListTile` merges its descendants
+    // into one semantics node, so the icon's label arrives concatenated with
+    // the row's title rather than standing alone. An exact match silently
+    // finds nothing here, which is how this assertion first failed.
+    //
+    // Held mid-probe by the gate: the permission row cannot have a verdict yet.
+    expect(find.bySemanticsLabel(RegExp('Checking')), findsWidgets);
+
+    gate.complete();
+    await settleChecklist(tester);
+
+    // And it is genuinely transient — once measured, the word is gone and the
+    // verdict has replaced it. Without this half the assertion above would
+    // also pass on a label that never goes away.
+    expect(find.bySemanticsLabel(RegExp('Checking')), findsNothing);
+    expect(find.bySemanticsLabel(RegExp('Passed')), findsWidgets);
+    handle.dispose();
+  });
+
   testWidgets('tapping Start Recording reaches Recording, not just Ready', (
     WidgetTester tester,
   ) async {

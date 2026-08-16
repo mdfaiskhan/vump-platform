@@ -274,9 +274,19 @@ class _StatusIcon extends StatelessWidget {
   Widget build(BuildContext context) {
     final ColorScheme colors = Theme.of(context).colorScheme;
     if (!measured) {
-      return const SizedBox.square(
-        dimension: 24,
-        child: CircularProgressIndicator(strokeWidth: 2),
+      // Chapter 2.10 §4 names "checklist re-run" as a progress indicator that
+      // must expose its state rather than being "purely an animated visual".
+      //
+      // There is no percentage to report — a row is measured or it is not — so
+      // this exposes the state as a word. Before Mission 5.5 the pass and fail
+      // states announced themselves and this one was silent, so a row still
+      // being checked and a row with no result at all sounded the same.
+      return Semantics(
+        label: 'Checking',
+        child: const SizedBox.square(
+          dimension: 24,
+          child: CircularProgressIndicator(strokeWidth: 2),
+        ),
       );
     }
     return Icon(
