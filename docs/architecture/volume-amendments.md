@@ -2817,6 +2817,33 @@ This repository has carried three checks that were hollow or misleading for stru
 
 So the golden tests **skip themselves when `GITHUB_ACTIONS` is unset**. Locally `flutter test` reports them as skipped, which is visible in the runner output rather than silently absent.
 
+### The first CI verdict — mismatch, cause inferred rather than read
+
+The Windows-generated baselines were committed and judged by CI on 2026-08-16. **They failed.**
+
+**The cause is inferred, not confirmed, and that is stated rather than smoothed over.** Job logs return HTTP 403 and artifact downloads HTTP 401 without a token, and none was available. What is known from the public step-level API:
+
+| Step | Result |
+|---|---|
+| Decide whether to regenerate or verify | success |
+| **Verify goldens** | **failure** |
+| Regenerate / Upload regenerated / Explain | skipped — correct, baselines existed |
+| Upload failure diffs | success — `golden-failures`, 32,167 bytes |
+
+`matchesGoldenFile` writes `_masterImage`, `_testImage` and `_maskedDiff` files only when a comparison actually ran and differed; a *missing* golden fails without producing them. 32 KB of diff images is therefore consistent with a real pixel mismatch — the anticipated antialiasing/Skia divergence — but **nobody read a line saying so.** If a future reader gets log access, this is worth confirming or correcting.
+
+The experiment was still worth running: it cost one commit and one CI run, and the alternative was leaving the gate red indefinitely behind a dispatch that could not be triggered.
+
+### A defect the same run exposed: the golden gate leaked into the unit-test job
+
+The `Test` job failed too, and that one was not a mismatch — it was a mistake in how the split was built.
+
+`flutter test --coverage` carried no tag filter. The golden tests skip on `GITHUB_ACTIONS` being **unset**, which is exactly the condition CI does not satisfy, so they ran inside the unit-test job as well as inside the golden job. One pixel diff failed both, and a visual regression would have been reported as a unit-test failure — sending whoever read it hunting for a logic bug that was not there.
+
+Measured rather than inferred: `flutter test` reports 789 passed / 2 skipped locally, and 791 passed with `GITHUB_ACTIONS=true`. With `--exclude-tags golden` added it reports 789 under both.
+
+**This is the third mechanism in one mission that was committed without being exercised**, after the dispatch that could not be triggered (above) and item 51's job that could not start. All three were designed carefully and none was run against the condition it was built for. The pattern is not carelessness about correctness — it is checking the artifact and not the environment it executes in.
+
 ### The bootstrap, and why CI cannot commit its own baselines
 
 The original design put bootstrapping behind `workflow_dispatch`. **That was unusable**: GitHub only offers a manual trigger when the workflow exists on the default branch, and `ci.yml` is not on `main` (open item 48). The bootstrap depended on a button nobody can press — a mechanism in name only, and the second time this repository has shipped one (cf. item 51's job that could not start).
