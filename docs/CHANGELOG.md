@@ -22,6 +22,20 @@ Chapter 11.5 §4 also states that pre-1.0.0 builds *"may log only against `[Unre
 
 ---
 
+## It went stale a second time
+
+**2026-08-16.** The paragraph above says the backfill was *"done once, to establish the file, not as a pattern."* It became a pattern.
+
+Missions 4.1, 4.2 and 4.3 each wrote their entries as they landed. Missions **4.4, 4.5, 4.6 and 4.7 wrote none at all** — the file's last edit before this one was `07ae25c`, and thirty-nine files and roughly 3,300 lines of `lib/` changed after it. Among them was the first code in this project that deletes a Collector's recorded footage from a device, which is exactly the kind of change Chapter 11.5 §2 puts under `Security`.
+
+Mission 4.8's security review found it, by reading `git log` against this file rather than trusting a memory of having written the entries. The entries below are the correction and are a second instance of the batching §4 warns against.
+
+**The dates are honest but not informative.** All nine commits carry the author date 2026-08-16, because Missions 4.4 through 4.7 were committed in one working session — the same thing that happened across Mission 3. They are commit dates read from `git log`, not invented, and per the convention above they will be accurate as merge dates the moment `mission-0.18.4-ci` merges.
+
+**What would actually stop this**, and is not built: nothing mechanically ties a commit touching `data/`, `core/storage/` or auth to a changelog edit. Every enforcement this project trusts lives in CI; this discipline lives only in a mission checklist, and has now failed the two times it was left there. Recorded as open item 66 rather than fixed here, because a CI gate is a change to the workflow and not a documentation fix.
+
+---
+
 ## [Unreleased]
 
 ### Added
@@ -33,6 +47,34 @@ Chapter 11.5 §4 also states that pre-1.0.0 builds *"may log only against `[Unre
   **Nothing uploads yet.** `sessionRegistrarProvider` still throws (open item 36) and A-068's Guard 1 refuses every chunk a device has recorded (open item 37), so the dispatcher logs a wiring fault and stops. That is the honest state of the feature and it fails visibly rather than silently. Mission 4.3, ADR-042.
 
 ### Security
+
+- **2026-08-16** — **Chunk files are now deleted from device storage.** Volume 5 Chapter 5.15's cleanup is the first code in this project that destroys a Collector's recorded footage, and everything about the design is chosen so that it cannot destroy footage the backend has not got.
+
+  Deletion is not driven by age, by free space, or by a sweep's own judgement. A chunk becomes eligible only once its stored status says the backend has it, and `deleteChunkFile` **unlinks the `.mp4` first and writes `localDeletedAt` second**. That order is deliberate: a crash between the two leaves a row marked present whose file is gone, which the orphan filter already handles, whereas the reverse order would leave a file nothing will ever collect. BR-08's crash-survival guarantee was checked against the trigger rather than assumed — a chunk that has not been confirmed is never a deletion candidate at any point in the sweep.
+
+  The row is soft-deleted, never removed. `localDeletedAt` is authoritative and the record survives as evidence that the chunk existed and where it went.
+
+  **A defect in the orphan filter was fixed in the same change**: `orphanedChunkIds` did not exclude rows with `localDeletedAt != null`, so every already-deleted chunk was reported as an orphan forever. Scoped into this commit because it is on the deletion path and shipping the sweep without it would have produced a permanently growing false-positive list.
+
+  **This code is verified on hardware and not by CI.** `IsarChunkStore` measures 1.9% line coverage and cannot be unit-tested without downloading a native binary at test time (A-096, open item 58). Mission 4.5's device probe exercised every write path including the file deletion, on a real device against a real Isar. Chapter 11.5 §2, Volume 8. Mission 4.5. (`ade2971`, `b6a3df8`, `ff6eb6b`)
+
+- **2026-08-16** — **Two new fields are persisted on every stored chunk record**, and no schema version bump accompanies them. `uploadAttemptCount` (`int`, defaulted 0) and `nextAttemptAt` (`DateTime?`) carry Chapter 5.13 §2's retry budget across process death, so a chunk cannot get a fresh six attempts by the app being restarted.
+
+  **The absent bump is the documented rule, not an oversight.** `DatabaseConstants.schemaVersion` says to increment *"only when a change requires existing data to be transformed. Adding a collection or a nullable property does not qualify — Isar handles those implicitly."* Both additions are of that kind. Bumping to 2 was considered and rejected: there are no `Migration` implementations in this project yet, so the first one would have been a no-op written to satisfy a version number, and it would have run against real chunk rows already sitting on a verified device. A-082.
+
+  Rows written before Mission 4.4 read back as `uploadAttemptCount: 0` and `nextAttemptAt: null` — eligible now, no attempts spent — which is the correct reading of a chunk that predates the counter. No stored value is rewritten and no existing row is touched. Chapter 11.5 §2, Volume 8. Mission 4.4. (`44a32ba`)
+
+- **2026-08-16** — Volume 5 Chapters 5.12 and 5.13, Offline Mode and Retry Strategy. No new network destination and no new credential — what changes is *when* the existing S3 and backend calls are allowed to happen.
+
+  Uploads are gated on observed connectivity rather than attempted-and-failed, so a device with the radio off stops generating requests instead of burning its retry budget against a known-dead network. Backoff is 5/10/20/40/80 seconds with ±20% jitter over a six-attempt budget (§2); the jitter exists so that a fleet of devices regaining signal together does not arrive at the backend as one synchronised burst. Exhaustion is terminal and visible: the chunk is marked `failed` and waits for FR-UPL-07's manual retry or for the network to change, rather than retrying forever in the background.
+
+  `connectivity_plus` stays confined to `features/recording/data/` and the composition root; `features/upload/` reads connectivity through a contract in `core/connectivity/` and still imports no feature, per ADR-022 R3 and ADR-040. The attempt accounting likewise lives on the `core/upload` contract rather than on either feature's own type.
+
+  Device-verified on a CPH2707 with the radio off: all six attempts observed end to end, every interval inside §2's tolerance, terminal transition reached at 166 seconds (open item 56, closed). Chapter 11.5 §2, Volume 8. Mission 4.4, A-083. (`af9a317`, `4d2e23c`, `02faba4`)
+
+- **2026-08-16** — The `core/queue` projection is widened to carry Chapter 5.13's retry state — attempt count and next-attempt time — so C-11's UI can show a chunk's real position in the retry cycle without `features/upload/` reaching into `features/recording/`'s schema.
+
+  This is more data crossing a feature boundary, which is the surface ADR-040 exists to govern, so it is recorded rather than treated as an internal refactor. The projection still carries **no file path and no checksum**; what was added is scheduling state the UI must show, not stored content. Soft-deleted rows (BR-08) remain excluded from the view. Chapter 11.5 §2, Volume 8. Mission 4.6, ADR-040. (`c95264f`)
 
 - **2026-08-16** — Two new Android permissions reach the shipped manifest. `FOREGROUND_SERVICE_DATA_SYNC` is declared deliberately — Android 14 requires the permission matching the service's `foregroundServiceType`, and `dataSync` is Google's documented type for transferring data to the cloud. The service itself is `android:exported="false"`; nothing outside the app can start it.
 
@@ -74,6 +116,8 @@ Chapter 11.5 §4 also states that pre-1.0.0 builds *"may log only against `[Unre
 - **2026-08-15** — Camera module, capability ladder and fixed capture specification (BR-01/BR-02). Mission 3.1. (`4c7f3d1`)
 
 ### Fixed
+
+- **2026-08-16** — HTTP 429 was classified as a terminal failure, so a chunk the backend had asked to slow down was marked `failed` and stopped retrying — the opposite of what the status code means. It is now `transportFailure` and transient, which routes it into Chapter 5.13 §2's backoff where a rate-limit response belongs. Closes A-050. Mission 4.4. (`0ed322b`)
 
 - **2026-08-15** — Recording never actually started. The Checklist reached `Ready` and navigated, but nothing called `RecordingNotifier.start()`, so the machine stayed in `Ready`, `isCapturing` was false, and the Recording Screen's Stop control rendered disabled and discarded every tap. Found by manual real-device testing; a unit test, a device harness and CI were all green throughout, because none exercised a UI tap. Mission 3.12-PRE, A-070. (`09f40ac`)
 - **2026-08-15** — A fully compliant device reporting a 0.6 zoom minimum was wrongly refused, because a Java `float` widened to a Dart `double` as 0.6000000238418579. Normalised at the data boundary. Found on the first physical device the ladder ever ran against. Mission 3.1.6, A-057. (`bc81a07`)
