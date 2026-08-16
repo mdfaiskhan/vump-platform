@@ -10,6 +10,7 @@ import 'package:mobile/features/auth/presentation/admin_invite_codes_screen.dart
 import 'package:mobile/features/auth/presentation/login_screen.dart';
 import 'package:mobile/features/auth/presentation/sign_out_tile.dart';
 import 'package:mobile/features/auth/presentation/signup_screen.dart';
+import 'package:mobile/features/onboarding/presentation/onboarding_carousel_screen.dart';
 import 'package:mobile/features/projects_tasks/presentation/admin_dashboard_screen.dart';
 import 'package:mobile/features/projects_tasks/presentation/admin_project_detail_screen.dart';
 import 'package:mobile/features/projects_tasks/presentation/admin_projects_screen.dart';
@@ -43,6 +44,7 @@ import 'package:mobile/features/upload/presentation/collector_sessions_screen.da
 /// /login                                        shared, role-agnostic
 /// /collector    5 tabs, stack per tab
 /// /admin        4 tabs, stack per tab
+/// /onboarding                                   full-screen modal, C-01
 /// /checklist/:taskId                            full-screen modal
 /// /recording/:sessionId                         chrome-free, no back
 /// /processing/:sessionId
@@ -385,6 +387,24 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((Ref ref) {
       // ---------------------------------------------------------------------
       // Outside both shells, so no tab bar wraps them — Chapter 2.4 §2 and §5.
       // ---------------------------------------------------------------------
+
+      // C-01, Chapter 2.4 §2's "full-screen modal, shown at first launch".
+      //
+      // Outside the shell because it carries no tab bar, and reachable by
+      // route rather than only at launch so C-02 can send a Collector back
+      // through the explanation once that screen exists.
+      //
+      // NOT wired to a first-launch trigger. Deciding "has this Collector seen
+      // onboarding" needs persisted state, and the only permission signal this
+      // project has is a camera open (see OnboardingCarouselScreen). Both
+      // belong with C-02 and the permission-plugin decision; see open item 78.
+      GoRoute(
+        path: '/onboarding',
+        builder: (BuildContext context, GoRouterState state) =>
+            OnboardingCarouselScreen(
+              onComplete: () => context.go('/collector/dashboard'),
+            ),
+      ),
 
       // Full-screen modal from Task Detail, and per Chapter 2.3 §5 the only
       // route toward capture (BR-04). Nothing enforces that yet; see the class
