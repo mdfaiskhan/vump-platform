@@ -3585,6 +3585,72 @@ So the purpose column is read as **descriptive prose rather than an exhaustive f
 
 ---
 
+### A-119 — Admin and Collector share one read path, and the fake cannot show the difference
+
+| | |
+|---|---|
+| **Volume** | 4, Ch. 4.6 §3 and Ch. 4.8 |
+| **Says** | `GET /v1/projects`, role **Admin, Collector** — *"Admin: all Projects in their org. Collector: only Projects with an assigned Task (BR-19)."* |
+| **Decision** | A-02 and A-03 use `ProjectTaskRepository` unchanged. No Admin variant |
+| **Date** | 2026-08-16, Mission 5.2.2 |
+
+One route serves both roles and **the scope difference is server-side**, derived from the verified token exactly as BR-19 is (Ch. 4.8: *"every endpoint re-derives role and scope from the verified token context"*). So there is no `fetchAllProjects`, no role parameter, and no second repository.
+
+This is A-099's `collectorId` argument applied a second time: a client-supplied scope on a server-enforced rule is redundant at best, and at worst a value some call site passes wrongly while the backend ignores it.
+
+### The consequence, recorded so it is not read as a bug
+
+`FakeProjectTaskRepository` models **no scoping at all**, deliberately (5.1.1: *"a fake that filtered locally would be modelling a rule the real repository does not implement either"*). So **A-02 and C-04 render identically against the fake** — same three Projects, same order.
+
+**The difference is real and untestable until Mission 7.** Nothing client-side can demonstrate it, because nothing client-side implements it. A later reader comparing the two screens and finding them identical is seeing the design working, not a missing filter — and open item 41's *"a green check over an empty set is not evidence"* is the nearest existing statement of why that distinction is worth writing down.
+
+---
+
+### A-120 — A-02's empty state is not C-04's, and Chapter 2.9 specifies them separately
+
+| | |
+|---|---|
+| **Volume** | 2, Ch. 2.9 §4.2, against Ch. 2.7 §5 |
+| **Class** | A divergence the cross-reference would have lost |
+| **Date** | 2026-08-16, Mission 5.2.2 |
+
+Ch. 2.7 §5 covers A-02 and A-03 by cross-reference — *"same pattern as their Collector counterparts, with Admin-only action buttons ('+ New Project', '+ New Task') added"*. Read alone, that says: copy C-04, add a button.
+
+**Ch. 2.9 §4.2 says otherwise**, and names both cases in one breath:
+
+> *"A Collector with no assigned Projects sees a plain-language explanation ('No Projects assigned yet — check back once your Admin adds you to one'), never a bare empty list.*
+> *An Admin's Projects List before their first Project is created **leads directly into the "+ New Project" action**, since that empty state has an obvious, single next step."*
+
+**C-04's empty state says *wait*. A-02's says *do this*.** One is an explanation of someone else's pending action; the other is the user's own next step, and §4.2 gives the reason — the Admin has one obvious thing to do and the Collector has none.
+
+So A-02 renders the create action **inside** its empty state, not only in the floating button behind it. A test asserts both halves: that the Admin copy appears, and that C-04's does not.
+
+**Recorded because the divergence lives in a different chapter from the screen's own specification.** Anyone implementing A-02 from Ch. 2.5 and Ch. 2.7 alone would produce C-04 with a button and never know they had missed a rule — which is the same failure mode as A-102's missing design system, at a much smaller scale.
+
+---
+
+### A-121 — A write goes through `application/` even though no layer rule forces it
+
+| | |
+|---|---|
+| **Reference** | error-handling.md §26's propagation table |
+| **Class** | Boundary decision, recorded because the obvious shortcut is legal |
+| **Date** | 2026-08-16, Mission 5.2.2 |
+
+A-04's form could read `projectTaskAdminRepositoryProvider` directly. It is declared in `application/` and typed as the domain interface, so **ADR-022 forbids nothing** — this is not the `presentation/ → data/` prohibition, and a reader checking the import matrix would find the shortcut clean.
+
+**The conversion is what forbids it.** §26's table gives `application/` *"`AppException` — **the last layer that may**"* and gives `presentation/` *"Nothing"* in the same column, with `Failure`, by pattern-matching on `code`, as the only thing it may catch. A screen that awaited the repository and caught its own exception would put `Failure.fromException` in `presentation/` — legal by the import rules, forbidden by the error rules, and invisible to both the analyzer and the `Architecture boundaries` CI job.
+
+So `AdminProjectTaskNotifier` exists to own one `try`. Its methods return `Failure?` — null on success — which is `AuthNotifier`'s shape since Mission 2.2, and for the reason that record already states: an action's outcome is not the feature's state, and pushing a failed create through an `AsyncError` would replace a good list with an error.
+
+### It invalidates rather than inserting
+
+A successful create invalidates the affected read provider instead of appending the returned entity to a local list. Both fakes share one store (A-117) and the real repositories will share a backend; **either way the list's source is authoritative and a locally-inserted copy is a second one that can silently disagree** — ADR-018's failure in miniature. Re-reading costs a rebuild and cannot drift.
+
+`tasksProvider` is invalidated per key rather than family-wide, so creating a Task in one Project does not refetch every Project a session happened to have visited.
+
+---
+
 ## ⚠ THE SOFT-DELETE BLIND SPOT — one root cause, three symptoms, one fix
 
 **This is a recommendation, not a cross-reference. It is placed here rather than inside an open-item row because three items now point at it and each reads, on its own, like a small local wart.**
@@ -3667,7 +3733,7 @@ All three reasons, not any one: item 36 and items 83, 84 and 79 for C-12; item 7
 
 ---
 
-## Consolidated open items — A-057 through A-118
+## Consolidated open items — A-057 through A-121
 
 Every carried-forward item, in one place. Accurate as of **Mission 4.3**; originally the seed for Mission 3.12's status report, and re-checked at the close of each sub-mission block per item 23.
 
@@ -3776,6 +3842,8 @@ Every carried-forward item, in one place. Accurate as of **Mission 4.3**; origin
 | 69 | FR-PT-05 and Volume 2 name a Task `requirements` field that Volume 4 Ch. 4.4 §3's `tasks` table does not have | **A PRODUCT question for Faisal, not an engineering interpretation to pick.** FR-PT-05 asks for *"instructions, reference examples, and requirements"*, and Volume 2 names the same three at C-06, at A-05 and in the Task Detail section list. Chapter 4.4 §3 has six columns and no `requirements`. Either it is prose already inside `instructions` and Volume 2 is naming a heading, or it is a real column the Data Dictionary omits. **Both readings are defensible and both are product answers**, so `Task` omits the field rather than folding it into `instructions` or inventing a column Mission 7 could not populate. `task_test.dart` asserts the omission, so a later mission that adds the field without the answer breaks a test that points here. Cost to settle: one field added, or one doc comment deleted. | A-098, FR-PT-05, V4 Ch. 4.4 §3 |
 | 70 | There is no `GET /v1/tasks/{id}`, so C-06 cannot resolve a bare `task_id` | **Owed to Mission 5.1.2, which is where a route first has to resolve one.** Chapter 4.6 §3 offers exactly three Task routes — `GET /v1/projects/{id}/tasks`, `POST /v1/projects/{id}/tasks`, `PATCH /v1/tasks/{id}` — so a single Task is reachable only through its Project's list. `ProjectTaskRepository` therefore declares no `fetchTask(taskId)`, because a method Mission 7 has no endpoint to satisfy is the breaking rework the interface was traced to avoid. The gap is real but narrow: C-06's route path carries only a `taskId`, so a deep link or a cold start straight into Task Detail has no Project to list from. Closing it needs either a backend route that does not exist or `local_task_cache`, which ADR-039 §3 assigns here and open item 2 defers. **Not a defect in the interface — a consequence of the catalog, recorded so 5.1.2 inherits it.** | A-099, V4 Ch. 4.6 §3, open item 2 |
 | 71 | No check catches a source file that is **entirely absent** from `lcov.info`, as distinct from one with low coverage | **A candidate for a later testing/verification mission. Deliberately not built in 5.1.1.** `flutter test --coverage` emits an `SF:` record only for files reachable from the test suite's import graph, so a file no test imports is missing from the report rather than counted as 0% — the denominator is recomputed every run from whatever the tests happened to load. Measured 2026-08-16: **90 of 227** hand-written `lib/` files carry no record. Most are legitimately line-free (bare interfaces, `freezed` declarations whose code lives in excluded `*.freezed.dart`, enums); some, like `invite_code_repository_impl.dart`, are not. A check would have to distinguish the two, which is why it is a mission rather than a one-line CI edit. **The standing risk is the point, not the check**: this is item 41's *"a green check over an empty set is not evidence"* aimed at the coverage report itself, and Mission 4.9 §4's unexercised-mechanism pattern in a third medium. | A-101, open item 41, Ch. 9.5 §2 |
+| 90 | **Chapter 2.9 contradicts itself about editing a Task: §2 principle 4 requires a confirmation, §4.4 forbids one** | **A PRODUCT/SPEC DECISION FOR FAISAL — a genuine authorial contradiction inside one chapter, not something derivable.** Both sentences name the same action explicitly and state opposite rules.<br><br>**§2, principle 4:** *"Admin actions that affect a Collector are never destructive-by-default. Removing a Collector from a Task, or **editing Task instructions after Collectors are already assigned, always confirms the action and states its effect in plain language before it takes effect**."*<br><br>**§4.4:** *"Reversible actions (reassigning a Collector, **editing Task instructions**) **do not require a confirmation dialog** — they save immediately and can be changed again just as easily."*<br><br>**This is unlike G3.** There the sources disagreed in emphasis and one class of them specified a mechanism, so the resolution was derivable by asking which sources were normative (A-116). Here both sentences are behavioural rules in the same chapter, at the same level of authority, naming the same action — and §2 P4 even supplies the reasoning (*"affect a Collector"*) that §4.4's *"reversible"* framing rejects. **There is no reading that satisfies both.** Mission 5.2.2 therefore held A-05's **edit** half back entirely rather than pick one: `updateTask` exists and works, and shipping either behaviour would encode an answer nobody has given into UI a Collector depends on. Settling it needs one sentence struck or amended, not an implementation judgement. | A-121, Ch. 2.9 §2 P4, Ch. 2.9 §4.4, FR-ADM-02 |
+| 91 | **Chapter 2.5's A-04 names "Project-level settings"; the phrase appears exactly once in all of Volume 2 — in that row** | **Third instance of one shape, and kept as a separate row so the family stays visible.** Ch. 2.5's A-04: *"Name, description, and **Project-level settings**."* Nothing defines them: `projects` has seven columns and none is a setting (Ch. 4.4 §2), `POST /v1/projects` carries no such field, no FR mentions one, and no other chapter uses the phrase. So A-04 renders name and description with **no settings section and no empty placeholder implying one is coming** — the treatment C-06 gave `requirements` (A-110), and a test asserts the absence.<br><br>**The family, three rows and three owners:** item 69 is FR-PT-05/A-05's `requirements` — a **Task** field named by a requirement with no column. This is A-04's **Project-level settings** — a **Project** field group named by a screen with no column. Both are *"a surface names something the schema does not have"*, and they are separate items because they have different owners, different chapters and will be answered by different decisions. Folding them would make one product answer look like it closed both. | A-110, item 69, Ch. 2.5 A-04, Ch. 4.4 §2 |
 | 85 | **Assignment is Task-level, so there is no way to say "this Collector gets every Task in this Project, including future ones"** | **A product question, not an engineering one — and the residue G3 leaves after A-116 resolves it.** Task-level assignment gives *"assigned to this Project"* for any Project with at least one assigned Task, which is what Ch. 4.6 §3's derivation already states. What it cannot express is a **standing grant**: a Project-level assignment would be a *rule* that future Tasks inherit, while Task-level assignments are *facts* about Tasks that exist. **An Admin who adds a Task next month must assign Collectors again, and nothing prompts them** — the new Task appears to nobody until someone remembers. UC-07's own flow never hits this because it creates the Task first and assigns second, so the happy path hides it. Closing it needs either a `project_assignments` table and a route (a backend change), or an explicit product decision that per-Task assignment is the intended model and the Admin UI should make the omission visible. **Not resolved by inventing a client-side fan-out** — assigning to every current Task would silently implement the facts reading of a question nobody has answered. | A-116, G3, FR-ADM-03, BR-15, UC-07 |
 | 86 | **FR-ADM-02 and MVP §2.2 both say an Admin can *remove* a Task; there is no `DELETE /v1/tasks/{id}`** | **A backend/spec gap, stated plainly rather than softened.** FR-ADM-02: *"create, edit, and **remove** Tasks within a Project"*, Must Have. MVP §2.2 repeats it verbatim in the in-scope list. Chapter 4.6 §3's Task routes are `GET /v1/projects/{id}/tasks`, `POST /v1/projects/{id}/tasks` and `PATCH /v1/tasks/{id}` — **no delete of any kind.** `ProjectTaskAdminRepository` therefore declares no `removeTask`, on 5.1.1's `fetchTask(taskId)` precedent: a port method Mission 7 has no endpoint to satisfy is breaking rework, and declaring one hides the gap behind an interface that looks complete. Closing it needs a route added to Chapter 4.6 — and a decision about whether removal is a hard delete or a soft one, since `tasks` has no `deleted_at` column while `projects` has `archived_at` and `task_assignments` has `removed_at`. **The absence is not test-guardable**: Dart offers no runtime assertion over a class's method set, so if a later mission adds `removeTask` nothing breaks. This row is the guard. | A-118, FR-ADM-02, MVP §2.2, Ch. 4.6 §3 |
 | 87 | **MVP §2.2 and Chapter 2.5's A-04 both assume an Admin can edit a Project; there is no `PATCH /v1/projects/{id}` and no FR either** | **Two gaps stacked, and the second is the surprising one.** MVP §2.2: *"Create, edit, and remove Projects."* Chapter 2.5's screen **A-04 is literally named "Create / Edit Project"** and described as *"Name, description, and Project-level settings."* Chapter 4.6 §3 has `POST /v1/projects` and nothing else for a Project. **And Chapter 1.3 has no requirement for it at all** — FR-ADM-01 is *"create a new Project"*, full stop; no FR-ADM covers editing one. So a named screen and an MVP scope line rest on a capability that has neither a route nor a requirement behind it. Closing it needs both: an FR, and a route. Until then `ProjectTaskAdminRepository` has no `updateProject`, and A-04 can implement only its "Create" half. | A-118, MVP §2.2, Ch. 2.5 A-04, Ch. 4.6 §3 |

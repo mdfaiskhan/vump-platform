@@ -40,6 +40,18 @@ Mission 4.8's security review found it, by reading `git log` against this file r
 
 ### Added
 
+- **2026-08-16** — A-02 Projects List (Admin), A-03 Project Detail (Admin), and the **create halves** of A-04 Create Project and A-05 Create Task. FR-ADM-01 is satisfied; FR-ADM-02 in its create half.
+
+  **Admin reuses the Collector's two read methods unchanged.** Volume 4 Chapter 4.6 §3 serves both roles from one route — *"Admin: all Projects in their org. Collector: only Projects with an assigned Task"* — and scopes server-side from the verified token, so there is no Admin variant and no role parameter (A-119). Against the fake, which models no scoping deliberately, A-02 and C-04 therefore render identically; the difference is real and untestable until Mission 7.
+
+  **A-02's empty state is not C-04's.** Chapter 2.9 §4.2 specifies them separately: a Collector *"sees a plain-language explanation"*, while an Admin's list *"leads directly into the '+ New Project' action, since that empty state has an obvious, single next step."* C-04 says wait; A-02 says do this. The divergence lives in a different chapter from the screen's own spec, which is how it would have been missed (A-120).
+
+  **Five things are deliberately absent, each tested.** A-03 has no Collector-assignment entry point, because A-06 needs two reads no endpoint provides (item 89). A-04 has no edit affordance — item 87 is worse than a missing route, since FR-ADM-01 is create-only and no FR covers editing at all — and renders no *"Project-level settings"*, a phrase appearing exactly once in all of Volume 2, in its own row (item 91). A-05 renders neither `requirements` (item 69) nor a reference-examples field, which needs a component Chapter 2.8 would specify (item 74).
+
+  **A-05's edit half is held back entirely**, although `updateTask` works: Chapter 2.9 §2 principle 4 requires editing a Task to confirm before saving, and §4.4 says it must not, naming the same action in both (item 90). Shipping either reading would encode an answer nobody has given.
+
+  Writes go through an `application/` notifier rather than a screen reading the repository — legal by the import rules, forbidden by error-handling.md §26, and invisible to both the analyzer and CI (A-121). 19 tests; the suite moves 919 → 938. Mission 5.2.2.
+
 - **2026-08-16** — `ProjectTaskAdminRepository`, the Admin write path A-099 decided at Mission 5.1.1 and deliberately left unbuilt. Five methods against Volume 4 Chapter 4.6 §3's five write routes: create a Project, create and update a Task, assign and unassign a Collector. Fake-backed like its read counterpart, with the same **M8** removal condition.
 
   **Nothing holds both interfaces**, which is the point: BR-18 and FR-ADM-07 — *"prevent a Collector from creating, editing, or deleting Projects or Tasks"* — are now a compile-time guarantee rather than a role check every notifier has to remember.
