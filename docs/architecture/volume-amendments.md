@@ -3900,7 +3900,9 @@ M7's criteria require every screen to **match** the Design System and the Wirefr
 
 ### 3. Screens in the inventory remain placeholders or absent
 
-C-02 (Permission Blocked) is unbuilt; C-13 and C-15 are Phase 2; A-01 through A-08 are Mission 1.3 placeholders awaiting Mission 5.2. Chapter 2.5's inventory is 23 screens and this is not a rounding error.
+**Restated 2026-08-16 at the close of Mission 5.2, against actual state.** C-02 (Permission Blocked) is unbuilt and blocked on item 78; C-13 and C-15 are Phase 2; C-12 is traced and unbuildable (A-115). On the Admin side, **A-01, A-02 and A-03 are built**, **A-04 and A-05 have their create halves** with their edit halves blocked on items 87 and 90, **A-06 and A-07 are traced and correctly not built** (A-122, A-124), and **A-08 is deferred with cited reasoning** — it needs the `metadata` module Volume 3 Chapter 3.5 §2 assigns it, which does not exist (item 97).
+
+**The conclusion is unchanged and this reason remains independently sufficient**: Chapter 2.5's inventory is 23 screens, several are unbuilt or unbuildable, and that is not a rounding error. What changed is only the evidence — the previous wording said *"A-01 through A-08 are Mission 1.3 placeholders awaiting Mission 5.2"*, which was true when written and outlived its fact. **A section that exists to prevent premature checking should not be inaccurate in the pessimistic direction either**, and A-114 records the same failure mode in a doc comment: nothing checks a claim that was correct on the day it was made.
 
 ### The trap this section exists to prevent
 
