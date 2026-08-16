@@ -3480,6 +3480,8 @@ It closes 61, 76 and 81 together, and it is the only thing that closes 76 at all
 
 **Build the history read path before building anything else that reads chunk rows.** Every surface added since Mission 4.5 has hit this, the count is rising by one per sub-mission, and each new consumer that works around it locally makes the eventual fix touch one more screen.
 
+**The fourth consumer is already identifiable: A-07 Admin Sessions asks *"what has this Collector done"*, which is a history question, not a queue question.** Written down at Mission 5.1.4 rather than left for Mission 5.2 to rediscover — the first three were each found by whoever happened to be building that week, and predicting the fourth is the cheapest way to stop that being four for four. Mission 4.9 §4 set the same precedent by predicting its own fourth instance instead of waiting to be surprised by it.
+
 This belongs in Mission 5's status report as a ranked recommendation in its own right — **not as three cross-referenced open items**, which is how it currently reads and which is precisely how a shared cause gets mistaken for a coincidence. Mission 4.9 §4 named its pattern rather than listing three unrelated CI defects, and the same instrument applies here.
 
 ---
