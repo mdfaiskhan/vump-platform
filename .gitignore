@@ -148,4 +148,9 @@ functions/lib/
 #
 # Anchored with a leading slash so it applies at the repository root only,
 # where they are written — not to any similarly named file inside a package.
+# Both forms. The rule originally named `.txt` alone, which is the format the
+# first reports were written in; Mission 3 began rendering the same artifact to
+# PDF for handoff, and Missions 2-4's PDFs then sat untracked at the root
+# because nothing named them. Same artifact, same reasoning, both ignored.
 /mission-*-report.txt
+/mission-*-report.pdf
