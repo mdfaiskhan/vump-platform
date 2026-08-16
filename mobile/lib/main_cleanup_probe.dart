@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:mobile/app/theme/app_theme.dart';
 import 'package:mobile/core/database/database_config.dart';
 import 'package:mobile/core/database/providers/database_provider.dart';
 import 'package:mobile/core/upload/interfaces/chunk_upload_source.dart';
@@ -16,6 +17,8 @@ import 'package:mobile/features/recording/domain/entities/chunk_processing_job.d
 import 'package:mobile/features/recording/domain/entities/recording_session.dart';
 import 'package:mobile/features/recording/domain/entities/storage_sweep_result.dart';
 import 'package:mobile/features/recording/domain/repositories/chunk_store.dart';
+import 'package:mobile/features/upload/application/upload_progress_notifier.dart';
+import 'package:mobile/features/upload/presentation/collector_sessions_screen.dart';
 import 'package:mobile/main.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -101,7 +104,11 @@ class _CleanupProbeApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) => MaterialApp(
     title: 'Ch. 5.15 probe',
-    theme: ThemeData(useMaterial3: true),
+    // AppTheme, not a bare ThemeData: C-11's pills read AppStatusColors from
+    // the theme extension, and a probe that supplied a plain ThemeData would
+    // crash on the first pill rather than render it.
+    theme: AppTheme.light,
+    darkTheme: AppTheme.dark,
     home: _CleanupProbeScreen(documentsPath: documentsPath),
   );
 }
@@ -137,7 +144,7 @@ class _CleanupProbeState extends ConsumerState<_CleanupProbeScreen> {
   }
 
   /// Seeds [count] chunks through the real finalizer and marks them complete.
-  Future<void> _seed(int count) async {
+  Future<void> _seed(int count, {bool markComplete = true}) async {
     final ChunkStore store = ref.read(chunkStoreProvider);
     final ChunkUploadSource source = ref.read(chunkUploadSourceProvider);
     final FinalizeChunkUseCase finalizer =
@@ -169,6 +176,10 @@ class _CleanupProbeState extends ConsumerState<_CleanupProbeScreen> {
       );
     }
     _say('seeded $count chunk(s) for session $sessionId');
+
+    if (!markComplete) {
+      return;
+    }
 
     // Move each to `complete` exactly as Chapter 5.10's pipeline does:
     // claim (queued -> uploading), then mark (uploading -> complete).
@@ -204,6 +215,47 @@ class _CleanupProbeState extends ConsumerState<_CleanupProbeScreen> {
         .sweep();
     _say('$label -> $result');
     await _reportFiles();
+  }
+
+  /// Seeds one chunk in each of Chapter 5.9 §1's four states.
+  ///
+  /// Open item 62: only `Queued` had ever been seen on a device, because the
+  /// real pipeline dies at construction (open item 36) and never moves a chunk
+  /// out of it. These rows are driven through the real `ChunkUploadSource`
+  /// exactly as the pipeline would — claim, then mark — so the states are real
+  /// rather than painted, and the real C-11 renders them.
+  Future<void> _seedAllStates() async {
+    final ChunkUploadSource source = ref.read(chunkUploadSourceProvider);
+    await _seed(4, markComplete: false);
+
+    // claim -> uploading, and leave it there.
+    final UploadableChunk? uploading = await source.claimNext(
+      now: DateTime.now(),
+    );
+    if (uploading != null) {
+      // Chapter 2.7 wants a live percentage on this pill; the progress
+      // notifier is in-memory (A-092), so it is seeded directly.
+      ref
+          .read(uploadProgressNotifierProvider.notifier)
+          .report(chunkId: uploading.chunkId, sentBytes: 42, totalBytes: 100);
+    }
+
+    // claim -> failed.
+    final UploadableChunk? failed = await source.claimNext(now: DateTime.now());
+    if (failed != null) {
+      await source.markFailed(failed.chunkId);
+    }
+
+    // claim -> complete.
+    final UploadableChunk? done = await source.claimNext(now: DateTime.now());
+    if (done != null) {
+      await source.markComplete(done.chunkId);
+      _seededPaths.add(done.localFilePath);
+    }
+
+    // The fourth stays queued.
+    _say('seeded one chunk in each of the four states');
+    _say('open C-11 to see them — the sweep is NOT running here');
   }
 
   /// Deletes one file behind the store's back, so the orphan path has a
@@ -252,6 +304,23 @@ class _CleanupProbeState extends ConsumerState<_CleanupProbeScreen> {
                 OutlinedButton(
                   onPressed: _busy ? null : () => _run(_breakOne),
                   child: const Text('4. Break one file'),
+                ),
+                // Open item 62: drives real rows into all four of Chapter 5.9
+                // §1's states and opens the real C-11 over them.
+                FilledButton.tonal(
+                  onPressed: _busy ? null : () => _run(_seedAllStates),
+                  child: const Text('5. Seed all four states'),
+                ),
+                FilledButton.tonal(
+                  onPressed: _busy
+                      ? null
+                      : () => Navigator.of(context).push(
+                          MaterialPageRoute<void>(
+                            builder: (BuildContext context) =>
+                                const CollectorSessionsScreen(),
+                          ),
+                        ),
+                  child: const Text('6. Open C-11'),
                 ),
               ],
             ),
