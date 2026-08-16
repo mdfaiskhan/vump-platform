@@ -2794,7 +2794,79 @@ Mission 4.6 ships a failed chunk as "Failed" plus Retry with **no** invented cau
 
 ---
 
-## Consolidated open items — A-057 through A-094
+### A-095 — Golden tests are generated and verified on CI only
+
+| | |
+|---|---|
+| **Volume** | 9, Chapter 9.7 §2; Chapter 9.5 §1's tooling column |
+| **Says** | *"Every reusable Design System component … has a golden test capturing its rendered output in both light and dark theme"*, and *"a golden test failing on an unintentional pixel diff is a hard CI gate"* |
+| **Class** | Mechanism decision, filling A-027's open question |
+| **Date** | 2026-08-16, Mission 4.7 |
+
+A-027 recorded that `golden_toolkit` is discontinued and that a maintained mechanism had to be chosen. It is chosen: **`matchesGoldenFile`, built into `flutter_test`, with no new dependency at all.** What `golden_toolkit` added was convenience — device configurations, font loading — not the capability. The requirement in §2 never needed the package.
+
+### Why they do not run locally
+
+Flutter renders text differently per host. A baseline captured on a Windows machine does not match one rendered on `ubuntu-latest`, so committing developer-generated goldens would produce a gate that fails on its first CI run and every run after, for a reason unrelated to what it guards.
+
+This repository has carried three checks that were hollow or misleading for structurally similar reasons — a rule with no subject (item 41), a scan pointed at the wrong subtree (item 50), a job that could not start (item 51). A gate that is red for the wrong reason trains people to ignore it, which is the same failure as a gate that is green for the wrong reason.
+
+So the golden tests **skip themselves when `GITHUB_ACTIONS` is unset**. Locally `flutter test` reports them as skipped, which is visible in the runner output rather than silently absent.
+
+### The bootstrap, and why CI cannot commit its own baselines
+
+The baselines do not exist yet and cannot be produced on a developer machine — that is the whole point of the decision. `workflow_dispatch` therefore takes an `update_goldens` input that regenerates them and uploads them as an artifact for a human to commit.
+
+The workflow stays `contents: read` and cannot commit them itself, deliberately: **a gate that can rewrite its own expected values is not a gate.** The same reasoning applies after an intentional visual change — §2 requires the new image to be *"explicitly regenerating and committing … as part of that PR"*, which is a human act by design.
+
+**Until that first dispatch runs, the `Golden tests` job has no baselines and will fail.** That is the honest state and is recorded rather than hidden behind a job that passes vacuously.
+
+---
+
+### A-096 — Chapter 9.5 §2's data-layer target is missed by one file, deliberately
+
+| | |
+|---|---|
+| **Volume** | 9, Chapter 9.5 §2 |
+| **Says** | *"Data layer (repositories): 80%+, focused on error-path coverage per Chapter 9.1's rule, not just the happy path"* |
+| **Measured** | **68.3%** (505/739) |
+| **Class** | Declared trade, not an oversight |
+| **Date** | 2026-08-16, Mission 4.7 |
+
+### The number, and what it is actually made of
+
+| Layer | Measured | Target | |
+|---|---|---|---|
+| Domain | **98.7%** (230/233) | 90%+ | **met** |
+| Data | **68.3%** (505/739) | 80%+ | **missed by 11.7 pts** |
+| Presentation | 79.3% (660/832) | golden tests, not a percentage | see A-095 |
+| `core/` | 85.1% | none stated | — |
+| `app/` | 66.2% | none stated (item 24) | — |
+| **Total** | **79.3%** (2586/3262) | — | — |
+
+**The miss is one file.** `isar_chunk_store.dart` measures **1.9%** — 4 of 212 lines. Every other file in `data/` is at or above 75%, and **excluding it the layer reads 95.1%** (501/527). This is not a diffuse testing gap; it is one untestable file dominating an average.
+
+It is also a regression: A-066 recorded 76.90% at Mission 3.10, and Missions 4.2–4.6 grew that same file substantially without adding a test to it.
+
+### Why it is untestable, and the trade taken
+
+`flutter test` cannot load `isar_flutter_libs`' native binaries. The only mechanism is `Isar.initializeIsarCore(download: true)`, which fetches a native binary at test time.
+
+**That was considered and declined.** It would put a network dependency into a job that currently has none, add a recurring failure mode to every CI run and every offline developer build, and introduce a downloaded binary nobody has reviewed — a permanent operational cost to move one file's number. **Device verification is therefore the standard for this file**, and Mission 4.5's probe is what discharges it: every write path, including the file deletion Chapter 5.15 added, is exercised against a real Isar on real hardware.
+
+This is a trade, not an oversight, and the cost is real on both sides: the number stays missed, and a regression in that file will be caught by a device pass rather than by CI.
+
+### What would reopen it
+
+- **A-029 / ADR-038's maintenance risk materialising.** Isar 3 is unmaintained and this project depends on an `@experimental` API for a uniqueness guarantee (item 13). If that forces an engine migration, the migration needs a test harness and this decision is void.
+- **A defect escaping to a device** that a unit test would have caught — one instance is enough to change the arithmetic.
+- **Isar shipping a test-host binary** that needs no download, which removes the objection entirely.
+
+Chapter 9.5 §2's 80% figure is not amended down. The target stands and is recorded as missed; what is amended is the claim that the gap is a testing failure rather than a chosen one.
+
+---
+
+## Consolidated open items — A-057 through A-096
 
 Every carried-forward item, in one place. Accurate as of **Mission 4.3**; originally the seed for Mission 3.12's status report, and re-checked at the close of each sub-mission block per item 23.
 
@@ -2840,7 +2912,7 @@ Every carried-forward item, in one place. Accurate as of **Mission 4.3**; origin
 | # | Item | State | Source |
 |---|---|---|---|
 | 18 | Data-layer coverage 76.90% vs 80% | Missed; cause named; device evidence stronger | A-066 |
-| 19 | Golden tests for Design System components | **Now non-vacuous, and still not built.** Mission 4.6 built this project's first Design System components — four status pills and a progress row — so Chapter 9.5 §2's *"golden tests for every Design System component"* finally has a subject. `golden_toolkit` is discontinued (A-027) and no replacement has been adopted; that is an ADR-030 admission nobody has taken. Mitigating: the pills are covered by widget tests asserting label, icon shape and themed colour in both brightnesses, plus a contrast test pinning all eight fill/foreground pairs at AA — which is most of what a golden would catch, without pixel comparison. | A-027, A-066, Ch. 9.5 §2, Mission 4.6 |
+| 19 | ~~Golden tests for Design System components~~ **Mechanism chosen and wired; baselines pending one CI dispatch** | **A-027's open question is answered**: `matchesGoldenFile`, built into `flutter_test`, no new dependency — `golden_toolkit` added convenience rather than capability. The tests exist for the four status pills in both themes, tagged `golden`, and **skip themselves off CI** so a Windows-rendered baseline can never be committed (A-095). **Not yet closed**: the baselines do not exist. `workflow_dispatch` with `update_goldens: true` regenerates them and uploads an artifact for a human to commit; until that runs once, the `Golden tests` job fails for want of a baseline. The workflow is `contents: read` and cannot commit them itself, deliberately — a gate that rewrites its own expected values is not a gate. | A-027, A-095, Ch. 9.5 §2, Ch. 9.7 §2 |
 | 20 | `integration_test` end-to-end flows (Ch. 9.7 §1's five) | Package not installed | A-028 |
 | 21 | ~~`recoverableChunkIds()` has no caller~~ **Half closed 2026-08-16 by Mission 4.5** | `orphanedChunkIds()` now has a caller and a fixed bug: Chapter 5.15's sweep reports it, and the method excluded nothing before, so **every successfully cleaned chunk would have reported itself as an orphan**. Verified on device — after nine cleaned rows and one file deleted behind the store, it reports exactly **1**, not 10. `recoverableChunkIds()` is still uncalled and still deliberately so: it answers which *queued* chunks still have a file, which is neither the queue's question (Ch. 5.9 §3 just re-reads the rows) nor cleanup's. It is owed to a dedicated integrity pass, and nothing has needed one yet. | A-064 §2, Mission 4.2, Mission 4.5 |
 | 22 | No iOS toolchain — no macOS host, no Xcode, no iOS device | Blocks any iOS verification | A-065 §3 |
@@ -2887,13 +2959,15 @@ Every carried-forward item, in one place. Accurate as of **Mission 4.3**; origin
 | 53 | Connectivity does not revive a `failed` chunk | **Needs a `failureCause` column on `local_chunks`** and a rule for which causes are revivable. Ch. 5.13 §2 says an exhausted chunk waits for *"connectivity/context to change … or a manual retry"*; only the manual half is automatic-free today. Reviving blindly would re-attempt terminal failures against §1. Worth doing together with C-11's per-row cause display, which needs the same column. | A-085 |
 | 54 | The `Volume 5.10` chapter reference is wrong in two documents | **A documentation pass, distinct from open item 34.** V3 Ch. 3.3 §6 and V1's NFR-REL-03 Target both cite *Volume 5.10* for retry/backoff and duplicate prevention; those live in **5.13** and **5.14**. Item 34 is about inline `ADR-NNN` collisions — this is a chapter-number drift, and two documents sharing one wrong reference suggests a single stale source. | A-084 |
 | 55 | `dart format` over `lib/` and `test/` silently reformats generated sources | **Format only the CI file list, never the whole tree.** The `Format` job excludes `*.g.dart` and `*.freezed.dart`, but `Generated code drift` compares them — so a blanket `dart format lib test` turns a green format run into a red drift run. Cost 33 files and ~6,200 lines of spurious diff in Mission 4.4 before it was caught and reverted. The safe command is the job's own: `git ls-files '*.dart' \| grep -v '\.g\.dart$' \| grep -v '\.freezed\.dart$' \| xargs dart format`. | Mission 4.4 verification |
-| 56 | **Chapter 5.13 §2's six-attempt exhaustion path has not been seen on hardware** | **Noted and deferred, not skipped.** Mission 4.4's device pass reconnected before the ladder ran out — reaching attempt 6 needs roughly 155 s of continuous offline (5+10+20+40+80 s), and the pass covered attempts 2 through 5 with their jitter. The transition to `failed` after the sixth attempt, and the `Failed` pill C-11 would then show, are unit-tested but unobserved on a device. Cheap to close: run `lib/main_upload_probe.dart`, queue chunks, and leave the radio off for ~3 minutes. Worth folding into whichever mission next needs a device session rather than booking one for it. | Mission 4.4.3, A-083 |
+| 56 | ~~Chapter 5.13 §2's six-attempt exhaustion path has not been seen on hardware~~ | **CLOSED 2026-08-16 by Mission 4.7.2.** Observed end to end on a CPH2707 with the radio off: attempt 2 waited 5s, 3 waited 9s, 4 waited 20s, 5 waited 40s, 6 waited 90s — every draw inside §2's ±20 % of 5/10/20/40/80 — and after the sixth the chunk logged *"failed after 6 attempts (transportFailure). It now waits for a manual retry or for the network to change."* 166 seconds end to end. The budget, the doubling, the jitter and the terminal transition are all now device-observed rather than unit-tested only. | Mission 4.4.3, 4.7.2, A-083 |
 | 57 | Cleanup's batch size is 10, chosen rather than measured | **Replace with a measurement, not a different guess.** NFR-SCL-01's 50-chunk depth is the anchor it was chosen against; what is unmeasured is whether ten unlinks per sweep ever competes with the Recording Pipeline for I/O, which is the thing §2 asks the batching to prevent. Constructor-injected. The interval needs no such item — it is derived from `RecordingLifecycle.chunkDuration`. | A-088 |
-| 58 | **`IsarChunkStore` has no unit tests at all — the store layer is device-verified only** | **The most under-tested layer in the project, and now the one that deletes files.** `flutter test` cannot load `isar_flutter_libs` natives without `Isar.initializeIsarCore(download: true)`, which this repo has never used, so `isar_chunk_store_test.dart` covers only pure static helpers. Every transaction, every status transition and now `deleteChunkFile` are verified on a device or not at all. Mission 4.5's probe is the first that had to carry a whole layer rather than confirm one. Closing it means adopting the Isar test-core download in CI, or accepting device verification as the standard for this file and saying so. | A-066, Mission 4.5 |
+| 58 | ~~`IsarChunkStore` has no unit tests at all~~ **Device verification is the declared standard for this one file** | **DECIDED 2026-08-16 by Mission 4.7.** `Isar.initializeIsarCore(download: true)` was considered and declined: a network dependency in a job that has none, a recurring failure mode for CI and offline builds, and an unreviewed downloaded binary — a permanent operational cost to move one file's number. The consequence is stated rather than softened: `data/` reads **68.3%** against Chapter 9.5 §2's 80%, entirely because this file measures **1.9%**; excluding it the layer is **95.1%**. A regression here will be caught by a device pass, not by CI. A-096 names the three things that would reopen it, the first being A-029's Isar maintenance risk materialising. | A-066, A-096, Mission 4.5, 4.7 |
 | 59 | The cleanup probe claims and deletes **pre-existing** queued chunks | **Observed, not theoretical.** Mission 4.5's device run seeded 4 chunks and marked **9** complete: five real chunks from Mission 3's recording sessions were still `queued` on the device, and `claimNext` legitimately claimed them too. It then deleted all nine. Harmless on a test device and it made the evidence stronger — real recorded files, 27.4 MB, not just 4 KB placeholders — but the probe is destructive to anything already queued, and a device holding footage someone wanted should not run it. | Mission 4.5.4 |
 | 60 | ~~A real chunk shows `Queued` forever, never `Failed`~~ | **FIXED 2026-08-16 by Mission 4.6.5.** The dispatcher now publishes when it halts, and C-11 shows a system-level banner — *"Uploads aren't running."* — above the list. Wired to the two real fault paths (pipeline construction, broken queue stream) and deliberately **not** to `shutDown()`, so normal teardown is silent. `main.dart`'s start-failure path reports too. The underlying cause is unchanged: Guard 1 still never runs, because `chunkUploadPipelineProvider` throws at construction before any chunk is claimed. What changed is that the Collector can see it. The banner names no cause and no fix, because neither exists while open item 36 is open — A-094. Confirmed on device. | Mission 4.6.3, 4.6.5, A-068, A-094, open item 36 |
 | 61 | Cleaned chunks disappear from C-11 entirely | `watchQueue` excludes rows soft-deleted per BR-08, so once Chapter 5.15's sweep runs a completed chunk vanishes from the Collector's Upload status rather than staying visible as `Complete`. Observed on device: after Mission 4.5's sweep the screen was empty. Chapter 2.7 does not say how long a completed chunk stays on C-11, and Chapter 5.15 §3 keeps *metadata* queryable without saying anything about this screen. A product question — how long should 'done' remain visible — not a defect. | Mission 4.6.3, Ch. 5.15 §3 |
-| 62 | Three of C-11's four pill states have never been seen on a device | Only `Queued` is reachable today (item 60). `Uploading`, `Failed`, `Complete` and the *"Retrying in Ns"* countdown are covered by widget tests and by nothing else — the same shape as item 58, one layer up. All four become reachable the moment open item 36 closes, so this is a note to re-run the device pass then rather than work to schedule now. | Mission 4.6.3 |
+| 62 | ~~Three of C-11's four pill states have never been seen on a device~~ | **CLOSED 2026-08-16 by Mission 4.7.2**, in both themes, against real Isar rows driven through the real `ChunkUploadSource`. Every clause of Chapter 2.7's C-11 table was visible at once: the accent pill reading *Uploading 42%* with the progress bar **beneath the row rather than inside the pill**, the failed row carrying a critical-coloured border with *Retry Chunk* revealed, the good-hue *Complete* row inert, and amber *Queued*. Two of the states landed on genuinely recorded chunks rather than seeded ones, because `claimNext` honours Chapter 5.9 §2's ordering and took the oldest sessions first. The probe deliberately does not start the dispatcher, so the 4.6 banner is absent — the banner was device-confirmed separately in 4.6.6, and the two have still never been seen in one frame. | Mission 4.6.3, 4.7.2 |
+| 63 | `mocktail` is named as project tooling and has never been installed | Volume 3 Chapter 3.1 p.5 lists *"mocktail (mocking)"* and Volume 9 Chapter 9.5 §1 repeats it in the tooling column. This project has hand-written every fake instead, across every mission, and the suite is 789 tests. **Recommendation: amend the tooling list rather than adopt the package.** Hand-written fakes have been more readable than mocks would have been here — several carry the reasoning for their own behaviour in doc comments, which a generated mock cannot — and adopting a mocking library now would be a second way to do a thing this project already does consistently. Recorded so the divergence is declared rather than silently persistent. | V3 Ch. 3.1, Ch. 9.5 §1, Mission 4.7 |
+| 64 | The testing pyramid's proportions are not measured | Chapter 9.5 §1 fixes Unit ~70%, Integration/Widget ~20%, Manual ~8%, Device ~2%. Nothing measures the split, and the shape is visibly different from the target: the suite is overwhelmingly unit and widget tests in one `flutter test` run, with **no integration tier at all** (item 20) and manual/device testing recorded only in mission reports and this register. Not obviously worth fixing — the proportions are a design heuristic rather than a gate, and Chapter 9.5 §3 gates on *"the full unit + integration suite"* passing rather than on its shape. Recorded so the pyramid is not cited as satisfied. | Ch. 9.5 §1, Mission 4.7 |
 
 ---
 
