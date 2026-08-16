@@ -104,7 +104,13 @@ void main() {
     expect(find.text('Chunk 1'), findsOneWidget);
     expect(find.text('Chunk 2'), findsOneWidget);
     expect(find.text('Chunk 3'), findsOneWidget);
-    expect(find.textContaining('Session s1'), findsOneWidget);
+
+    // Was `Session s1` until Mission 5.1.4. Chapter 2.7 asks for a heading
+    // "grouped under the session name" and a session has no name, so the
+    // heading is when it was recorded — the only identifying fact a Collector
+    // holds. The raw id told them nothing they could match against their day.
+    expect(find.textContaining('Session s1'), findsNothing);
+    expect(find.textContaining('Today'), findsOneWidget);
   });
 
   testWidgets('every one of Chapter 5.9 §1s four states renders', (
