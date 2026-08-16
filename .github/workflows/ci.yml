@@ -475,37 +475,88 @@ jobs:
       # both themes, and "a golden test failing on an unintentional pixel diff
       # is a hard CI gate".
       #
-      # These run HERE AND NOWHERE ELSE. Flutter renders text differently per
-      # host, so a baseline captured on a developer's Windows machine does not
-      # match one rendered on ubuntu-latest - it would fail on its first run
-      # here and every run after, for a reason unrelated to what it guards.
-      # The tests skip themselves when GITHUB_ACTIONS is unset, so a local run
-      # reports them as skipped rather than omitting them silently. A-095.
+      # These run HERE AND NOWHERE ELSE. The tests skip themselves when
+      # GITHUB_ACTIONS is unset, so a local run reports them as skipped rather
+      # than omitting them silently. A-095.
       #
       # golden_toolkit is not used: it is discontinued (A-027), and
       # matchesGoldenFile is built into flutter_test.
+      - name: Decide whether to regenerate or verify
+        id: goldens
+        run: |
+          # Three reasons to regenerate rather than verify, and the first is
+          # why this job no longer depends on a manual dispatch:
+          #
+          #   1. No baselines exist. Bootstrapping used to require
+          #      workflow_dispatch, which GitHub only offers when the workflow
+          #      is on the default branch - and ci.yml is not on main (open
+          #      item 48). A job that could only be unblocked by a button
+          #      nobody can press is not a mechanism.
+          #
+          #   2. The pull request carries the `update-goldens` label. Chapter
+          #      9.7 §2 requires an intentional visual change to be
+          #      "explicitly regenerating and committing the new golden image
+          #      as part of that PR", which is a recurring need rather than a
+          #      one-off. A commit-message marker cannot serve here: a
+          #      pull_request event carries no head_commit.
+          #
+          #   3. A workflow_dispatch asked for it, if one ever becomes
+          #      available.
+          count=$(find test -type d -name goldens -exec find {} -name '*.png' \; 2>/dev/null | wc -l)
+          echo "Found $count committed baseline image(s)."
+
+          if [ "$count" -eq 0 ]; then
+            echo "regenerate=true" >> "$GITHUB_OUTPUT"
+            echo "reason=no baselines exist yet" >> "$GITHUB_OUTPUT"
+          elif [ "$LABELLED" = "true" ] || [ "$DISPATCHED" = "true" ]; then
+            echo "regenerate=true" >> "$GITHUB_OUTPUT"
+            echo "reason=regeneration was explicitly requested" >> "$GITHUB_OUTPUT"
+          else
+            echo "regenerate=false" >> "$GITHUB_OUTPUT"
+          fi
+        env:
+          LABELLED: ${{ contains(github.event.pull_request.labels.*.name, 'update-goldens') }}
+          DISPATCHED: ${{ github.event.inputs.update_goldens }}
+
       - name: Verify goldens
-        if: ${{ github.event.inputs.update_goldens != 'true' }}
+        if: steps.goldens.outputs.regenerate != 'true'
         run: flutter test --tags golden
 
-      # Bootstrap and intentional-change path. Produces baselines as an
-      # artifact for a human to commit; this workflow is contents: read and
-      # cannot commit them itself, which is deliberate - a gate that can
-      # rewrite its own expected values is not a gate.
       - name: Regenerate goldens
-        if: ${{ github.event.inputs.update_goldens == 'true' }}
+        if: steps.goldens.outputs.regenerate == 'true'
         run: flutter test --tags golden --update-goldens
 
       - name: Upload regenerated goldens
-        if: ${{ github.event.inputs.update_goldens == 'true' }}
+        if: steps.goldens.outputs.regenerate == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: goldens
           path: mobile/test/**/goldens/**
 
+      # Regenerating is never a pass. The images are produced for a human to
+      # inspect and commit; a job that generated its own expected values and
+      # then reported success would verify nothing, which is the vacuous-green
+      # shape open items 41, 50 and 51 already cost this project three times.
+      #
+      # This workflow is also contents: read and cannot commit them itself,
+      # deliberately - a gate that rewrites its own expected values is not a
+      # gate.
+      - name: Explain what to do with them
+        if: steps.goldens.outputs.regenerate == 'true'
+        run: |
+          echo "::error::Goldens were regenerated (${{ steps.goldens.outputs.reason }}) and are NOT verified."
+          echo ""
+          echo "  1. Download the 'goldens' artifact from this run."
+          echo "  2. Unpack it over mobile/test/ and commit the images."
+          echo "  3. Re-run: the job will verify against them instead."
+          echo ""
+          echo "  If you were regenerating after an intentional visual change,"
+          echo "  remove the 'update-goldens' label once the new images are in."
+          exit 1
+
       # A pixel diff is unreadable as a log line; the images are the report.
       - name: Upload failure diffs
-        if: failure()
+        if: failure() && steps.goldens.outputs.regenerate != 'true'
         uses: actions/upload-artifact@v4
         with:
           name: golden-failures
