@@ -25,13 +25,7 @@ void main() {
       expect(OnboardingPermission.carousel, hasLength(5));
       expect(
         OnboardingPermission.carousel.map((OnboardingPermission p) => p.title),
-        <String>[
-          'Camera',
-          'Microphone',
-          'Location',
-          'Notifications',
-          'Files',
-        ],
+        <String>['Camera', 'Microphone', 'Location', 'Notifications', 'Files'],
       );
     });
 
@@ -53,13 +47,7 @@ void main() {
           .map((OnboardingPermission p) => p.primaryLabel)
           .toList();
 
-      expect(labels, <String>[
-        'Next',
-        'Next',
-        'Next',
-        'Next',
-        'Get Started',
-      ]);
+      expect(labels, <String>['Next', 'Next', 'Next', 'Next', 'Get Started']);
     });
 
     testWidgets('the first card shows Next', (WidgetTester tester) async {
