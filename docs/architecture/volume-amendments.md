@@ -2817,6 +2817,16 @@ This repository has carried three checks that were hollow or misleading for stru
 
 So the golden tests **skip themselves when `GITHUB_ACTIONS` is unset**. Locally `flutter test` reports them as skipped, which is visible in the runner output rather than silently absent.
 
+### Outcome — closed on run #11, after two informative failures
+
+| Run | Baselines present | Job did | Result |
+|---|---|---|---|
+| #9 | Windows-generated | verified | **failed** — hosts render differently |
+| #10 | none | regenerated on `ubuntu-latest`, uploaded, failed deliberately | **failed by design** |
+| #11 | Ubuntu-native | **verified** | **green** — all ten jobs |
+
+The mechanism is proven in both directions: it verifies when baselines exist and regenerates when they do not, and run #10's step results are the exact inverse of #11's. A gate that took the same branch regardless would have looked identical on a green run and told nobody anything.
+
 ### The first CI verdict — mismatch, cause inferred rather than read
 
 The Windows-generated baselines were committed and judged by CI on 2026-08-16. **They failed.**
@@ -2949,7 +2959,7 @@ Every carried-forward item, in one place. Accurate as of **Mission 4.3**; origin
 | # | Item | State | Source |
 |---|---|---|---|
 | 18 | Data-layer coverage 76.90% vs 80% | Missed; cause named; device evidence stronger | A-066 |
-| 19 | ~~Golden tests for Design System components~~ **Mechanism proven end to end; Ubuntu-native baselines committed and awaiting the next CI verdict** | A-027's open question is answered: `matchesGoldenFile`, built into `flutter_test`, **no new dependency** — `golden_toolkit` added convenience rather than capability. Four status pills in both themes, tagged `golden`, skipping off CI. The `workflow_dispatch` bootstrap was replaced after it proved unusable (open item 48 — no manual trigger without `ci.yml` on `main`): the job now regenerates whenever no baselines exist, or when the PR carries an `update-goldens` label for Chapter 9.7 §2's recurring intentional-change case. Regeneration always fails the job rather than passing vacuously. **The bootstrap has now run for real**, and the step results discriminated correctly rather than doing one thing regardless: on the run with Windows baselines present it verified and failed; on the run with none present it skipped verification, regenerated against `ubuntu-latest`, uploaded the artifact, and failed deliberately rather than passing vacuously.
+| 19 | ~~Golden tests for Design System components~~ **CLOSED 2026-08-16 — verified green on CI run #11** | A-027's open question is answered without adding a dependency: `matchesGoldenFile`, built into `flutter_test`. `golden_toolkit` supplied convenience — device configs, font loading — not capability, and Chapter 9.7 §2's requirement never needed it. Four status pills in both themes, tagged `golden`, skipping off CI so a developer-rendered baseline cannot be committed (A-095). **Closed on a run that verified rather than generated.** Run #11 reports `Verify goldens: success` with `Regenerate` and `Explain` skipped — the inverse of run #10, which skipped verification and regenerated. The job discriminates rather than doing one thing regardless, which is what makes the gate real. All ten jobs green. It took three runs, and the two failures were both worth having: #9 established that Windows and Ubuntu render these widgets differently even with no fonts rasterized, and #10 exercised the bootstrap path for the first time. The `workflow_dispatch` design this replaced could never have run at all (open item 48). | A-027, A-095, Ch. 9.7 §2, open item 48 |
 
 **Still not closed.** The Ubuntu-generated baselines are now committed and have not yet been verified by a run that *verifies* rather than *generates* them. Closing it before that run would be asserting a pass nobody has seen — the premature closure this register exists to catch.
 
