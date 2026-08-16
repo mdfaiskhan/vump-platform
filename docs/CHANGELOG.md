@@ -40,6 +40,16 @@ Mission 4.8's security review found it, by reading `git log` against this file r
 
 ### Added
 
+- **2026-08-16** — `ProjectTaskAdminRepository`, the Admin write path A-099 decided at Mission 5.1.1 and deliberately left unbuilt. Five methods against Volume 4 Chapter 4.6 §3's five write routes: create a Project, create and update a Task, assign and unassign a Collector. Fake-backed like its read counterpart, with the same **M8** removal condition.
+
+  **Nothing holds both interfaces**, which is the point: BR-18 and FR-ADM-07 — *"prevent a Collector from creating, editing, or deleting Projects or Tasks"* — are now a compile-time guarantee rather than a role check every notifier has to remember.
+
+  **Three required capabilities have no route and are deliberately absent.** FR-ADM-02 and MVP §2.2 both say an Admin can *remove* a Task, and there is no `DELETE /v1/tasks/{id}` (open item 86). MVP §2.2 and Chapter 2.5's A-04 — a screen literally named *"Create / Edit Project"* — both assume Project editing, which has no route **and no requirement either**, since FR-ADM-01 is create-only (open item 87). And `projects.archived_at` is a live column that C-04 renders and C-03's active count is defined by, while the word *archive* appears nowhere in Volumes 1 or 2 (open item 88). Declaring methods for any of them would have hidden the gap behind an interface that looks complete.
+
+  **Assignment is Task-level only.** FR-ADM-03 says *"to a Project and to specific Tasks within it"*, but every source that specifies a mechanism — Chapter 4.4's tables, Chapter 4.6's routes, US-29/30, UC-07's own main flow — is Task-only, and Chapter 4.6 §3 states the derivation: *"Collector: only Projects with an assigned Task."* What derivation cannot express is a standing grant covering Tasks created later (open item 85, A-116).
+
+  Both fakes now share one in-memory store, so a Project created through the Admin path is immediately readable through the Collector's. Two independent fakes would have failed in a way that looked like a bug in whichever screen was being built (A-117). 25 tests; the suite moves 894 → 919. Mission 5.2.1.
+
 - **2026-08-16** — C-04 Projects List, C-05 Project Detail and C-06 Task Detail, replacing the three Mission 1.3 Collector placeholders. FR-PT-03, FR-PT-04 and FR-PT-07 are satisfied; **FR-PT-05 only in part**.
 
   **No repository method was added for any of them.** C-04 is `fetchProjects()`, C-05 is `fetchTasks(projectId)`, and C-06 selects its Task out of that same list — which works only because Mission 5.1.2 made it read the `projectId` its route already carried. C-05's title comes from `projectsProvider` rather than a second call, because Chapter 4.6 §3 has no `GET /v1/projects/{id}` either.

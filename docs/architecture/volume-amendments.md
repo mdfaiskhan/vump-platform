@@ -3507,6 +3507,84 @@ Two options were available and both were refused:
 
 ---
 
+### A-116 — G3 resolves to Task-level assignment, and what that leaves unexpressed
+
+| | |
+|---|---|
+| **Volume** | 1, FR-ADM-03/04, BR-14/15; Volume 4 Ch. 4.4 §4 and Ch. 4.6 §3 |
+| **Says** | FR-ADM-03: *"assign one or more Collectors to a **Project** and to specific Tasks within it"* |
+| **Has** | One table, `task_assignments`. Two routes, both Task-scoped |
+| **Decision** | Task-level methods only; Project-level assignment is derived |
+| **Date** | 2026-08-16, Mission 5.2.1 |
+
+G3 was traced at Mission 5.1.1 and left open because nothing then needed it. The write interface needs it, and the sources split cleanly once laid side by side:
+
+| Source | Scope it names |
+|---|---|
+| FR-ADM-03, FR-ADM-04, BR-14, BR-15 | Project **and** Task |
+| **US-29** | *"a Project **or** Task"* |
+| **US-30** | *"remove a Collector from **a Task**"* |
+| **UC-07 main flow, step 3** | *"assigns them to **the Task**"* |
+| **UC-07 alternate flow** | *"reassigns **a Task** from one Collector to another"* |
+| **Ch. 4.4** | `task_assignments` only |
+| **Ch. 4.6 §3** | `POST` / `DELETE /v1/tasks/{id}/assignments` only |
+
+**Every source that specifies a mechanism is Task-only.** The ones naming a Project are summary statements — the requirement headline, the business rules, and US-29's *"or"*. The moment a chapter describes *how*, it describes a Task.
+
+And Ch. 4.6 §3's own `GET /v1/projects` row states the derivation outright: *"Collector: only Projects with an assigned Task (BR-19)."* Assigning a Collector to any Task in a Project is what makes that Project theirs; BR-15's *"more than one Project concurrently"* follows with no second table.
+
+### The residue, which is real and is not a technicality
+
+Derivation gives *"assigned to this Project"* for any Project with at least one assigned Task. It **cannot** express a standing grant — *"assign this Collector to every Task in this Project, **including ones created later**"*.
+
+**A Project-level assignment would be a rule. Task-level assignments are facts.** An Admin who adds a Task next month must assign Collectors again, and nothing in the system will prompt them; the new Task simply appears to nobody. UC-07's own flow never hits this, because it creates the Task first and assigns second — so the happy path hides the gap.
+
+Recorded as open item 85 rather than resolved. An `assignToProject` method with no table behind it is the rework 5.1.1 refused when it declined `fetchTask(taskId)`, and inventing a client-side fan-out — assign to every current Task — would silently implement the *facts* reading of a question nobody has answered.
+
+---
+
+### A-117 — One shared store behind both fakes
+
+| | |
+|---|---|
+| **Class** | Fake-infrastructure decision, taken because a write path arrived |
+| **Date** | 2026-08-16, Mission 5.2.1 |
+
+Mission 5.1.1's `FakeProjectTaskRepository` held its seed in two `static final` collections and was `const`. Correct for a read-only stand-in; unusable the moment anything writes.
+
+**Two independent fakes would have been worse than one shared store**, and the failure mode is the argument: `FakeProjectTaskAdminRepository.createProject` would succeed, `FakeProjectTaskRepository.fetchProjects` would never show the result, and **the symptom would not look like a bug in either fake**. A Project created on A-04 that never appears on C-04 sends someone hunting through presentation code for a fault two layers down.
+
+So the seed moved to `InMemoryProjectTaskStore` and both fakes take the same instance, introduced at the composition root exactly as the real repositories will be. `main.dart` already does this for `IsarChunkStore` — one instance behind four contracts, so every reader sees the same rows.
+
+**It touched previously-closed work**, which is why it landed as its own commit: 894 tests passing either side, no write path in it, revertible without touching the interface that uses it.
+
+### Assignments are recorded and never read back
+
+`InMemoryProjectTaskStore.assignments` is written by the Admin fake and read by **no repository method**, because Ch. 4.6 §3 has no endpoint that reads one — only `POST` and `DELETE`. Tests inspect the store directly, which is legitimate for a fake's own state.
+
+Ch. 2.7's A-06 nonetheless requires its checkboxes to *"reflect current assignment state on load"*. **That screen cannot be built as specified**, and it is Mission 5.2.2's first problem — open item 89.
+
+---
+
+### A-118 — `updateTask` carries `title`, and that is a judgement rather than a transcription
+
+| | |
+|---|---|
+| **Volume** | 4, Ch. 4.6 §3's `PATCH /v1/tasks/{id}` row; Ch. 4.4 §3; Volume 1 FR-ADM-02 |
+| **Says** | Ch. 4.6 §3's purpose column: *"Edit instructions/reference examples"* |
+| **Built** | `title`, `instructions` and `referenceExamples`, all optional |
+| **Date** | 2026-08-16, Mission 5.2.1 |
+
+Every other signature in `ProjectTaskAdminRepository` is fixed by a table or a route. This one is not, and it is recorded because the register should be able to tell the two apart.
+
+The purpose column names two fields. **Ch. 4.4 §3 makes `title` a column of the very row that route patches**, and FR-ADM-02 says *"create, edit, and remove Tasks … **including** instructions, reference examples, and requirements"* — *including*, not *only*. A `PATCH` on a resource whose title cannot be patched is also an odd shape to hand Mission 7.
+
+So the purpose column is read as **descriptive prose rather than an exhaustive field list**, and `title` is included. Ch. 4.6 §6 already establishes that this chapter is not the authority on fields — it *"defers full field types"* to a Volume 6 artifact that does not exist, which is why A-097 traced the entities from Ch. 4.4 in the first place. The same authority ordering applies here.
+
+**If that reading is wrong the cost is one parameter**, and a backend that rejects a title change surfaces it immediately at Mission 7. Recorded so that failure is diagnosed in one step rather than treated as a defect.
+
+---
+
 ## ⚠ THE SOFT-DELETE BLIND SPOT — one root cause, three symptoms, one fix
 
 **This is a recommendation, not a cross-reference. It is placed here rather than inside an open-item row because three items now point at it and each reads, on its own, like a small local wart.**
@@ -3589,7 +3667,7 @@ All three reasons, not any one: item 36 and items 83, 84 and 79 for C-12; item 7
 
 ---
 
-## Consolidated open items — A-057 through A-115
+## Consolidated open items — A-057 through A-118
 
 Every carried-forward item, in one place. Accurate as of **Mission 4.3**; originally the seed for Mission 3.12's status report, and re-checked at the close of each sub-mission block per item 23.
 
@@ -3698,6 +3776,11 @@ Every carried-forward item, in one place. Accurate as of **Mission 4.3**; origin
 | 69 | FR-PT-05 and Volume 2 name a Task `requirements` field that Volume 4 Ch. 4.4 §3's `tasks` table does not have | **A PRODUCT question for Faisal, not an engineering interpretation to pick.** FR-PT-05 asks for *"instructions, reference examples, and requirements"*, and Volume 2 names the same three at C-06, at A-05 and in the Task Detail section list. Chapter 4.4 §3 has six columns and no `requirements`. Either it is prose already inside `instructions` and Volume 2 is naming a heading, or it is a real column the Data Dictionary omits. **Both readings are defensible and both are product answers**, so `Task` omits the field rather than folding it into `instructions` or inventing a column Mission 7 could not populate. `task_test.dart` asserts the omission, so a later mission that adds the field without the answer breaks a test that points here. Cost to settle: one field added, or one doc comment deleted. | A-098, FR-PT-05, V4 Ch. 4.4 §3 |
 | 70 | There is no `GET /v1/tasks/{id}`, so C-06 cannot resolve a bare `task_id` | **Owed to Mission 5.1.2, which is where a route first has to resolve one.** Chapter 4.6 §3 offers exactly three Task routes — `GET /v1/projects/{id}/tasks`, `POST /v1/projects/{id}/tasks`, `PATCH /v1/tasks/{id}` — so a single Task is reachable only through its Project's list. `ProjectTaskRepository` therefore declares no `fetchTask(taskId)`, because a method Mission 7 has no endpoint to satisfy is the breaking rework the interface was traced to avoid. The gap is real but narrow: C-06's route path carries only a `taskId`, so a deep link or a cold start straight into Task Detail has no Project to list from. Closing it needs either a backend route that does not exist or `local_task_cache`, which ADR-039 §3 assigns here and open item 2 defers. **Not a defect in the interface — a consequence of the catalog, recorded so 5.1.2 inherits it.** | A-099, V4 Ch. 4.6 §3, open item 2 |
 | 71 | No check catches a source file that is **entirely absent** from `lcov.info`, as distinct from one with low coverage | **A candidate for a later testing/verification mission. Deliberately not built in 5.1.1.** `flutter test --coverage` emits an `SF:` record only for files reachable from the test suite's import graph, so a file no test imports is missing from the report rather than counted as 0% — the denominator is recomputed every run from whatever the tests happened to load. Measured 2026-08-16: **90 of 227** hand-written `lib/` files carry no record. Most are legitimately line-free (bare interfaces, `freezed` declarations whose code lives in excluded `*.freezed.dart`, enums); some, like `invite_code_repository_impl.dart`, are not. A check would have to distinguish the two, which is why it is a mission rather than a one-line CI edit. **The standing risk is the point, not the check**: this is item 41's *"a green check over an empty set is not evidence"* aimed at the coverage report itself, and Mission 4.9 §4's unexercised-mechanism pattern in a third medium. | A-101, open item 41, Ch. 9.5 §2 |
+| 85 | **Assignment is Task-level, so there is no way to say "this Collector gets every Task in this Project, including future ones"** | **A product question, not an engineering one — and the residue G3 leaves after A-116 resolves it.** Task-level assignment gives *"assigned to this Project"* for any Project with at least one assigned Task, which is what Ch. 4.6 §3's derivation already states. What it cannot express is a **standing grant**: a Project-level assignment would be a *rule* that future Tasks inherit, while Task-level assignments are *facts* about Tasks that exist. **An Admin who adds a Task next month must assign Collectors again, and nothing prompts them** — the new Task appears to nobody until someone remembers. UC-07's own flow never hits this because it creates the Task first and assigns second, so the happy path hides it. Closing it needs either a `project_assignments` table and a route (a backend change), or an explicit product decision that per-Task assignment is the intended model and the Admin UI should make the omission visible. **Not resolved by inventing a client-side fan-out** — assigning to every current Task would silently implement the facts reading of a question nobody has answered. | A-116, G3, FR-ADM-03, BR-15, UC-07 |
+| 86 | **FR-ADM-02 and MVP §2.2 both say an Admin can *remove* a Task; there is no `DELETE /v1/tasks/{id}`** | **A backend/spec gap, stated plainly rather than softened.** FR-ADM-02: *"create, edit, and **remove** Tasks within a Project"*, Must Have. MVP §2.2 repeats it verbatim in the in-scope list. Chapter 4.6 §3's Task routes are `GET /v1/projects/{id}/tasks`, `POST /v1/projects/{id}/tasks` and `PATCH /v1/tasks/{id}` — **no delete of any kind.** `ProjectTaskAdminRepository` therefore declares no `removeTask`, on 5.1.1's `fetchTask(taskId)` precedent: a port method Mission 7 has no endpoint to satisfy is breaking rework, and declaring one hides the gap behind an interface that looks complete. Closing it needs a route added to Chapter 4.6 — and a decision about whether removal is a hard delete or a soft one, since `tasks` has no `deleted_at` column while `projects` has `archived_at` and `task_assignments` has `removed_at`. **The absence is not test-guardable**: Dart offers no runtime assertion over a class's method set, so if a later mission adds `removeTask` nothing breaks. This row is the guard. | A-118, FR-ADM-02, MVP §2.2, Ch. 4.6 §3 |
+| 87 | **MVP §2.2 and Chapter 2.5's A-04 both assume an Admin can edit a Project; there is no `PATCH /v1/projects/{id}` and no FR either** | **Two gaps stacked, and the second is the surprising one.** MVP §2.2: *"Create, edit, and remove Projects."* Chapter 2.5's screen **A-04 is literally named "Create / Edit Project"** and described as *"Name, description, and Project-level settings."* Chapter 4.6 §3 has `POST /v1/projects` and nothing else for a Project. **And Chapter 1.3 has no requirement for it at all** — FR-ADM-01 is *"create a new Project"*, full stop; no FR-ADM covers editing one. So a named screen and an MVP scope line rest on a capability that has neither a route nor a requirement behind it. Closing it needs both: an FR, and a route. Until then `ProjectTaskAdminRepository` has no `updateProject`, and A-04 can implement only its "Create" half. | A-118, MVP §2.2, Ch. 2.5 A-04, Ch. 4.6 §3 |
+| 88 | **`projects.archived_at` is live, rendered and read — and the word *archive* appears nowhere in Volume 1 or Volume 2** | **A column with no requirement: the inverse of items 69 and G3, and worth naming as that shape.** Item 69 is a requirement (`requirements`) with no column; G3 is a requirement (assign-to-Project) with no table; **this is a column with no requirement.** Volume 4 Chapter 4.4 §2 declares `archived_at timestamptz Yes — Soft-delete`, Chapter 4.2 §1 explains the soft-delete pattern *"after a Project is archived"*, `Project.archivedAt` carries it (A-097), **C-04 renders an "Archived" label from it (A-109)**, and **C-03's active count is defined by it (A-104)**. Meanwhile a full-text search of Volumes 1 and 2 finds the word *archive* only inside the product name *Human Archive* — **no FR, no BR, no user story, no use case, no MVP scope line, no screen.** So the field is read in three places and **nothing specifies who sets it, when, or what it means for a Collector mid-session against an archived Project.** MVP §2.2's *"remove Projects"* is the nearest thing and it says *remove*, not *archive*, with no route either way (item 87). Needs a product decision before any Admin surface can write it. | A-104, A-109, item 87, Ch. 4.4 §2, Ch. 4.2 §1 |
+| 89 | **Chapter 2.7's A-06 requires checkboxes that "reflect current assignment state on load"; no endpoint returns assignments** | **Mission 5.2.2's first problem, and it blocks a screen rather than a nicety.** Chapter 4.6 §3 offers `POST /v1/tasks/{id}/assignments` and `DELETE /v1/tasks/{id}/assignments/{userId}` — **write only.** Nothing returns who is currently assigned to a Task, and `GET /v1/projects/{id}/tasks` returns Tasks, not assignments. So A-06 can be rendered but **cannot be initialised**: its own spec says *"Checkbox reflects current assignment state on load; unchecked-and-saved triggers FR-ADM-04 removal, not a silent no-op"*, and both halves of that sentence need a read. `ProjectTaskAdminRepository` declares no assignment read for the usual reason, and `InMemoryProjectTaskStore.assignments` is written and never read back through any repository — tests inspect the store directly. **This also has a second missing piece:** A-06 lists *Collectors* to check, and no endpoint returns the org's Collectors either (Chapter 4.6 §2 has `GET /v1/users/me` and nothing else). Two reads missing, one screen. | A-117, Ch. 2.7 A-06, Ch. 4.6 §2/§3, FR-ADM-03/04 |
 | 83 | **This client never observes `verified_at`, so FR-META-12's verification is unreadable — and closing item 36 would not change that** | **A second blocker sitting behind item 36, found 2026-08-16 by Mission 5.1.5 tracing C-12.** FR-META-12 requires a chunk's uploaded checksum to be verified against the local one *"before marking that chunk Complete"*, and Chapter 2.7 gates C-12's confirmation icon on exactly that. **Nothing in this application can read it.** Two files already state the position — `storage_cleanup_sweep.dart`: *"This device never observes `verified_at`. It writes `complete` itself"*; `chunk_upload_status.dart`: *"the device never reads `verified_at` back"* — and both were correct for their own purpose, which is why neither is a defect. The finding is what they imply together: **a deployed backend would set `verified_at` server-side and this client would still have no path to it**, so item 36 closing unblocks the upload and not the confirmation. Closing this needs a read path for verification state — `GET /v1/chunks/{id}/metadata` exists in Chapter 4.6 §3 but is Admin-scoped, so it is not simply a call the Collector's client can make. **Same shape as A-100**: a port whose blocker turned out to have a blocker behind it. **A-07 Admin Sessions is the first surface that will hit this: an Admin asking *"is this chunk verified"* has no more access to `verified_at` than a Collector does.** | A-115, item 36, FR-META-12, BR-21, A-07 |
 | 84 | **C-12 is in Chapter 2.5's inventory and Chapter 2.7's spec, and in no part of Chapter 2.4's navigation model** | **Second instance of open item 82's class: a screen the inventory names and the navigation model does not place.** Chapter 2.4 §2's Collector modals are the Checklist, Checklist Failed and Permission Blocked; its stacks are Projects→…→Task Detail and Sessions→Session Detail→Chunk Detail; §5's summary table names neither C-12 nor a route to it. **The gap is not cosmetic, because of when C-12's condition becomes true:** C-10 fires seconds after Stop, when local chunking and metadata generation finish, while C-12 fires when the *last chunk's checksum verifies server-side* — minutes to hours later over a field connection. **A Collector is long gone from C-10 by then**, on another screen or with the app closed, so there is no moment at which the application can simply show C-12 as written. It would have to be reached from C-11, or driven by a push notification (FR-SEC-03/04, Phase 2, unbuilt), or surfaced on next launch — and Chapter 2.4 specifies none of the three. **Inserting it after C-10 is the obvious wrong answer**: it would fire at the moment local processing ends, which is precisely when the claim BR-12 forbids would be false. Needs a product decision about where C-12 lives before it needs any code. | A-115, item 82, Ch. 2.4, Ch. 2.5 |
 | 81 | **C-11 forgets a session once all its chunks are swept, so FR-SES-01's end-to-end tracking is not served** | **Third symptom of one cause — see "⚠ THE SOFT-DELETE BLIND SPOT" above, and do not fix this one locally.** C-11's sessions are derived by grouping `QueuedChunk` rows, and `currentQueue` excludes `localDeletedAt != null`. So a session whose chunks have all uploaded **and** been cleaned disappears from the screen entirely — not shown as complete, shown as nothing. FR-SES-01 requires the system to *"track the state of every session (recording, chunking, uploading, complete) end to end"*, and a view that forgets finished sessions does not do that: **C-11 is an upload-queue view wearing a session-history label.** The obvious local patch — group before filtering — renders a heading over no rows, which is worse. Closes together with items 61 and 76 once a history-capable read path exists. Note that C-11 remains **correct for its own stated purpose**: Chapter 2.5 calls it *"Upload / Sync Status"*, and finished, cleaned work has no upload status. The gap is that nothing else answers the session-history question. | A-112, items 61 and 76, FR-SES-01 |
