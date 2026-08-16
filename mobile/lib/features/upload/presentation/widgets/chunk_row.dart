@@ -96,10 +96,29 @@ class ChunkRow extends StatelessWidget {
               const SizedBox(height: AppSpacing.sm),
               // "progress bar beneath the row, not inside the pill".
               // An unknown total renders indeterminate rather than as 0%.
-              LinearProgressIndicator(
-                value: progress?.fraction,
-                color: palette.accent,
-                backgroundColor: palette.accent.withValues(alpha: 0.18),
+              //
+              // Chapter 2.10 §4: a progress indicator must "expose their state
+              // as a value a screen reader can read (e.g. '62 percent'), not
+              // purely as an animated visual". A bare LinearProgressIndicator
+              // exposes nothing at all — before Mission 5.5 this bar was
+              // silent, and an uploading chunk sounded identical to a stalled
+              // one.
+              //
+              // `value` carries the percentage and `label` names what is being
+              // measured, because "62 percent" alone does not say 62 percent
+              // of what. An indeterminate bar gets no value — there is no
+              // number to read, and inventing "0 percent" would report a
+              // stall that is not happening.
+              Semantics(
+                label: 'Upload progress',
+                value: progress?.percent == null
+                    ? null
+                    : '${progress!.percent} percent',
+                child: LinearProgressIndicator(
+                  value: progress?.fraction,
+                  color: palette.accent,
+                  backgroundColor: palette.accent.withValues(alpha: 0.18),
+                ),
               ),
             ],
             if (isFailed) ...<Widget>[
