@@ -3898,6 +3898,112 @@ So it catches the common single-line case and is **not a proof of absence**. Ite
 
 ---
 
+
+### A-126 — `core/onboarding/` applies ADR-040's pattern to a relationship ADR-040 did not name
+
+| | |
+|---|---|
+| **ADR** | 040 — Cross-Feature Contracts in `core/` (Accepted) |
+| **Relationship ADR-040 decides** | feature <-> feature |
+| **Relationship recorded here** | `app/` <-> feature |
+| **Status** | A stretch by analogy. **Not settled by citation.** |
+| **Date** | 2026-08-16, Mission 5.4 |
+
+### What was actually needed
+
+`OnboardingGuard` answers *"has this Collector seen C-01"*, and the fact is owned by `features/onboarding/`. The guard runs inside `router.dart`'s `redirect`, so `lib/app/` must read it.
+
+**ADR-022 R2 forbids exactly that path**: `app/` may import a feature's `presentation/` and nothing else. Declaring the contract or its provider inside `features/onboarding/application/` would have put `router.dart` across R2 — an eighth breach of a rule already broken seven times (open item 101), added by the sub-mission whose subject is the routing layer.
+
+So the contract went to `core/onboarding/`: interface in `interfaces/`, throwing provider in `providers/`, implementation in `features/onboarding/data/`, the two introduced by the composition root. `app/` imports `core/`, which ADR-022 permits without qualification.
+
+### Why this is recorded as a stretch and not as ADR-040 compliance
+
+**ADR-040's stated shape is feature <-> feature**, and it says so in the sentence that distinguishes it from ADR-035:
+
+> *"**This case is feature <-> feature.** Neither party is `core/`. Nothing in `core/` wants these rows; `core/` is being asked to hold a contract between two modules that must not know about each other."*
+
+Here the consumer is `app/`, not a second feature. **The mechanism transfers exactly — neutral ground, dependency inversion, composition-root binding — and the justification does not**, because ADR-040's reasoning is about two features being mutually blind, which is not the property at issue when one party is the application shell.
+
+**Citing ADR-040 as though it already covered this would be the failure mode the register exists to catch**: a decision that was never taken appearing settled because a nearby decision was. It is recorded as an analogy that held, with the gap named.
+
+### The clarification this is owed
+
+Whether `app/ <-> feature` belongs inside ADR-040, inside ADR-022 as a stated consequence of R2, or in a record of its own. **It is a real question because R2 forces it**: any fact `app/` needs from a feature and cannot get through `presentation/` has to land somewhere, and `core/` is currently the only legal answer. That answer is undocumented, so the next person hitting R2 will re-derive it or breach R2 instead — which is what the seven existing breaches look like from here.
+
+Left open deliberately. **A new ADR is a decision to be approved, not a by-product of a wiring sub-mission**, and Mission 5.4's brief scoped it to route wiring.
+
+---
+
+### A-127 — `shared_preferences`' fourth owner is a named FILE, on ADR-039's self-declaring-filename convention
+
+| | |
+|---|---|
+| **Artifact** | `.github/workflows/ci.yml`, `Architecture boundaries` job |
+| **Rule changed** | `check shared_preferences <owner-regex>` |
+| **Kind of change** | Applying an already-accepted dependency more broadly — **not** an ADR-030 decision |
+| **Date** | 2026-08-16, Mission 5.4 |
+
+### What changed, and what deliberately did not
+
+Added: `lib/features/onboarding/data/shared_preferences_onboarding_seen_store\.dart`.
+
+**Not added: `lib/features/onboarding/data/`.** The directory grant was the obvious form and is the wrong one. One boolean was needed; a directory grant permits every future file in that directory to reach the plugin for any purpose, and the permission would then be invisible at the point someone uses it.
+
+### The rule already supported this granularity, and already argued for it
+
+The existing owner list carries its own precedent in a comment:
+
+> *"Both files are named individually — the permission is two FILES, not a directory or a glob, so a third entrypoint cannot acquire it by being added nearby."*
+
+ADR-039 states the convention independently, for `isar`:
+
+> *"the file that may import [the package] announces it in its own filename … greppable and self-declaring instead of a directory anyone can drop a file into."*
+
+`shared_preferences_onboarding_seen_store.dart` satisfies both: the filename carries the permission, and a second file under `features/onboarding/data/` cannot acquire it by proximity.
+
+### Why this is an amendment and not an ADR change
+
+**No accepted ADR fixes the owner list.** It exists only in `ci.yml`. ADR-008 mentions the package once — *"`shared_preferences` is not currently a dependency, so the prohibition against using it for secrets is forward-looking rather than corrective"* — which is stale as to the dependency and silent as to ownership. ADR-039 cites the package only as a naming example. **Checked before assuming**, because the alternative was a fork.
+
+ADR-030 governs *adding* a dependency. `shared_preferences` was added at Mission 3 and is already in `pubspec.yaml`, so this is the A-107 shape: an existing decided dependency applied to one more consumer.
+
+**ADR-008's test was applied rather than assumed.** The flag holds no secret, no credential and no identifier of any person or account — one boolean about a device. Writing it into `flutter_secure_storage` would blur the rule that makes ADR-008 checkable, which is the argument `SharedPreferencesWideAngleEligibilityCache` already makes for the wide-angle verdict.
+
+---
+
+### A-128 — `router.dart`'s route table documented 9 of 23 routes, and three adjacent claims had gone false with it
+
+| | |
+|---|---|
+| **Artifact** | `mobile/lib/app/router.dart`, class-level doc comment |
+| **Written** | Mission 1.3, accurate then |
+| **Found** | Mission 5.4, after eleven sub-missions of additions |
+| **Family** | A-114 — a record true when written that nothing re-checks |
+| **Date** | 2026-08-16, Mission 5.4 |
+
+### The drift
+
+The fenced block listing the application's routes named **nine**. The file declares **twenty-three**. Absent: every tab route, every stack route, `/signup`, `/admin/invite-codes` and the entry route. **A reader checking "what routes exist" against the most obvious place to look got less than half the answer**, from a file whose whole purpose (ADR-004) is being the one place routes are declared.
+
+### Three adjacent claims in the same comment had also gone false
+
+Found only because correcting the table meant reading the comment around it.
+
+| Claim | State when found |
+|---|---|
+| *"only from a feature's `presentation/` layer — ADR-022 §2.2"* | **A claim of compliance the file does not have** — three of its own imports breach R2 (open item 101) |
+| *"A single top-level `redirect` delegates to AuthGuard"* | Three guards since Mission 3.8; now four with `OnboardingGuard` |
+| *"No modal routes beyond the checklist … Neither module is scaffolded"* | False since Mission 5.2.2 added two create modals, and `onboarding` is scaffolded |
+
+All four corrected together. The R2 sentence was **replaced with a statement of the actual breach** rather than deleted, because a doc comment asserting compliance is worse than one asserting nothing.
+
+### Why this is A-114's family and not a new failure mode
+
+A-114 was a comment that outlived the fact it described; the Mission 5.2.1 off-by-one was a comment wrong on arrival. **This is the first: written true, never re-read.** Its distinguishing feature is that nothing could have caught it — no test asserts the doc matches the routes, no lint compares a comment to code, and the file passed every check in CI throughout.
+
+**No test was added to prevent recurrence, and that is a gap rather than a decision.** A check that the table's rows match the declared `path:` values is mechanically possible; whether a doc-comment-versus-code assertion is worth its maintenance is a question this sub-mission did not have the scope to answer. The reconciliation was done by hand here — 23 declared paths, 23 rows, enumerated and compared rather than eyeballed.
+
 ## ⚠ THE SOFT-DELETE BLIND SPOT — one root cause, three symptoms, one fix
 
 **This is a recommendation, not a cross-reference. It is placed here rather than inside an open-item row because three items now point at it and each reads, on its own, like a small local wart.**
@@ -3982,7 +4088,7 @@ All three reasons, not any one: item 36 and items 83, 84 and 79 for C-12; item 7
 
 ---
 
-## Consolidated open items — A-057 through A-125
+## Consolidated open items — A-057 through A-128
 
 Every carried-forward item, in one place. Accurate as of **Mission 4.3**; originally the seed for Mission 3.12's status report, and re-checked at the close of each sub-mission block per item 23.
 
@@ -4115,9 +4221,13 @@ Every carried-forward item, in one place. Accurate as of **Mission 4.3**; origin
 | 75 | FR-PT-01's *"in-progress sessions"* has no `core/` contract, so C-03 shows no tile for it | **Needs a new `core/` contract over `LocalSession.status` — ADR-040's pattern, out of scope for a UI sub-mission.** FR-SES-02's status is owned by `features/recording/`; `QueuedChunk` carries `sessionId` and `sessionStartedAt` but no session status. Counting distinct `sessionId`s in the queue was **considered and rejected as wrong rather than approximate**: it counts sessions with surviving chunk rows, and Mission 4.9's handoff warns in terms against reading the session column as an upload signal. **No tile is rendered**, and a test asserts its absence, because `0` would be a claim about the Collector's work. **This is A-100's shape a second time** — a `features/projects_tasks/` surface needing data `features/recording/` owns — which is the standing cost of ADR-022 R3 rather than a one-off. | A-103, A-100, Ch. 2.5 C-03 |
 | 76 | FR-PT-01's *"total recorded time"* has **no correct source anywhere in the project** | **Do not approximate it. A queue-sum is actively wrong, not merely incomplete.** A per-chunk duration exists — `MetadataTimingDocument.durationSeconds`, derived from `startedAt`/`endedAt` and deliberately unstored — but only one chunk at a time through `ChunkMetadataSource.metadataDocument`, with no aggregate. Summing over the queue fails because `IsarChunkStore.currentQueue` skips every row with `localDeletedAt != null` and Chapter 5.15's cleanup soft-deletes rows as chunks complete (open item 61): **the total would decrease as the Collector records more**, peaking before the first sweep. That is worse than an absent number — an incomplete figure invites trust, one that moves the wrong way trains distrust of the whole screen. Closing it needs an aggregate over *all* chunk rows including soft-deleted ones, which is a new method on a `features/recording/`-owned store exposed through a new `core/` contract. **No tile is rendered**, and a test asserts its absence. **Second of three symptoms of one cause** — items 61 and 81 trip on the same `currentQueue` filter. This is the one that cannot be fixed locally at all: caching a running total before cleanup would be a second source of truth for a number derivable from the rows, the failure ADR-018 exists to prevent. See **"⚠ THE SOFT-DELETE BLIND SPOT"** above; a history-capable read path is the only thing that closes this item. | A-103, items 61 and 81, Ch. 5.15 |
 | 77 | The cross-feature confinement sweep grew from 20 ordered pairs to 30 | **Informational, and the sweep needs no edit — but the number in every report does.** `features/onboarding/` was created at Mission 5.1.2, taking `lib/features/` from five modules to six; the `Architecture boundaries` job derives its pairs from `ls -1 lib/features`, so it picked the ten new pairs up with no change. Recorded because "20 feature pairs" is quoted as a verification figure in the Mission 4.9 report and in several amendments, and a stale count in a later report would read as a narrowed sweep — which is exactly the failure open item 26 exists to prevent. The next module makes it 42. | Mission 5.1.2, open item 26, ADR-022 R3 |
-| 78 | C-01 exists but requests nothing — **FR-ONB-01 is not satisfied**, and onboarding has no first-launch trigger | **Needs a permission plugin, which is an ADR-030 dependency decision, and it should be taken together with C-02.** FR-ONB-01 requires the system to *"request Camera, Microphone, Location (When In Use), Notifications, and Files access during first launch"*. Mission 5.1.2 built the carousel that explains all five and requests none. **This project has no permission plugin at all** — the only permission machinery is `CameraPermissionProbeImpl`, which infers camera and microphone grants by opening a camera with audio and disposing it, a side-effect probe rather than a permission API; nothing can read or request Location, Notifications or Files. C-02 (FR-ONB-02's blocking explainer and settings deep link) needs the same package, so deciding them apart would take the same decision twice. **Two things are missing, not one:** the request, and a first-launch trigger — deciding *"has this Collector seen onboarding"* needs persisted state that does not exist, so `/onboarding` is reachable by route and fires automatically for nobody. A test walks the whole carousel with a mock handler on the camera channel and asserts zero platform calls, so wiring a real request in breaks a test that names this item. | A-105, FR-ONB-01/02, ADR-030 |
+| 78 | C-01 exists but requests nothing — **FR-ONB-01 is not satisfied**. ~~and onboarding has no first-launch trigger~~ **(trigger CLOSED, Mission 5.4)** | **Needs a permission plugin, which is an ADR-030 dependency decision, and it should be taken together with C-02.** FR-ONB-01 requires the system to *"request Camera, Microphone, Location (When In Use), Notifications, and Files access during first launch"*. Mission 5.1.2 built the carousel that explains all five and requests none. **This project has no permission plugin at all** — the only permission machinery is `CameraPermissionProbeImpl`, which infers camera and microphone grants by opening a camera with audio and disposing it, a side-effect probe rather than a permission API; nothing can read or request Location, Notifications or Files. C-02 (FR-ONB-02's blocking explainer and settings deep link) needs the same package, so deciding them apart would take the same decision twice. **Two things were missing, and ONE is now fixed.** The **trigger** closed at Mission 5.4: `OnboardingSeenStore` persists the flag and `OnboardingGuard` sends an unprimed Collector to `/onboarding` on first launch (A-126, A-127, item 99). That work also revealed the sharper form of the problem — the route had **no inbound edge from anywhere in `lib/`**, so C-01 was not merely un-triggered but unreachable by any path.<br><br>**The request is still missing, and it is the half that decides this item.** Making a screen reachable ships it; it does not make it function. A Collector now sees the carousel and is asked for nothing, so FR-ONB-01 remains unsatisfied and this item stays OPEN on the plugin decision alone. A test walks the whole carousel with a mock handler on the camera channel and asserts zero platform calls, so wiring a real request in breaks a test that names this item. | A-105, A-126, A-127, item 99, FR-ONB-01/02, ADR-030 |
 | 73 | **`features/upload/application/chunk_upload_pipeline.dart` imports `features/upload/data/`, which ADR-022 forbids outright** | **Found 2026-08-16 by Mission 5.1.1's full layer sweep. Reported, not fixed — `features/upload/` is on this sub-mission's explicit do-not-touch list, and rewiring a verified upload path is not a documentation-mission change.** ADR-022 names this one of *"the two most consequential prohibitions in the matrix"*: *"`presentation/` and `application/` may not import `data/`. The repository interface is in `domain/`; the implementation is in `data/`. A layer that imports `data/` has bound itself to one implementation, which breaks test substitution."* Line 19 imports `ChunkUploadApiImpl` and line 440's `chunkUploadPipelineProvider` constructs it directly. **Every other repository in this project already does the opposite** — `authRepositoryProvider`, `chunkUploadSourceProvider`, `chunkQueueSourceProvider` and now `projectTaskRepositoryProvider` all throw and are overridden at the composition root, precisely so `application/` never names a `data/` class. This one provider is the exception and carries no `ignore`, no doc comment and no amendment explaining why. **Why no check caught it:** the `Architecture boundaries` CI job enforces package confinement (14 rules), cross-feature imports (20 pairs) and `core/` contract neutrality — **it does not enforce ADR-022's intra-feature layer matrix at all**, so this prohibition has been binding in writing and unenforced in fact since Mission 4.2, exactly as R3 was before ADR-040 made it checkable. The fix is one throwing provider plus one `uploadOverrides()` entry; the check is one `grep` per direction. Both belong to whichever mission owns `features/upload/` next. | ADR-022 (import matrix), open item 26, Mission 5.1.1 |
 | 72 | `features/auth/domain/` has no `analysis_options.yaml`, so `public_member_api_docs` has never been enforced there | **A one-file fix, deliberately not made in 5.1.1 — `features/auth/` is outside this sub-mission's scope and a lint widening is a change to a verified layer.** ADR-022 §6.1 step 7 requires the file for **every** feature's `domain/` and `data/`. Present for `auth/data`, `recording/domain`, `recording/data`, `upload/domain`, `upload/data`, and now `projects_tasks/domain` and `projects_tasks/data` — missing only for `auth/domain`, which holds five entities and two repository interfaces. Whichever mission takes it should expect new lint findings on files that have never been checked, which is why it belongs in a commit of its own rather than folded into unrelated work. | ADR-022 §6.1 step 7, A-025, Mission 5.1.1 |
+| 99 | **`/onboarding` had no inbound navigation edge anywhere in `lib/` — C-01 was declared, buildable and reachable by nobody** | **CLOSED by Mission 5.4, and recorded because the finding is reusable, not because it is open.** Mission 5.1.2 built C-01 and logged it as *"not wired to a first-launch trigger"*, which is true and files the gap as a missing feature. **Stated as a navigation fact it is sharper and worse: a route with no inbound edge is unreachable, and an unreachable screen is not shipped.** No tab, no button, no redirect and no deep link reached it; the only references to the route string in `lib/` were its own declaration and comments.<br><br>It was found by a mechanical sweep — for each declared route, count the navigation sites that target it — run because Mission 5.4's subject was the navigation graph rather than any one screen. Tabs correctly show zero `context.go` calls (`TabShell` uses `navigationShell.goBranch`), which is the one false positive the sweep produces and the reason it needs a human reading rather than a CI rule as written.<br><br>**The fix is `OnboardingSeenStore` + `OnboardingGuard`** (A-126, A-127). **It does not satisfy FR-ONB-01**, which is item 78 and stays open: the carousel is now reachable, and it still requests no permission. *Shipped* and *functional* are different claims and this closes only the first. | A-126, A-127, item 78, item 100 |
+| 100 | **Chapter 2.4's navigation model places neither C-01 nor C-10, and two shipping screens are in no Volume 2 inventory at all** | **The structural inverse of item 82, kept as its own row rather than folded in, because the direction determines the fix.** Item 82 is *Chapter 2.4 names a screen Chapter 2.5's inventory lacks* — Session Detail, Chunk Detail, Admin Task Detail. This is the reverse: **screens that exist and ship, which Chapter 2.4 never places.**<br><br>**In Chapter 2.5, absent from Chapter 2.4:** C-01 Onboarding and C-10 Local Processing. Verified against Chapter 2.4's full text — neither appears in any tab list, stack or modal list in §2 or §3.<br><br>**In neither Chapter 2.4 nor Chapter 2.5:** `/signup` and `/admin/invite-codes`. These are not omissions but consequences — self-signup (A-051, A-056) and ADR-036's invite codes were both decided after Volume 2 was written, and Volume 2 has not been revised since.<br><br>**C-01's unreachability (item 99) is plausibly a downstream effect of this.** Chapter 2.4 is where a screen's entry point is specified; a screen the chapter never places has no specified entry point, so building it from Chapter 2.7 alone produces exactly what happened — a correct screen nothing reaches. **That causal link is why the two items cross-reference and why neither belongs inside item 82**, whose phantom screens have the opposite problem and a different fix (build them, or delete the reference). | Item 82, item 99, A-051, A-056, ADR-036, Ch. 2.4 §2/§3, Ch. 2.5 |
+| 101 | **ADR-022 R2 is breached seven times in `lib/app/`, and the CI check ADR-022 assigned to "the first feature mission" was never added** | **One item, not two, because the missing check is the reason the breaches exist — ADR-022 predicted this outcome in writing and nothing acted on the prediction.** R2: *"`app/router.dart` is the only file in `app/` permitted to import from `features/`, and only from `features/<name>/presentation/` … it may not import a feature's `domain/`, `data/` or `application/`."*<br><br>**The seven**, from a full sweep of `lib/app/` (30 feature imports, 23 legal): `auth_guard.dart` → `auth/application/auth_state.dart`, `auth/domain/entities/role.dart`, `auth/domain/entities/user.dart`; `recording_guard.dart` → `recording/domain/entities/recording_state.dart`; `router.dart` → `auth/application/auth_notifier.dart`, `auth/application/auth_state.dart`, `recording/application/recording_notifier.dart`.<br><br>**ADR-022 called it.** Its Consequences record R3, R4, the `data/` prohibitions and the `app/`↛`features/` rule as *"binding in writing and unenforced in fact"*, and assign the fix explicitly: *"extending the `Architecture boundaries` job belongs to the mission that creates the first feature."* That mission arrived; the check did not. **Nothing in this register recorded the breaches before Mission 5.4**, so they were undetected drift rather than an accepted deviation — the state ADR-022 wrote that sentence to prevent.<br><br>**Explicitly NOT opened as a sub-mission by 5.4.** The fix touches `auth_guard.dart` and `recording_guard.dart`, which belong to two closed features, and choosing between *move the types to `core/`*, *pass primitives*, or *amend R2* is a trace of its own. Mission 5.4 did the one thing it could do without that trace: **it added no eighth breach.** `OnboardingGuard` takes a plain `bool` rather than an `AuthState`, and `core/onboarding/` exists so `router.dart` reads a `core/` provider instead of a feature's `application/` (A-126). | A-126, ADR-022 R2 + Consequences, `lib/app/` |
+
 
 ---
 
