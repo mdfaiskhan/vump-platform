@@ -3288,7 +3288,92 @@ That is Mission 4.9 §4's lesson at small scale — an artifact correct as writt
 
 ---
 
-## Consolidated open items — A-057 through A-108
+### A-109 — C-04 shows archived Projects and labels them
+
+| | |
+|---|---|
+| **Volume** | 1, FR-PT-03; Volume 2 Ch. 2.5's C-04 row; Volume 4 Ch. 4.6 §3 and Ch. 4.2 §1 |
+| **Omits** | Whether an archived Project appears in the Collector's list. **All four are silent** |
+| **Decision** | Shown, marked with the word *"Archived"*, and still openable |
+| **Date** | 2026-08-16, Mission 5.1.3 |
+
+Checked for a signal before treating it as a choice. FR-PT-03 says *"the list of Projects assigned to the logged-in Collector"*; BR-19 is about assignment, not archival; Ch. 2.5's C-04 says *"Every Project assigned to this Collector"*; Ch. 4.6 §3's row says *"Collector: only Projects with an assigned Task (BR-19)"*. Ch. 4.2 §1 establishes only that an archived Project's data stays queryable. **None of them addresses the question.**
+
+| Option | Cost |
+|---|---|
+| Hide archived | Drops a Project a Collector may have recorded against, with no explanation |
+| Show undifferentiated | Lets someone begin work against a closed Project |
+| **Show, labelled** | C-03's *active* count and C-04's list length differ |
+
+The third was taken because it is the only one that neither hides work nor invites it. The count/length difference is legible from the two labels — *"Active projects"* on C-03 (A-104), *"Projects"* on C-04.
+
+**The marker is a word, not a tint.** Ch. 2.10 §2.1 is written about status pills — *"A Collector with red-green color blindness must be able to tell 'Failed' from 'Complete' from the label and icon shape alone"* — and the principle transfers exactly. Greying an archived row would encode its state in hue alone.
+
+**Archived Projects stay tappable.** Ch. 4.2 §1 keeps their data queryable deliberately, and a Collector who recorded against one still needs to reach its Tasks. Nothing about archival is enforced client-side, for the same reason nothing about assignment is: both are the backend's to decide.
+
+---
+
+### A-110 — C-06 renders two of the three things FR-PT-05 names, and neither shortfall is hidden
+
+| | |
+|---|---|
+| **Volume** | 1, FR-PT-05; Volume 2 Ch. 2.5's C-06 row |
+| **Says** | *"Task Detail including instructions, reference examples, **and requirements**"* |
+| **Renders** | Instructions (in full) and reference examples (as text that opens nothing) |
+| **Class** | Requirement partially satisfied, twice over, both recorded |
+| **Date** | 2026-08-16, Mission 5.1.3 |
+
+### `requirements` — absent, and absent visibly
+
+Volume 4 Ch. 4.4 §3's `tasks` table has six columns and no `requirements` (A-098, open item 69). Three ways to make the screen look complete were available and all three were refused:
+
+- **Add a `requirements` field** — invents a column Mission 7 could not populate.
+- **Relabel `instructions` as "Instructions & Requirements"** — encodes one of two product readings into shipped copy.
+- **Render an empty "Requirements" heading** — implies the data is coming when nobody has decided it exists.
+
+So there is no section at all, and `collector_task_detail_screen_test.dart` asserts that no text matching *requirement* appears anywhere on the screen. A later mission that adds one without settling item 69 breaks a test that names it.
+
+### Reference examples — rendered, and close to useless
+
+Ch. 4.4 §3 types the column *"Array of reference media URLs"*. They are `SelectableText` and **nothing opens them**.
+
+- A tappable link needs **`url_launcher`** — a new dependency, an ADR-030 decision, and the first outbound-navigation path in an app that currently opens no external URL. That is new capability, not layout.
+- Inline previews need Ch. 2.8's component library, which is not in this repository (A-102, open item 74).
+
+**This is not a finished feature and the register should not read as though it were.** A Collector standing in a field with a URL they cannot open has, in practice, no reference example. FR-PT-05's second clause is met in letter and missed in substance — open item 80.
+
+The test asserts no `InkWell` or `GestureDetector` wraps a URL, scoped to the examples themselves. **The first draft of that test asserted no `InkWell` anywhere and caught Start Recording's button instead** — it would have passed for the wrong reason, and would have kept passing if the button were deleted. Worth recording because it is the ordinary way an absence-assertion goes wrong: the finder was correct about the widget and wrong about the subject.
+
+---
+
+### A-111 — The Record tab implements the second half of Chapter 2.4 §2, and only the second
+
+| | |
+|---|---|
+| **Volume** | 2, Ch. 2.4 §2 |
+| **Says** | Tab 3 *"jumps into the most relevant in-progress Task's checklist, **or prompts Task selection if none is obviously in progress**"* |
+| **Built** | The prompt. Always |
+| **Date** | 2026-08-16, Mission 5.1.3 |
+
+Determining *"the most relevant in-progress Task"* means reading `LocalSession.status` — owned by `features/recording/`, with no `core/` contract exposing it to anything that knows about Tasks. That is **open item 75**, the same gap that leaves C-03 without an in-progress-sessions tile. Until it closes, *"none is obviously in progress"* is true by construction and the prompt is the whole of the specified behaviour that can run.
+
+**This is a deliberate subset, not an approximation.** Deriving "most relevant" from the chunk queue would pick a Task from a session's chunk rows, which answers a different question — the identical substitution A-103 rejected for the dashboard, and Mission 4.9's handoff warns against in terms.
+
+### The screen had to gain content, not just lose a button
+
+`RecordingGuard.fallbackRoute` is `/collector/record`. A Collector who reaches `/recording/:id` without a live session is redirected **here**. The Mission 1.3 placeholder rendered its own name, which was tolerable while the debug button sat beneath it and would have become a dead end the moment that button was removed. Removing an affordance and leaving the guard pointing at an empty screen would have traded one defect for a quieter one.
+
+### What the debug button's removal did and did not accomplish
+
+**Did:** the temporary `/checklist/debug-test-task` affordance is gone, and the real path — C-04 → C-05 → C-06 → Start Recording — reaches `/checklist/:taskId` with a Task the Collector chose. Its removal condition, *"that picker existing"*, is met.
+
+**Did not:** make any recording task-attributed. `PreRecordingChecklistScreen` declares `taskId` and reads it nowhere; neither does `ChecklistNotifier`, `RecordingNotifier` or `RecordingGuard`. `TaskContext` is still bound to `UnsourcedTaskContext`. **A recording started through the real picker is attributed to exactly nothing, precisely as one started through the debug button was** — open items 1 and 79, and A-068's Guard 1 still refuses 100% of recorded chunks.
+
+The debug button was never a workaround for a missing *value*. It was a workaround for a missing *route into the screen*, and only the route has been supplied. Recorded at this length because the proximity of a real Task picker to an unattributed recording invites exactly the wrong conclusion.
+
+---
+
+## Consolidated open items — A-057 through A-111
 
 Every carried-forward item, in one place. Accurate as of **Mission 4.3**; originally the seed for Mission 3.12's status report, and re-checked at the close of each sub-mission block per item 23.
 
@@ -3397,6 +3482,8 @@ Every carried-forward item, in one place. Accurate as of **Mission 4.3**; origin
 | 69 | FR-PT-05 and Volume 2 name a Task `requirements` field that Volume 4 Ch. 4.4 §3's `tasks` table does not have | **A PRODUCT question for Faisal, not an engineering interpretation to pick.** FR-PT-05 asks for *"instructions, reference examples, and requirements"*, and Volume 2 names the same three at C-06, at A-05 and in the Task Detail section list. Chapter 4.4 §3 has six columns and no `requirements`. Either it is prose already inside `instructions` and Volume 2 is naming a heading, or it is a real column the Data Dictionary omits. **Both readings are defensible and both are product answers**, so `Task` omits the field rather than folding it into `instructions` or inventing a column Mission 7 could not populate. `task_test.dart` asserts the omission, so a later mission that adds the field without the answer breaks a test that points here. Cost to settle: one field added, or one doc comment deleted. | A-098, FR-PT-05, V4 Ch. 4.4 §3 |
 | 70 | There is no `GET /v1/tasks/{id}`, so C-06 cannot resolve a bare `task_id` | **Owed to Mission 5.1.2, which is where a route first has to resolve one.** Chapter 4.6 §3 offers exactly three Task routes — `GET /v1/projects/{id}/tasks`, `POST /v1/projects/{id}/tasks`, `PATCH /v1/tasks/{id}` — so a single Task is reachable only through its Project's list. `ProjectTaskRepository` therefore declares no `fetchTask(taskId)`, because a method Mission 7 has no endpoint to satisfy is the breaking rework the interface was traced to avoid. The gap is real but narrow: C-06's route path carries only a `taskId`, so a deep link or a cold start straight into Task Detail has no Project to list from. Closing it needs either a backend route that does not exist or `local_task_cache`, which ADR-039 §3 assigns here and open item 2 defers. **Not a defect in the interface — a consequence of the catalog, recorded so 5.1.2 inherits it.** | A-099, V4 Ch. 4.6 §3, open item 2 |
 | 71 | No check catches a source file that is **entirely absent** from `lcov.info`, as distinct from one with low coverage | **A candidate for a later testing/verification mission. Deliberately not built in 5.1.1.** `flutter test --coverage` emits an `SF:` record only for files reachable from the test suite's import graph, so a file no test imports is missing from the report rather than counted as 0% — the denominator is recomputed every run from whatever the tests happened to load. Measured 2026-08-16: **90 of 227** hand-written `lib/` files carry no record. Most are legitimately line-free (bare interfaces, `freezed` declarations whose code lives in excluded `*.freezed.dart`, enums); some, like `invite_code_repository_impl.dart`, are not. A check would have to distinguish the two, which is why it is a mission rather than a one-line CI edit. **The standing risk is the point, not the check**: this is item 41's *"a green check over an empty set is not evidence"* aimed at the coverage report itself, and Mission 4.9 §4's unexercised-mechanism pattern in a third medium. | A-101, open item 41, Ch. 9.5 §2 |
+| 79 | **A real Task picker exists and no recording is attributed to a Task** — the picker's `taskId` is never wired through to `TaskContext` | **Separate work in `features/recording/`. Explicitly NOT closed by Mission 5.1.3's proximity to it.** C-06's Start Recording passes a real `taskId` into `/checklist/:taskId`, and there the trail ends: `PreRecordingChecklistScreen` declares the parameter and reads it nowhere, and neither does `ChecklistNotifier`, `RecordingNotifier` nor `RecordingGuard`. `TaskContext` remains bound to `UnsourcedTaskContext`, which returns `MetadataIdentity.unsourced` — the empty string — for both `project_id` and `task_id`. **So a recording started through the real picker is attributed to exactly nothing, precisely as one started through the removed debug button was**, and A-068's Guard 1 still refuses 100% of recorded chunks. The work is: carry the `taskId` (and the `projectId` C-06 already holds) from the route into a `TaskContext` implementation that reads them, and bind it at the composition root in place of `UnsourcedTaskContext`. That closes **open item 1** and removes two of Guard 1's five missing fields; items 5 and 11 supply two more. **Nothing about building the picker made this easier or harder** — it was always a `features/recording/` wiring job — but the picker's existence makes it look done, which is why it is written down at length. | A-111, open items 1, 37, A-062 §1, A-068 |
+| 80 | C-06 renders reference-example URLs as text that opens nothing, so FR-PT-05 is met in letter and missed in substance | **Needs `url_launcher`, which is an ADR-030 dependency decision and the first outbound-navigation path in this app — new capability, not layout.** Volume 4 Ch. 4.4 §3 types the column *"Array of reference media URLs"*; C-06 renders them as `SelectableText`. **A Collector standing in a field with a URL they cannot open has, in practice, no reference example**, so this should not be read as a finished section. The alternative — inline image/video previews — needs Chapter 2.8's component library, which is not in this repository (open item 74), so it is doubly blocked. Deliberately not built in 5.1.3: adding a package and an outbound navigation surface inside a layout sub-mission would be exactly the scope drift these missions have avoided elsewhere. A test asserts no tap target wraps a URL, so wiring one in breaks a test that names this item. | A-110, FR-PT-05, ADR-030, open item 74 |
 | 74 | **Chapters 2.6 and 2.8 are not in this repository, so every screen built to date is token-correct and component-unverified** | **Owed to Mission 5.3's Design System audit, which currently has no reference document to audit against.** Volume 2's front matter says both are *"delivered separately"* as interactive HTML; neither file is under `docs/`. Chapter 2.7 specifies every screen in terms of Chapter 2.8 components (`card container` §5, `btn-primary` §5, `field.error` §7), and Chapter 2.10 §2.3 and §6 defer the light/dark CSS custom properties and the type scale to it. What is reachable second-hand: the four status colours (Ch. 2.10 §2.2, adopted by A-089), and the spacing/radius/size/duration/opacity scales transcribed into `lib/app/theme/` at Missions 0.7 and 4.6. What is not: what any component actually looks like. **C-01 and C-03 are therefore built from tokens and `Theme.of(context)` and are unreconciled against the definitions they were specified in terms of.** Two things close this: the HTML arriving, or an explicit decision that `lib/app/theme/` **is** the design system of record and Chapter 2.8 is superseded — the second is an ADR, not an amendment. Recorded now because a screen built from the right tokens looks finished, which is Mission 4.9 §4's shape in a visual medium. | A-102, Ch. 2.7, Ch. 2.8 |
 | 75 | FR-PT-01's *"in-progress sessions"* has no `core/` contract, so C-03 shows no tile for it | **Needs a new `core/` contract over `LocalSession.status` — ADR-040's pattern, out of scope for a UI sub-mission.** FR-SES-02's status is owned by `features/recording/`; `QueuedChunk` carries `sessionId` and `sessionStartedAt` but no session status. Counting distinct `sessionId`s in the queue was **considered and rejected as wrong rather than approximate**: it counts sessions with surviving chunk rows, and Mission 4.9's handoff warns in terms against reading the session column as an upload signal. **No tile is rendered**, and a test asserts its absence, because `0` would be a claim about the Collector's work. **This is A-100's shape a second time** — a `features/projects_tasks/` surface needing data `features/recording/` owns — which is the standing cost of ADR-022 R3 rather than a one-off. | A-103, A-100, Ch. 2.5 C-03 |
 | 76 | FR-PT-01's *"total recorded time"* has **no correct source anywhere in the project** | **Do not approximate it. A queue-sum is actively wrong, not merely incomplete.** A per-chunk duration exists — `MetadataTimingDocument.durationSeconds`, derived from `startedAt`/`endedAt` and deliberately unstored — but only one chunk at a time through `ChunkMetadataSource.metadataDocument`, with no aggregate. Summing over the queue fails because `IsarChunkStore.currentQueue` skips every row with `localDeletedAt != null` and Chapter 5.15's cleanup soft-deletes rows as chunks complete (open item 61): **the total would decrease as the Collector records more**, peaking before the first sweep. That is worse than an absent number — an incomplete figure invites trust, one that moves the wrong way trains distrust of the whole screen. Closing it needs an aggregate over *all* chunk rows including soft-deleted ones, which is a new method on a `features/recording/`-owned store exposed through a new `core/` contract. **No tile is rendered**, and a test asserts its absence. | A-103, open item 61, Ch. 5.15 |

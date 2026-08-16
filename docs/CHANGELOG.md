@@ -40,6 +40,16 @@ Mission 4.8's security review found it, by reading `git log` against this file r
 
 ### Added
 
+- **2026-08-16** — C-04 Projects List, C-05 Project Detail and C-06 Task Detail, replacing the three Mission 1.3 Collector placeholders. FR-PT-03, FR-PT-04 and FR-PT-07 are satisfied; **FR-PT-05 only in part**.
+
+  **No repository method was added for any of them.** C-04 is `fetchProjects()`, C-05 is `fetchTasks(projectId)`, and C-06 selects its Task out of that same list — which works only because Mission 5.1.2 made it read the `projectId` its route already carried. C-05's title comes from `projectsProvider` rather than a second call, because Chapter 4.6 §3 has no `GET /v1/projects/{id}` either.
+
+  **Archived Projects are shown and labelled**, not hidden. FR-PT-03, BR-19, Chapter 2.5 and Chapter 4.6 §3 are all silent on archival; hiding them would drop a Project a Collector may have recorded against, and showing them undifferentiated would let someone begin work against a closed one. The marker is the word *"Archived"* rather than a tint, per Chapter 2.10 §2.1 (A-109).
+
+  **C-06 renders two of the three things FR-PT-05 names.** There is no `requirements` section, no empty slot implying one is coming, and `instructions` was not relabelled to cover the gap — Chapter 4.4 §3's table has no such column and open item 69 is a product question. Reference examples render as selectable text that **opens nothing**: a tappable link needs `url_launcher`, an ADR-030 decision and the first outbound-navigation path in this app. An unopenable URL is close to useless in the field, so that clause is met in letter and missed in substance (open item 80, A-110).
+
+  Empty, not-found and failed are three distinct states on C-05 and C-06 rather than one blank list. BR-19 makes *"not assigned"* and *"does not exist"* indistinguishable from the client, so the copy claims neither. 25 tests; the suite moves 859 → 884. Mission 5.1.3.
+
 - **2026-08-16** — C-01's permission-priming carousel, in a new `features/onboarding/` module, and C-03's Home Dashboard.
 
   **C-01 explains five permissions and requests none, so FR-ONB-01 is not satisfied.** The requirement is that the system *"shall **request** Camera, Microphone, Location (When In Use), Notifications, and Files access during first launch"*. This project has no permission plugin — the only permission machinery is a camera open that infers two grants as a side effect, and nothing can read or request Location, Notifications or Files. Adding one is an ADR-030 decision belonging with C-02, which needs the same package (open item 78). Five cards, not the four Chapter 2.7's worked example implies: three of the four statements across Chapters 2.5 and 2.7 say five, and the example contradicts its own table's button rule (A-105).
@@ -148,5 +158,11 @@ Mission 4.8's security review found it, by reading `git log` against this file r
 - **2026-08-15** — Android build failure: `concurrent-futures` was missing from `camera_android_camerax`'s compile classpath. Mission 3.1.4. (`11d3ef4`)
 
 ### Changed
+
+- **2026-08-16** — **The temporary debug button is gone from the Record tab.** It navigated to `/checklist/debug-test-task` with a hardcoded fake Task id and had sat uncommitted in the working tree since Mission 3.12, carried forward through every mission report as a must-not-forget item. Its stated removal condition was a real Task picker existing; C-04/C-05/C-06 are that picker, and the real path now reaches `/checklist/:taskId` with a Task the Collector chose.
+
+  In its place the tab implements Volume 2 Chapter 2.4 §2's *second* half — *"prompts Task selection if none is obviously in progress"*. The first half needs `LocalSession.status`, which no `core/` contract exposes (open item 75), so the prompt always shows. That subset is deliberate rather than approximate: guessing "most relevant" from the chunk queue would answer a different question, the same substitution A-103 rejected for the Dashboard. The screen also had to gain content rather than merely lose a button, because `RecordingGuard.fallbackRoute` points at it and would otherwise have redirected onto a dead end.
+
+  **This changed nothing about attribution.** `PreRecordingChecklistScreen` declares its `taskId` and reads it nowhere, and neither does `ChecklistNotifier`, `RecordingNotifier` or `RecordingGuard`; `TaskContext` is still bound to `UnsourcedTaskContext`. A recording started through the real picker is attributed to exactly nothing, precisely as one started through the debug button was — open items 1 and 79, and A-068's Guard 1 still refuses every recorded chunk. Mission 5.1.3, A-111.
 
 - **2026-08-15** — LiDAR depth capture removed from Mission 3's scope. ARKit requires exclusive camera ownership and cannot run beside the AVFoundation pipeline. Mission 3.9, A-065. (`5ceb8eb`)
