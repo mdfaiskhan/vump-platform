@@ -245,7 +245,25 @@ class _StopControl extends StatelessWidget {
   Widget build(BuildContext context) {
     return Semantics(
       button: true,
-      label: 'Stop recording',
+      enabled: enabled,
+      // Chapter 2.10 §4: the Stop control "announces its state changes
+      // ('Recording — tap to stop' while active) so a screen-reader user
+      // always knows recording is in progress even without seeing the pulsing
+      // visual indicator".
+      //
+      // The label was the constant 'Stop recording' until Mission 5.5, which
+      // named the action correctly and answered none of what §4 asks: the
+      // sentence is about knowing that CAPTURE IS RUNNING, and a static label
+      // reads identically whether it is or not. The pulsing indicator carries
+      // that fact visually and `_RecordingIndicator` is the only thing that
+      // does, so a TalkBack user had no equivalent.
+      //
+      // `liveRegion` is what makes it an announcement rather than something
+      // only heard on focus. The label changes when `enabled` flips, and a
+      // live region speaks that change wherever the person is on screen —
+      // which is the point, since §5 confines focus to this one control.
+      liveRegion: true,
+      label: enabled ? 'Recording — tap to stop' : 'Stop recording',
       child: SizedBox.square(
         dimension: 80,
         child: Material(
