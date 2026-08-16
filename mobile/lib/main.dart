@@ -22,6 +22,8 @@ import 'package:mobile/features/auth/application/auth_notifier.dart';
 import 'package:mobile/features/auth/application/invite_code_notifier.dart';
 import 'package:mobile/features/auth/data/invite_code_repository_impl.dart';
 import 'package:mobile/features/auth/data/repositories/auth_repository_impl.dart';
+import 'package:mobile/features/projects_tasks/application/project_task_providers.dart';
+import 'package:mobile/features/projects_tasks/data/fake_project_task_repository.dart';
 import 'package:mobile/features/recording/application/checklist_notifier.dart';
 import 'package:mobile/features/recording/application/finalize_chunk_use_case.dart';
 import 'package:mobile/features/recording/application/recording_notifier.dart';
@@ -85,6 +87,27 @@ Future<void> main() async {
       // TEMPORARY, retired with ADR-036 at Mission 6/7.
       inviteCodeRepositoryProvider.overrideWithValue(
         InviteCodeRepositoryImpl(),
+      ),
+
+      // TEMPORARY — a fake repository, deliberately bound in the build.
+      //
+      // REMOVAL CONDITION: deleted when a real ProjectTaskRepository calls
+      // Volume 4 Chapter 4.6 §3's endpoints. That is Mission 7, and Volume 11
+      // Chapter 11.1's M8 gate ("no fake/mock repository remains wired into a
+      // release build") is what makes removing it mandatory rather than
+      // optional.
+      //
+      // It is bound now, rather than left throwing, because M8 comes AFTER M7
+      // — the "UI Complete" gate Mission 5 exists to reach. `backend/` is
+      // empty, no Volume 4 endpoint is deployed (M2 is not met), so C-03–C-06
+      // cannot be built against a real repository at all. Binding the fake for
+      // Mission 5 is the milestone sequence working, not a shortcut past it.
+      //
+      // This is the only file in `lib/` that names the class. Every consumer
+      // holds `ProjectTaskRepository`, so the removal is one line here plus
+      // one deleted file.
+      projectTaskRepositoryProvider.overrideWithValue(
+        const FakeProjectTaskRepository(),
       ),
 
       // The recording feature's collections, contributed here rather than by
