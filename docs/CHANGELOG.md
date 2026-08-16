@@ -106,6 +106,14 @@ Mission 4.8's security review found it, by reading `git log` against this file r
 
 ### Security
 
+- **2026-08-17** — **A new key is persisted to `shared_preferences`, and `shared_preferences` gained a fourth owner.** `onboarding_seen_v1` is a single boolean recording that C-01's permission-priming carousel has run to completion on this device. It is written once, only ever as `true`, and read synchronously by `OnboardingGuard` inside GoRouter's redirect.
+
+  **What it is not, stated because a flag invites being waved through.** It is device-scoped rather than account-scoped, so it reveals nothing about who is signed in. It is not a security control: it gates an informational screen, and forging it in either direction grants no access to anything — `true` skips a carousel, `false` shows it again. Under ADR-008's test it holds no secret, no credential and no identifier of any person or account, which is what makes `shared_preferences` the correct store rather than `flutter_secure_storage`.
+
+  **The dependency grant is one FILE, not a directory.** CI confines `shared_preferences` to a closed list, and `shared_preferences_onboarding_seen_store.dart` joins `main.dart` and `main_cleanup_probe.dart` by name — so a second file added under `features/onboarding/data/` does not acquire the plugin by proximity. ADR-039's convention: the file that may import a package announces it in its own filename. A-127.
+
+  **This entry exists because persisted state earns one regardless of credentials or network.** The precedent is this file's own *"Two new fields are persisted on every stored chunk record"* entry, which is the same shape — new state written to device storage, no credential and no network involved. Mission 5.4 shipped without it and Mission 5.7's security review found the omission; the same gap has happened before, in Missions 4.4–4.7. Mission 5.4, recorded by Mission 5.7. (`84bf1cf`)
+
 - **2026-08-16** — **Chunk files are now deleted from device storage.** Volume 5 Chapter 5.15's cleanup is the first code in this project that destroys a Collector's recorded footage, and everything about the design is chosen so that it cannot destroy footage the backend has not got.
 
   Deletion is not driven by age, by free space, or by a sweep's own judgement. A chunk becomes eligible only once its stored status says the backend has it, and `deleteChunkFile` **unlinks the `.mp4` first and writes `localDeletedAt` second**. That order is deliberate: a crash between the two leaves a row marked present whose file is gone, which the orphan filter already handles, whereas the reverse order would leave a file nothing will ever collect. BR-08's crash-survival guarantee was checked against the trigger rather than assumed — a chunk that has not been confirmed is never a deletion candidate at any point in the sweep.
