@@ -4396,6 +4396,85 @@ BR-19 and BR-20 are enforced **server-side from the verified token**. The worst 
 
 The stretch A-126 records is about **where a contract lives**, not about **what it protects**. Those are different questions and only the first is open.
 
+
+---
+
+### A-140 — Mission 5 cannot move a Feature Tracker row, and the rule that says so is this project's own
+
+| | |
+|---|---|
+| **Volume** | 11, Chapter 11.6 §4 — the Verified bar |
+| **Found** | 2026-08-17, Mission 5.8, while framing the status report |
+| **Class** | A finding about project state, not a document edit |
+| **Consequence** | Every Mission 5 status claim is *Built (unverified)* at best |
+
+### The fact
+
+    origin/mission-0.18.4-ci   67cd79b   2026-08-16   CI run #13, 10 of 10
+    HEAD                       de5de9a   2026-08-17
+                               67 commits ahead — 64 of them Mission 5
+
+**CI has never executed a line of Mission 5.** Every check the mission
+reported green — 1038 tests, 56 boundary checks, 7 token rules, 14 package
+confinements, 5 secret patterns — was run on a developer machine, in most
+cases by extracting the step from `ci.yml` and executing it directly, so that
+the numbers would be real. They are real. They are not CI.
+
+### Why that is a state finding and not a logistics note
+
+Chapter 11.6 §4, which `docs/development/feature-tracker.md` quotes in full:
+
+> *"A row moves to 'Verified' only once its Volume 9 test coverage (Chapters
+> 9.6/9.7) actually passes in CI — **not on the developer's local machine**."*
+
+The rule does not express a preference. **It makes the Feature Tracker unable
+to record Mission 5's work as Verified at all** — ten screens, a navigation
+graph, an accessibility pass verified on physical hardware, and 249 new tests,
+none of which can move a row.
+
+**The tracker's own text had gone false and was corrected rather than left
+standing.** It read *"Run #13 — the current HEAD, `67cd79b` — reports 10 of
+10. The suite it runs is 789 tests."* Neither clause is true now.
+
+### The four Verified rows are annotated, not demoted
+
+Mission 4 moved FR-AUTH, FR-CHK, FR-REC and FR-CHNK to Verified on run #13's
+authority. **That run happened and its evidence is real for the code that
+existed then.** What changed is that the evidence is now 64 commits old, and
+Mission 5 modified files inside two of those groups — `recording_screen.dart`
+and `pre_recording_checklist_screen.dart`.
+
+They keep their status and carry **⚠ stale**. FR-CHNK was not touched at all
+and is annotated anyway, because **the honest statement is about the age of
+the evidence rather than the size of the change**, and a marker applied only
+where a file happened to change would imply the others had been re-confirmed.
+
+### There is specific reason to expect the first run not to be green
+
+Not a hedge — three named risks:
+
+1. **The golden tests have never seen this mission.** They skip locally by
+   design (A-095), so they are 2 of the suite's 3 skips, and Mission 5.7
+   changed `chunk_status_pill.dart` — **the one widget with committed
+   baselines**. `excludeSemantics: true` should be pixel-neutral; "should" is
+   what a golden exists to check.
+2. **Sixty new accessibility tests render text on a host that has never run
+   them**, and open item 19 already recorded Windows and Ubuntu producing
+   different bytes for these widgets.
+3. **Mission 4's report predicted it**, under *"EXPECT A FOURTH UNEXERCISED
+   MECHANISM"*.
+
+### Why this is recorded as an amendment and not only in the report
+
+The status report is gitignored — a working artifact, not a governed one. This
+finding outlives it: **any future reader of the Feature Tracker needs to know
+that four rows read Verified against a 64-commit-old run**, and that the rule
+forbidding local verification is the reason Mission 5's output shows nowhere in
+the table. Recorded here so it survives the report being deleted.
+
+**It resolves on one action** — push the branch and get a green run — which is
+recommendation 1 of the Mission 5 handoff, ahead of every product decision.
+
 ## ⚠ THE SOFT-DELETE BLIND SPOT — one root cause, three symptoms, one fix
 
 **This is a recommendation, not a cross-reference. It is placed here rather than inside an open-item row because three items now point at it and each reads, on its own, like a small local wart.**
@@ -4480,7 +4559,7 @@ All three reasons, not any one: item 36 and items 83, 84 and 79 for C-12; item 7
 
 ---
 
-## Consolidated open items — A-057 through A-139
+## Consolidated open items — A-057 through A-140
 
 Every carried-forward item, in one place. Accurate as of **Mission 4.3**; originally the seed for Mission 3.12's status report, and re-checked at the close of each sub-mission block per item 23.
 
