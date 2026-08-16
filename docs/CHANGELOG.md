@@ -40,6 +40,14 @@ Mission 4.8's security review found it, by reading `git log` against this file r
 
 ### Added
 
+- **2026-08-16** — A-01 Admin Dashboard, built as a placeholder given its specified job rather than as a partial dashboard. Volume 2 Chapter 2.2's Admin flow step 2 assigns it one concrete, fully satisfiable duty — *"Selects 'New Project' or an existing Project"*, with the branch *"No Projects yet → empty state prompting Project creation"* — and it is the screen the Role Router lands every Admin on. Until now it rendered its own name.
+
+  It carries the one tile with an honest source: the managed-Projects count, from `fetchProjects()` under Chapter 4.6 §3's Admin scope. *"All managed"* rather than *"active"*, so unlike C-03 it needs no `archivedAt` reading.
+
+  **The other two tiles render nothing** — no zero, no placeholder, no label. *"Collector activity summary"* has no source under any reading (open items 92, 89, 36), and *"outstanding Task counts"* is undefined in the Volumes **and underivable**, because Chapter 4.4 §3's `tasks` table has six columns and no status of any kind (open item 94). C-03 set the precedent for omitting silently, and Chapter 2.9 supplies no vocabulary for *"this data has no source"*.
+
+  **No functional requirement governs this screen.** FR-ADM-01 through 08 contain no dashboard, and FR-PT-01 is the Collector's with no Admin counterpart (open item 93). Also recorded: `core/queue/` is always the *local device's* chunks, so no Admin screen can read it — which means open item 81 is Collector-side only and is not among A-07's blockers (A-123). 10 tests; the suite moves 938 → 948. Mission 5.2.4.
+
 - **2026-08-16** — A-02 Projects List (Admin), A-03 Project Detail (Admin), and the **create halves** of A-04 Create Project and A-05 Create Task. FR-ADM-01 is satisfied; FR-ADM-02 in its create half.
 
   **Admin reuses the Collector's two read methods unchanged.** Volume 4 Chapter 4.6 §3 serves both roles from one route — *"Admin: all Projects in their org. Collector: only Projects with an assigned Task"* — and scopes server-side from the verified token, so there is no Admin variant and no role parameter (A-119). Against the fake, which models no scoping deliberately, A-02 and C-04 therefore render identically; the difference is real and untestable until Mission 7.
