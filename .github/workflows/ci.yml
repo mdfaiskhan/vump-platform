@@ -20,6 +20,15 @@ on:
   pull_request:
     branches: [main, develop]
   workflow_dispatch:
+    inputs:
+      update_goldens:
+        description: >-
+          Regenerate golden baselines instead of verifying them. Use this once
+          to bootstrap, and after an intentional visual change. The regenerated
+          images are uploaded as an artifact to be committed by hand - this
+          workflow has `contents: read` and cannot commit them itself.
+        type: boolean
+        default: false
 
 # A new push to the same branch cancels the previous run. Reviewers should see
 # the result for the current head, not for a commit already replaced.
@@ -443,6 +452,64 @@ jobs:
           # neutral type in core/network/, not a wider confinement rule.
 
           exit $status
+
+  goldens:
+    name: Golden tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      # Volume 9 Chapter 9.7 §2: every Design System component has a golden in
+      # both themes, and "a golden test failing on an unintentional pixel diff
+      # is a hard CI gate".
+      #
+      # These run HERE AND NOWHERE ELSE. Flutter renders text differently per
+      # host, so a baseline captured on a developer's Windows machine does not
+      # match one rendered on ubuntu-latest - it would fail on its first run
+      # here and every run after, for a reason unrelated to what it guards.
+      # The tests skip themselves when GITHUB_ACTIONS is unset, so a local run
+      # reports them as skipped rather than omitting them silently. A-095.
+      #
+      # golden_toolkit is not used: it is discontinued (A-027), and
+      # matchesGoldenFile is built into flutter_test.
+      - name: Verify goldens
+        if: ${{ github.event.inputs.update_goldens != 'true' }}
+        run: flutter test --tags golden
+
+      # Bootstrap and intentional-change path. Produces baselines as an
+      # artifact for a human to commit; this workflow is contents: read and
+      # cannot commit them itself, which is deliberate - a gate that can
+      # rewrite its own expected values is not a gate.
+      - name: Regenerate goldens
+        if: ${{ github.event.inputs.update_goldens == 'true' }}
+        run: flutter test --tags golden --update-goldens
+
+      - name: Upload regenerated goldens
+        if: ${{ github.event.inputs.update_goldens == 'true' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: goldens
+          path: mobile/test/**/goldens/**
+
+      # A pixel diff is unreadable as a log line; the images are the report.
+      - name: Upload failure diffs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: golden-failures
+          path: mobile/test/**/failures/**
 
   commit-convention:
     name: Commit convention
