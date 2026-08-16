@@ -2372,15 +2372,32 @@ Volume 3's internal sequence, read off that table for anyone who hits this again
 
 ### The pattern, now proven by repetition rather than argued
 
-Three missions, three collisions, each found by whichever chapter happened to be read:
+Four missions, four collisions — the first three found by whichever chapter happened to be read, the fourth by consulting this table:
 
-| Mission | Volume citation | What it means here |
+| Mission | Citation | What it means here |
 |---|---|---|
 | 4.1 | V8 Ch. 8.2 §3's "ADR-011" | Not this repo's ADR-011 (S3 storage) — A-069 |
 | 4.2 | V5 Ch. 5.10 §2/§4's "ADR-004" | Real record is ADR-007 (network), not GoRouter — open item 34 |
 | 4.3 | V5 Ch. 5.11's "ADR-003" | Real record is V3 Ch. 3.2's own ADR-003, not Riverpod |
+| **5.1.1** | **A mission brief's "ADR-006 (fake repository / provider interface pattern)"** | **Real record is V3 Ch. 3.2's own ADR-006 — Dependency Injection Approach. This repo's ADR-006 is Centralised Application Configuration** |
 
-Open item 34 recommended a single sweep listing every inline `ADR-NNN`. That recommendation is now three-for-three and is restated with more force below. Not attempted here — out of scope for 4.3 as it was for 4.1 and 4.2.
+Open item 34 recommended a single sweep listing every inline `ADR-NNN`. That recommendation is now **four-for-four** and is restated with more force below. Not attempted here — out of scope for 4.3 as it was for 4.1 and 4.2, and for 5.1.1.
+
+### The fourth instance, 2026-08-16, Mission 5.1.1
+
+The brief for 5.1.1 named *"ADR-006 (fake repository / provider interface pattern)"* as governing a new feature's fake repository. **This repository's ADR-006 is Centralised Application Configuration** — `app/config/`, `AppInfo`, `AppEnvironment` — and has nothing to do with repositories, fakes or providers.
+
+The record actually meant is **Volume 3 Chapter 3.2's internal ADR-006, Dependency Injection Approach**, which names the pattern outright: *"Repositories (Auth, Projects/Tasks, Recording, Upload, Metadata) need to be constructed once and made available throughout the app, and swapped for fakes in tests"*, resolved as *"Riverpod providers double as the app's dependency injection layer."*
+
+This repository's records for that decision are **ADR-003** — whose own Consequences say *"Overriding a repository with a fake in tests is a first-class Riverpod feature (ProviderScope overrides)"* — and **ADR-022**, which forbids `application/` importing `data/` and so forces the composition-root override.
+
+**Three things separate this instance from the first three, and each matters:**
+
+- **It was resolved by reading this table, not by stumbling into a chapter.** The lookup sequence above was already written down, so the collision cost about a minute instead of a mission. That is the first evidence A-077's table pays for itself, and the first argument for item 34's full sweep that is not purely theoretical.
+- **The collision arrived in a mission brief, not in a Volume.** The Volumes are a fixed corpus a single sweep could close. Briefs are written fresh every mission, so **the trap regenerates**: a sweep fixes the source but not the channel.
+- **Three ADRs were cited and none of them governed.** The brief also named ADR-035 and ADR-040. ADR-035 governs authenticated requests and binds at Mission 7, not at a fake. ADR-040 governs feature↔feature contracts and does not bind at all in a sub-mission that is entirely intra-feature. The brief's own instruction — *"confirm which of these actually govern … do not assume all three apply equally"* — was right, and the answer was **none of the three as cited**; the governing set is ADR-001, ADR-003 and ADR-022.
+
+**The generalisation worth carrying past the Volumes:** any `ADR-NNN` written outside `docs/architecture/decisions/` — in a Volume, a brief, a commit message or a doc comment — is ambiguous until resolved against the real files. The same failure has now reached shipped code once: `session_registrar.dart` cited *"Volume 11's M12 gate"* for the no-fakes-in-a-release-build rule, which is **M8 — APIs Integrated**; M12 is Store-Ready and says nothing about fakes. Corrected this mission in its own commit.
 
 ### A secondary, smaller mismatch in the same chapter
 
@@ -2913,7 +2930,163 @@ Chapter 9.5 §2's 80% figure is not amended down. The target stands and is recor
 
 ---
 
-## Consolidated open items — A-057 through A-096
+### A-097 — `Project` and `Task` are Chapter 4.4's tables, not Chapter 4.6's catalog
+
+| | |
+|---|---|
+| **Volume** | 4, Chapter 4.6 §3 (the endpoint catalog) and Chapter 4.4 §2/§3 (the Data Dictionary) |
+| **Says** | Ch. 4.6 §3 lists the Projects/Tasks routes; Ch. 4.6 §6 **defers** *"Full OpenAPI/Swagger schema with every field type — an implementation artifact generated in Volume 6"* |
+| **Means** | Chapter 4.6 is **not** the authority on entity shape. Chapter 4.4 is |
+| **Class** | Source selection, recorded so it is not re-litigated |
+| **Date** | 2026-08-16, Mission 5.1.1 |
+
+The obvious reading — trace the domain entities from the endpoint catalog, since that is what the app calls — produces nothing usable. Chapter 4.6 §3 is a table of methods, paths, roles and purposes; the only field list anywhere in the chapter is §5's three-field chunk-registration sample. §6 says outright that the field types are deferred to a Volume 6 artifact that does not exist.
+
+So `Project` and `Task` are traced from **Chapter 4.4's Data Dictionary**, column for column, with nullability preserved:
+
+| Entity | Columns carried | Source |
+|---|---|---|
+| `Project` | `id`, `org_id`, `name`, `description?`, `created_by`, `created_at`, `archived_at?` | Ch. 4.4 §2 |
+| `Task` | `id`, `project_id`, `title`, `instructions`, `reference_examples?`, `created_at` | Ch. 4.4 §3 |
+
+**Nothing was added and nothing was dropped**, with one recorded exception (§below). The point of tracing before typing is that Mission 7 replaces the fake with a repository that calls Ch. 4.6 §3's routes; a domain entity carrying fields the table does not have would make that a rewrite rather than a substitution.
+
+`org_id` and `created_by` are carried although C-04 renders neither. They are non-null columns, and dropping a non-null column means the real repository discards data the backend sent — the first surface needing either (Admin's A-02, any BR-20 assertion) would then widen the entity and every mapper with it.
+
+`archived_at` stays a timestamp rather than narrowing to `isArchived`. Chapter 4.2 §1 makes soft-delete a timestamp deliberately so archived data stays queryable, and no chapter says the Collector's list filters archived Projects — so the entity records the fact and decides nothing about it.
+
+**`reference_examples` is the one reshaped column.** Chapter 4.4 §3 types it nullable `jsonb` and describes it in five words — *"Array of reference media URLs"* — so it is `List<String>` with no element structure invented, defaulting to empty rather than nullable. A null array and an empty array carry the same fact and no chapter distinguishes them, so C-05 and C-06 render one shape rather than branching on a difference that means nothing.
+
+**Session is not this module's entity.** Chapter 4.3 §2 makes `tasks → sessions` 1:N and Chapter 4.6 §4 nests session creation under a Task, but `features/recording/` already owns `LocalSession` and `features/upload/` owns the remote-session port. This module supplies the `task_id` that `POST /v1/tasks/{id}/sessions` needs and stops there.
+
+---
+
+### A-098 — FR-PT-05's `requirements` has no column, and the drift is a product question
+
+| | |
+|---|---|
+| **Volume** | 1, Ch. 1.3 FR-PT-05 and Volume 2 (C-06, A-05, Task Detail) against Volume 4 Ch. 4.4 §3 |
+| **Says** | FR-PT-05: *"display Task Detail including instructions, reference examples, **and requirements**"*. Volume 2 names the same three, three separate times |
+| **Omits** | Volume 4 Chapter 4.4 §3's `tasks` table has six columns and **none of them is `requirements`** |
+| **Class** | Cross-volume drift. **Not resolved here** |
+| **Date** | 2026-08-16, Mission 5.1.1 |
+
+Two readings exist and both are defensible:
+
+- `requirements` is prose already inside `instructions`, and Volume 2 is naming a **heading** rather than a field; or
+- `requirements` is a real column Chapter 4.4 omits, and the schema is incomplete.
+
+**Both are product answers dressed as engineering ones.** Folding it into `instructions` encodes the first reading into the type system permanently; adding a `requirements` field invents a column the backend does not have and Mission 7 could not populate. So the field is **omitted from `Task`** and the drift is recorded as open item 69 for a product decision.
+
+The omission is made to fail loudly rather than fade: `task_test.dart` asserts that no `requirements` member exists, so a later mission that adds one without the product answer breaks a test that points here.
+
+When it is settled, the cost is one field added or one doc comment deleted. Neither is a rework, which is why deferring it was cheap enough to be the right call.
+
+---
+
+### A-099 — The Collector's read path and the Admin's write path are two interfaces, decided now and built apart
+
+| | |
+|---|---|
+| **Volume** | 1, Ch. 1.3 FR-ADM-07 and BR-18; Volume 3 Ch. 3.4 §2 (`ProjectTaskRepository`) |
+| **Says** | FR-ADM-07: *"prevent a Collector from creating, editing, or deleting Projects or Tasks, or from assigning Collectors"*. BR-18: *"Only an Admin may create, edit, or delete Projects and Tasks, or assign Collectors"* |
+| **Decision** | `ProjectTaskRepository` (read, built 5.1.1) and `ProjectTaskAdminRepository` (write, **declared as a decision, built by 5.2**) |
+| **Class** | Design decision inside one feature — an amendment, not an ADR |
+| **Date** | 2026-08-16, Mission 5.1.1 |
+
+The split is not tidiness. **It turns BR-18 and FR-ADM-07 from a runtime check into a compile-time guarantee.** A Collector-side notifier that holds only the read interface *cannot* call a write path, because the methods are not on its type. One interface carrying all nine methods would make the same rule a role check somebody has to remember to write, in every notifier, forever — and FR-ADM-07 is phrased as a prevention, not a validation.
+
+**Decided in 5.1.1 and built in 5.2, deliberately.** Retrofitting the split after five write methods have call sites means moving those call sites; declaring it now costs a sentence. But the write interface is **not** created as an empty or signature-only file: an `abstract interface class` with no implementer and no caller is dead code, which `CLAUDE.md` forbids, and writing it with the FR-ADM-01–04 signatures would be implementing Mission 5.2 inside 5.1.1, which `CLAUDE.md` also forbids. The decision is the artifact; the file follows when it has a consumer.
+
+### The read interface has two methods, because the backend has two routes
+
+`fetchProjects()` and `fetchTasks(projectId)`, and no `fetchTask(taskId)`. **Chapter 4.6 §3 has no `GET /v1/tasks/{id}`** — the three Task routes are `GET /v1/projects/{id}/tasks`, `POST /v1/projects/{id}/tasks` and `PATCH /v1/tasks/{id}`. Declaring a by-id fetch would put a method on the port that Mission 7 has no endpoint to satisfy, which is the breaking rework this interface was traced against Chapter 4.6 specifically to avoid.
+
+The consequence is recorded as open item 70 rather than absorbed: C-06's route carries only a `taskId`, so a deep link or cold start straight into Task Detail has no Project to list from.
+
+### `fetchProjects()` takes no `collectorId`, and this module needs nothing from `features/auth/`
+
+Volume 4 Chapter 4.8: *"every endpoint in Chapter 4.6 re-derives role and scope from the verified token context."* Chapter 4.2 §3: the API layer always injects `WHERE task_assignments.user_id = :current_user`, *"never left optional."* Chapter 4.6 §3's own row: *"Collector: only Projects with an assigned Task (BR-19)."*
+
+So BR-19 is enforced **server-side, from the bearer token**, which `AuthInterceptor` attaches one layer down under ADR-035. A `collectorId` parameter would be a client-supplied scope on a server-enforced rule — redundant at best, and at worst a value some future call site passes wrongly while the backend ignores it.
+
+**This is stronger than Volume 3 Chapter 3.5 §4's *"projects_tasks depends on core and auth"***: for the read path it depends on neither. Recorded because the expected shape of this module was a cross-feature boundary needing ADR-040's treatment, and tracing it dissolved the boundary instead.
+
+**Open item 11 is therefore untouched by this module.** That item's `collector_id` is `DeviceContext.collectorId` — a port `features/recording/` declares for chunk *metadata*, which `features/auth/` must satisfy at the composition root. It is independently closeable today and building `features/projects_tasks/` neither helps nor hinders it. The Mission 4.9 report's recommendation 4 pairs items 5 and 11 with this module; **that pairing is wrong for item 11** and is corrected here rather than inherited.
+
+---
+
+### A-100 — `SessionRegistrar` cannot be implemented by the feature it is assigned to
+
+| | |
+|---|---|
+| **Volume** | 5, Ch. 5.10 §1 step 1 and Volume 4 Ch. 4.6 §4, via `core/upload/interfaces/session_registrar.dart` |
+| **Says** | The port is *"owed to whichever mission builds `features/projects_tasks/`"*, and takes one argument: `remoteSessionId(String localSessionId)` |
+| **Problem** | Satisfying it requires reading `LocalSession.taskId`, which `features/recording/` owns and **no `core/` contract exposes** |
+| **Class** | Unexercised mechanism — Mission 4.9 §4's pattern, fifth instance |
+| **Date** | 2026-08-16, Mission 5.1.1. **Recorded, not resolved** |
+
+The port takes a **local** session id. Any implementation must look that row up to find its `task_id` before it can call `POST /v1/tasks/{id}/sessions`. `LocalSession.taskId` lives in `features/recording/data/collections/local_session.dart`; `core/queue/`'s `QueuedChunk` carries `sessionId` but no `taskId`, and `core/upload/`'s three interfaces expose neither.
+
+So `features/projects_tasks/` implementing `SessionRegistrar` would have to import `features/recording/` — **exactly the ADR-022 R3 violation the port was declared on neutral ground to prevent.** The port as written is unsatisfiable by its designated owner.
+
+### Why this belongs in Mission 4.9 §4's category
+
+That section named three mechanisms *"reviewed carefully, read correctly, and committed without once being run where it would actually have to work"*, and predicted a fourth. This is not a fourth CI defect — it is the same shape in a different medium. `SessionRegistrar` was designed, argued for at length in its own doc comment, cross-referenced from three amendments and an open item, and **never once traced from its consumer to its assigned owner**. The tracing is what found it, and the tracing took one grep.
+
+The lesson generalises past CI: *a port is not satisfiable because it is well-argued; it is satisfiable when someone follows it to the module that has to implement it and finds the data there.*
+
+### Two resolutions, and this mission picks neither
+
+1. **A new `core/` contract exposing `localSessionId → taskId`**, implemented by `features/recording/` and consumed by whoever registers.
+2. **Change the signature** to take the `taskId` directly, moving the lookup to the caller.
+
+**Recommendation only, not a decision:** option 1 is more consistent with ADR-040's established pattern — it is the same inversion `ChunkUploadSource`, `ChunkMetadataSource` and `ConnectivityService` already use, and it would be the fourth application rather than a new shape. Option 2 changes a `core/` contract's surface, which is governed by ADR-040 and needs its own treatment.
+
+**Whichever sub-mission picks this up decides for real.** Both are out of 5.1.1's scope: this sub-mission builds domain, data and application against a fake repository and implements no port. Recorded as open item 36's second blocker so it is inherited rather than rediscovered.
+
+---
+
+### A-101 — `flutter test --coverage` silently redefines its own denominator
+
+| | |
+|---|---|
+| **Volume** | 9, Ch. 9.5 §2's per-layer targets, and the `Test` CI job that measures them |
+| **Behaviour** | `lcov.info` contains an `SF:` record only for files **reachable from the test suite's import graph** |
+| **Consequence** | A file no test imports is **absent** from the report — not counted as 0% |
+| **Class** | Standing measurement risk, not a one-off defect |
+| **Date** | 2026-08-16, Mission 5.1.1 |
+
+**This is not a claim that any previously reported number was wrong.** Every figure A-066 and A-096 record is accurate for the files it measured. The risk is structural and forward-looking: **the denominator is recomputed on every run from whatever the tests happened to import**, so untested code lowers the layer percentage far less than it should — and in the limit, not at all.
+
+Measured this mission at commit-time: **90 of 227** hand-written `lib/` files carry no `SF:` record.
+
+### The honest split, because most of those 90 are fine
+
+| Category | Absent because | Is it a gap? |
+|---|---|---|
+| Pure `abstract interface class` files | No executable lines exist to instrument | **No** |
+| `freezed` entity declarations | Every executable line is in the excluded `*.freezed.dart` | **No** |
+| Enums and const-only files | Same | **No** |
+| Files with real logic that no test imports | Nothing loaded them | **Yes** |
+
+`features/auth/data/invite_code_repository_impl.dart` is in the fourth row. So were `features/projects_tasks/`'s fake and both notifiers, until this mission's tests were written.
+
+### The sharper form, found by this mission's own numbers
+
+Before tests, `features/*/domain` read **98.71% (230/233)** with three new untested domain files on disk. After 51 tests, it reads **98.71% (230/233)** — *identical*. Both times for a correct reason, and neither time because the target was actually re-tested: the entities are `freezed` declarations and the repository is a bare interface, so none of the three contributes an executable line either way.
+
+**A feature whose `domain/` is entirely entities and interfaces cannot move the `domain` layer percentage at all** — not by being tested, and not by being untested. The number is real; what it measures is narrower than "the domain layer", and Chapter 9.5 §2's target is silent on the distinction.
+
+### Why it is filed as a standing risk
+
+It is item 41's *"a green check over an empty set is not evidence"* applied to the coverage report itself, and it is Mission 4.9 §4's pattern in a third medium: a measurement that is correct as written, read carefully every mission, and never once asked what it was failing to look at.
+
+**Not fixed here.** A CI check that fails on files entirely missing from `lcov.info` — as distinct from files with low coverage — is recorded as open item 71, a candidate for a later testing/verification mission. Nothing about it is urgent; what mattered was writing down that the number does not mean what its name implies.
+
+---
+
+## Consolidated open items — A-057 through A-101
 
 Every carried-forward item, in one place. Accurate as of **Mission 4.3**; originally the seed for Mission 3.12's status report, and re-checked at the close of each sub-mission block per item 23.
 
@@ -2984,7 +3157,7 @@ Every carried-forward item, in one place. Accurate as of **Mission 4.3**; origin
 | 31 | CameraX `GRAPH_ERROR(ERROR_GRAPH_CONFIG)` on every session close | **Open, uninvestigated.** Fires after a successful `stopChunk()`, during `closeSession()`. Affected no run — chunk written, row committed, session completed each time. May be teardown noise or an unclean close that leaks across repeated sessions. Not assumed harmless. | A-070 §6 |
 | 32 | A device harness that drives the notifier cannot see UI wiring | **CLOSED for this case** by Mission 3.12-PRE (`09f40ac`)'s widget test; the general lesson stays open. **Third instance of "a whole checked in parts"** (cf. items 23, 26). Mission 3.8.1 returned `RESULT pass` twice while nothing in `lib/` called `start()`. Closed for this case by a widget test that taps the button; the general lesson is that an unattended harness proves the layer it drives and silently assumes the layer above calls it. | A-070 §3 |
 | 33 | `flutter install` deploys a stale artifact | **Use `flutter run`, or `flutter build` immediately before `flutter install`.** It installed Mission 3.8's pre-fix APK and reported success, causing a fix to be reported as on-device when it was not. "Install succeeded" is not evidence the change is on the device. | A-070 §4 |
-| 34 | Volumes' inline ADR citations collide with this repository's ADR numbers | **Sweep all Volumes, rather than fixing each as it is hit.** Confirmed in Volume 8 Ch. 8.2 §3, across Volume 3 Ch. 3.2's whole inline sequence, and inherited by Volume 5 Ch. 5.8's header. **Second instance found 2026-08-15 by Mission 4.2: Volume 5 Ch. 5.10 §2 and §4 both cite "ADR-004" for Dio's progress callbacks and cancellation tokens — this repository's ADR-004 is GoRouter; the real record is ADR-007 (network configuration).** Two missions running, a citation collision has been found by whichever chapter happened to be read, which is the pattern rather than the exception. A single pass listing every inline `ADR-NNN` and what it actually means would turn a recurring trap into a lookup table. Not attempted in 4.1, 4.2 or 4.3 — out of scope for all three. **Third instance found 2026-08-16 by Mission 4.3: Volume 5 Ch. 5.11's header cites "ADR-003", which is Volume 3 Ch. 3.2's own Background Upload record; this repository's ADR-003 is Riverpod.** Three missions, three collisions, each found only because someone happened to read that chapter. The recommendation is unchanged and now three-for-three. A-077 carries Volume 3's internal sequence as a partial lookup table. | A-069, A-077 |
+| 34 | Volumes' inline ADR citations collide with this repository's ADR numbers | **Sweep all Volumes, rather than fixing each as it is hit.** Confirmed in Volume 8 Ch. 8.2 §3, across Volume 3 Ch. 3.2's whole inline sequence, and inherited by Volume 5 Ch. 5.8's header. **Second instance found 2026-08-15 by Mission 4.2: Volume 5 Ch. 5.10 §2 and §4 both cite "ADR-004" for Dio's progress callbacks and cancellation tokens — this repository's ADR-004 is GoRouter; the real record is ADR-007 (network configuration).** Two missions running, a citation collision has been found by whichever chapter happened to be read, which is the pattern rather than the exception. A single pass listing every inline `ADR-NNN` and what it actually means would turn a recurring trap into a lookup table. Not attempted in 4.1, 4.2 or 4.3 — out of scope for all three. **Third instance found 2026-08-16 by Mission 4.3: Volume 5 Ch. 5.11's header cites "ADR-003", which is Volume 3 Ch. 3.2's own Background Upload record; this repository's ADR-003 is Riverpod.** Three missions, three collisions, each found only because someone happened to read that chapter. The recommendation is unchanged and now three-for-three. A-077 carries Volume 3's internal sequence as a partial lookup table. **Fourth instance found 2026-08-16 by Mission 5.1.1, and it is the first one A-077's table caught in advance rather than after the fact: a mission brief's "ADR-006 (fake repository / provider interface pattern)" is Volume 3 Ch. 3.2's own Dependency Injection record; this repository's ADR-006 is Centralised Application Configuration.** Two findings change the recommendation's shape. **First, the trap is not confined to the Volumes** — this one arrived in a *brief*, and briefs are written fresh every mission, so a one-off sweep fixes the fixed corpus but not the regenerating channel. **Second, it has now reached shipped code**: `core/upload/interfaces/session_registrar.dart` cited *"Volume 11's M12 gate"* for the no-fake-in-a-release-build rule, which is **M8 — APIs Integrated**; M12 is Store-Ready and says nothing about fakes. Corrected 2026-08-16 in a standalone commit. The sweep should therefore cover `lib/` doc comments as well as the Volumes, and the rule to carry is that **any `ADR-NNN` or milestone id written outside `docs/architecture/decisions/` is ambiguous until resolved against the real files.** | A-069, A-077, A-099 |
 | 35 | **No field bandwidth-floor NFR exists** (Volume 1 Ch. 1.4) — `S3TransferClient` consequently has no send timeout | **Raising this NFR is a product decision, not an engineering one, and belongs in its own conversation rather than inside an implementation mission.** Deferred, not resolved. No number was proposed and none was guessed. The constant becomes derivable the moment the NFR exists. | A-072 |
 | 36 | Backend session registration has no implementation — `SessionRegistrar` is a named, unowned port | **Owed to whichever mission builds `features/projects_tasks/`.** Ch. 5.10 §1 step 1's URL needs a backend session id from `POST /v1/tasks/{id}/sessions`, which needs a `task_id`. `sessionRegistrarProvider` throws; a fake satisfies it in tests only. **Until this lands the pipeline cannot upload anything**, which is why 4.2's verification is against the fake rather than a real endpoint. | A-071, Ch. 4.6 §4 |
 | 37 | Guard 1 refuses 100% of chunks recorded on a device | **Correct behaviour, not a defect — and the reason it fires is items 1, 5 and 11.** Four of `MetadataIdentity`'s five fields carry the unsourced sentinel, so no real chunk can be uploaded until `features/projects_tasks/`, the `collector_id` inversion and a `device_id` source all exist. Named here so nobody reads an empty upload log as a broken pipeline. | A-068 Guard 1, A-062 §1 |
@@ -3019,6 +3192,11 @@ Every carried-forward item, in one place. Accurate as of **Mission 4.3**; origin
 | 66 | Nothing mechanically ties a security-relevant commit to a changelog entry | Volume 11 Chapter 11.5 §4 requires an entry *"the day the change merges"*, and §2 puts anything touching auth, storage or data handling under `Security`. The discipline has now failed twice: Missions 3.1–3.10 shipped with no changelog at all (found by Mission 3.11's review, finding S3), and Missions 4.4–4.7 shipped with no entry of any category (found by Mission 4.8, after 3,300 lines of `lib/` including the project's first data-deleting code). Both times it was caught by a review reading `git log` against the file, months of work apart. **Every enforcement this project actually trusts lives in CI; this one lives in a mission checklist, and a checklist has lost to it twice.** A plausible gate — fail a PR whose diff touches `data/`, `core/storage/`, `core/network/interceptors/` or auth without touching `docs/CHANGELOG.md` — is a workflow change, not a documentation fix, so it is recorded here rather than bundled into Mission 4.8.1's docs commit. | V11 Ch. 11.5 §2/§4, Mission 3.11, Mission 4.8 |
 | 67 | `docs/CHANGELOG.md` has two `### Added` headings under one `## [Unreleased]` | Keep a Changelog, which Chapter 11.5 §1 adopts by name, gives each release section one heading per category. This file has `### Added` in two places under `[Unreleased]` — the Mission 4.x entries under the first, the Mission 3 backfill under the second, with `### Security` sitting between them. **Real but cosmetic**: no entry is missing, misfiled or wrong, and every entry carries its own inline date, so nothing is harder to find than it would be if merged. Deliberately not fixed in Mission 4.8.1, because merging the sections would have moved unrelated lines and buried that commit's actual diff — the entries it existed to add. Fold the two together the next time this file is opened for a substantive reason, so the cleanup rides along with a change being reviewed anyway rather than becoming a churn commit of its own. | V11 Ch. 11.5 §1, Mission 4.8.2 |
 | 68 | ADR-040, ADR-041 and ADR-042 carry `Implementation Status` tables that are snapshots of the mission that wrote them | Each table describes the code as it stood at Mission 4.1, 4.2 and 4.3 respectively, and Missions 4.4–4.6 have since applied all three patterns further: `core/connectivity/` is a fourth application of ADR-041's neutral-type inversion, `core/time/` is a new contract module, `core/upload/` gained attempt accounting, and `core/queue/`'s projection was widened to carry retry state. **No decision changed** — these are instances of decided patterns, recorded as amendments A-081–A-096 — so nothing is owed a superseding ADR and none was written. What is stale is the factual status table, not the decision above it. **Deliberately not corrected in place**: `CLAUDE.md` and this project's practice treat an accepted ADR as not rewritten, and a status table edited on every subsequent mission would make the ADR a living document rather than a dated decision. The alternative, if this becomes annoying, is to drop the tables from future ADRs and let the register carry implementation state — which is what it already does. | ADR-040/041/042, Mission 4.9 |
+| 69 | FR-PT-05 and Volume 2 name a Task `requirements` field that Volume 4 Ch. 4.4 §3's `tasks` table does not have | **A PRODUCT question for Faisal, not an engineering interpretation to pick.** FR-PT-05 asks for *"instructions, reference examples, and requirements"*, and Volume 2 names the same three at C-06, at A-05 and in the Task Detail section list. Chapter 4.4 §3 has six columns and no `requirements`. Either it is prose already inside `instructions` and Volume 2 is naming a heading, or it is a real column the Data Dictionary omits. **Both readings are defensible and both are product answers**, so `Task` omits the field rather than folding it into `instructions` or inventing a column Mission 7 could not populate. `task_test.dart` asserts the omission, so a later mission that adds the field without the answer breaks a test that points here. Cost to settle: one field added, or one doc comment deleted. | A-098, FR-PT-05, V4 Ch. 4.4 §3 |
+| 70 | There is no `GET /v1/tasks/{id}`, so C-06 cannot resolve a bare `task_id` | **Owed to Mission 5.1.2, which is where a route first has to resolve one.** Chapter 4.6 §3 offers exactly three Task routes — `GET /v1/projects/{id}/tasks`, `POST /v1/projects/{id}/tasks`, `PATCH /v1/tasks/{id}` — so a single Task is reachable only through its Project's list. `ProjectTaskRepository` therefore declares no `fetchTask(taskId)`, because a method Mission 7 has no endpoint to satisfy is the breaking rework the interface was traced to avoid. The gap is real but narrow: C-06's route path carries only a `taskId`, so a deep link or a cold start straight into Task Detail has no Project to list from. Closing it needs either a backend route that does not exist or `local_task_cache`, which ADR-039 §3 assigns here and open item 2 defers. **Not a defect in the interface — a consequence of the catalog, recorded so 5.1.2 inherits it.** | A-099, V4 Ch. 4.6 §3, open item 2 |
+| 71 | No check catches a source file that is **entirely absent** from `lcov.info`, as distinct from one with low coverage | **A candidate for a later testing/verification mission. Deliberately not built in 5.1.1.** `flutter test --coverage` emits an `SF:` record only for files reachable from the test suite's import graph, so a file no test imports is missing from the report rather than counted as 0% — the denominator is recomputed every run from whatever the tests happened to load. Measured 2026-08-16: **90 of 227** hand-written `lib/` files carry no record. Most are legitimately line-free (bare interfaces, `freezed` declarations whose code lives in excluded `*.freezed.dart`, enums); some, like `invite_code_repository_impl.dart`, are not. A check would have to distinguish the two, which is why it is a mission rather than a one-line CI edit. **The standing risk is the point, not the check**: this is item 41's *"a green check over an empty set is not evidence"* aimed at the coverage report itself, and Mission 4.9 §4's unexercised-mechanism pattern in a third medium. | A-101, open item 41, Ch. 9.5 §2 |
+| 73 | **`features/upload/application/chunk_upload_pipeline.dart` imports `features/upload/data/`, which ADR-022 forbids outright** | **Found 2026-08-16 by Mission 5.1.1's full layer sweep. Reported, not fixed — `features/upload/` is on this sub-mission's explicit do-not-touch list, and rewiring a verified upload path is not a documentation-mission change.** ADR-022 names this one of *"the two most consequential prohibitions in the matrix"*: *"`presentation/` and `application/` may not import `data/`. The repository interface is in `domain/`; the implementation is in `data/`. A layer that imports `data/` has bound itself to one implementation, which breaks test substitution."* Line 19 imports `ChunkUploadApiImpl` and line 440's `chunkUploadPipelineProvider` constructs it directly. **Every other repository in this project already does the opposite** — `authRepositoryProvider`, `chunkUploadSourceProvider`, `chunkQueueSourceProvider` and now `projectTaskRepositoryProvider` all throw and are overridden at the composition root, precisely so `application/` never names a `data/` class. This one provider is the exception and carries no `ignore`, no doc comment and no amendment explaining why. **Why no check caught it:** the `Architecture boundaries` CI job enforces package confinement (14 rules), cross-feature imports (20 pairs) and `core/` contract neutrality — **it does not enforce ADR-022's intra-feature layer matrix at all**, so this prohibition has been binding in writing and unenforced in fact since Mission 4.2, exactly as R3 was before ADR-040 made it checkable. The fix is one throwing provider plus one `uploadOverrides()` entry; the check is one `grep` per direction. Both belong to whichever mission owns `features/upload/` next. | ADR-022 (import matrix), open item 26, Mission 5.1.1 |
+| 72 | `features/auth/domain/` has no `analysis_options.yaml`, so `public_member_api_docs` has never been enforced there | **A one-file fix, deliberately not made in 5.1.1 — `features/auth/` is outside this sub-mission's scope and a lint widening is a change to a verified layer.** ADR-022 §6.1 step 7 requires the file for **every** feature's `domain/` and `data/`. Present for `auth/data`, `recording/domain`, `recording/data`, `upload/domain`, `upload/data`, and now `projects_tasks/domain` and `projects_tasks/data` — missing only for `auth/domain`, which holds five entities and two repository interfaces. Whichever mission takes it should expect new lint findings on files that have never been checked, which is why it belongs in a commit of its own rather than folded into unrelated work. | ADR-022 §6.1 step 7, A-025, Mission 5.1.1 |
 
 ---
 

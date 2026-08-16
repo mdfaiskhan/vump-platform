@@ -40,6 +40,16 @@ Mission 4.8's security review found it, by reading `git log` against this file r
 
 ### Added
 
+- **2026-08-16** — `features/projects_tasks/` has a `domain/`, `data/` and `application/` layer for the first time. `Project` and `Task` are traced column-for-column from Volume 4 Chapter 4.4's Data Dictionary — **not** from Chapter 4.6's endpoint catalog, which §6 says defers every field type to a Volume 6 artifact that does not exist (A-097). `ProjectTaskRepository` serves FR-PT-03/04/05 with two methods, `fetchProjects()` and `fetchTasks(projectId)`, matching the two routes Chapter 4.6 §3 actually offers.
+
+  **Neither method takes a `collectorId`.** Chapter 4.8 has every endpoint re-derive scope from the verified token, and Chapter 4.2 §3 injects the assignment filter server-side, so BR-19 is enforced by the backend rather than by this client — which means the read path needs nothing at all from `features/auth/` (A-099).
+
+  **The write path is a separate interface that does not exist yet.** `ProjectTaskAdminRepository` is decided but unbuilt: keeping FR-ADM's writes off the Collector's type makes BR-18 and FR-ADM-07 a compile-time guarantee rather than a role check every notifier has to remember. It is declared as a decision rather than as an empty file, because an interface with no implementer is dead code and one with the FR-ADM signatures would be Mission 5.2 (A-099).
+
+  **`Task` has no `requirements` field, deliberately.** FR-PT-05 and Volume 2 name it three times; Chapter 4.4 §3's table has no such column. Both readings — prose inside `instructions`, or a missing column — are product answers, so the field is omitted and the drift is recorded as open item 69 rather than guessed (A-098).
+
+  **Nothing here reads a backend.** `FakeProjectTaskRepository` is bound in `main.dart` with its removal condition written into the override: it is deleted when a real repository calls Chapter 4.6 §3's endpoints, at Volume 11 Chapter 11.1's **M8** gate. Binding it now is what the milestone order sanctions — M8 follows M7, the "UI Complete" gate this mission serves, and no Volume 4 endpoint is deployed for it to call instead. 51 tests; `domain` holds at 98.71%, `data` moves 68.34% → 69.45%. Mission 5.1.1, ADR-001/003/022.
+
 - **2026-08-16** — Volume 5 Chapter 5.11's Background Upload (Android). A single foreground service starts when a chunk enters `Uploading` and stops when the queue drains — one persistent notification for the whole batch, showing aggregate progress ("Uploading 2 of 5 chunks."), never restarted per chunk. Up to two chunks upload in parallel (§3's *"small fixed number"*; the number is chosen rather than derived — A-078).
 
   **The upload runs in the app's main isolate, not in the service's task isolate**, and ADR-042 records why: the plugin's `TaskHandler` runs in a separate isolate that cannot hold the single `IsarChunkStore` instance ADR-040 requires, and `firebase_auth` does not serve tokens to a background isolate. An Android foreground service keeps its host process alive, which is the whole of what Chapter 5.11 §3 asks for.
@@ -116,6 +126,8 @@ Mission 4.8's security review found it, by reading `git log` against this file r
 - **2026-08-15** — Camera module, capability ladder and fixed capture specification (BR-01/BR-02). Mission 3.1. (`4c7f3d1`)
 
 ### Fixed
+
+- **2026-08-16** — `SessionRegistrar`'s doc comment cited *"Volume 11's M12 gate"* for the rule that a fake repository must not be wired into a release build. That rule is **M8 — APIs Integrated**; M12 is Store-Ready and says nothing about fakes. The rule is real and the code obeys it — only the citation was wrong — but it is load-bearing for Mission 7's exit criteria, and it pointed at a milestone six gates later than the one that actually binds. **The fourth instance of open item 34's citation collision, and the first found in this project's own shipped code rather than in a Volume** (A-077). Mission 5.1.1, standalone commit.
 
 - **2026-08-16** — HTTP 429 was classified as a terminal failure, so a chunk the backend had asked to slow down was marked `failed` and stopped retrying — the opposite of what the status code means. It is now `transportFailure` and transient, which routes it into Chapter 5.13 §2's backoff where a rate-limit response belongs. Closes A-050. Mission 4.4. (`0ed322b`)
 
