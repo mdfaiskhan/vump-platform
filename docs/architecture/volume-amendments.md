@@ -4324,6 +4324,78 @@ Part 1 reported *"three tooling gaps Chapter 9.5/9.7 name that don't exist"*. Ch
 
 **Only the golden-coverage count was genuinely new** (item 109). Recorded because the near-miss is instructive: a fresh measurement can rediscover a known item and present it as news, and the register is the thing that stops that.
 
+
+---
+
+### A-138 — Mission 5.7's security review: scope, method, and the three findings
+
+| | |
+|---|---|
+| **Range** | `ccd6874..HEAD` — **58 commits, 93 files** (54 added, 39 modified) |
+| **Method** | Working-tree scan **and** patch-history scan; boundary checks re-run rather than cited |
+| **Outcome** | Two fixed under authorisation, one recorded for deliberate scheduling (open item 110) |
+| **Date** | 2026-08-17, Mission 5.7 |
+
+`ccd6874` was HEAD when Mission 5 began, so the range is exact rather than estimated.
+
+### Why the history was scanned and not only the tree
+
+The project's `Secret scan` job reads `git ls-files` — the **working tree**. A credential added in one commit and deleted in a later one passes that scan and is still disclosed permanently, which is the failure ADR-016 exists for.
+
+So the review extracted all **11,156 added lines** across the 58 commits and ran the five committed patterns plus seven broader ones (`password=`, `secret=`, `api_key`, `client_secret`, `BEGIN CERTIFICATE`, bearer-shaped values, long token literals). **Zero hits.** The three `Bearer` matches are prose inside doc comments describing how `AuthInterceptor` works.
+
+### What was clean, stated so the absence is evidence rather than silence
+
+- **Storage.** Mission 5 added exactly one persistence writer: `onboarding_seen_v1`, a boolean written only ever as `true`. `features/auth/` was touched **only in `presentation/`** — no `core/storage/`, no `core/network/`, no `features/auth/data/`. The token path is untouched, and `StorageKeys` remains a typed registry whose API refuses a string literal at compile time.
+- **Network.** The only URL literals added are four `https://example.invalid/...` seeds — RFC 2606 reserved and **guaranteed non-resolvable** — plus one documentation link in a comment. `url_launcher` appears exactly once in all of Mission 5: **in a doc comment explaining why it was not added.** It is not a dependency. `launchUrl`, `canLaunch`, `WebView`, `HttpClient`, `Dio(`, `Socket`, `WebSocket`: all zero. **No outbound capability was added despite open item 80's proximity**, which was checked explicitly because that item makes it plausible.
+- **Boundaries.** 14 package confinements, **30 cross-feature pairs**, core-neutrality — re-run from `ci.yml` rather than cited from Mission 5.6. Exit 0.
+
+### The two fixes
+
+**Finding 2 — the core-neutrality check covered 3 of `core/`'s 12 modules.** Fixed by deriving the list from the filesystem. The comment beside the old list read *"adding a third contract module is one word rather than ten lines someone can forget to keep in step"* — Mission 5.4 added a fourth and **the one word was forgotten anyway**, which is the argument for removing the failure mode rather than patching the instance. No violation existed; all nine unchecked modules were verified clean by hand. Proven non-vacuous by planting an import in `core/time/` — a module the old list did not reach — and watching the check fail with a named path.
+
+**Finding 3 — Mission 5 wrote 79 changelog lines, all under "Added", none under "Security."** Written now for the onboarding store.
+
+### A labelling collision this review nearly created
+
+The findings were drafted as **S-1, S-2, S-3**. Checking the register before writing them up found that **open items 27, 28 and 29 are already labelled S1, S2 and S3** — Mission 3.11's security review, using the same scheme for entirely different findings.
+
+**So those labels are not used here.** This is the same hazard A-069 and open item 34 record for ADR numbers, appearing in a second namespace: a short label that reads as globally unique inside one document and is not. A future reader searching the register for *"S2"* would have found two unrelated things.
+
+### And a rule the same check surfaced
+
+Open item 29 names the governing requirement for finding 3: **Volume 11 Chapter 11.5 §2 requires Security entries for storage and data handling.** The changelog entry had been written citing only the *precedent* — this file's own persisted-chunk-fields entry — which is weaker. The rule is cited now. **Precedent shows an entry of this shape exists; the rule is why one was owed.**
+
+---
+
+### A-139 — Why open item 101 and A-126 stay architectural, with the reasoning rather than the verdict
+
+| | |
+|---|---|
+| **Question** | Are the seven ADR-022 R2 breaches, or `core/onboarding/`'s `app/ ↔ feature` stretch, security-relevant? |
+| **Answer** | **No, to both.** Purely architectural. |
+| **Date** | 2026-08-17, Mission 5.7 |
+
+Recorded with the argument attached, because **the verdict alone would be re-litigated by the next reviewer, and could be reversed by anyone who assumed a different premise.**
+
+### Item 101 — the seven R2 breaches
+
+**Reason 1: the breaches are inbound only.** All seven are `lib/app/` reading feature types — `AuthState`, `Role`, `User`, `RecordingState`. Nothing is exposed outward; no value crosses a boundary in the direction that would let one principal read another's data. A layering breach becomes an information-boundary issue when it lets data *escape*, and these move data toward the shell that already renders it.
+
+**Reason 2, and the decisive one: `AuthGuard` is not a security control**, in its own words at `auth_guard.dart:71`:
+
+> *"the backend refuses the data regardless (Volume 4 Chapter 4.8 §1), so this is a navigation correction and not a security boundary."*
+
+BR-19 and BR-20 are enforced **server-side from the verified token**. The worst a compromised guard can do is send someone to a screen the server will not populate.
+
+**The premise that would change this answer, stated so it can be checked rather than assumed:** if any guard ever became the *only* thing standing between a role and data — a client-side filter over a response the server scoped loosely, say — then its imports would become an information-boundary question and item 101 would need elevating. **That is not today's architecture**, and Volume 4 Chapter 4.8 §1 is what makes it not.
+
+### The `core/onboarding/` stretch (A-126)
+
+`core/onboarding/` carries **one boolean about whether a carousel has been shown**. It crosses no trust boundary, gates no access, and moves no data between principals. Forging it in either direction changes which informational screen renders and nothing else.
+
+The stretch A-126 records is about **where a contract lives**, not about **what it protects**. Those are different questions and only the first is open.
+
 ## ⚠ THE SOFT-DELETE BLIND SPOT — one root cause, three symptoms, one fix
 
 **This is a recommendation, not a cross-reference. It is placed here rather than inside an open-item row because three items now point at it and each reads, on its own, like a small local wart.**
@@ -4408,7 +4480,7 @@ All three reasons, not any one: item 36 and items 83, 84 and 79 for C-12; item 7
 
 ---
 
-## Consolidated open items — A-057 through A-137
+## Consolidated open items — A-057 through A-139
 
 Every carried-forward item, in one place. Accurate as of **Mission 4.3**; originally the seed for Mission 3.12's status report, and re-checked at the close of each sub-mission block per item 23.
 
@@ -4558,6 +4630,8 @@ Every carried-forward item, in one place. Accurate as of **Mission 4.3**; origin
 
 | 108 | **C-06's reference-example URLs are 28dp long-press targets — Chapter 2.10 §3 forbids both the size AND the interaction** | **Found by `androidTapTargetGuideline` on its first run, on a screen Mission 5.5's device pass had already measured by hand and passed.** The dump: `Rect.fromLTRB(16.0, 176.0, 784.0, 204.0)`, `actions: [longPress]`, `flags: [isTextField, isMultiline, isReadOnly]` — **768×28 dp, twenty under the minimum**.<br><br>**Two distinct breaches, and the second is the worse one.** §3's table sets 48×48dp for interactive elements. §3's bullet then says: *"No interactive element on any Collector screen requires a multi-finger gesture, **a precise long-press**, or a drag to operate."* `SelectableText` makes a precise long-press the ONLY way to use these URLs. **Enlarging the target satisfies the table and leaves the bullet broken.**<br><br>**Not fixed, because every fix is a product decision.** Replacing `SelectableText` with `Text` removes the only way to copy a URL and makes **open item 80** worse — those URLs already open nothing, pending an ADR-030 `url_launcher` decision. Padding to 48dp enlarges a target whose interaction §3 prohibits at any size. Adding a real tap action is item 80's fix, and it would close this item as a side effect — which is the strongest argument that **these two should be resolved together**.<br><br>The sweep records it as `skip: true` **with the reason in the test name**, so it prints on every run rather than hiding in a comment. Delete the skip when this closes. | A-136, item 80, Ch. 2.10 §3, `collector_task_detail_screen.dart` |
 | 109 | **Golden tests cover ONE component; Chapter 9.7 §2 asks for every Design System component** | **Distinct from open item 19, which closed the mechanism rather than the coverage.** Item 19 answered *can this project do golden tests without `golden_toolkit`* — yes, `matchesGoldenFile` — and delivered the status pill in both themes on a CI run that verified rather than generated. It never claimed the set was complete.<br><br>Chapter 9.7 §2: *"Every reusable Design System component (Volume 2, Chapter 2.8 — **buttons, status pills, checklist items, form fields**) has a golden test capturing its rendered output in both light and dark theme."* **One test file, two committed images, one component.**<br><br>**Bounded by item 74, and that is what stops this being a simple to-do.** Chapter 2.8 is not in this repository, so *"every reusable Design System component"* has no enumerable membership — the four named in §2's parenthesis are examples, not the list. Building goldens for four guessed components would produce a number without producing the coverage §2 means.<br><br>**Closing it needs item 74 first**, or an explicit decision that the components named in §2's parenthesis ARE the list. | Item 19, item 74, A-095, Ch. 9.7 §2 |
+
+| 110 | **SECURITY — recorded GPS coordinates and video files sit in app data that Android backs up by default; Volume 8's threat model never considered backup** | **The most serious finding of Mission 5.7's security review, and deliberately NOT fixed there.** Pre-existing, from Missions 3–4; surfaced because Mission 5.4 added a new consumer of device storage.<br><br>**The state.** `mobile/android/app/src/main/AndroidManifest.xml` sets **no `android:allowBackup`, no `android:dataExtractionRules`, no `android:fullBackupContent`**, and no backup-rules XML exists anywhere under `android/`. Android's default therefore applies.<br><br>**What is in scope of that default.** Both live under `getApplicationDocumentsDirectory()`: the **Isar database**, whose `EmbeddedGpsFix` persists `latitude` and `longitude`, and the **recorded `.mp4` chunk files** themselves (`main.dart` passes the same `documents.path` to `databaseDirectoryProvider` and to `recordingOverrides`).<br><br>**Why the existing decision does not cover it.** Volume 8 Chapter 8.2 §3 chose OS-level app-sandbox encryption over app-level AES, reasoning that *"no other app can read this app's sandbox without root/jailbreak"* — **an app-to-app threat model**. Backup and device-to-device transfer copy data *out of* the sandbox that reasoning depends on. **The word "backup" appears nowhere in Volume 8** — searched across all 18 pages, not sampled.<br><br>**Secondary, and independent of disclosure:** `flutter_secure_storage` on Android uses `EncryptedSharedPreferences`, whose master key lives in the Android Keystore and is **not** backed up. A restored install therefore reads back undecryptable blobs rather than tokens — a correctness failure that arrives through the same mechanism.<br><br>**Why it was not fixed in a review sub-mission.** The fix is not one attribute. It is a decision about *what* to exclude versus disabling backup entirely, taken against Volume 8's threat model and Volume 1's data-handling commitments, and it belongs to whoever revisits that model. Setting `allowBackup="false"` unilaterally would also silently change device-transfer behaviour for any existing install.<br><br>**Worth deliberate scheduling given what is at stake — GPS coordinates and recorded video of third parties. Not urgent-today; not indefinitely deferred either.** Distinct from open item 45, which is about merged *permissions* and an exported receiver in the same file — same manifest, different subject. | A-138, A-069, item 45, V8 Ch. 8.2 §3, `AndroidManifest.xml` |
 
 
 ---
