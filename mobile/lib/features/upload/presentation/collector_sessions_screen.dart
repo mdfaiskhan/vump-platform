@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mobile/app/theme/app_status_colors.dart';
+import 'package:mobile/core/queue/chunk_upload_status.dart';
 import 'package:mobile/core/queue/queued_chunk.dart';
 import 'package:mobile/core/time/providers/clock_provider.dart';
 import 'package:mobile/features/upload/application/upload_dispatcher_status_notifier.dart';
@@ -133,9 +134,19 @@ class _CollectorSessionsScreenState
           children: <Widget>[
             Padding(
               padding: EdgeInsets.only(top: index == 0 ? 0 : 24, bottom: 8),
-              child: Text(
-                'Session ${group.sessionId}',
-                style: Theme.of(context).textTheme.titleSmall,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Text(
+                    sessionHeading(group, now),
+                    style: Theme.of(context).textTheme.titleSmall,
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    sessionSummary(group),
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ],
               ),
             ),
             for (final QueuedChunk chunk in group.chunks)
@@ -249,4 +260,108 @@ class _Message extends StatelessWidget {
       ),
     ),
   );
+}
+
+/// The heading Chapter 2.7 asks for: *"grouped under the session name"*.
+///
+/// ## A session has no name, so this is the nearest true thing
+///
+/// Nothing in this project gives a recording session a title. `QueuedChunk`
+/// carries `sessionId` and `sessionStartedAt` and no label, and
+/// `LocalSession` — which has no `core/` contract exposing it anyway (open
+/// item 75) — has none either. Until a session can be named, **when it was
+/// recorded is the only identifying fact a Collector actually holds**.
+///
+/// It replaces a raw UUID. `Session 7f3a1c2e-…` satisfied the letter of
+/// "grouped under the session" and told a Collector nothing they could match
+/// against their own day.
+///
+/// ## Relative for two days, absolute after
+///
+/// "Today" and "Yesterday" are what a Collector reasons in during the window
+/// where an upload is still outstanding; past that, a date is more useful than
+/// counting back. [now] is passed in rather than read from the system clock so
+/// the boundary is testable — the same reason Chapter 5.13's schedule takes an
+/// injectable clock (A-083).
+///
+/// Comparison is on local calendar dates, not on elapsed hours: a chunk
+/// recorded at 23:50 reads "Yesterday" at 00:10, which is what a person means
+/// by yesterday even though ten hours have not passed.
+///
+/// Month abbreviations are English, consistent with every other string in this
+/// application — no localisation exists anywhere yet, and this adds a
+/// dependency on none.
+String sessionHeading(UploadQueueSession group, DateTime now) {
+  // BOTH sides are converted before the calendar dates are taken. `now` comes
+  // from `Clock.now()` and `sessionStartedAt` is stored UTC, so comparing one
+  // converted value against one unconverted one would put the Today/Yesterday
+  // boundary at UTC midnight rather than the Collector's — wrong by a whole
+  // day for anyone far enough east or west, and invisible in a UTC test.
+  final DateTime started = group.chunks.first.sessionStartedAt.toLocal();
+  final DateTime local = now.toLocal();
+  final DateTime today = DateTime(local.year, local.month, local.day);
+  final DateTime day = DateTime(started.year, started.month, started.day);
+  final int daysApart = today.difference(day).inDays;
+
+  final String time =
+      '${started.hour.toString().padLeft(2, '0')}:'
+      '${started.minute.toString().padLeft(2, '0')}';
+
+  return switch (daysApart) {
+    0 => 'Today $time',
+    1 => 'Yesterday $time',
+    _ => '${started.day} ${_months[started.month - 1]} $time',
+  };
+}
+
+const List<String> _months = <String>[
+  'Jan',
+  'Feb',
+  'Mar',
+  'Apr',
+  'May',
+  'Jun',
+  'Jul',
+  'Aug',
+  'Sep',
+  'Oct',
+  'Nov',
+  'Dec',
+];
+
+/// One line of per-session progress, under the heading.
+///
+/// Chapter 2.4 §2 calls Tab 4 *"upload/sync status **across all sessions**"*,
+/// and until now the screen answered that only by making the reader count
+/// rows. `UploadQueueSession.countOf` has existed and been unit-tested since
+/// Mission 4.1 with no production consumer; this is it.
+///
+/// ## It counts what the queue still holds, and says so when that is all done
+///
+/// Chapter 5.15's cleanup soft-deletes completed chunks and the queue excludes
+/// soft-deleted rows (open item 61), so a session's totals **shrink as
+/// housekeeping runs** and a fully-swept session disappears from this screen
+/// altogether. That is the same root cause as open items 76 and 81 and it is
+/// not worked around here: the wording avoids a total the reader could take as
+/// a session's true chunk count.
+///
+/// So this reads *"2 uploaded · 1 waiting"* rather than *"2 of 5 uploaded"*.
+/// The second phrasing would state a denominator this screen cannot know.
+String sessionSummary(UploadQueueSession group) {
+  final int complete = group.countOf(ChunkUploadStatus.complete);
+  final int uploading = group.countOf(ChunkUploadStatus.uploading);
+  final int queued = group.countOf(ChunkUploadStatus.queued);
+  final int failed = group.countOf(ChunkUploadStatus.failed);
+
+  final List<String> parts = <String>[
+    if (complete > 0) '$complete uploaded',
+    if (uploading > 0) '$uploading uploading',
+    if (queued > 0) '$queued waiting',
+    // Named last and never omitted when non-zero: Chapter 2.9 §4.1 forbids a
+    // failure that is not visible, and a summary that led with "3 uploaded"
+    // while one chunk was stuck would be exactly that.
+    if (failed > 0) '$failed needs attention',
+  ];
+
+  return parts.join(' · ');
 }
