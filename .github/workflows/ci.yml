@@ -331,7 +331,20 @@ jobs:
           # one is asynchronous. Both files are named individually - the
           # permission is two FILES, not a directory or a glob, so a third
           # entrypoint cannot acquire it by being added nearby.
-          check shared_preferences     'lib/features/recording/data/|lib/main\.dart|lib/main_cleanup_probe\.dart'
+          # The fourth owner is ONE FILE, named in full, joining the two
+          # entrypoints above on the same terms rather than the directory
+          # grant `lib/features/recording/data/` holds. Mission 5.4 needed a
+          # single boolean — "has this device seen C-01" — persisted for
+          # OnboardingGuard, and a `lib/features/onboarding/data/` grant would
+          # have permitted every future file in that directory to reach the
+          # plugin for anything at all.
+          #
+          # ADR-039 states the convention this relies on: "the file that may
+          # import [the package] announces it in its own filename … greppable
+          # and self-declaring instead of a directory anyone can drop a file
+          # into." The filename carries the permission, so a second onboarding
+          # file cannot acquire it by being added nearby.
+          check shared_preferences     'lib/features/recording/data/|lib/main\.dart|lib/main_cleanup_probe\.dart|lib/features/onboarding/data/shared_preferences_onboarding_seen_store\.dart'
           check crypto                 lib/features/recording/data/
           check battery_plus           lib/features/recording/data/
           # connectivity_plus gains main.dart as a second owner, on exactly the

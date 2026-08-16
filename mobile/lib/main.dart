@@ -17,6 +17,7 @@ import 'package:mobile/core/errors/app_exception.dart';
 import 'package:mobile/core/firebase/providers/firebase_provider.dart';
 import 'package:mobile/core/logging/app_logger.dart';
 import 'package:mobile/core/logging/providers/logger_provider.dart';
+import 'package:mobile/core/onboarding/providers/onboarding_ports.dart';
 import 'package:mobile/core/queue/providers/queue_ports.dart';
 import 'package:mobile/core/time/providers/clock_provider.dart';
 import 'package:mobile/core/upload/providers/upload_ports.dart';
@@ -24,6 +25,7 @@ import 'package:mobile/features/auth/application/auth_notifier.dart';
 import 'package:mobile/features/auth/application/invite_code_notifier.dart';
 import 'package:mobile/features/auth/data/invite_code_repository_impl.dart';
 import 'package:mobile/features/auth/data/repositories/auth_repository_impl.dart';
+import 'package:mobile/features/onboarding/data/shared_preferences_onboarding_seen_store.dart';
 import 'package:mobile/features/projects_tasks/application/project_task_providers.dart';
 import 'package:mobile/features/projects_tasks/data/fake_project_task_admin_repository.dart';
 import 'package:mobile/features/projects_tasks/data/fake_project_task_repository.dart';
@@ -94,6 +96,17 @@ Future<void> main() async {
       // TEMPORARY, retired with ADR-036 at Mission 6/7.
       inviteCodeRepositoryProvider.overrideWithValue(
         InviteCodeRepositoryImpl(),
+      ),
+
+      // C-01's first-launch trigger. The SAME resolved SharedPreferences
+      // instance that backs the wide-angle cache below — A-067's arrangement
+      // for this plugin, one instance behind every port that needs it.
+      //
+      // The contract is in `core/onboarding/` rather than in the feature
+      // because `app/router.dart` reads it, and ADR-022 R2 forbids `app/`
+      // from importing a feature's `domain/`, `data/` or `application/`.
+      onboardingSeenStoreProvider.overrideWithValue(
+        SharedPreferencesOnboardingSeenStore(preferences),
       ),
 
       // TEMPORARY — a fake repository, deliberately bound in the build.

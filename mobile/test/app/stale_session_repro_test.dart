@@ -7,10 +7,13 @@ import 'package:go_router/go_router.dart';
 import 'package:mobile/app/router.dart';
 import 'package:mobile/core/errors/error_codes.dart';
 import 'package:mobile/core/errors/exceptions/authentication_exception.dart';
+import 'package:mobile/core/onboarding/providers/onboarding_ports.dart';
 import 'package:mobile/features/auth/application/auth_notifier.dart';
 import 'package:mobile/features/auth/domain/entities/session.dart';
 import 'package:mobile/features/auth/domain/entities/user.dart';
 import 'package:mobile/features/auth/domain/repositories/auth_repository.dart';
+
+import '../core/onboarding/fakes/onboarding_seen_fakes.dart';
 
 /// Regression tests for the cold-start crash on a stale, role-less session.
 ///
@@ -41,6 +44,12 @@ void main() {
     final ProviderContainer container = ProviderContainer(
       overrides: <Override>[
         authRepositoryProvider.overrideWithValue(repository),
+        // The redirect consults this on every navigation and the provider
+        // throws until overridden. Seen-by-default, so C-01 does not
+        // intercept tests about auth; onboarding_route_test.dart owns it.
+        onboardingSeenStoreProvider.overrideWithValue(
+          FakeOnboardingSeenStore(),
+        ),
       ],
     );
     addTearDown(container.dispose);

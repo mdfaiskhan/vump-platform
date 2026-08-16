@@ -3,7 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:mobile/app/auth_guard.dart';
 import 'package:mobile/app/navigation/tab_shell.dart';
+import 'package:mobile/app/onboarding_guard.dart';
 import 'package:mobile/app/recording_guard.dart';
+import 'package:mobile/core/onboarding/providers/onboarding_ports.dart';
 import 'package:mobile/features/auth/application/auth_notifier.dart';
 import 'package:mobile/features/auth/application/auth_state.dart';
 import 'package:mobile/features/auth/presentation/admin_invite_codes_screen.dart';
@@ -115,10 +117,21 @@ import 'package:mobile/features/upload/presentation/collector_sessions_screen.da
 ///
 /// ## The guard
 ///
-/// A single top-level `redirect` delegates to [AuthGuard], a pure function of
-/// auth state and location — see ADR-037. `refreshListenable` is what re-runs
-/// it when the session changes, because GoRouter evaluates `redirect` on
-/// navigation and has no other reason to look again.
+/// A single top-level `redirect` delegates to three pure functions, in a fixed
+/// order — see ADR-037:
+///
+/// 1. [AuthGuard] — who is this, and may they be here at all.
+/// 2. [OnboardingGuard] — has this Collector seen C-01 (Chapter 2.7's
+///    "shown at first launch").
+/// 3. [RecordingGuard] — BR-04's checklist gate.
+///
+/// Auth runs first because someone with no session belongs on Login regardless
+/// of what the other two think, and running them first would bounce them
+/// twice. Each guard's own doc gives its reason for the position it holds.
+///
+/// `refreshListenable` is what re-runs the chain when the session changes,
+/// because GoRouter evaluates `redirect` on navigation and has no other reason
+/// to look again.
 ///
 /// The router is a provider rather than a top-level `final` for one reason:
 /// `redirect` must read `authNotifierProvider`, and a top-level object has no
@@ -180,6 +193,27 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((Ref ref) {
       );
       if (authRedirect != null) {
         return authRedirect;
+      }
+
+      // Chapter 2.7's "shown at first launch", and it runs after AuthGuard for
+      // the same reason RecordingGuard does: someone with no session belongs
+      // on Login, and priming them first would bounce them twice.
+      //
+      // It runs BEFORE RecordingGuard, which matters in exactly one case — a
+      // first-launch deep link to /recording/:id. Onboarding wins there,
+      // because a device that has never been primed has no live session for
+      // RecordingGuard to protect, so its only possible answer is the Record
+      // tab, and sending an unprimed Collector there skips the screen
+      // Chapter 2.7 says comes first.
+      final String? onboardingRedirect = OnboardingGuard.redirect(
+        isCollector: AuthGuard.isCollector(auth),
+        hasSeenOnboarding: ref
+            .read(onboardingSeenStoreProvider)
+            .hasSeenOnboarding,
+        location: state.matchedLocation,
+      );
+      if (onboardingRedirect != null) {
+        return onboardingRedirect;
       }
 
       // BR-04, and it runs second on purpose: someone who is not signed in
@@ -491,15 +525,33 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((Ref ref) {
       // route rather than only at launch so C-02 can send a Collector back
       // through the explanation once that screen exists.
       //
-      // NOT wired to a first-launch trigger. Deciding "has this Collector seen
-      // onboarding" needs persisted state, and the only permission signal this
-      // project has is a camera open (see OnboardingCarouselScreen). Both
-      // belong with C-02 and the permission-plugin decision; see open item 78.
+      // Reached by OnboardingGuard on a Collector's first launch, and by route
+      // otherwise, so C-02 can send someone back through the explanation once
+      // that screen exists.
+      //
+      // Until Mission 5.4 this route had NO inbound edge from anywhere in
+      // `lib/` — declared, buildable, and reachable by nobody. The trigger it
+      // was missing is `OnboardingSeenStore`.
+      //
+      // **The screen still requests no permission.** It cannot: this project
+      // has no permission plugin, so three of FR-ONB-01's five cannot even be
+      // read (see OnboardingCarouselScreen). Making the carousel reachable
+      // makes it shipped, not satisfied — FR-ONB-01 stays open, with C-02 and
+      // the ADR-030 plugin decision, at open item 78.
       GoRoute(
-        path: '/onboarding',
+        path: OnboardingGuard.route,
         builder: (BuildContext context, GoRouterState state) =>
             OnboardingCarouselScreen(
-              onComplete: () => context.go('/collector/dashboard'),
+              // Awaited before navigating, not fired alongside it: the `go`
+              // below re-runs the top-level redirect, which reads the flag
+              // synchronously. Navigating first would race the write and send
+              // the Collector straight back to this screen.
+              onComplete: () async {
+                await ref.read(onboardingSeenStoreProvider).markSeen();
+                if (context.mounted) {
+                  context.go(AuthGuard.collectorRoot);
+                }
+              },
             ),
       ),
 

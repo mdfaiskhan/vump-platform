@@ -78,6 +78,22 @@ abstract final class AuthGuard {
     return trespassing ? home : null;
   }
 
+  /// Whether [auth] is a signed-in Collector.
+  ///
+  /// Exists so `OnboardingGuard` can be told *which role* without importing
+  /// one. ADR-022 R2 permits `lib/app/` to import a feature's `presentation/`
+  /// and nothing else; this file already imports `AuthState`, `User` and
+  /// `Role`, so answering the question here costs nothing, while asking it in
+  /// the new guard would have added three fresh breaches of R2.
+  ///
+  /// False while [auth] is null — the session is still resolving, and
+  /// redirecting on a role nobody has established yet is how the flash
+  /// Mission 2.2 removed would come back.
+  static bool isCollector(AuthState? auth) => switch (auth) {
+    AuthStateAuthenticated(:final User user) => user.role == Role.collector,
+    _ => false,
+  };
+
   /// Sends anyone without a session to Login, except where they may already be.
   static String? _forSignedOut(String location) {
     if (publicRoutes.contains(location)) {
