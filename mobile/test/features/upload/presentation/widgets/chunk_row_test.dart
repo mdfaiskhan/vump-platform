@@ -45,9 +45,7 @@ void main() {
   ) async {
     final SemanticsHandle handle = tester.ensureSemantics();
     await tester.pumpWidget(
-      app(
-        const ChunkUploadProgressSnapshot(sentBytes: 620, totalBytes: 1000),
-      ),
+      app(const ChunkUploadProgressSnapshot(sentBytes: 620, totalBytes: 1000)),
     );
     await tester.pumpAndSettle();
 

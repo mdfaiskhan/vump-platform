@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:mobile/app/theme/app_status_colors.dart';
@@ -26,6 +27,73 @@ void main() {
       ),
     ),
   );
+
+  group('open item 106 — a pill announces itself ONCE', () {
+    // Found on a CPH2707, not by a test: `uiautomator dump` reported
+    // `content-desc` read 'Queued' twice on C-11. `Semantics(label:)` does not
+    // replace a child `Text`'s contribution — the two merge — so every state
+    // doubled. `excludeSemantics: true` is the fix, and these are the
+    // assertions that would have caught it.
+    for (final (ChunkUploadStatus status, String expected)
+        in <(ChunkUploadStatus, String)>[
+          (ChunkUploadStatus.queued, 'Queued'),
+          (ChunkUploadStatus.uploading, 'Uploading'),
+          (ChunkUploadStatus.complete, 'Complete'),
+        ]) {
+      testWidgets('${status.wireName} is not doubled', (
+        WidgetTester tester,
+      ) async {
+        final SemanticsHandle handle = tester.ensureSemantics();
+        await pump(tester, status);
+
+        final SemanticsNode node = tester.getSemantics(
+          find.byType(ChunkStatusPill),
+        );
+        // Equality, not `contains`: the defect was a label that CONTAINED the
+        // right word twice, so a substring assertion passes on the bug.
+        expect(node.label, expected);
+        handle.dispose();
+      });
+    }
+
+    testWidgets('the live percentage is announced once, with its number', (
+      WidgetTester tester,
+    ) async {
+      final SemanticsHandle handle = tester.ensureSemantics();
+      await pump(tester, ChunkUploadStatus.uploading, percent: 62);
+
+      expect(
+        tester.getSemantics(find.byType(ChunkStatusPill)).label,
+        'Uploading 62%',
+      );
+      handle.dispose();
+    });
+
+    testWidgets('failed KEEPS its retry sentence — the label is composed, '
+        'not merely deduplicated', (WidgetTester tester) async {
+      // The half that makes `excludeSemantics` correct rather than lossy.
+      // `_semanticLabel()` adds a sentence the visible text does not carry,
+      // and excluding the child must not take that with it.
+      final SemanticsHandle handle = tester.ensureSemantics();
+      await pump(tester, ChunkUploadStatus.failed);
+
+      expect(
+        tester.getSemantics(find.byType(ChunkStatusPill)).label,
+        'Failed. Retry available.',
+      );
+      handle.dispose();
+    });
+
+    testWidgets('the visible word is still rendered', (
+      WidgetTester tester,
+    ) async {
+      // `excludeSemantics` removes the child from the SEMANTICS tree only.
+      // If it ever removed the text from the screen, every sighted Collector
+      // would lose the pill's word and these other tests would not notice.
+      await pump(tester, ChunkUploadStatus.queued);
+      expect(find.text('Queued'), findsOneWidget);
+    });
+  });
 
   group('every state carries a colour AND an icon AND a label', () {
     for (final (ChunkUploadStatus status, String label)

@@ -60,6 +60,22 @@ class ChunkStatusPill extends StatelessWidget {
       // for a screen reader, which cannot see the countdown's placement.
       label: _semanticLabel(),
       container: true,
+      // Without this the child `Text` contributes its own string and the two
+      // MERGE, so every pill announced itself twice. Dumped from C-11 on a
+      // CPH2707: `content-desc='Queued\nQueued'`. All four states doubled,
+      // because `_semanticLabel()` returns `_label()` verbatim except when
+      // failed — *Uploading 62% Uploading 62%*, *Complete Complete*, and
+      // *Failed. Retry available. Failed*.
+      //
+      // The comment above describes the intent and the code did not achieve
+      // it: adding a label to a node whose child already has text ADDS to the
+      // announcement rather than replacing it. `_semanticLabel()` is built
+      // from `_label()`, so it already contains everything the visible text
+      // says and the child's copy is pure duplication.
+      //
+      // Found only on device (open item 106). No widget test caught it and no
+      // screenshot shows it — it existed solely in the accessibility tree.
+      excludeSemantics: true,
       child: DecoratedBox(
         decoration: BoxDecoration(
           color: style.fill,
