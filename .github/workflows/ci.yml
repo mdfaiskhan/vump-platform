@@ -153,7 +153,19 @@ jobs:
         # and `core/storage` convert third-party errors and neither has a
         # boundary test, so a gate set today would fail on those rather than
         # on the auth tree.
-        run: flutter test --coverage --reporter expanded
+        #
+        # --exclude-tags golden, because the golden tests do NOT skip here.
+        # They skip on GITHUB_ACTIONS being unset, which is exactly the
+        # condition CI does not satisfy - so without this filter they run
+        # inside the unit-test job as well as inside the Golden tests job, and
+        # a single pixel diff fails both. Confirmed by measurement rather than
+        # inference: `flutter test` reports 789 passed / 2 skipped locally and
+        # 791 passed with GITHUB_ACTIONS=true.
+        #
+        # A visual regression must be reported by the job that guards visuals.
+        # Reporting it as a unit-test failure sends whoever reads it looking
+        # for a logic bug that is not there. A-095.
+        run: flutter test --coverage --exclude-tags golden --reporter expanded
 
       - name: Report coverage
         run: |
