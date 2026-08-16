@@ -2807,7 +2807,11 @@ A-027 recorded that `golden_toolkit` is discontinued and that a maintained mecha
 
 ### Why they do not run locally
 
-Flutter renders text differently per host. A baseline captured on a Windows machine does not match one rendered on `ubuntu-latest`, so committing developer-generated goldens would produce a gate that fails on its first CI run and every run after, for a reason unrelated to what it guards.
+Flutter renders text differently per host, so a baseline captured on a Windows machine may not match one rendered on `ubuntu-latest` — producing a gate that fails for a reason unrelated to what it guards.
+
+> **Corrected 2026-08-16, same mission.** That reason is **overstated for these particular goldens**, and the correction is recorded rather than the original quietly edited. `flutter_test` loads no fonts, so every glyph and icon in the captured image renders as a **filled box** at exact glyph-advance width. There is no font rasterization to differ between hosts. What the images verify is colour, pill geometry, layout and label widths; the largest source of cross-platform divergence is absent.
+>
+> What remains genuinely platform-dependent is antialiasing on the rounded-rect edges and the Skia/Impeller version. That is enough to keep the CI-only rule — Flutter's own guidance still restricts goldens to one platform — but not enough to justify refusing to try. The first baselines were therefore generated on Windows and committed **to be judged by CI**, which is a cheap reversible experiment with a useful answer either way. If they mismatch, the job fails with a diff artifact and the bootstrap path below regenerates correct ones.
 
 This repository has carried three checks that were hollow or misleading for structurally similar reasons — a rule with no subject (item 41), a scan pointed at the wrong subtree (item 50), a job that could not start (item 51). A gate that is red for the wrong reason trains people to ignore it, which is the same failure as a gate that is green for the wrong reason.
 
@@ -2815,11 +2819,17 @@ So the golden tests **skip themselves when `GITHUB_ACTIONS` is unset**. Locally 
 
 ### The bootstrap, and why CI cannot commit its own baselines
 
-The baselines do not exist yet and cannot be produced on a developer machine — that is the whole point of the decision. `workflow_dispatch` therefore takes an `update_goldens` input that regenerates them and uploads them as an artifact for a human to commit.
+The original design put bootstrapping behind `workflow_dispatch`. **That was unusable**: GitHub only offers a manual trigger when the workflow exists on the default branch, and `ci.yml` is not on `main` (open item 48). The bootstrap depended on a button nobody can press — a mechanism in name only, and the second time this repository has shipped one (cf. item 51's job that could not start).
 
-The workflow stays `contents: read` and cannot commit them itself, deliberately: **a gate that can rewrite its own expected values is not a gate.** The same reasoning applies after an intentional visual change — §2 requires the new image to be *"explicitly regenerating and committing … as part of that PR"*, which is a human act by design.
+The job now decides for itself, on three triggers:
 
-**Until that first dispatch runs, the `Golden tests` job has no baselines and will fail.** That is the honest state and is recorded rather than hidden behind a job that passes vacuously.
+1. **No baselines exist** — regenerate. This is the bootstrap, and it needs no dispatch.
+2. **The PR carries an `update-goldens` label** — regenerate. §2 requires an intentional visual change to be *"explicitly regenerating and committing the new golden image as part of that PR"*, which recurs. A commit-message marker cannot serve: a `pull_request` event carries no `head_commit`, and pushes to a mission branch trigger nothing at all.
+3. A `workflow_dispatch`, if one ever becomes available.
+
+**Regenerating is never a pass.** That path uploads the images and then exits 1 with instructions. A job that generated its own expected values and reported success would verify nothing — the vacuous-green shape open items 41, 50 and 51 have already cost this project three times.
+
+The workflow stays `contents: read` and cannot commit the images itself, deliberately: **a gate that can rewrite its own expected values is not a gate.**
 
 ---
 
@@ -2912,7 +2922,7 @@ Every carried-forward item, in one place. Accurate as of **Mission 4.3**; origin
 | # | Item | State | Source |
 |---|---|---|---|
 | 18 | Data-layer coverage 76.90% vs 80% | Missed; cause named; device evidence stronger | A-066 |
-| 19 | ~~Golden tests for Design System components~~ **Mechanism chosen and wired; baselines pending one CI dispatch** | **A-027's open question is answered**: `matchesGoldenFile`, built into `flutter_test`, no new dependency — `golden_toolkit` added convenience rather than capability. The tests exist for the four status pills in both themes, tagged `golden`, and **skip themselves off CI** so a Windows-rendered baseline can never be committed (A-095). **Not yet closed**: the baselines do not exist. `workflow_dispatch` with `update_goldens: true` regenerates them and uploads an artifact for a human to commit; until that runs once, the `Golden tests` job fails for want of a baseline. The workflow is `contents: read` and cannot commit them itself, deliberately — a gate that rewrites its own expected values is not a gate. | A-027, A-095, Ch. 9.5 §2, Ch. 9.7 §2 |
+| 19 | ~~Golden tests for Design System components~~ **Mechanism chosen, wired, and self-bootstrapping; first baselines committed and awaiting CI's verdict** | A-027's open question is answered: `matchesGoldenFile`, built into `flutter_test`, **no new dependency** — `golden_toolkit` added convenience rather than capability. Four status pills in both themes, tagged `golden`, skipping off CI. The `workflow_dispatch` bootstrap was replaced after it proved unusable (open item 48 — no manual trigger without `ci.yml` on `main`): the job now regenerates whenever no baselines exist, or when the PR carries an `update-goldens` label for Chapter 9.7 §2's recurring intentional-change case. Regeneration always fails the job rather than passing vacuously. **Still not closed**: the committed baselines were generated on Windows and have not yet been verified against `ubuntu-latest`. A-095 records why that is a reasonable experiment rather than a violation — no fonts are rasterized in these images — and what happens if it fails. | A-027, A-095, Ch. 9.7 §2, open item 48 |
 | 20 | `integration_test` end-to-end flows (Ch. 9.7 §1's five) | Package not installed | A-028 |
 | 21 | ~~`recoverableChunkIds()` has no caller~~ **Half closed 2026-08-16 by Mission 4.5** | `orphanedChunkIds()` now has a caller and a fixed bug: Chapter 5.15's sweep reports it, and the method excluded nothing before, so **every successfully cleaned chunk would have reported itself as an orphan**. Verified on device — after nine cleaned rows and one file deleted behind the store, it reports exactly **1**, not 10. `recoverableChunkIds()` is still uncalled and still deliberately so: it answers which *queued* chunks still have a file, which is neither the queue's question (Ch. 5.9 §3 just re-reads the rows) nor cleanup's. It is owed to a dedicated integrity pass, and nothing has needed one yet. | A-064 §2, Mission 4.2, Mission 4.5 |
 | 22 | No iOS toolchain — no macOS host, no Xcode, no iOS device | Blocks any iOS verification | A-065 §3 |
