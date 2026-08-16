@@ -4004,6 +4004,121 @@ A-114 was a comment that outlived the fact it described; the Mission 5.2.1 off-b
 
 **No test was added to prevent recurrence, and that is a gap rather than a decision.** A check that the table's rows match the declared `path:` values is mechanically possible; whether a doc-comment-versus-code assertion is worth its maintenance is a question this sub-mission did not have the scope to answer. The reconciliation was done by hand here — 23 declared paths, 23 rows, enumerated and compared rather than eyeballed.
 
+
+---
+
+### A-129 — Chapter 2.10 §8 names its own screen list, and it contains none of Mission 5's screens
+
+| | |
+|---|---|
+| **Volume** | 2, Ch. 2.10 §8 — Verification Checklist |
+| **Status of the chapter** | Draft — Pending Approval (**as are all nine Volume 2 chapters**; checked, not assumed) |
+| **Class** | Scope settled by the specification, against the sub-mission's own framing |
+| **Date** | 2026-08-16, Mission 5.5 |
+
+### The list
+
+> *"VoiceOver (iOS) and TalkBack (Android) manual pass completed on: **Login (SH-02), Pre-Recording Checklist (C-07/C-08), Recording Screen (C-09), Upload/Sync Status (C-11), Assign Collectors (A-06), Metadata Detail (A-08)**."*
+>
+> *"Text scaling verified at 100%, 150%, and 200% OS settings **on the same screen list above**."*
+
+| Screen | Built by | Built in 5.1/5.2? |
+|---|---|---|
+| Login (SH-02) | Mission 2 | No |
+| Pre-Recording Checklist (C-07/C-08) | Mission 3 | No |
+| Recording Screen (C-09) | Mission 3 | No |
+| Upload/Sync Status (C-11) | Mission 4 | No |
+| Assign Collectors (A-06) | **never built** — item 89 | No |
+| Metadata Detail (A-08) | **never built** — item 97 | No |
+
+### Why this is recorded rather than resolved silently
+
+Mission 5.5's brief scoped the pass to *"all new screens"* and asked explicitly whether Chapter 2.10 applies retroactively **the way Mission 5.3's token sweep turned out to need**. The honest answer is neither option as posed:
+
+- **Not 5.3's shape.** 5.3's retroactive scope was a *discovery* — the token sweep found violations in older screens and widened to meet them. Nothing in Chapter 2.8 named a screen list.
+- **Not "new screens only".** Chapter 2.10 §8 names six screens by identifier, and **zero of them were built in 5.1 or 5.2.** The list predates every screen in it.
+
+**So the specification inverts the sub-mission's scoping**, and the device pass follows the chapter. The screens built in 5.1/5.2 stay in the code-verifiable bucket, where they do have findings.
+
+**The chapter's Draft status was checked before leaning on it.** All nine Volume 2 chapters carry *"Draft — Pending Approval"*, so §8's status is the volume's normal state and not a reason to discount it. The rule that only *Accepted* records bind applies to ADRs; Volume chapters are the specification regardless.
+
+---
+
+### A-130 — Re-running the contrast check found a class A-090 never measured
+
+| | |
+|---|---|
+| **Volume** | 2, Ch. 2.10 §2.2 / §2.3, against `AppStatusColors` and `AppColors` |
+| **Pairs computed** | 40 |
+| **Failures** | 3 — all in the class A-090 did not cover |
+| **Date** | 2026-08-16, Mission 5.5 |
+
+### What the earlier measurement holds, and the question it answered
+
+A-090 measured the four published hues **as a fill carrying body text** and found three of four failing 4.5:1, which is the evidence that §2.2's *"checked against … contrast requirements"* referred to some other application.
+
+Mission 5.5 re-ran everything and confirms A-090's derived foregrounds work: **all 8 status fill-vs-foreground pairs pass** (lowest 4.76:1) and **all 24 `ColorScheme` text pairs pass** (lowest 5.02:1).
+
+### The class it did not measure — the pill against the surface behind it
+
+WCAG 1.4.11 non-text contrast, 3:1, which decides whether a pill's **boundary is visible at all** rather than whether its text is readable:
+
+| Theme | Pair | Ratio | |
+|---|---|---|---|
+| light | `warning` `#FAB219` vs `#FBFBFD` | **1.78:1** | ✗ |
+| dark | `accent` `#215FAB` vs `#101317` | **2.92:1** | ✗ |
+| dark | `critical` `#A62F2F` vs `#101317` | **2.72:1** | ✗ |
+
+**Mitigated, not resolved.** §2.1 requires every pill to pair colour with an icon *and* a text label, and it does — so no information is lost when the edge is hard to see. The defect is that the shape is low-contrast, not that the meaning is unreadable.
+
+**Not fixed, by decision.** Changing a published hue is what §2.2 forbids *"without re-validation"*, and A-090 already established there is nothing to re-validate against — Chapter 2.8 is not in this repository. Recorded as open item 102.
+
+**The dark accent misses by 0.08.** That is worth its own sentence: it is a rounding-scale question rather than a design failure, and it is the one of the three most likely to disappear if Chapter 2.8 is ever recovered and the real dark-surface value turns out to differ from the transcription.
+
+---
+
+### A-131 — Chapter 2.10 §5's focus trap is satisfied by construction, and its second half cannot be
+
+| | |
+|---|---|
+| **Volume** | 2, Ch. 2.10 §5 |
+| **Outcome** | No production code written. One half held by the navigation model, the other structurally unavailable. |
+| **Date** | 2026-08-16, Mission 5.5 |
+
+§5: *"Modal screens (Checklist, Create/Edit forms, Metadata Detail) trap focus within the modal while open, and return focus to the triggering element on dismissal."*
+
+### First half — stronger than asked, and proven rather than assumed
+
+**Every screen Chapter 2.4 calls a modal is a full-screen `GoRoute` reached by `context.go`**, which replaces the location rather than pushing an overlay. Swept `lib/`: no `Navigator.push`, no `context.push`, and one `showDialog` (sign-out confirmation, where Flutter traps and restores focus itself).
+
+So the triggering screen is not merely unfocusable — **it is not in the widget tree**, which is a stronger guarantee than a focus trap.
+
+**No `FocusScope` was added.** It would have been redundant code implying the framework was not already doing this. The deliverable is a regression test that holds the property: the triggering screen proven absent, and twelve tab presses proven to land on real focus nodes all inside the modal — with the count asserted, because a tab that focuses nothing skips the check and twelve of those would look identical to twelve successes.
+
+### Second half — unsatisfiable, and not by omission
+
+*"Return focus to the triggering element on dismissal"* has **no referent** under `go`. Dismissal navigates to a route rebuilt from scratch, so the triggering element is a new widget with no focus history and nothing to restore to.
+
+**This is a consequence of the navigation model, not a missing line in a form.** Satisfying it would mean either presenting these screens as pushed routes or overlays — a Chapter 2.4 change — or tracking a focus target across route rebuilds, which nothing in this project does. Recorded as open item 104, owned by whoever revisits how modals are presented, not by an accessibility pass.
+
+---
+
+### A-132 — `ListTile` merges descendant semantics, so an icon's label is not findable on its own
+
+| | |
+|---|---|
+| **Artifact** | Test craft, applicable to every future accessibility assertion in this repository |
+| **Found by** | An assertion that failed on its first run, not by reading documentation |
+| **Date** | 2026-08-16, Mission 5.5 |
+
+`Semantics(label: 'Checking')` on a `ListTile`'s `leading` widget does **not** produce a node labelled `Checking`. `ListTile` merges its descendants into one node, so the label arrives **concatenated with the row's title** — the checklist row reads as something like *"Camera and microphone Checking"*.
+
+**`find.bySemanticsLabel('Checking')` therefore finds nothing**, and does so silently: it reports zero matches exactly as it would if the label had never been added. The first version of Mission 5.5's checklist test failed this way and the fix is `find.bySemanticsLabel(RegExp('Checking'))`.
+
+**Recorded because the failure mode is invisible in the other direction.** A test written to match a merged label would keep passing if the label were deleted from a *different* child of the same tile. Anyone asserting on labels inside a merging widget — `ListTile`, `MergeSemantics`, a `Chip` — needs to know the node they are matching is the composite, not the part they wrote.
+
+Two smaller findings from the same session, kept here rather than as their own records: **`pumpAndSettle` times out on an indeterminate `LinearProgressIndicator`** (it animates forever — use `pump`), and **`tester.binding.rootPipelineOwner` is not where a widget test's semantics tree lives**, so walking from it finds nothing. Asserting on a node obtained via `tester.getSemantics(finder)` avoids both the deprecated API and the wrong tree.
+
 ## ⚠ THE SOFT-DELETE BLIND SPOT — one root cause, three symptoms, one fix
 
 **This is a recommendation, not a cross-reference. It is placed here rather than inside an open-item row because three items now point at it and each reads, on its own, like a small local wart.**
@@ -4088,7 +4203,7 @@ All three reasons, not any one: item 36 and items 83, 84 and 79 for C-12; item 7
 
 ---
 
-## Consolidated open items — A-057 through A-128
+## Consolidated open items — A-057 through A-132
 
 Every carried-forward item, in one place. Accurate as of **Mission 4.3**; originally the seed for Mission 3.12's status report, and re-checked at the close of each sub-mission block per item 23.
 
@@ -4227,6 +4342,11 @@ Every carried-forward item, in one place. Accurate as of **Mission 4.3**; origin
 | 99 | **`/onboarding` had no inbound navigation edge anywhere in `lib/` — C-01 was declared, buildable and reachable by nobody** | **CLOSED by Mission 5.4, and recorded because the finding is reusable, not because it is open.** Mission 5.1.2 built C-01 and logged it as *"not wired to a first-launch trigger"*, which is true and files the gap as a missing feature. **Stated as a navigation fact it is sharper and worse: a route with no inbound edge is unreachable, and an unreachable screen is not shipped.** No tab, no button, no redirect and no deep link reached it; the only references to the route string in `lib/` were its own declaration and comments.<br><br>It was found by a mechanical sweep — for each declared route, count the navigation sites that target it — run because Mission 5.4's subject was the navigation graph rather than any one screen. Tabs correctly show zero `context.go` calls (`TabShell` uses `navigationShell.goBranch`), which is the one false positive the sweep produces and the reason it needs a human reading rather than a CI rule as written.<br><br>**The fix is `OnboardingSeenStore` + `OnboardingGuard`** (A-126, A-127). **It does not satisfy FR-ONB-01**, which is item 78 and stays open: the carousel is now reachable, and it still requests no permission. *Shipped* and *functional* are different claims and this closes only the first. | A-126, A-127, item 78, item 100 |
 | 100 | **Chapter 2.4's navigation model places neither C-01 nor C-10, and two shipping screens are in no Volume 2 inventory at all** | **The structural inverse of item 82, kept as its own row rather than folded in, because the direction determines the fix.** Item 82 is *Chapter 2.4 names a screen Chapter 2.5's inventory lacks* — Session Detail, Chunk Detail, Admin Task Detail. This is the reverse: **screens that exist and ship, which Chapter 2.4 never places.**<br><br>**In Chapter 2.5, absent from Chapter 2.4:** C-01 Onboarding and C-10 Local Processing. Verified against Chapter 2.4's full text — neither appears in any tab list, stack or modal list in §2 or §3.<br><br>**In neither Chapter 2.4 nor Chapter 2.5:** `/signup` and `/admin/invite-codes`. These are not omissions but consequences — self-signup (A-051, A-056) and ADR-036's invite codes were both decided after Volume 2 was written, and Volume 2 has not been revised since.<br><br>**C-01's unreachability (item 99) is plausibly a downstream effect of this.** Chapter 2.4 is where a screen's entry point is specified; a screen the chapter never places has no specified entry point, so building it from Chapter 2.7 alone produces exactly what happened — a correct screen nothing reaches. **That causal link is why the two items cross-reference and why neither belongs inside item 82**, whose phantom screens have the opposite problem and a different fix (build them, or delete the reference). | Item 82, item 99, A-051, A-056, ADR-036, Ch. 2.4 §2/§3, Ch. 2.5 |
 | 101 | **ADR-022 R2 is breached seven times in `lib/app/`, and the CI check ADR-022 assigned to "the first feature mission" was never added** | **One item, not two, because the missing check is the reason the breaches exist — ADR-022 predicted this outcome in writing and nothing acted on the prediction.** R2: *"`app/router.dart` is the only file in `app/` permitted to import from `features/`, and only from `features/<name>/presentation/` … it may not import a feature's `domain/`, `data/` or `application/`."*<br><br>**The seven**, from a full sweep of `lib/app/` (30 feature imports, 23 legal): `auth_guard.dart` → `auth/application/auth_state.dart`, `auth/domain/entities/role.dart`, `auth/domain/entities/user.dart`; `recording_guard.dart` → `recording/domain/entities/recording_state.dart`; `router.dart` → `auth/application/auth_notifier.dart`, `auth/application/auth_state.dart`, `recording/application/recording_notifier.dart`.<br><br>**ADR-022 called it.** Its Consequences record R3, R4, the `data/` prohibitions and the `app/`↛`features/` rule as *"binding in writing and unenforced in fact"*, and assign the fix explicitly: *"extending the `Architecture boundaries` job belongs to the mission that creates the first feature."* That mission arrived; the check did not. **Nothing in this register recorded the breaches before Mission 5.4**, so they were undetected drift rather than an accepted deviation — the state ADR-022 wrote that sentence to prevent.<br><br>**Explicitly NOT opened as a sub-mission by 5.4.** The fix touches `auth_guard.dart` and `recording_guard.dart`, which belong to two closed features, and choosing between *move the types to `core/`*, *pass primitives*, or *amend R2* is a trace of its own. Mission 5.4 did the one thing it could do without that trace: **it added no eighth breach.** `OnboardingGuard` takes a plain `bool` rather than an `AuthState`, and `core/onboarding/` exists so `router.dart` reads a `core/` provider instead of a feature's `application/` (A-126). | A-126, ADR-022 R2 + Consequences, `lib/app/` |
+
+| 102 | **Three status hues fail WCAG 1.4.11 against the surface behind them — a contrast class A-090 never measured** | **Not fixable without Chapter 2.8, and mitigated enough that fixing it blind would be worse than recording it.** Non-text contrast (3:1) decides whether a pill's *boundary* is visible, which is a different question from whether its text is readable — and the text pairs all pass (A-130: 8/8 fills, 24/24 scheme pairs).<br><br>**light `warning` `#FAB219` vs `#FBFBFD` — 1.78:1. dark `accent` `#215FAB` vs `#101317` — 2.92:1. dark `critical` `#A62F2F` vs `#101317` — 2.72:1.**<br><br>**No information is lost**, because Chapter 2.10 §2.1 requires every pill to carry an icon and a text label alongside its colour and every pill does. What is lost is edge definition.<br><br>**The dark accent misses by 0.08**, and that is worth separating from the other two: it is a rounding-scale question rather than a design failure, and **it is the one most likely to resolve on its own if Chapter 2.8 is ever recovered** — the dark surface value it is measured against is a Mission 0.7/4.6 transcription, and a small difference in the real published value flips it. The other two miss by margins no transcription error explains.<br><br>Changing a hue is what §2.2 forbids *"without re-validation"*, and A-090 established there is nothing to re-validate against. Closing it needs item 74. | A-130, A-090, item 74, Ch. 2.10 §2.1/§2.2 |
+| 103 | **Chapter 2.10 §8's verification checklist can never be completed as written — two of its six screens do not exist** | **Recorded so that a future "accessibility verified" claim cannot be made against a list that was only ever four-sixths runnable.** §8 requires a TalkBack pass and a 100/150/200% text-scaling pass on six named screens. **Assign Collectors (A-06)** and **Metadata Detail (A-08)** have never been built.<br><br>Both blockers are already on this register and neither is close: **item 89** — Chapter 2.7 requires A-06's checkboxes to *"reflect current assignment state on load"* and no endpoint returns assignments or the org's Collectors; **item 97** — A-08 belongs to a `metadata` module that does not exist, whose creation takes the cross-feature sweep from 30 ordered pairs to 42.<br><br>**Stays open until BOTH close.** Not partially closable: §8 is a checklist, and four of six is a checklist that failed. When Mission 5.5's device pass completes, the correct statement is *"§8's four buildable screens pass"* — never *"§8 passes"*. | Item 89, item 97, A-129, Ch. 2.10 §8 |
+| 104 | **Chapter 2.10 §5's "return focus to the triggering element" is structurally unsatisfiable under `context.go`** | **Not an omission and not fixable inside an accessibility pass.** §5 asks modals to *"trap focus within the modal while open, and return focus to the triggering element on dismissal."*<br><br>**The first half is satisfied more strongly than §5 asks** and is now held by a regression test (A-131): every screen Chapter 2.4 calls a modal is a full-screen `GoRoute` reached by `context.go`, so the triggering screen is not in the widget tree at all.<br><br>**That same fact is what makes the second half impossible.** `go` replaces the location; dismissal rebuilds the previous route from scratch, so the triggering element is a **new widget with no focus history** and there is nothing to return focus to. No amount of code in a form changes that.<br><br>Satisfying it needs one of: presenting these screens as pushed routes or overlays (a Chapter 2.4 change, and A-04/A-05 are specified as *modals* while being built as replacements — worth noticing), or tracking a focus target across route rebuilds, which nothing in this project does. **Owned by whoever revisits how modals are presented.** | A-131, Ch. 2.10 §5, Ch. 2.4 §2/§3, ADR-004 |
+| 105 | **`AppSizes.minTouchTarget = 48` is declared and used ZERO times, so Chapter 2.10 §3's minimum is enforced by nothing** | **The token exists, which is exactly what makes this easy to miss.** A reader finding `minTouchTarget` in `lib/app/theme/app_sizes.dart` reasonably concludes the minimum is handled. Swept `lib/` and `test/`: **zero occurrences of the identifier outside its own declaration.**<br><br>Chapter 2.10 §3 sets **44×44pt (iOS) / 48×48dp (Android)** for *"standard buttons, list rows, tab bar items"*, with the Recording Screen's Stop at **≥64** and the checklist's retry action **full-width, ≥44pt height**. Only C-09's Stop is verifiably compliant by inspection — `SizedBox.square(dimension: 80)`, checked during Mission 5.5.<br><br>**Everything else relies on Material's defaults**, which usually do meet 48dp and are not a guarantee anyone has checked: a `ListTile` with reduced `contentPadding`, an `IconButton` with a constrained box, or a `Chip` can all render under it. `AdminProjectDetailScreen`'s rows already set a custom `contentPadding`.<br><br>**Two separable pieces of work**, and neither was in Mission 5.5's scope: measure the real rendered sizes on device (Bucket B), and add a check — a widget test asserting a minimum tap-target size, or a lint — so the token means something. Until then §3 is aspiration. | A-129, Ch. 2.10 §3, `lib/app/theme/app_sizes.dart` |
 
 
 ---
