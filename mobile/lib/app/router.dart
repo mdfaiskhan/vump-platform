@@ -11,6 +11,8 @@ import 'package:mobile/features/auth/presentation/login_screen.dart';
 import 'package:mobile/features/auth/presentation/sign_out_tile.dart';
 import 'package:mobile/features/auth/presentation/signup_screen.dart';
 import 'package:mobile/features/onboarding/presentation/onboarding_carousel_screen.dart';
+import 'package:mobile/features/projects_tasks/presentation/admin_create_project_screen.dart';
+import 'package:mobile/features/projects_tasks/presentation/admin_create_task_screen.dart';
 import 'package:mobile/features/projects_tasks/presentation/admin_dashboard_screen.dart';
 import 'package:mobile/features/projects_tasks/presentation/admin_project_detail_screen.dart';
 import 'package:mobile/features/projects_tasks/presentation/admin_projects_screen.dart';
@@ -45,6 +47,8 @@ import 'package:mobile/features/upload/presentation/collector_sessions_screen.da
 /// /collector    5 tabs, stack per tab
 /// /admin        4 tabs, stack per tab
 /// /onboarding                                   full-screen modal, C-01
+/// /admin/projects/new                           full-screen modal, A-04
+/// /admin/projects/:projectId/tasks/new          full-screen modal, A-05
 /// /checklist/:taskId                            full-screen modal
 /// /recording/:sessionId                         chrome-free, no back
 /// /processing/:sessionId
@@ -389,6 +393,27 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((Ref ref) {
       // ---------------------------------------------------------------------
       // Outside both shells, so no tab bar wraps them — Chapter 2.4 §2 and §5.
       // ---------------------------------------------------------------------
+
+      // A-04 and A-05's create halves. Chapter 2.4 §3 presents Create/Edit
+      // Project and Create/Edit Task as modals, so both sit outside the shell
+      // and carry no tab bar.
+      //
+      // They are declared here rather than as children of /admin/projects so
+      // the literal `new` segment cannot be matched as a :projectId. Nesting
+      // them would make the route table order-dependent, which is a trap the
+      // next person to add a segment would have to know about.
+      GoRoute(
+        path: '/admin/projects/new',
+        builder: (BuildContext context, GoRouterState state) =>
+            const AdminCreateProjectScreen(),
+      ),
+      GoRoute(
+        path: '/admin/projects/:projectId/tasks/new',
+        builder: (BuildContext context, GoRouterState state) =>
+            AdminCreateTaskScreen(
+              projectId: state.pathParameters['projectId'] ?? '',
+            ),
+      ),
 
       // C-01, Chapter 2.4 §2's "full-screen modal, shown at first launch".
       //
