@@ -35,7 +35,23 @@ import 'package:mobile/features/upload/presentation/collector_sessions_screen.da
 ///
 /// The single route table ADR-004 requires, implementing Volume 2 Chapter 2.4's
 /// navigation model. This is the only file in `app/` permitted to import from
-/// `features/`, and only from a feature's `presentation/` layer — ADR-022 §2.2.
+/// `features/` — ADR-022 R2.
+///
+/// **R2 also says "and only from a feature's `presentation/` layer", and this
+/// file breaks that three times**: `auth/application/auth_notifier.dart`,
+/// `auth/application/auth_state.dart` and
+/// `recording/application/recording_notifier.dart`. `auth_guard.dart` and
+/// `recording_guard.dart` add four more, for seven across `lib/app/`.
+///
+/// ADR-022 predicted this exactly — it recorded the rule as *"binding in
+/// writing and unenforced in fact"* and assigned the CI check to *"the mission
+/// that creates the first feature"*. That mission came and went; the check was
+/// never added, and the breaches accumulated undetected. Recorded as an open
+/// item, with the fix scoped as its own future work rather than a by-product
+/// of Mission 5.4.
+///
+/// It is stated here rather than left implied, because the sentence this
+/// replaced claimed compliance the file does not have.
 ///
 /// ## Shape
 ///
@@ -43,16 +59,54 @@ import 'package:mobile/features/upload/presentation/collector_sessions_screen.da
 /// bar with independent drill-down stacks, plus one chrome-free surface:
 ///
 /// ```text
+/// /                                             renders nothing; always redirects
 /// /login                                        shared, role-agnostic
-/// /collector    5 tabs, stack per tab
-/// /admin        4 tabs, stack per tab
+/// /signup                                       public; ADR-036's invite code gates it
+///
+/// /collector    5 tabs (Chapter 2.4 §2), stack per tab
+///   /collector/dashboard                        C-03
+///   /collector/projects                         C-04
+///     /collector/projects/:projectId            C-05  — IS Chapter 2.4's "Task List"
+///       …/tasks/:taskId                         C-06
+///   /collector/record                           shortcut into a Task's checklist
+///   /collector/sessions                         C-11
+///     /collector/sessions/:sessionId            placeholder — open item 82
+///   /collector/settings
+///
+/// /admin        4 tabs (Chapter 2.4 §3), stack per tab
+///   /admin/dashboard                            A-01
+///   /admin/projects                             A-02
+///     /admin/projects/:projectId                A-03  — IS Chapter 2.4's "Task List"
+///   /admin/sessions                             placeholder — A-07, open item 96
+///   /admin/settings
+///   /admin/invite-codes                         TEMPORARY, ADR-036
+///
 /// /onboarding                                   full-screen modal, C-01
 /// /admin/projects/new                           full-screen modal, A-04
 /// /admin/projects/:projectId/tasks/new          full-screen modal, A-05
 /// /checklist/:taskId                            full-screen modal
 /// /recording/:sessionId                         chrome-free, no back
-/// /processing/:sessionId
+/// /processing/:sessionId                        C-10
 /// ```
+///
+/// **This table lists every route the file declares.** It listed nine of them
+/// until Mission 5.4 — accurate when Mission 1.3 wrote it, and left behind by
+/// eleven sub-missions of additions, so a reader checking "what routes exist"
+/// against the most obvious place to look got less than half the answer. Same
+/// failure mode as A-114: a record true when written that nothing re-checks.
+///
+/// ## Four of these routes are not in Chapter 2.4's navigation model
+///
+/// `/onboarding` (C-01), `/processing/:sessionId` (C-10), `/signup` and
+/// `/admin/invite-codes`. Chapter 2.4 names no modal, tab or stack position
+/// for any of them — verified against its full text, not assumed. The last two
+/// are not in Chapter 2.5's screen inventory either; they exist because
+/// self-signup (A-051, A-056) and ADR-036's invite codes were decided after
+/// Volume 2 was written.
+///
+/// This is the **inverse** of open item 82, where Chapter 2.4 names screens the
+/// inventory lacks. Both directions are recorded, separately, because they
+/// have different causes and different fixes.
 ///
 /// `StatefulShellRoute.indexedStack` is what makes the tab bar persistent and
 /// each tab's stack independent: a branch keeps its own navigator, so drilling
@@ -73,10 +127,26 @@ import 'package:mobile/features/upload/presentation/collector_sessions_screen.da
 ///
 /// ## What is deliberately absent
 ///
-/// - **No modal routes beyond the checklist.** Chapter 2.4 §2 and §3 also
-///   specify Permission Blocked (owned by `onboarding`), Create/Edit Project,
-///   Create/Edit Task, Assign Collectors, and Metadata Detail/Export (owned by
-///   `metadata`). Neither module is scaffolded.
+/// - **Five of Chapter 2.4's modals have no route, each for a recorded
+///   reason.** Permission Blocked (C-02, no permission plugin — open item 78);
+///   Edit Project (Chapter 2.9 contradicts itself — item 87); Edit Task (same
+///   contradiction — item 90); Assign Collectors (A-06: no endpoint returns
+///   assignments or the org's Collectors — item 89); Metadata Detail/Export
+///   (A-08, item 97). **Create** Project and Create Task do have routes, added
+///   by Mission 5.2.2.
+///
+///   None of them is a stub or a disabled control. A greyed entry point
+///   implies a capability that is temporarily off, and nothing here is off —
+///   the destinations do not exist.
+/// - **Three routes Chapter 2.4 names have no screen in Chapter 2.5's
+///   inventory**: Session Detail, Chunk Detail and Admin Task Detail. Open
+///   item 82. `/collector/sessions/:sessionId` is a placeholder for the first;
+///   the other two have no route at all.
+/// - **Chapter 2.4's four-level Project stacks are three routes, correctly.**
+///   *Projects → Project Detail → Task List → Task Detail* names four levels,
+///   but Chapter 2.5 describes C-05 as *"Task List within the selected
+///   Project"* and A-03 as *"Task list within the Project"* — Project Detail
+///   **is** the Task List. The level collapses; nothing is missing.
 /// - **No typed route arguments.** Every parameter is read as a raw `String`
 ///   from `GoRouterState`. ADR-004 records the choice between manual parsing
 ///   and GoRouter's typed-routes generator as unresolved.
