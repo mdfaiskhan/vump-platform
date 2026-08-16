@@ -40,6 +40,14 @@ Mission 4.8's security review found it, by reading `git log` against this file r
 
 ### Added
 
+- **2026-08-16** — C-01's permission-priming carousel, in a new `features/onboarding/` module, and C-03's Home Dashboard.
+
+  **C-01 explains five permissions and requests none, so FR-ONB-01 is not satisfied.** The requirement is that the system *"shall **request** Camera, Microphone, Location (When In Use), Notifications, and Files access during first launch"*. This project has no permission plugin — the only permission machinery is a camera open that infers two grants as a side effect, and nothing can read or request Location, Notifications or Files. Adding one is an ADR-030 decision belonging with C-02, which needs the same package (open item 78). Five cards, not the four Chapter 2.7's worked example implies: three of the four statements across Chapters 2.5 and 2.7 say five, and the example contradicts its own table's button rule (A-105).
+
+  **C-03 renders three of FR-PT-01's four aggregates and shows no tile for the other two.** Pending, uploading and completed counts (FR-PT-02, satisfied in full) come from `core/queue/` — the same rows C-11 reads, through the contract ADR-040 already put on neutral ground. *"In-progress sessions"* needs a `core/` contract over `LocalSession.status` that does not exist (open item 75). *"Total recorded time"* has **no correct source anywhere**: a per-chunk duration exists but no aggregate, and summing the queue would be actively wrong rather than incomplete, because cleanup soft-deletes completed rows and the queue excludes them — the total would decrease as the Collector records more (open item 76). Both tiles are absent rather than zeroed, and tests assert the absence.
+
+  Neither screen's visuals are reconciled against Chapter 2.8, which is not in this repository (open item 74). Both are built from the tokens already transcribed into `lib/app/theme/`. 19 tests; the suite moves 840 → 859. Mission 5.1.2.
+
 - **2026-08-16** — `features/projects_tasks/` has a `domain/`, `data/` and `application/` layer for the first time. `Project` and `Task` are traced column-for-column from Volume 4 Chapter 4.4's Data Dictionary — **not** from Chapter 4.6's endpoint catalog, which §6 says defers every field type to a Volume 6 artifact that does not exist (A-097). `ProjectTaskRepository` serves FR-PT-03/04/05 with two methods, `fetchProjects()` and `fetchTasks(projectId)`, matching the two routes Chapter 4.6 §3 actually offers.
 
   **Neither method takes a `collectorId`.** Chapter 4.8 has every endpoint re-derive scope from the verified token, and Chapter 4.2 §3 injects the assignment filter server-side, so BR-19 is enforced by the backend rather than by this client — which means the read path needs nothing at all from `features/auth/` (A-099).
@@ -126,6 +134,10 @@ Mission 4.8's security review found it, by reading `git log` against this file r
 - **2026-08-15** — Camera module, capability ladder and fixed capture specification (BR-01/BR-02). Mission 3.1. (`4c7f3d1`)
 
 ### Fixed
+
+- **2026-08-16** — C-06 ignored the `projectId` its own route carried. The route has been `/collector/projects/:projectId/tasks/:taskId` since Mission 1.3, but `CollectorTaskDetailScreen` took only the `taskId`, which made open item 70 — no `GET /v1/tasks/{id}` exists — look like it blocked the drill-down path too. It never did. Reading the parameter closes the narrow half of that item with no new endpoint, no cache and no client-side scan across every Project. `/checklist/:taskId` and Chapter 2.4 §2's Record tab still carry no Project and keep item 70 open. Mission 5.1.2, standalone commit.
+
+- **2026-08-16** — A derived `StreamProvider` written as an `async*` body looping over another stream reported that stream's errors **twice** — once as the `AsyncError` Riverpod correctly produced, and once as an uncaught zone error, because `await for` re-throws inside the generator. The screen rendered correctly in every state, so review would not have caught it; a test asserting the error copy did. Replaced with a `.map` over the source, which passes errors through untouched and leaves one handler. Fixed in `lib/` rather than suppressed in the test. A-108 records the pattern for the next derived provider. Mission 5.1.2.
 
 - **2026-08-16** — `SessionRegistrar`'s doc comment cited *"Volume 11's M12 gate"* for the rule that a fake repository must not be wired into a release build. That rule is **M8 — APIs Integrated**; M12 is Store-Ready and says nothing about fakes. The rule is real and the code obeys it — only the citation was wrong — but it is load-bearing for Mission 7's exit criteria, and it pointed at a milestone six gates later than the one that actually binds. **The fourth instance of open item 34's citation collision, and the first found in this project's own shipped code rather than in a Volume** (A-077). Mission 5.1.1, standalone commit.
 

@@ -3086,7 +3086,209 @@ It is item 41's *"a green check over an empty set is not evidence"* applied to t
 
 ---
 
-## Consolidated open items — A-057 through A-101
+### A-102 — Chapters 2.6 and 2.8 are not in this repository, so no UI built to date is reconciled against them
+
+| | |
+|---|---|
+| **Volume** | 2, front matter and Chapter 2.7's Companion Documents line |
+| **Says** | *"Chapters Included 2.1–2.5, 2.7, 2.9, 2.10 (8 Word chapters); **2.6 and 2.8 delivered separately**"* — as standalone interactive HTML |
+| **Fact** | Neither file exists under `docs/`. The only HTML in the repository is two Gradle build reports and `web/index.html` |
+| **Class** | Missing source, not a specification defect |
+| **Date** | 2026-08-16, Mission 5.1.2 |
+
+Chapter 2.8 is the design system: *"the living reference for every color, type style, spacing value, and component (buttons, pills, form fields, checklist items)"*. Chapter 2.6 is the clickable wireframe tool covering 14 of the 23 screens. **Every component citation in Chapter 2.7 resolves to a document nobody building this has read.**
+
+### What is reachable second-hand, and what is not
+
+| Needed | Available? |
+|---|---|
+| The four status colours | **Yes** — Chapter 2.10 §2.2 lists them, adopted verbatim by A-089 and contrast-measured by A-090 |
+| Spacing, radius, size, duration, opacity scales | **Yes** — transcribed into `lib/app/theme/` at Missions 0.7 and 4.6 |
+| Type scale | **Partly** — `AppTextTheme` exists; Chapter 2.10 §6 defers the scale itself to *"Chapter 2.8, Section 3"* |
+| What a `card container` (§5) actually looks like | **No** |
+| What `btn-primary` / `btn-secondary` / `btn-disabled` look like | **No** |
+| The `field` component and its `.error` state (§7) | **No** |
+| The light/dark CSS custom properties Chapter 2.10 §2.3 cites | **No** |
+
+So a screen can be built from the token set and from `Theme.of(context)` — which ADR-005 requires of a widget regardless — and it **cannot** be checked against the component definitions it was specified in terms of.
+
+### Why this is recorded as its own amendment rather than a footnote
+
+Mission 5.1.2 is the first mission to build a screen from a Chapter 2.7 table, and every UI mission after it will hit the same wall. Recording it once means 5.3's Design System audit inherits a known, bounded gap — *"these screens are token-correct and component-unverified"* — instead of discovering mid-audit that its reference document is missing and having to decide, alone and under time pressure, whether to invent one.
+
+**The risk if it stays unrecorded** is the specific one Mission 4.9 §4 describes in a different medium: work that is correct as far as it was checked, presented as correct outright. A screen built from the right tokens looks finished.
+
+Open item 74 carries it. Two things close it: the HTML arriving, or an explicit decision that `lib/app/theme/` **is** the design system of record and Chapter 2.8 is superseded by it — which would be an ADR, not an amendment.
+
+---
+
+### A-103 — FR-PT-01's four aggregates: three sources, one that does not exist
+
+| | |
+|---|---|
+| **Volume** | 1, Ch. 1.3 FR-PT-01/02; Volume 2 Ch. 2.5's C-03 row |
+| **Says** | FR-PT-01: *"a Home Dashboard showing **active projects, in-progress sessions, total recorded time, and sync status**"*. FR-PT-02: *"pending, uploading, and completed chunk counts"* |
+| **Class** | Requirement partially unsatisfiable; two aggregates deferred with reasons |
+| **Date** | 2026-08-16, Mission 5.1.2 |
+
+Traced one at a time rather than as a group, because they turned out to have four different answers.
+
+| Aggregate | Source | State |
+|---|---|---|
+| pending / uploading / completed counts | `core/queue/ChunkQueueSource.watchQueue()` | **Sourced** |
+| sync status | the same stream | **Sourced** |
+| active projects | `ProjectTaskRepository` + `Project.archivedAt` | **Sourced, on a reading** — A-104 |
+| in-progress sessions | `LocalSession.status`, no `core/` contract | **Blocked** — open item 75 |
+| total recorded time | nothing correct exists | **Gap** — open item 76 |
+
+### FR-PT-02 crosses no boundary, and that is ADR-040 working
+
+`core/queue/` is already a contract module. `features/projects_tasks/` consuming it alongside `features/upload/` is the arrangement ADR-040 exists to permit — the two features still never name each other. The only change needed was moving the *provider* onto the same neutral ground as its contract (A-107).
+
+### In-progress sessions — the data exists and the contract does not
+
+FR-SES-02's status is on `LocalSession.status` (`in_progress` | `complete`), owned by `features/recording/`. `QueuedChunk` carries `sessionId` and `sessionStartedAt` but **no session status**.
+
+Counting distinct `sessionId`s in the queue was considered and rejected as **wrong rather than approximate**: it counts sessions with surviving chunk rows, which is a different question, and Mission 4.9's handoff warns in terms — *"DO NOT READ `local_sessions.status` AS AN UPLOAD SIGNAL … the session column is FR-SES-02's and means something different."*
+
+**This is A-100's shape a second time**, three sub-missions later: a `features/projects_tasks/` surface needs data `features/recording/` owns, with no contract between them. That repetition is itself the finding — ADR-040's pattern is not a one-off resolution but the standing cost of ADR-022 R3, and each new cross-feature read pays it again.
+
+### Total recorded time — the one that must not be approximated
+
+A per-chunk duration exists: `MetadataTimingDocument.durationSeconds`, derived from `startedAt` and `endedAt` and deliberately not stored *"because a stored copy could disagree"*. It is reachable one chunk at a time through `ChunkMetadataSource.metadataDocument`.
+
+**There is no aggregate, and summing the queue would be actively wrong.** `IsarChunkStore.currentQueue` skips every row with `localDeletedAt != null`, and Chapter 5.15's cleanup soft-deletes rows as chunks complete (open item 61). A total built that way **decreases as the Collector records more** — it would be at its highest before the first sweep and fall thereafter.
+
+That is worse than absent. An incomplete number invites a reader to trust it; a number that moves the wrong way trains them to distrust the screen.
+
+### What the screen does instead: nothing
+
+**No tile is rendered for either.** `0` and `0h 0m` are claims about the Collector's work, and both would be false. An absent tile is an absence, and `collector_dashboard_screen_test.dart` asserts both absences so a later mission cannot add a plausible zero silently.
+
+**FR-PT-01 is therefore partially satisfied and FR-PT-02 fully**, and the Feature Tracker says so rather than reading the pair as one green row.
+
+---
+
+### A-104 — "Active projects" means `archivedAt == null`, and that is a reading
+
+| | |
+|---|---|
+| **Volume** | 1, FR-PT-01 — *"active projects"*; Volume 2 Ch. 2.5's C-03 row — *"Active Projects"* |
+| **Omits** | Any definition of *active*, in either volume |
+| **Decision** | Not archived. `Project.archivedAt == null` |
+| **Date** | 2026-08-16, Mission 5.1.2 |
+
+Two readings are available and only one is computable today.
+
+**"Not archived"** — `archived_at` is the only activity signal Volume 4 Chapter 4.4 §2 gives a Project, and Chapter 4.2 §1 introduces soft-delete precisely so an archived row stays queryable and distinguishable rather than vanishing. The word *active* sitting opposite a column named *archived* is the natural pairing.
+
+**"Has an assigned Task in progress"** — defensible, arguably closer to what a Collector means by "active", and **not computable**: it needs the session data open item 75 blocks.
+
+So the first reading is adopted, and it is recorded rather than left implicit because the second is the one a product owner might have meant. If it was, the fix is not a UI change — it is open item 75 first.
+
+---
+
+### A-105 — C-01 has five cards; Chapter 2.7's own example says four
+
+| | |
+|---|---|
+| **Volume** | 2, Ch. 2.7's C-01 table and Ch. 2.5's C-01 row; Volume 1 FR-ONB-01 |
+| **Conflict** | Four statements across two chapters; three imply five cards, one implies four |
+| **Decision** | **Five**, one per permission — confirmed as a product decision, not inferred |
+| **Date** | 2026-08-16, Mission 5.1.2 |
+
+| Statement | Implies |
+|---|---|
+| FR-ONB-01: *"Camera, Microphone, Location (When In Use), Notifications, and Files access"* | 5 |
+| Ch. 2.5's C-01 row names the same five | 5 |
+| Ch. 2.7 layout: *"one permission per card"* | 5 |
+| Ch. 2.7 button rule: *"'Next' on cards 1–4, 'Get Started' on the final card"* | 5 |
+| Ch. 2.7 example: *"Camera & Microphone — to record your walkthroughs"* | **4** |
+
+The example is the only thing that combines two permissions, and it is also the only concrete copy the chapter provides — which is why it is worth recording rather than dismissing. It reads as illustrative phrasing for a card's *sentence*, not as a card boundary, and the same table's button rule contradicts it directly.
+
+`OnboardingPermission.primaryLabel` derives the label from position rather than storing it per case, so a sixth permission cannot produce two cards both reading "Get Started". A test pins the five names and the label sequence.
+
+---
+
+### A-106 — The Dot row is a local widget, and ADR-022 R5 is why
+
+| | |
+|---|---|
+| **Volume** | 2, Ch. 2.7's C-01 table and §6 |
+| **Says** | *"Dot row (not in Design System v1.0 — flagged as a net-new component for the Ch. 2.8 v1.1 pass)"*, and §6: net-new components *"should be folded back into the Design System in its next revision rather than treated as one-offs"* |
+| **Decision** | `features/onboarding/presentation/onboarding_dot_row.dart` — local, not shared |
+| **Date** | 2026-08-16, Mission 5.1.2 |
+
+Chapter 2.7 §6 is guidance for the **design document**, not licence to pre-promote the **code**, and ADR-022 R5 is binding and explicit in the other direction:
+
+> Nothing enters `shared/` without a second consumer. Components are written inside the feature that needs them and *promoted* when a second feature needs them.
+
+C-01 is the only consumer and `lib/shared/` does not exist. There is no v1.1 of Chapter 2.8 to check against either, since Chapter 2.8 itself is missing (A-102) — so "fold it into the Design System" has nowhere to land today.
+
+**The tradeoff, stated rather than hidden:** local means whoever adds a second carousel does the promotion move. ADR-022's own Consequences names that cost and accepts it — *"the first reusable-looking widget is written inside a feature and moved later, which is one extra step at the moment someone believes they are being helpful."*
+
+### One accessibility decision inside it, which runs against the obvious reading
+
+Chapter 2.10 §4 requires every icon-only element to carry a screen-reader label, and §4 separately requires progress indicators to *"expose their state as a value a screen reader can read"*. Five individually-labelled dots would satisfy the letter of the first and defeat both.
+
+The dots carry **no information the screen does not already state** — the card heading names the permission and the button label changes on the last card. So the row labels itself once (*"Step 3 of 5"*) and excludes its children from semantics. §4's progress-indicator rule governs upload progress and checklist re-runs, which report state the user cannot otherwise obtain; carousel position is not that.
+
+---
+
+### A-107 — `chunkQueueSourceProvider` moved to `core/queue/providers/`
+
+| | |
+|---|---|
+| **Class** | Placement correction — ADR-040's pattern, applied to the module that had been missed |
+| **Date** | 2026-08-16, Mission 5.1.2 |
+
+Declared in `features/upload/application/upload_queue_notifier.dart` at Mission 4.1, when `features/upload/` was the queue's only reader. **A second reader made the placement visible**: C-03 belongs to `features/projects_tasks/` and FR-PT-02 needs the same rows C-11 renders, so reading them through a provider declared inside `features/upload/` would be the ADR-022 R3 import forbidden *"at any layer, in either direction"*.
+
+`core/upload/providers/upload_ports.dart` and `core/connectivity/providers/connectivity_ports.dart` already sit on neutral ground for their own contracts. **`core/queue/` was the one ADR-040 contract module whose provider still lived inside a consumer**, and nothing had forced the question until now.
+
+**A second provider was not declared alongside the first.** Two providers over one contract means two override sites and, the first time one is missed, two different answers to *"what is in the queue"* — the two-sources-of-truth failure ADR-018 exists to prevent. Pure move, 840 tests passing either side, committed alone so it is revertible on its own.
+
+**The generalisation:** a contract on neutral ground is only half the inversion. If its provider lives in a consumer, the next feature to need that contract still cannot reach it — and the defect stays invisible while there is exactly one consumer, which is the same *"green check over an empty set"* shape as open item 41.
+
+---
+
+### A-108 — An `async*` provider that `await for`s a foreign stream reports its errors twice
+
+| | |
+|---|---|
+| **Class** | Transferable mechanism risk, found by a test rather than by review |
+| **Date** | 2026-08-16, Mission 5.1.2 |
+
+`dashboardSummaryProvider` was first written as a `StreamProvider` with an `async*` body looping over the queue's stream:
+
+```dart
+await for (final List<QueuedChunk> queue in source.watchQueue()) {
+  yield DashboardSummary(...);
+}
+```
+
+When the source stream errors, `await for` **throws inside the generator**. Riverpod catches that and sets `AsyncError` correctly — the screen renders its error state exactly as intended — *and* the throw is reported again to the zone as an uncaught error. Two reports, one fault.
+
+In a test that is a hard failure; in production it is noise in whatever `FlutterError.onError` is wired to, and the second report carries the generator's stack rather than the source's.
+
+**The fix is one word of shape, not a suppression.** Mapping the source stream leaves errors untouched and exactly one handler:
+
+```dart
+return source.watchQueue().map((queue) => DashboardSummary(...));
+```
+
+`async*` is right when a provider *interleaves* sources, holds state between events, or emits more events than it receives. It is wrong when the body is a pure transform of one stream, which is the common case and the one that reads most naturally as a loop.
+
+### Why it is recorded rather than just fixed
+
+The wrong version worked. The screen rendered the right thing in every state, and a reviewer reading the provider would have seen an `AsyncError` being produced correctly. **It was caught by a test asserting the error copy, and only because the double-report is fatal in `flutter_test`.**
+
+That is Mission 4.9 §4's lesson at small scale — an artifact correct as written, reviewed as correct, and wrong in the environment it runs in — and it is worth a paragraph because the next derived stream provider in this project will be written by someone reaching for the same loop. The fix was made in `lib/`, not worked around with `takeException()` in the test.
+
+---
+
+## Consolidated open items — A-057 through A-108
 
 Every carried-forward item, in one place. Accurate as of **Mission 4.3**; originally the seed for Mission 3.12's status report, and re-checked at the close of each sub-mission block per item 23.
 
@@ -3195,6 +3397,11 @@ Every carried-forward item, in one place. Accurate as of **Mission 4.3**; origin
 | 69 | FR-PT-05 and Volume 2 name a Task `requirements` field that Volume 4 Ch. 4.4 §3's `tasks` table does not have | **A PRODUCT question for Faisal, not an engineering interpretation to pick.** FR-PT-05 asks for *"instructions, reference examples, and requirements"*, and Volume 2 names the same three at C-06, at A-05 and in the Task Detail section list. Chapter 4.4 §3 has six columns and no `requirements`. Either it is prose already inside `instructions` and Volume 2 is naming a heading, or it is a real column the Data Dictionary omits. **Both readings are defensible and both are product answers**, so `Task` omits the field rather than folding it into `instructions` or inventing a column Mission 7 could not populate. `task_test.dart` asserts the omission, so a later mission that adds the field without the answer breaks a test that points here. Cost to settle: one field added, or one doc comment deleted. | A-098, FR-PT-05, V4 Ch. 4.4 §3 |
 | 70 | There is no `GET /v1/tasks/{id}`, so C-06 cannot resolve a bare `task_id` | **Owed to Mission 5.1.2, which is where a route first has to resolve one.** Chapter 4.6 §3 offers exactly three Task routes — `GET /v1/projects/{id}/tasks`, `POST /v1/projects/{id}/tasks`, `PATCH /v1/tasks/{id}` — so a single Task is reachable only through its Project's list. `ProjectTaskRepository` therefore declares no `fetchTask(taskId)`, because a method Mission 7 has no endpoint to satisfy is the breaking rework the interface was traced to avoid. The gap is real but narrow: C-06's route path carries only a `taskId`, so a deep link or a cold start straight into Task Detail has no Project to list from. Closing it needs either a backend route that does not exist or `local_task_cache`, which ADR-039 §3 assigns here and open item 2 defers. **Not a defect in the interface — a consequence of the catalog, recorded so 5.1.2 inherits it.** | A-099, V4 Ch. 4.6 §3, open item 2 |
 | 71 | No check catches a source file that is **entirely absent** from `lcov.info`, as distinct from one with low coverage | **A candidate for a later testing/verification mission. Deliberately not built in 5.1.1.** `flutter test --coverage` emits an `SF:` record only for files reachable from the test suite's import graph, so a file no test imports is missing from the report rather than counted as 0% — the denominator is recomputed every run from whatever the tests happened to load. Measured 2026-08-16: **90 of 227** hand-written `lib/` files carry no record. Most are legitimately line-free (bare interfaces, `freezed` declarations whose code lives in excluded `*.freezed.dart`, enums); some, like `invite_code_repository_impl.dart`, are not. A check would have to distinguish the two, which is why it is a mission rather than a one-line CI edit. **The standing risk is the point, not the check**: this is item 41's *"a green check over an empty set is not evidence"* aimed at the coverage report itself, and Mission 4.9 §4's unexercised-mechanism pattern in a third medium. | A-101, open item 41, Ch. 9.5 §2 |
+| 74 | **Chapters 2.6 and 2.8 are not in this repository, so every screen built to date is token-correct and component-unverified** | **Owed to Mission 5.3's Design System audit, which currently has no reference document to audit against.** Volume 2's front matter says both are *"delivered separately"* as interactive HTML; neither file is under `docs/`. Chapter 2.7 specifies every screen in terms of Chapter 2.8 components (`card container` §5, `btn-primary` §5, `field.error` §7), and Chapter 2.10 §2.3 and §6 defer the light/dark CSS custom properties and the type scale to it. What is reachable second-hand: the four status colours (Ch. 2.10 §2.2, adopted by A-089), and the spacing/radius/size/duration/opacity scales transcribed into `lib/app/theme/` at Missions 0.7 and 4.6. What is not: what any component actually looks like. **C-01 and C-03 are therefore built from tokens and `Theme.of(context)` and are unreconciled against the definitions they were specified in terms of.** Two things close this: the HTML arriving, or an explicit decision that `lib/app/theme/` **is** the design system of record and Chapter 2.8 is superseded — the second is an ADR, not an amendment. Recorded now because a screen built from the right tokens looks finished, which is Mission 4.9 §4's shape in a visual medium. | A-102, Ch. 2.7, Ch. 2.8 |
+| 75 | FR-PT-01's *"in-progress sessions"* has no `core/` contract, so C-03 shows no tile for it | **Needs a new `core/` contract over `LocalSession.status` — ADR-040's pattern, out of scope for a UI sub-mission.** FR-SES-02's status is owned by `features/recording/`; `QueuedChunk` carries `sessionId` and `sessionStartedAt` but no session status. Counting distinct `sessionId`s in the queue was **considered and rejected as wrong rather than approximate**: it counts sessions with surviving chunk rows, and Mission 4.9's handoff warns in terms against reading the session column as an upload signal. **No tile is rendered**, and a test asserts its absence, because `0` would be a claim about the Collector's work. **This is A-100's shape a second time** — a `features/projects_tasks/` surface needing data `features/recording/` owns — which is the standing cost of ADR-022 R3 rather than a one-off. | A-103, A-100, Ch. 2.5 C-03 |
+| 76 | FR-PT-01's *"total recorded time"* has **no correct source anywhere in the project** | **Do not approximate it. A queue-sum is actively wrong, not merely incomplete.** A per-chunk duration exists — `MetadataTimingDocument.durationSeconds`, derived from `startedAt`/`endedAt` and deliberately unstored — but only one chunk at a time through `ChunkMetadataSource.metadataDocument`, with no aggregate. Summing over the queue fails because `IsarChunkStore.currentQueue` skips every row with `localDeletedAt != null` and Chapter 5.15's cleanup soft-deletes rows as chunks complete (open item 61): **the total would decrease as the Collector records more**, peaking before the first sweep. That is worse than an absent number — an incomplete figure invites trust, one that moves the wrong way trains distrust of the whole screen. Closing it needs an aggregate over *all* chunk rows including soft-deleted ones, which is a new method on a `features/recording/`-owned store exposed through a new `core/` contract. **No tile is rendered**, and a test asserts its absence. | A-103, open item 61, Ch. 5.15 |
+| 77 | The cross-feature confinement sweep grew from 20 ordered pairs to 30 | **Informational, and the sweep needs no edit — but the number in every report does.** `features/onboarding/` was created at Mission 5.1.2, taking `lib/features/` from five modules to six; the `Architecture boundaries` job derives its pairs from `ls -1 lib/features`, so it picked the ten new pairs up with no change. Recorded because "20 feature pairs" is quoted as a verification figure in the Mission 4.9 report and in several amendments, and a stale count in a later report would read as a narrowed sweep — which is exactly the failure open item 26 exists to prevent. The next module makes it 42. | Mission 5.1.2, open item 26, ADR-022 R3 |
+| 78 | C-01 exists but requests nothing — **FR-ONB-01 is not satisfied**, and onboarding has no first-launch trigger | **Needs a permission plugin, which is an ADR-030 dependency decision, and it should be taken together with C-02.** FR-ONB-01 requires the system to *"request Camera, Microphone, Location (When In Use), Notifications, and Files access during first launch"*. Mission 5.1.2 built the carousel that explains all five and requests none. **This project has no permission plugin at all** — the only permission machinery is `CameraPermissionProbeImpl`, which infers camera and microphone grants by opening a camera with audio and disposing it, a side-effect probe rather than a permission API; nothing can read or request Location, Notifications or Files. C-02 (FR-ONB-02's blocking explainer and settings deep link) needs the same package, so deciding them apart would take the same decision twice. **Two things are missing, not one:** the request, and a first-launch trigger — deciding *"has this Collector seen onboarding"* needs persisted state that does not exist, so `/onboarding` is reachable by route and fires automatically for nobody. A test walks the whole carousel with a mock handler on the camera channel and asserts zero platform calls, so wiring a real request in breaks a test that names this item. | A-105, FR-ONB-01/02, ADR-030 |
 | 73 | **`features/upload/application/chunk_upload_pipeline.dart` imports `features/upload/data/`, which ADR-022 forbids outright** | **Found 2026-08-16 by Mission 5.1.1's full layer sweep. Reported, not fixed — `features/upload/` is on this sub-mission's explicit do-not-touch list, and rewiring a verified upload path is not a documentation-mission change.** ADR-022 names this one of *"the two most consequential prohibitions in the matrix"*: *"`presentation/` and `application/` may not import `data/`. The repository interface is in `domain/`; the implementation is in `data/`. A layer that imports `data/` has bound itself to one implementation, which breaks test substitution."* Line 19 imports `ChunkUploadApiImpl` and line 440's `chunkUploadPipelineProvider` constructs it directly. **Every other repository in this project already does the opposite** — `authRepositoryProvider`, `chunkUploadSourceProvider`, `chunkQueueSourceProvider` and now `projectTaskRepositoryProvider` all throw and are overridden at the composition root, precisely so `application/` never names a `data/` class. This one provider is the exception and carries no `ignore`, no doc comment and no amendment explaining why. **Why no check caught it:** the `Architecture boundaries` CI job enforces package confinement (14 rules), cross-feature imports (20 pairs) and `core/` contract neutrality — **it does not enforce ADR-022's intra-feature layer matrix at all**, so this prohibition has been binding in writing and unenforced in fact since Mission 4.2, exactly as R3 was before ADR-040 made it checkable. The fix is one throwing provider plus one `uploadOverrides()` entry; the check is one `grep` per direction. Both belong to whichever mission owns `features/upload/` next. | ADR-022 (import matrix), open item 26, Mission 5.1.1 |
 | 72 | `features/auth/domain/` has no `analysis_options.yaml`, so `public_member_api_docs` has never been enforced there | **A one-file fix, deliberately not made in 5.1.1 — `features/auth/` is outside this sub-mission's scope and a lint widening is a change to a verified layer.** ADR-022 §6.1 step 7 requires the file for **every** feature's `domain/` and `data/`. Present for `auth/data`, `recording/domain`, `recording/data`, `upload/domain`, `upload/data`, and now `projects_tasks/domain` and `projects_tasks/data` — missing only for `auth/domain`, which holds five entities and two repository interfaces. Whichever mission takes it should expect new lint findings on files that have never been checked, which is why it belongs in a commit of its own rather than folded into unrelated work. | ADR-022 §6.1 step 7, A-025, Mission 5.1.1 |
 
