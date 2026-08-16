@@ -73,8 +73,18 @@ class ChunkStatusPill extends StatelessWidget {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: <Widget>[
-              Icon(style.icon, size: 14, color: style.foreground),
-              const SizedBox(width: 6),
+              // DESIGN-TOKEN-EXEMPT: AppSizes' smallest icon is 16. 14 is
+              // deliberate at pill scale and golden-covered. Open item 98.
+              // DESIGN-TOKEN-EXEMPT
+              Icon(
+                style.icon,
+                size: 14, // DESIGN-TOKEN-EXEMPT
+                color: style.foreground,
+              ),
+              // DESIGN-TOKEN-EXEMPT: 6 sits between AppSpacing.xs (4) and
+              // sm (8). This widget is golden-covered, so a substitution
+              // would change committed baselines. Open item 98.
+              const SizedBox(width: 6), // DESIGN-TOKEN-EXEMPT
               Text(
                 _label(),
                 style: Theme.of(context).textTheme.labelMedium?.copyWith(

@@ -219,6 +219,9 @@ class _ChecklistRow extends StatelessWidget {
         ),
         if (check == ChecklistCheck.network && measured)
           Padding(
+            // DESIGN-TOKEN-EXEMPT: 72 aligns this copy under the row's icon
+            // column -- a computed offset, not a step on the spacing scale.
+            // Open item 98.
             padding: const EdgeInsets.fromLTRB(
               72,
               0,

@@ -12,6 +12,29 @@ import 'package:mobile/features/recording/presentation/recording_error_copy.dart
 
 /// Volume 2 Chapter 2.7's C-09 — the chrome-free capture surface.
 ///
+/// ## DESIGN-TOKEN-EXEMPT — this screen uses raw `Colors`, deliberately
+///
+/// Every other screen takes colour from `Theme.of(context)` per ADR-005. This
+/// one does not, and Mission 5.3's token sweep left it alone rather than
+/// converting it.
+///
+/// **The black is not a palette value.** Chapter 2.7's C-09 layout is a
+/// *"full-bleed camera preview … no status bar chrome"*, and the surround
+/// behind a camera feed is black because it is the absence of light, not
+/// because a design system chose it. A themed surface colour would tint the
+/// letterbox around a live preview.
+///
+/// **The red is a real question and is NOT resolved here.** Chapter 2.7 says
+/// the recording indicator is *"red, per Design System critical hue, but
+/// denoting 'live' not 'error' in this one context"*. `AppStatusColors`'
+/// critical is `#D03B3B`; `Colors.red` is `#F44336`. **They are different
+/// colours**, so switching is a visible change to a screen confirmed on a
+/// CPH2707 (Mission 3), and there is no Chapter 2.8 to check the result
+/// against (open item 74). Converting it inside a compliance sweep would be a
+/// redesign performed by the wrong instrument.
+///
+/// Open item 98 carries both.
+///
 /// ## What delivers "chrome-free", structurally
 ///
 /// Chapter 2.4 §2: *"deliberately removes all navigation chrome so nothing can
@@ -232,7 +255,11 @@ class _StopControl extends StatelessWidget {
             customBorder: const CircleBorder(),
             onTap: enabled ? onStop : null,
             child: const Center(
-              child: Icon(Icons.stop, color: Colors.white, size: 40),
+              child: Icon(
+                Icons.stop,
+                color: Colors.white,
+                size: 40, // DESIGN-TOKEN-EXEMPT
+              ),
             ),
           ),
         ),

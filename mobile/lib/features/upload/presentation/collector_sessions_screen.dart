@@ -211,8 +211,18 @@ class _UploadsHaltedBanner extends StatelessWidget {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
-            Icon(Icons.cloud_off_outlined, size: 18, color: status.onWarning),
-            const SizedBox(width: 10),
+            // DESIGN-TOKEN-EXEMPT: 18 is between AppSizes.iconXs (16) and
+            // iconSm (20). Open item 98.
+            Icon(
+              Icons.cloud_off_outlined,
+              size: 18, // DESIGN-TOKEN-EXEMPT
+              color: status.onWarning,
+            ),
+            // DESIGN-TOKEN-EXEMPT: 10 is between AppSpacing.sm (8) and md
+            // (12); no token equals it. Substituting either changes the
+            // rendered gap, which is a design decision and not a
+            // compliance fix. Open item 98.
+            const SizedBox(width: 10), // DESIGN-TOKEN-EXEMPT
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
