@@ -3440,6 +3440,73 @@ So the requirement's own *"or Dashboard"* is what makes this honest rather than 
 
 ---
 
+### A-115 — C-12 cannot be built as Chapter 2.7 specifies, and three of its four blockers are not item 36
+
+| | |
+|---|---|
+| **Volume** | 2, Ch. 2.5's C-12 row and Ch. 2.7 §3's C-12 table |
+| **Says** | *"Give an unambiguous, satisfying confirmation … every chunk and its metadata verified, **not just uploaded**"* |
+| **Decision** | **Not built.** Mission 5.1.5 produced no `lib/` change, deliberately |
+| **Date** | 2026-08-16, Mission 5.1.5 |
+
+The obvious reading going in was that C-12 is blocked by open item 36 alone — no backend, so *"confirmed uploaded"* cannot be true. Tracing it found **four blockers, and only one of them is item 36.**
+
+### Blocker 1 — Chapter 2.7's own table forbids the degraded version, in those words
+
+The natural compromise is a C-12 that renders what is honestly knowable — *"your session is recorded, chunks are queued"* — with the verification claim omitted. **Chapter 2.7 rules that out by name:**
+
+| Element | Rule, verbatim |
+|---|---|
+| Confirmation icon | *"Appears only once every chunk has cleared checksum verification (FR-META-12), **never on partial completion**."* |
+| Supporting text | *"States the chunk count explicitly (e.g. 'All 6 chunks and their metadata are confirmed uploaded.') rather than a generic 'Done'."* |
+| Primary action | *"Returns to Task List (C-06), **not the Dashboard**"* |
+
+*"Never on partial completion"* is exactly the state a degraded C-12 would render. **The chapter anticipated the compromise and refused it**, so building one is not degrading C-12 — it is building a screen Chapter 2.7 says must not appear. That is a spec clause, not a judgement call available to an implementation mission.
+
+BR-12 and BR-21 say the same thing in the business-rule register: *"'Complete' must mean the data is actually safe in cloud storage, not just recorded"*, and *"'Complete' must mean the footage is both present and fully described/verifiable, not just uploaded."*
+
+### Blocker 2 — this client never observes `verified_at`, and would not after a backend existed
+
+C-12's icon is gated on FR-META-12's checksum verification. **Nothing in this application can read that.** Two files already state the position, both written before this mission:
+
+> *"**This device never observes `verified_at`.** It writes `complete` itself"* — `storage_cleanup_sweep.dart`
+>
+> *"Volume 4 Chapter 4.5's `verified_at` is set by the backend … the device never reads `verified_at` back"* — `chunk_upload_status.dart`
+
+So **item 36 closing would not unblock C-12.** A deployed backend would set `verified_at` server-side and this client would still have no read path to it. That is a second, independent gap sitting *behind* the first — the same shape A-100 found when `SessionRegistrar` turned out to have a blocker behind its blocker. Recorded as open item 83.
+
+### Blocker 3 — C-12 has no trigger and no place in the navigation model
+
+C-12 is in Chapter 2.5's inventory and Chapter 2.7's spec. **It is in no part of Chapter 2.4.** §2's Collector modals are the Checklist, Checklist Failed and Permission Blocked; the stacks are Projects→…→Task Detail and Sessions→Session Detail→Chunk Detail. C-12 is in neither list, and §5's summary table does not mention it.
+
+That gap matters because of *when* C-12's condition becomes true:
+
+| Screen | Fires when | Delay after Stop |
+|---|---|---|
+| C-10 Local Processing | chunking and metadata generation finish | seconds |
+| **C-12 Session Complete** | **the last chunk's checksum verifies server-side** | minutes to hours, over a field connection |
+
+**A Collector is long gone from C-10 before C-12's condition holds** — on another screen, or with the app backgrounded or closed. So there is no moment at which the application can simply *show* C-12 as written. It would have to be reached from C-11, or driven by a push notification (FR-SEC-03/04, Phase 2, unbuilt), or surfaced on next launch. **Chapter 2.4 specifies none of the three.**
+
+This is open item 82's class of defect, second instance: a screen the inventory names and the navigation model does not place. Recorded as open item 84.
+
+### Blocker 4 — the specified return destination needs an id nothing supplies
+
+Chapter 2.7 requires C-12's action to return to *"Task List (C-06), **not the Dashboard**"*. C-06 lives at `/collector/projects/:projectId/tasks/:taskId` and the recording path carries only a `sessionId`; the session's `taskId` is never wired through and `TaskContext` is still `UnsourcedTaskContext`. **Open item 79, already recorded, and it lands on C-12 too.**
+
+A-114 took the Dashboard branch for C-10's Done under FR-SES-04's own *"or Dashboard"*. **C-12 has no such alternative** — Chapter 2.7 names the Dashboard and excludes it.
+
+### Why nothing was built, stated as a decision rather than an absence
+
+Two options were available and both were refused:
+
+- **A degraded C-12** — forbidden by Blocker 1, above.
+- **A shell or route only** — already covered by Volume 11 Chapter 11.2's **M4** exit criteria, *"layers, modules, routing, and DI graph exist and compile **with placeholder screens**"*. A placeholder cannot advance M7 without making M7 into M4, and it would add a second unreachable route beside open item 82's.
+
+**The deliverable of this sub-mission is the blocker list.** Whoever picks C-12 up after item 36 closes would otherwise find three more things in the way and no record that they were known.
+
+---
+
 ## ⚠ THE SOFT-DELETE BLIND SPOT — one root cause, three symptoms, one fix
 
 **This is a recommendation, not a cross-reference. It is placed here rather than inside an open-item row because three items now point at it and each reads, on its own, like a small local wart.**
@@ -3486,7 +3553,43 @@ This belongs in Mission 5's status report as a ranked recommendation in its own 
 
 ---
 
-## Consolidated open items — A-057 through A-114
+## ⚠ M7 — "UI COMPLETE" — IS NOT MET AND MUST NOT BE CLAIMED
+
+**Recorded 2026-08-16 at Mission 5.1.5, in the same form and for the same reason Mission 4.9 wrote *"M6's 'Upload Engine Working E2E' milestone is NOT met and must not be claimed"* while most of the upload engine existed.**
+
+Volume 11 Chapter 11.2 §1 fixes the exit criteria:
+
+> **M7 — UI Complete.** *"Every screen in Volume 2, Chapter 2.5's inventory is built and matches the Design System (Chapter 2.8) and Wireframes (Chapter 2.6)."*
+
+**Three independent reasons. Any one of them is sufficient on its own.**
+
+### 1. C-12 cannot be built as specified, and will not be by item 36 alone
+
+A-115 has the full argument: Chapter 2.7's table forbids the partial version in the words *"never on partial completion"*; this client never observes `verified_at` and would not after a backend existed (item 83); C-12 has no trigger and no place in Chapter 2.4's navigation model (item 84); and its specified return destination needs the `taskId` item 79 does not supply.
+
+### 2. Chapters 2.6 and 2.8 are not in this repository
+
+M7's criteria require every screen to **match** the Design System and the Wireframes. Neither document is here (A-102, item 74). **The clause cannot be evaluated at all** — not failed, not passed, unevaluable — and a criterion nobody can check is not a criterion that has been met.
+
+### 3. Screens in the inventory remain placeholders or absent
+
+C-02 (Permission Blocked) is unbuilt; C-13 and C-15 are Phase 2; A-01 through A-08 are Mission 1.3 placeholders awaiting Mission 5.2. Chapter 2.5's inventory is 23 screens and this is not a rounding error.
+
+### The trap this section exists to prevent
+
+Chapter 11.2 §2 names it, using M7 as its own worked example:
+
+> *"A milestone is not marked complete until its exit criteria is fully met — **partial completion (e.g. 'most screens built' for M7)** is tracked as in-progress against Chapter 11.3's sprint backlog, not prematurely checked off here."*
+
+**The volume picked this milestone, by name, as the illustration of premature checking.** Missions 5.1.1–5.1.4 built seven Collector screens, which is real progress and is exactly the condition under which a gate starts looking closer than it is. Building *something* named C-12 would have made the inventory read complete while moving the gate not at all — which is why 5.1.5 built nothing.
+
+### What would change this
+
+All three reasons, not any one: item 36 and items 83, 84 and 79 for C-12; item 74 for the match clause; Mission 5.2 and beyond for the remaining screens. **Until then M7 is in progress, and any status report that reads otherwise is wrong.**
+
+---
+
+## Consolidated open items — A-057 through A-115
 
 Every carried-forward item, in one place. Accurate as of **Mission 4.3**; originally the seed for Mission 3.12's status report, and re-checked at the close of each sub-mission block per item 23.
 
@@ -3595,6 +3698,8 @@ Every carried-forward item, in one place. Accurate as of **Mission 4.3**; origin
 | 69 | FR-PT-05 and Volume 2 name a Task `requirements` field that Volume 4 Ch. 4.4 §3's `tasks` table does not have | **A PRODUCT question for Faisal, not an engineering interpretation to pick.** FR-PT-05 asks for *"instructions, reference examples, and requirements"*, and Volume 2 names the same three at C-06, at A-05 and in the Task Detail section list. Chapter 4.4 §3 has six columns and no `requirements`. Either it is prose already inside `instructions` and Volume 2 is naming a heading, or it is a real column the Data Dictionary omits. **Both readings are defensible and both are product answers**, so `Task` omits the field rather than folding it into `instructions` or inventing a column Mission 7 could not populate. `task_test.dart` asserts the omission, so a later mission that adds the field without the answer breaks a test that points here. Cost to settle: one field added, or one doc comment deleted. | A-098, FR-PT-05, V4 Ch. 4.4 §3 |
 | 70 | There is no `GET /v1/tasks/{id}`, so C-06 cannot resolve a bare `task_id` | **Owed to Mission 5.1.2, which is where a route first has to resolve one.** Chapter 4.6 §3 offers exactly three Task routes — `GET /v1/projects/{id}/tasks`, `POST /v1/projects/{id}/tasks`, `PATCH /v1/tasks/{id}` — so a single Task is reachable only through its Project's list. `ProjectTaskRepository` therefore declares no `fetchTask(taskId)`, because a method Mission 7 has no endpoint to satisfy is the breaking rework the interface was traced to avoid. The gap is real but narrow: C-06's route path carries only a `taskId`, so a deep link or a cold start straight into Task Detail has no Project to list from. Closing it needs either a backend route that does not exist or `local_task_cache`, which ADR-039 §3 assigns here and open item 2 defers. **Not a defect in the interface — a consequence of the catalog, recorded so 5.1.2 inherits it.** | A-099, V4 Ch. 4.6 §3, open item 2 |
 | 71 | No check catches a source file that is **entirely absent** from `lcov.info`, as distinct from one with low coverage | **A candidate for a later testing/verification mission. Deliberately not built in 5.1.1.** `flutter test --coverage` emits an `SF:` record only for files reachable from the test suite's import graph, so a file no test imports is missing from the report rather than counted as 0% — the denominator is recomputed every run from whatever the tests happened to load. Measured 2026-08-16: **90 of 227** hand-written `lib/` files carry no record. Most are legitimately line-free (bare interfaces, `freezed` declarations whose code lives in excluded `*.freezed.dart`, enums); some, like `invite_code_repository_impl.dart`, are not. A check would have to distinguish the two, which is why it is a mission rather than a one-line CI edit. **The standing risk is the point, not the check**: this is item 41's *"a green check over an empty set is not evidence"* aimed at the coverage report itself, and Mission 4.9 §4's unexercised-mechanism pattern in a third medium. | A-101, open item 41, Ch. 9.5 §2 |
+| 83 | **This client never observes `verified_at`, so FR-META-12's verification is unreadable — and closing item 36 would not change that** | **A second blocker sitting behind item 36, found 2026-08-16 by Mission 5.1.5 tracing C-12.** FR-META-12 requires a chunk's uploaded checksum to be verified against the local one *"before marking that chunk Complete"*, and Chapter 2.7 gates C-12's confirmation icon on exactly that. **Nothing in this application can read it.** Two files already state the position — `storage_cleanup_sweep.dart`: *"This device never observes `verified_at`. It writes `complete` itself"*; `chunk_upload_status.dart`: *"the device never reads `verified_at` back"* — and both were correct for their own purpose, which is why neither is a defect. The finding is what they imply together: **a deployed backend would set `verified_at` server-side and this client would still have no path to it**, so item 36 closing unblocks the upload and not the confirmation. Closing this needs a read path for verification state — `GET /v1/chunks/{id}/metadata` exists in Chapter 4.6 §3 but is Admin-scoped, so it is not simply a call the Collector's client can make. **Same shape as A-100**: a port whose blocker turned out to have a blocker behind it. | A-115, item 36, FR-META-12, BR-21 |
+| 84 | **C-12 is in Chapter 2.5's inventory and Chapter 2.7's spec, and in no part of Chapter 2.4's navigation model** | **Second instance of open item 82's class: a screen the inventory names and the navigation model does not place.** Chapter 2.4 §2's Collector modals are the Checklist, Checklist Failed and Permission Blocked; its stacks are Projects→…→Task Detail and Sessions→Session Detail→Chunk Detail; §5's summary table names neither C-12 nor a route to it. **The gap is not cosmetic, because of when C-12's condition becomes true:** C-10 fires seconds after Stop, when local chunking and metadata generation finish, while C-12 fires when the *last chunk's checksum verifies server-side* — minutes to hours later over a field connection. **A Collector is long gone from C-10 by then**, on another screen or with the app closed, so there is no moment at which the application can simply show C-12 as written. It would have to be reached from C-11, or driven by a push notification (FR-SEC-03/04, Phase 2, unbuilt), or surfaced on next launch — and Chapter 2.4 specifies none of the three. **Inserting it after C-10 is the obvious wrong answer**: it would fire at the moment local processing ends, which is precisely when the claim BR-12 forbids would be false. Needs a product decision about where C-12 lives before it needs any code. | A-115, item 82, Ch. 2.4, Ch. 2.5 |
 | 81 | **C-11 forgets a session once all its chunks are swept, so FR-SES-01's end-to-end tracking is not served** | **Third symptom of one cause — see "⚠ THE SOFT-DELETE BLIND SPOT" above, and do not fix this one locally.** C-11's sessions are derived by grouping `QueuedChunk` rows, and `currentQueue` excludes `localDeletedAt != null`. So a session whose chunks have all uploaded **and** been cleaned disappears from the screen entirely — not shown as complete, shown as nothing. FR-SES-01 requires the system to *"track the state of every session (recording, chunking, uploading, complete) end to end"*, and a view that forgets finished sessions does not do that: **C-11 is an upload-queue view wearing a session-history label.** The obvious local patch — group before filtering — renders a heading over no rows, which is worse. Closes together with items 61 and 76 once a history-capable read path exists. Note that C-11 remains **correct for its own stated purpose**: Chapter 2.5 calls it *"Upload / Sync Status"*, and finished, cleaned work has no upload status. The gap is that nothing else answers the session-history question. | A-112, items 61 and 76, FR-SES-01 |
 | 82 | Chapter 2.4 §2 names *Session Detail* and *Chunk Detail*; Chapter 2.5's authoritative inventory has neither | **A product call between two chapters, not something a screen should settle by being built.** Ch. 2.4 §2's stack sentence — *"Sessions → Session Detail → Chunk Detail"* — is **the only occurrence of either name in all of Volume 2**. Chapter 2.5 calls itself *"The master, authoritative list of screens"* and its fifteen Collector entries include no such screens; Chapter 2.7 gives neither a component table; no FR names either. **C-11's own inventory line already covers both levels** — *"Per-session, per-chunk status"* — and Mission 4.6 built exactly that, flattened into one screen with sessions as group headings and chunks as rows. The consequence in code is a live but unreachable route: `/collector/sessions/:sessionId` is a Mission 1.3 placeholder and **nothing in the application navigates to it**, because C-11 has nowhere to drill down *to*. **Deliberately left in place rather than deleted** at Mission 5.1.4: removing a route Chapter 2.4 names is as much a product decision as building the screen it names, and leaving it costs one unreachable placeholder while keeping both options open. Resolving it means either amending Ch. 2.4's stack to match the inventory, or adding two screens to Ch. 2.5 — and the second needs someone to say what they would show that C-11 does not. | Ch. 2.4 §2, Ch. 2.5, Mission 5.1.4 |
 | 79 | **A real Task picker exists and no recording is attributed to a Task** — the picker's `taskId` is never wired through to `TaskContext` | **Separate work in `features/recording/`. Explicitly NOT closed by Mission 5.1.3's proximity to it.** C-06's Start Recording passes a real `taskId` into `/checklist/:taskId`, and there the trail ends: `PreRecordingChecklistScreen` declares the parameter and reads it nowhere, and neither does `ChecklistNotifier`, `RecordingNotifier` nor `RecordingGuard`. `TaskContext` remains bound to `UnsourcedTaskContext`, which returns `MetadataIdentity.unsourced` — the empty string — for both `project_id` and `task_id`. **So a recording started through the real picker is attributed to exactly nothing, precisely as one started through the removed debug button was**, and A-068's Guard 1 still refuses 100% of recorded chunks. The work is: carry the `taskId` (and the `projectId` C-06 already holds) from the route into a `TaskContext` implementation that reads them, and bind it at the composition root in place of `UnsourcedTaskContext`. That closes **open item 1** and removes two of Guard 1's five missing fields; items 5 and 11 supply two more. **Nothing about building the picker made this easier or harder** — it was always a `features/recording/` wiring job — but the picker's existence makes it look done, which is why it is written down at length. | A-111, open items 1, 37, A-062 §1, A-068 |
