@@ -1,0 +1,45 @@
+-- 0009 — The default organisation, so that a self-signup account has an org
+-- it can actually belong to.
+--
+-- ## What this fixes
+--
+-- Deferred item 12. `redeemInviteCode` has assigned the literal string
+-- `"vump-default"` as an `org_id` custom claim since Mission 2.9, when no
+-- organisation model existed. Mission 6.3 defined one:
+--
+--     users.org_id uuid NOT NULL REFERENCES orgs(id)
+--
+-- A literal is not a uuid and references nothing, so every account created so
+-- far carries an org_id that cannot be written to the schema. Four live
+-- accounts are in that state.
+--
+-- ## Data, not DDL
+--
+-- This migration inserts one row and changes no structure. The claim value
+-- stays exactly as it is; what changes is that the value now *resolves* —
+-- `backend/packages/shared/src/org.ts` maps the literal to the id below by
+-- explicit lookup, and rejects any other value rather than guessing.
+--
+-- ## Why the id is a literal rather than gen_random_uuid()
+--
+-- The mapping has to agree across the database, the Lambda code and any future
+-- environment. A generated id would differ per environment, so the code could
+-- not name it without reading it first — and a lookup by *name* would make the
+-- display string load-bearing, so renaming the org in an admin screen would
+-- silently break sign-up.
+--
+-- The value is deliberately not a random-looking uuid. It is
+-- `00000000-0000-4000-8000-000000000001`: valid (version 4, variant 8) and
+-- obviously reserved, so nobody mistakes it for real data.
+--
+-- ## This is a trusted-group assumption, and it expires
+--
+-- Every self-signup account lands in this one organisation, so BR-20's tenant
+-- isolation puts them all in the same tenant. That is acceptable only while
+-- ADR-036's distribution model holds — "informal APK sharing among a trusted
+-- group". **Revisit before public distribution**, the same class of assumption
+-- and the same trigger as ADR-036's own.
+
+INSERT INTO orgs (id, name)
+VALUES ('00000000-0000-4000-8000-000000000001', 'Unassigned')
+ON CONFLICT (id) DO NOTHING;

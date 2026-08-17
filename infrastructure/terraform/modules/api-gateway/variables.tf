@@ -26,6 +26,11 @@ variable "lambda_role_arns" {
   type        = map(string)
 }
 
+variable "db_credential_secret_arns" {
+  description = "Per-function database credential secret ARNs, keyed by function name (Mission 6.3). Each function is given only its own."
+  type        = map(string)
+}
+
 variable "lambda_environment" {
   description = "Non-secret environment variables common to every function. Secret VALUES are forbidden here (Volume 8 Ch. 8.4 §2)."
   type        = map(string)

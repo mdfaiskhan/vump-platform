@@ -1,0 +1,86 @@
+# ADR-048 — A REQUEST Authorizer Resolves the Caller
+
+- **Status:** Accepted
+- **Date:** 2026-08-18
+- **Supersedes:** the design recorded in **A-159**, which made `org_id` a Firebase custom claim so that every function could scope by org without reading `users`. That amendment stands as history; its design is not adopted.
+
+## Context
+
+Chapter 4.8 §2's middleware chain begins *"1. Authenticate (Chapter 4.7) — attaches user, role, org_id"*, and every one of Chapter 4.6's fifteen endpoints is supposed to run behind it.
+
+Nothing could implement that. Chapter 4.7 §1 step 4's caller lookup is a read of `users`, and Volume 8 Chapter 8.4 §1 gives that grant to `auth-verify` alone — enforced in PostgreSQL by migration `0007`, because ADR-044 records that per-table permission is not expressible in IAM under the Data API. Six functions were required to attach `org_id` and forbidden from reading the table it comes from.
+
+A-159 resolved that by moving `org_id` into the token as a custom claim. Mission 6.5 re-traced it and found three problems:
+
+1. **Chapter 4.7 §2 makes the claim a cache, not a source** — *"falling back to the users table as the authoritative source if the claim and the table ever disagree."* A design where the claim is the only source inverts the chapter it cites.
+2. **A claim is written once and read until the token refreshes.** A user moved between orgs is stale everywhere until then; the table never is.
+3. **It was the only reason to write claims from AWS**, which is what forces the Firebase credential question ADR-036 deferred. The design created the credential problem.
+
+## Decision
+
+**An API Gateway REQUEST authorizer resolves the caller once, and API Gateway attaches the result to every downstream request.**
+
+`auth-verify` serves it — the same function, told apart by event shape. One function reads `users`, exactly as Chapter 8.4 §1 requires, and fourteen routes receive `userId`, `orgId` and `role` in `event.requestContext.authorizer` without a query and without a grant.
+
+`role` remains a Firebase custom claim, because Chapter 4.7 §2 specifies it and `redeemInviteCode` already writes it. **`org_id` does not.**
+
+### The authorizer is `auth-verify`, not an eighth function
+
+A separate authorizer would need `SELECT` on `users`, which means an eighth database role, an eighth credential and an eighth secret — to run the query the existing function is already the only principal permitted to run. Mission 6.5 adds **zero** secrets, and this is how.
+
+### Exactly one route is exempt, and the exemption is machine-checked
+
+`POST /v1/auth/verify` is not behind the authorizer. Chapter 4.7 reads as self-contradictory —
+
+- §1 step 4: *"looks up **(or creates, on first login)** the matching users row"*
+- §4 pseudocode: `if user is null: reject(401)`
+
+— and the contradiction dissolves once the two are read as **different components**. §4 is the authorizer, in front of fourteen routes. §1 step 4 is `POST /v1/auth/verify`, which verifies its own token and creates the row.
+
+Applying "reject" uniformly deadlocks the platform, and this is not hypothetical: four Firebase accounts existed with `users` empty, nothing writes to that table, and `redeemInviteCode` creates Firebase accounts without an Aurora row. Every account, existing and future, would have been refused at every door including the one meant to let them in. A-166.
+
+A second exemption would open an endpoint with nothing in front of it, so a Terraform `check` asserts the exempt list is exactly `["POST /v1/auth/verify"]` and fails the plan otherwise.
+
+### Deny, not allow-with-a-flag
+
+A failed lookup returns an explicit `Deny`, so API Gateway refuses before the target function is invoked. Returning `Allow` with an "unauthenticated" flag would push the decision into fifteen handlers, any one of which could forget it. A handler that finds no authorizer context **fails** rather than falling back — a detached authorizer must not silently become an open endpoint.
+
+### `authorizerResultTtlInSeconds = 0`
+
+Caching a policy caches an authorization decision. A user removed from an org, or deleted, would keep working for the cache window. Correctness first; revisit under measured load.
+
+## Alternatives Considered
+
+- **A-159's `org_id` custom claim** — rejected above. It inverts Chapter 4.7 §2, goes stale, and drags in the deferred credential question.
+- **Grant every function `SELECT` on `users`** — rejected. It is precisely what Chapter 8.4 §1 forbids, and A-158's per-function GRANTs exist to prevent it.
+- **Each function calls `auth-verify` over HTTP** — rejected. A second network hop on every request, and a new internal authentication problem to solve.
+- **A JWT authorizer** — rejected. It validates the token but cannot read `users`, so it delivers claims and not the row, which is the half that was never the problem.
+- **An eighth Lambda as the authorizer** — rejected on cost: an eighth role, credential and secret for one query.
+
+## Consequences
+
+- **`withEnvelope` no longer verifies tokens.** Fourteen routes read the authorizer context. The behaviour moved to `withVerifiedToken`, used by exactly one route.
+- **A route detached from the authorizer fails closed**, with a 500 naming the misconfiguration rather than a 200.
+- **The authorizer runs on every request**, so `auth-verify` is now the hottest function and a Data API round-trip sits in front of every call. With TTL 0 there is no cache to soften it.
+- **`resolveCaller`'s stub is gone.** `lookupCaller` and `provisionCaller` replace it, and the `Caller` handed to a domain handler now carries real values.
+- **A-159 is superseded, not deleted.** Its reasoning was sound given what it knew; A-163 had already corrected its premise, and this record corrects its conclusion.
+
+## Related Missions
+
+- Mission 6.5 — which needed this and produced it.
+
+## Implementation Status
+
+**Implemented and applied to development.**
+
+| | Decision | State |
+|---|---|---|
+| REQUEST authorizer | Required | ✅ `vump-dev-caller`, identity source `Authorization` |
+| Served by `auth-verify` | Required | ✅ one function, discriminated by event shape |
+| 14 routes behind it | Required | ✅ **verified against live AWS**, per-method |
+| Exactly one exempt | Required | ✅ `POST /v1/auth/verify`, and a `check` enforces it |
+| Zero new secrets | Required | ✅ 8 before, 8 after |
+| `org_id` no longer a claim | Supersedes A-159 | ✅ read from `users` |
+| Deny is explicit | Required | ✅ 403 with an explicit-deny body |
+| Live round-trip | — | ✅ 403 → 200 (row created) → 200 |
+| Called by the mobile app | — | ⬜ **Not wired.** No app code calls either route yet |
