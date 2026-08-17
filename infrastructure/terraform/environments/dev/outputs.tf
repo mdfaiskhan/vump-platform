@@ -34,3 +34,18 @@ output "lambda_roles_by_domain" {
   EOT
   value       = module.iam.roles_by_domain
 }
+
+output "api_invoke_url" {
+  description = "Base URL of the deployed API stage. Deferred item 1's real value for development."
+  value       = module.api_gateway.invoke_url
+}
+
+output "api_routes" {
+  description = "Every route the API serves — the fifteen endpoints of Volume 4 Chapter 4.6."
+  value       = module.api_gateway.routes
+}
+
+output "lambda_function_names" {
+  description = "Deployed function names, keyed by ADR-015 function."
+  value       = module.api_gateway.function_names
+}

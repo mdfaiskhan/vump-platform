@@ -56,3 +56,35 @@ module "iam" {
   master_user_secret_arn    = module.database.master_user_secret_arn
   chunk_s3_policy_documents = local.chunk_s3_policy_documents
 }
+
+# Mission 6.2. The seven Lambda functions and the REST API in front of them.
+#
+# `artifacts_dir` points at esbuild output that this configuration does not
+# build. `npm run build` in backend/ must have run first, or the archive data
+# source fails at plan with a missing directory. That coupling is deliberate:
+# Terraform is not a build tool, and having it shell out to npm would make a
+# plan depend on a toolchain the IaC has no way to pin.
+module "api_gateway" {
+  source = "../../modules/api-gateway"
+
+  environment_slug = var.environment_slug
+  region           = var.region
+  artifacts_dir    = "${path.module}/../../../../backend/artifacts"
+
+  lambda_role_arns = module.iam.role_arns
+
+  # Non-secret only. The two secret ARNs below are identifiers, not values —
+  # ADR-016: "A secret ARN is not a secret. It is an identifier; possessing it
+  # grants nothing without IAM permission to read the secret behind it."
+  # AWS_REGION is deliberately absent: it is a reserved Lambda variable that the
+  # runtime sets itself, and setting it here is rejected at create time.
+  # `loadConfig` reads the runtime's copy.
+  lambda_environment = {
+    CHUNK_BUCKET                    = var.chunk_bucket
+    PRESIGN_EXPIRY_SECONDS          = tostring(var.presign_expiry_seconds)
+    DATABASE_CLUSTER_ARN            = module.database.cluster_arn
+    DATABASE_CREDENTIALS_SECRET_ARN = module.database.master_user_secret_arn
+    DATABASE_NAME                   = module.database.database_name
+    FIREBASE_PROJECT_ID             = var.firebase_project_id
+  }
+}
