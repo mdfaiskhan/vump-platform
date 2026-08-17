@@ -5030,3 +5030,49 @@ The exception is recorded rather than taken quietly because a rule bypassed with
 ### Numbering, so the gap is not read as a loss
 
 This entry is **A-147**, and A-141 through A-146 do not exist on this branch. They are Mission 6.1's, written on `mission/6.1-aws-foundations`, and they land in `develop` when that pull request merges. The gap is reserved, not missing.
+
+---
+
+### A-148 — CI had no gate on infrastructure, and the first Terraform pull request is what showed it
+
+| | |
+|---|---|
+| **Record** | ADR-019 — required status checks; ADR-043 — Terraform |
+| **Was** | Ten jobs, every one Dart-scoped. `grep -E "terraform|\.tf\b"` over `ci.yml` returned nothing. |
+| **Is** | Eleven jobs. A `Terraform` job runs `fmt -check`, `validate` and `tflint`; `Environment consistency` reads `.tf` variable defaults as a fourth language. |
+| **Authority** | ADR-019 (required checks), ADR-043 (Terraform as the IaC tool) |
+| **Class** | Enforcement gap closed |
+| **Status** | **Closed** |
+| **Date** | 2026-08-17, Mission 6.1.7 |
+
+Mission 6.1.6 pushed the first branch carrying a Terraform change and watched the suite run over it. Every job passed, and the passing was the finding: **six of the seven required checks would have passed exactly the same way over a diff that was Terraform and nothing else.** `Format` and `Analyze` read `mobile/`. `Test` re-runs the Dart suite. `Architecture boundaries`' 63 checks are all `lib/`-scoped. `AWS credential isolation` reads `mobile/pubspec.yaml` and `lib/`.
+
+A green pipeline over an unexamined change is worse than no pipeline, because it reads as verification.
+
+### What CI would not have caught
+
+Three concrete things from Mission 6.1's own history:
+
+- **`terraform validate`, `fmt` and `tflint` failures.** All three were run by hand. tflint found six real issues on its first run — every module missing `required_version` and `required_providers` — and nothing in CI would have.
+- **A `.tf` region or bucket disagreeing with `environments.json`.** ADR-043 made Terraform a **fourth** language holding values that Dart, JSON and shell already hold, and `Environment consistency` — the job written precisely to stop those three drifting — did not read it.
+- **The A-143 privilege regression**, where one role held both `s3:PutObject` and `s3:GetObject`. Still not caught, and deliberately so: see below.
+
+### Two changes, and one thing deliberately not changed
+
+**A `Terraform` job.** `fmt -recursive -check`, then `init -backend=false` and `validate` per environment root, then `tflint --recursive`. `-backend=false` is what makes it runnable with no credentials — a real `init` reaches the S3 backend in `ap-south-1`, and `ci.yml`'s header commits to a workflow that uses no secrets. Validation needs the provider schema and the module sources, not the state.
+
+**`Environment consistency` extended, not duplicated.** That job already owns cross-language agreement for the environment model; Terraform is a fourth holder of the same values. A second job would have split one invariant across two places, which is the failure the job itself exists to prevent.
+
+**The Dart-scoped jobs are untouched.** `Architecture boundaries` and `AWS credential isolation` are about `lib/`, and teaching either to reason about an IAM policy would make them two jobs wearing one name. **The consequence is that no CI job checks IAM least-privilege**, so the A-143 class of defect is still caught only by review. That is a known, named gap rather than an oversight.
+
+### Proven non-vacuous before it was committed
+
+A check that passes is not evidence until it has been shown to fail. The extended script was extracted from `ci.yml` and run against three planted drifts, each of which failed it with a named path and value:
+
+| Planted | Result |
+|---|---|
+| `chunk_bucket` default set to `vump-platform-prod` in the `dev` root | ✅ failed — *"chunk_bucket default 'vump-platform-prod' != environments.json chunkBucket 'vump-platform-dev' for development"* |
+| `region` default set to `us-east-1` | ✅ failed — *"region default 'us-east-1' != environments.json 'ap-south-1' (ADR-011)"* |
+| `environment_slug` default set to `staging` in the `dev` directory | ✅ failed — *"environment_slug default 'staging' != directory 'dev'"* |
+
+The unmodified tree passes. The first of those three is a staging-or-worse build pointed at the production bucket, which is the exact defect class `Environment consistency` was created for — expressed in the one language it could not read until now.

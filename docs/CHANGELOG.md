@@ -40,6 +40,12 @@ Mission 4.8's security review found it, by reading `git log` against this file r
 
 ### Added
 
+- **2026-08-17** — **CI gained an eleventh job, because the first Terraform pull request proved the other ten could not see it.** `grep -E "terraform|\.tf"` over `ci.yml` returned nothing: `fmt`, `validate` and `tflint` were run by hand, and six of the seven required checks would have passed identically over a diff that was Terraform and nothing else.
+
+  The new `Terraform` job runs `fmt -recursive -check`, `init -backend=false` + `validate` per environment root, and `tflint --recursive`. `Environment consistency` was **extended rather than duplicated** — ADR-043 made Terraform a fourth language holding the region and bucket names that Dart, JSON and shell already hold, and that job already owns their agreement.
+
+  Proven non-vacuous before commit: three planted drifts each failed it with a named path and value, including a `vump-platform-prod` bucket in the `dev` root. **No CI job checks IAM least-privilege** — the A-143 class of defect is still caught only by review, and that is named rather than left implied. A-148. Mission 6.1.7.
+
 - **2026-08-17** — **The development AWS environment exists, and it is described in Terraform.** ADR-043 closes Volume 4 Chapter 4.9 §5's infrastructure-as-code deferral — which pointed at Volume 7, where the choice was never made — and `infrastructure/terraform/` now holds three modules (network, database, iam) and one root module per environment, of which only `dev` exists.
 
   **35 resources applied**: a `10.0.0.0/16` VPC with two private database subnets and no gateway of any kind, an Aurora Serverless v2 PostgreSQL 16.14 cluster scaling 0–2 ACU with a single writer, and seven Lambda execution roles across ADR-015's six resource domains, with no function attached to any of them. `terraform plan` reports `No changes`; every resource was also confirmed by reading AWS directly rather than the state file.

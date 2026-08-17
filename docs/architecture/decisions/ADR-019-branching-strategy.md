@@ -111,12 +111,15 @@ All seven jobs from `.github/workflows/ci.yml`, on `main` and `develop`:
 
 The last four are not conventional CI. They exist because ADR-011, ADR-016 and ADR-018 make claims — layer boundaries hold, no credential is committed, environments cannot drift — that would otherwise be enforced only by memory.
 
-**Cross-reference:** two further required checks were added after this record.
+**Cross-reference:** three further required checks were added after this record.
 
 - `Commit convention` (ADR-020) validates the pull request title. Pull requests only, since that title becomes the squash commit under this ADR's merge strategy.
 - `Generated code drift` (Mission 0.18.4) re-runs `build_runner` and fails if the committed `*.g.dart` files are stale. Required by name in Volume 7, Chapter 7.13 §2.
+- `Terraform` (Mission 6.1.7, ADR-043) runs `fmt -check`, `validate` and `tflint` over `infrastructure/terraform/`. Added because Mission 6.1.6 ran the suite over a Terraform change and found that **no job looked at it** — the seven checks above are all Dart-scoped, and infrastructure had no gate at all.
 
-Nine checks in total.
+**Ten checks in total**, plus `Golden tests` — which this record has never listed and which has run since Mission 0.18.4. Eleven jobs.
+
+`Environment consistency` was extended rather than duplicated at the same time: ADR-043 made Terraform a fourth language holding the region and bucket names, alongside Dart, JSON and shell, and that job already owns their agreement.
 
 ### Branch protection
 
