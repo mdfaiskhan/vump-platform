@@ -1205,11 +1205,20 @@ jobs:
       - name: Format
         run: npx prettier --check .
 
+      - name: Type-check
+        # BEFORE lint, not after. The ESLint config is type-aware, and
+        # `@vump/shared` resolves its types from `dist/` — which does not exist
+        # on a clean checkout. Linting first makes every cross-package type
+        # degrade, and the visible symptom is unrelated: three
+        # `no-unnecessary-type-assertion` errors in a test that is correct.
+        #
+        # Found by this job on its first run. It passed locally only because a
+        # previous `tsc --build` had left `dist/` behind, which is exactly the
+        # stale-artifact difference CI exists to catch.
+        run: npm run typecheck
+
       - name: Lint
         run: npm run lint
-
-      - name: Type-check
-        run: npm run typecheck
 
       - name: Test
         run: npm run test
