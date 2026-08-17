@@ -57,8 +57,19 @@ Everything in `docs/architecture/aws-sdk-integration.md` was written to be runti
 
 ## Implementation Status
 
-**Not implemented.** `backend/` is empty. No Lambda function, no `package.json`, no `tsconfig.json`, no SDK dependency exists.
+**Implemented as a scaffold.** Mission 6.2 filled `backend/`: an npm workspace on Node 24 with TypeScript, seven Lambda functions behind a REST API, and the AWS SDK for JavaScript v3. ADR-045 governs its dependencies and toolchain; A-152 records the scaffold.
 
-What this record unblocks is the client code deferred by `docs/architecture/aws-sdk-integration.md` — the S3 client construction, the presigned multipart URL generation, and the completion verification. That work belongs to a backend implementation mission, not to Mission 0.17.
+| | Decision | State |
+|---|---|---|
+| AWS Lambda, Node.js | Required | ✅ `nodejs24.x` (A-151) |
+| TypeScript, compiled | Required | ✅ strict, `tsc --build` clean |
+| API Gateway as the only entry | Required | ✅ REST API, 15 routes |
+| One function per resource domain | Six domains | ✅ **Seven functions** — see below |
+| AWS SDK for JavaScript v3 | Required | ✅ `@aws-sdk/client-rds-data`; S3 clients arrive with the presigner in 6.3 |
+| Firebase Admin SDK for token verification | Required | ✅ **Real, and needs no secret** (A-149) |
+
+**This record is refined by A-143, not contradicted.** Six *domains* stand; there are seven *roles* and therefore seven functions, because the `chunks` domain needs one principal that can write and cannot read, and one that is the reverse. A domain is a unit of code decomposition; a role is a unit of privilege, and a Lambda has exactly one execution role.
+
+What this record unblocked — the S3 client construction, presigned multipart URL generation and completion verification deferred by `docs/architecture/aws-sdk-integration.md` — is **still not written**. Mission 6.2 provisioned the routes and their handlers; the queries and the presigning land in 6.3.
 
 Nothing in the repository contradicts this decision. The single FastAPI reference, in `aws-sdk-integration.md`, was corrected when this record was written.

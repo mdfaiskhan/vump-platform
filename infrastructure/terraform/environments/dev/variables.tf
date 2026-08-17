@@ -83,3 +83,21 @@ variable "chunk_bucket" {
   type        = string
   default     = "vump-platform-dev"
 }
+
+variable "presign_expiry_seconds" {
+  description = "Presigned URL lifetime. Must match environments.json (ADR-011, aws-sdk-integration.md)."
+  type        = number
+  default     = 3600
+}
+
+variable "firebase_project_id" {
+  description = <<-EOT
+    Firebase project the backend verifies ID tokens against.
+
+    Not a secret: ADR-016 places Firebase client identifiers in the Public tier,
+    and ADR-010 records why concealing them protects nothing. Deferred item 3
+    records that one project currently serves all three environments.
+  EOT
+  type        = string
+  default     = "vump-platform-f86af"
+}

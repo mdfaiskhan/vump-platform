@@ -1,0 +1,11 @@
+{
+  "//": "Type context for files that belong to no package: the Vitest config and the cross-function route-inventory test. Both are checked rather than exempted from linting — see eslint.config.mjs.",
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "composite": false,
+    "declaration": false,
+    "declarationMap": false
+  },
+  "include": ["vitest.config.ts", "functions/routes.test.ts"]
+}

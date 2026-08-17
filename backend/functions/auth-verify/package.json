@@ -1,0 +1,11 @@
+{
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "dependencies": {
+    "@vump/shared": "0.1.0"
+  },
+  "name": "@vump/auth-verify",
+  "description": "Token verification and the caller's own profile. ADR-015 domain: auth-verify."
+}

@@ -59,6 +59,12 @@ env:
   TERRAFORM_VERSION: 1.15.8
   TFLINT_VERSION: v0.64.0
 
+  # The backend's Node major, pinned for the same reason. This is one of four
+  # places the version lives — the others are backend/package.json's `engines`,
+  # backend/scripts/build.mjs's esbuild target, and the Terraform `runtime`
+  # variable. The Environment consistency job checks all four agree.
+  BACKEND_NODE_VERSION: 24
+
 jobs:
   # The three checks run as separate jobs rather than as steps in one, so a
   # failure in any of them still reports the results of the others. Sequential
@@ -909,6 +915,63 @@ jobs:
                   print(f'ok  Terraform defaults agree with environments.json '
                         f'in {len(roots)} environment root(s): {roots}')
 
+          # --- The Node major version, which lives in four places ------------
+          #
+          # ADR-045 pins Node 24 and A-151 records why it is 24 rather than
+          # either available precedent. The version is then restated in four
+          # files that no compiler, and no single tool, reads together:
+          #
+          #   backend/package.json                    engines.node
+          #   backend/scripts/build.mjs               esbuild target
+          #   .../modules/api-gateway/variables.tf    Lambda runtime
+          #   this workflow                           BACKEND_NODE_VERSION
+          #
+          # A-151 named the drift risk and left it unchecked. This is the check.
+          # The failure it prevents is specific: bundling for one Node major and
+          # deploying onto another produces syntax the runtime rejects at
+          # invocation, not at build — so it surfaces as a broken function
+          # rather than a failed pipeline.
+          node_sites = {}
+
+          pkg = json.load(io.open('backend/package.json', encoding='utf-8'))
+          engines = pkg.get('engines', {}).get('node', '')
+          m = re.search(r'>=\s*(\d+)', engines)
+          if m is None:
+              fail(f'backend/package.json: engines.node "{engines}" has no >=MAJOR bound')
+          else:
+              node_sites['backend/package.json (engines.node)'] = m.group(1)
+
+          build = io.open('backend/scripts/build.mjs', encoding='utf-8').read()
+          m = re.search(r"TARGET\s*=\s*'node(\d+)'", build)
+          if m is None:
+              fail("backend/scripts/build.mjs: no `TARGET = 'nodeNN'` found")
+          else:
+              node_sites['backend/scripts/build.mjs (esbuild target)'] = m.group(1)
+
+          tf = io.open(
+              'infrastructure/terraform/modules/api-gateway/variables.tf', encoding='utf-8'
+          ).read()
+          m = re.search(r'default\s*=\s*"nodejs(\d+)\.x"', tf)
+          if m is None:
+              fail('api-gateway/variables.tf: no `default = "nodejsNN.x"` runtime found')
+          else:
+              node_sites['api-gateway/variables.tf (Lambda runtime)'] = m.group(1)
+
+          workflow = io.open('.github/workflows/ci.yml', encoding='utf-8').read()
+          m = re.search(r'BACKEND_NODE_VERSION:\s*(\d+)', workflow)
+          if m is None:
+              fail('.github/workflows/ci.yml: no BACKEND_NODE_VERSION found')
+          else:
+              node_sites['.github/workflows/ci.yml (BACKEND_NODE_VERSION)'] = m.group(1)
+
+          if len(set(node_sites.values())) > 1:
+              fail('Node major version disagrees across the files that restate it:')
+              for where, major in sorted(node_sites.items()):
+                  print(f'::error::  {where} -> Node {major}')
+          elif node_sites:
+              agreed = next(iter(set(node_sites.values())))
+              print(f'ok  Node major agrees in {len(node_sites)} places: {agreed}')
+
           sys.exit(status)
           PY
 
@@ -1107,3 +1170,79 @@ jobs:
         run: |
           tflint --init
           tflint --recursive --format=compact
+
+  backend:
+    name: Backend
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # Overrides the workflow-level `mobile` default — the same trap open item
+    # 49 records for the three jobs above.
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          # Pinned for the reason FLUTTER_VERSION is: CI and a developer's
+          # machine must not run two different major versions. Keep in step
+          # with backend/package.json's `engines`, scripts/build.mjs's esbuild
+          # target and the Terraform `runtime` variable — the Environment
+          # consistency job checks all four agree.
+          node-version: ${{ env.BACKEND_NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install
+        # `ci`, not `install`: it installs exactly the committed lockfile and
+        # fails if package.json and the lockfile disagree. ADR-045 commits the
+        # lockfile precisely so this is reproducible.
+        run: npm ci
+
+      - name: Format
+        run: npx prettier --check .
+
+      - name: Type-check
+        # BEFORE lint, not after. The ESLint config is type-aware, and
+        # `@vump/shared` resolves its types from `dist/` — which does not exist
+        # on a clean checkout. Linting first makes every cross-package type
+        # degrade, and the visible symptom is unrelated: three
+        # `no-unnecessary-type-assertion` errors in a test that is correct.
+        #
+        # Found by this job on its first run. It passed locally only because a
+        # previous `tsc --build` had left `dist/` behind, which is exactly the
+        # stale-artifact difference CI exists to catch.
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Test
+        run: npm run test
+
+      - name: Audit
+        # Volume 8, Chapter 8.3 §4 names the tool and the threshold: "an
+        # automated vulnerability scan (npm audit or an equivalent SCA tool)
+        # gating CI", and "Any dependency with a published critical CVE blocks
+        # deployment until patched or explicitly risk-accepted by the project
+        # owner."
+        #
+        # Gated at `high` rather than `critical`, which is stricter than the
+        # chapter requires. The chapter's floor is the point at which a
+        # deployment is blocked; a high-severity advisory in a request path
+        # this project has not written yet is worth failing on while the tree
+        # is small enough to fix it.
+        #
+        # This is the check ADR-045 recorded as owed and unbuilt. At the time
+        # of writing the tree carries six moderate advisories, all transitive
+        # through firebase-admin, and none high or critical.
+        run: npm run audit
+
+      - name: Build
+        # The bundles are what Terraform packages, so a configuration that
+        # type-checks and cannot bundle is still broken. Cheap, and it is the
+        # only step that exercises esbuild.
+        run: npm run build

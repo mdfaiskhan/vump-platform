@@ -51,7 +51,11 @@ Each top-level directory is a **deployment or governance boundary**, not a group
 | **Must not contain** | Dart code, AWS resource definitions (those are `infrastructure/`), or Python — ADR-015 forecloses it. |
 | **Deploys as** | Lambda functions, independently of the mobile release. |
 
-**Currently empty.** ADR-015 decides what fills it and does not fill it. It is a separate root directory rather than a subdirectory of anything because it deploys on its own cadence and shares no toolchain with `mobile/`.
+**No longer empty.** Mission 6.2 filled it with what ADR-015 decided: an npm workspace holding `packages/shared/` and one package per function under `functions/`, plus its own toolchain (ADR-045). It is a separate root directory rather than a subdirectory of anything because it deploys on its own cadence and shares no toolchain with `mobile/`.
+
+**`backend/functions/` and the repository-root `functions/` are different things**, and the collision is worth naming. The root one is a Firebase Cloud Function that ADR-036 marks temporary and retires (deferred item 10); `backend/functions/` holds the Lambda handlers. The `backend/` prefix is what disambiguates them, and the collision resolves itself when the root directory goes.
+
+Build output — `backend/artifacts/` and any `dist/` — is gitignored and rebuilt by `npm run build`.
 
 ### 1.3 `infrastructure/`
 

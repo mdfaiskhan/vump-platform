@@ -1,0 +1,38 @@
+{
+  "name": "vump-backend",
+  "version": "0.1.0",
+  "private": true,
+  "description": "AWS Lambda backend for Vump Technologies. One function per ADR-015 resource domain, behind API Gateway.",
+  "type": "module",
+  "engines": {
+    "node": ">=24 <25"
+  },
+  "workspaces": [
+    "packages/*",
+    "functions/*"
+  ],
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "typecheck": "tsc --build --force",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --check .",
+    "format:fix": "prettier --write .",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "audit": "npm audit --audit-level=high",
+    "verify": "npm run format && npm run typecheck && npm run lint && npm run test && npm run audit"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.1",
+    "@types/aws-lambda": "^8.10.156",
+    "@types/node": "^24.10.1",
+    "aws-sdk-client-mock": "^4.1.0",
+    "esbuild": "^0.25.12",
+    "eslint": "^9.39.1",
+    "prettier": "^3.6.2",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.46.4",
+    "vitest": "^4.1.10"
+  }
+}
