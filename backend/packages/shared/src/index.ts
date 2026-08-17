@@ -12,8 +12,10 @@ export {
   execute,
   statementTarget,
   resetDataApiClientForTest,
+  type ExecuteOptions,
   type StatementTarget,
 } from './data-api.js';
+export { isResuming, withResumeRetry, type RetryOptions } from './resume.js';
 export {
   success,
   failure,

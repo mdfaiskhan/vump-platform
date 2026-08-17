@@ -3,16 +3,11 @@
  *
  * ## What this is, and what Mission 6.2 deliberately did not build
  *
- * The client is constructed here and nothing runs a query through it. Mission
- * 6.3 owns the schema and the statements; wiring a real `ExecuteStatement` now
- * would mean inventing table shapes that 6.3 has not settled.
+ * The client is constructed here. Mission 6.3 owns the schema, so the
+ * statements themselves still belong to the handlers that will issue them —
+ * `execute` runs a statement, and no handler calls it yet.
  *
- * `execute` therefore exists and throws. That is a deliberate choice over
- * omitting it: a handler that imports a missing function fails to compile in
- * 6.3, whereas one that calls this gets a named `NOT_IMPLEMENTED` and a stack
- * trace pointing here.
- *
- * ## Two constraints from ADR-044 that shape every future query
+ * ## Two constraints from ADR-044 that shape every query
  *
  * **The 1 MiB response ceiling.** *"The response size limit is 1 MiB. If the
  * call returns more than 1 MiB of response data, the call is terminated."* That
@@ -20,18 +15,38 @@
  * rather than a convention — see {@link ./pagination.ts}.
  *
  * **Writer-only.** *"You can only execute Data API queries on writer instances
- * in a DB cluster"*, reads included. There is no reader to route to, and adding
- * one would not help.
+ * in a DB cluster"*, reads included. There is no reader to route to.
+ *
+ * ## A third constraint, measured in Mission 6.3
+ *
+ * **Multi-statement calls are rejected.** `SELECT 1; SELECT 2` returns
+ * `ValidationException: Multistatements aren't supported`. One statement per
+ * call, always — which is why the migration runner splits its files rather
+ * than sending them whole.
+ *
+ * **Session state does not survive between calls unless they share a
+ * transaction.** `SET search_path` in one call is invisible to the next; inside
+ * an explicit transaction it persists. This is why per-function database
+ * identity comes from a per-function *credential* (ADR-046) rather than from
+ * `SET ROLE`.
  *
  * ## Credentials
  *
- * None are passed. The client resolves them from the execution role through the
- * SDK's default provider chain, exactly as `aws-sdk-integration.md` requires:
- * *"constructed with **no credential parameters at all**, only a region"*.
+ * None are passed to the client. They resolve from the execution role through
+ * the SDK's default provider chain, exactly as `aws-sdk-integration.md`
+ * requires: *"constructed with **no credential parameters at all**, only a
+ * region"*. The *database* credential is a separate thing — a Secrets Manager
+ * ARN named in configuration, never a value.
  */
-import { RDSDataClient } from '@aws-sdk/client-rds-data';
-import { ApiError } from './errors.js';
+import {
+  RDSDataClient,
+  ExecuteStatementCommand,
+  type ExecuteStatementCommandOutput,
+  type SqlParameter,
+} from '@aws-sdk/client-rds-data';
 import { loadConfig } from './config.js';
+import { logger } from './logger.js';
+import { withResumeRetry } from './resume.js';
 
 let client: RDSDataClient | undefined;
 
@@ -40,9 +55,17 @@ let client: RDSDataClient | undefined;
  *
  * Reused because construction resolves credentials, and doing that per request
  * would add a round trip to every call for no benefit.
+ *
+ * **Region comes from the SDK's own provider chain, not from `loadConfig()`.**
+ * It used to read the full backend configuration, which quietly coupled every
+ * caller to the Lambda environment: the migration runner resolves its own
+ * target from AWS and has no `CHUNK_BUCKET`, yet could not construct a client
+ * without one. A client needs a region; requiring six unrelated variables to
+ * get it was the defect. Lambda always sets `AWS_REGION`, so nothing changes
+ * for the handlers.
  */
 export function dataApiClient(): RDSDataClient {
-  client ??= new RDSDataClient({ region: loadConfig().region });
+  client ??= new RDSDataClient({});
   return client;
 }
 
@@ -63,16 +86,52 @@ export function statementTarget(): StatementTarget {
   };
 }
 
+/** Options for a single statement. */
+export interface ExecuteOptions {
+  /** Named parameters. Always use these rather than interpolating into SQL. */
+  readonly parameters?: SqlParameter[];
+  /** Joins an existing transaction, from `BeginTransactionCommand`. */
+  readonly transactionId?: string;
+  /** Overrides the target — the migration runner uses the master credential. */
+  readonly target?: StatementTarget;
+}
+
 /**
- * Runs a statement. **Not implemented in Mission 6.2.**
+ * Runs one statement through the Data API.
  *
- * Mission 6.3 replaces this body with a real `ExecuteStatementCommand`. Until
- * then it throws rather than returning an empty result set, because an empty
- * result is a plausible answer and would let a caller believe the database was
- * consulted.
+ * **One statement.** The Data API rejects multi-statement SQL outright, so
+ * splitting is the caller's job and a semicolon-joined string is a runtime
+ * error rather than a convenience.
+ *
+ * Retries only while the cluster is resuming from a scale-to-zero pause — see
+ * {@link ./resume.ts} for why that is the only retried condition.
  */
-export function execute(_sql: string, _parameters?: Record<string, unknown>): never {
-  throw ApiError.notImplemented('Database access');
+export async function execute(
+  sql: string,
+  options: ExecuteOptions = {},
+): Promise<ExecuteStatementCommandOutput> {
+  const target = options.target ?? statementTarget();
+
+  return withResumeRetry(
+    () =>
+      dataApiClient().send(
+        new ExecuteStatementCommand({
+          resourceArn: target.resourceArn,
+          secretArn: target.secretArn,
+          database: target.database,
+          sql,
+          ...(options.parameters === undefined ? {} : { parameters: options.parameters }),
+          ...(options.transactionId === undefined ? {} : { transactionId: options.transactionId }),
+        }),
+      ),
+    {
+      onRetry: (attempt, delayMs) => {
+        // Logged at info rather than warn: a resuming cluster is the expected
+        // cost of min_capacity = 0, not a fault.
+        logger.info('cluster resuming, retrying', { attempt, delayMs });
+      },
+    },
+  );
 }
 
 /** Resets the memoised client. Tests only. */
