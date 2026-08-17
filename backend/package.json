@@ -21,7 +21,10 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "audit": "npm audit --audit-level=high",
-    "verify": "npm run format && npm run typecheck && npm run lint && npm run test && npm run audit"
+    "verify": "npm run format && npm run typecheck && npm run lint && npm run test && npm run audit",
+    "db:migrate": "node packages/migrate/dist/cli.js",
+    "db:migrate:dry": "node packages/migrate/dist/cli.js --dry-run",
+    "db:bootstrap": "node packages/migrate/dist/bootstrap.js"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",

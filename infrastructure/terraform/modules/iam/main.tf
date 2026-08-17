@@ -166,11 +166,22 @@ data "aws_iam_policy_document" "data_api" {
     resources = [var.cluster_arn]
   }
 
+  # The function's OWN database credential, and only its own.
+  #
+  # Mission 6.3 replaced the shared master credential with one per function.
+  # This is the statement that makes the PostgreSQL GRANTs real: the Data API
+  # authenticates as whatever user the secret names, so a function that cannot
+  # read another's credential cannot act as another's database role.
+  #
+  # Falls back to the master secret only while the per-function secrets do not
+  # exist, so the module remains applyable in that order.
   statement {
-    sid       = "ReadDatabaseCredential"
-    effect    = "Allow"
-    actions   = ["secretsmanager:GetSecretValue"]
-    resources = [var.master_user_secret_arn]
+    sid     = "ReadOwnDatabaseCredential"
+    effect  = "Allow"
+    actions = ["secretsmanager:GetSecretValue"]
+    resources = [
+      lookup(var.db_credential_secret_arns, each.key, var.master_user_secret_arn),
+    ]
   }
 
   dynamic "statement" {
