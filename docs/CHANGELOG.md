@@ -40,6 +40,20 @@ Mission 4.8's security review found it, by reading `git log` against this file r
 
 ### Added
 
+- **2026-08-18** — **The backend is live.** `terraform apply` created 31 resources — Mission 6.2's seven Lambdas, REST API, stage, log groups and invoke permissions, which had been planned and never applied, alongside Mission 6.3's seven credential containers — and repointed seven IAM policies. 66 managed resources now, and `terraform plan` reports `No changes`.
+
+  `npm run db:bootstrap` gave each of the seven database roles a password and wrote it to that function's secret. Per-function isolation is now enforced **twice**: IAM decides which credential a Lambda can read, PostgreSQL decides what that credential may do. Both were proved live rather than read from configuration — `simulate-principal-policy` returns `implicitDeny` for another function's secret and for the master, and `SET ROLE` between function roles is refused `42501`. A-160. Mission 6.3.
+
+- **2026-08-18** — **The Aurora schema exists.** Nine tables, three functions, two triggers and seven database roles, applied to the development cluster through the Data API. `orgs` is Volume 4 Chapter 4.3's ninth table, which Chapter 4.4 referenced from two NOT NULL foreign keys and never defined (A-154).
+
+  Volume 4 Chapter 4.2 §3's business rules are enforced by the database rather than by handler discipline, as that chapter requires: BR-08 and BR-11 as constraints, BR-21 as a `SECURITY DEFINER` procedure with a trigger that makes it the *only* path to `complete`, BR-22 as a `BEFORE UPDATE` trigger. Each was proved behaviourally against the live database — a direct `UPDATE … status='complete'` is refused, and so is changing `resolution` after insert.
+
+  ADR-046 is new: numbered `.sql` files applied by a TypeScript runner over the Data API. `node-pg-migrate` and Flyway were both ruled out because neither can reach a cluster that has no network path (ADR-044). Mission 6.3.
+
+- **2026-08-18** — **Each Lambda gets its own database credential**, so Volume 8 Chapter 8.4 §1's table-level restrictions are enforced rather than described. ADR-044 records that `rds-data` scopes to the cluster, so the restrictions are PostgreSQL `GRANT`s against seven roles — and since the Data API authenticates as whichever user its secret names, one shared credential would have made every GRANT decoration.
+
+  Nine secrets now, not two (ADR-016 amended). No password reaches Terraform state or source control: Terraform creates empty containers, the migration creates the roles `NOLOGIN`, and `npm run db:bootstrap` generates and sets each one. A-158. Mission 6.3.
+
 - **2026-08-18** — **CI gained a twelfth job, and the Node version now checks itself in four places.** ADR-045 wrote a backend standard and nothing executed it — the same gap A-148 recorded for infrastructure, in a second directory. The `Backend` job runs prettier, eslint, `tsc --build`, Vitest, `npm audit` and the esbuild bundle.
 
   `Environment consistency` was **extended rather than duplicated**, gaining a fourth agreement check: the Node major restated in `engines`, the esbuild target, the Terraform `runtime` variable and `BACKEND_NODE_VERSION` must agree. Proven non-vacuous by moving each of the four sites in turn; each failed with all four paths and values printed, so the message names which one moved.
@@ -158,6 +172,20 @@ Mission 4.8's security review found it, by reading `git log` against this file r
 - **2026-08-15** — Camera module, capability ladder and fixed capture specification (BR-01/BR-02). Mission 3.1. (`4c7f3d1`)
 
 ### Security
+
+- **2026-08-18** — **A stored procedure that gates chunk completion was executable by every role.** `complete_chunk()` is BR-21's gate, and migration `0007` claimed "the only role that can complete a chunk is the one granted EXECUTE". It was not: PostgreSQL grants `EXECUTE` on new functions to `PUBLIC` by default, and the `ALTER DEFAULT PRIVILEGES … REVOKE ALL ON FUNCTIONS` intended to prevent that recorded nothing — `pg_default_acl` was empty and the function's ACL read `{=X/vump_admin,…}`, where the empty grantee is PUBLIC.
+
+  Found by verifying the applied schema against the specification **by reading the database**, not by re-reading the migration — the only way this surfaces, because the SQL was accepted and the statement succeeded. Fixed in a new migration rather than by editing the applied one. A-153's shape, one layer down. Mission 6.3.
+
+- **2026-08-18** — **`auth-verify` may INSERT its own user row and nothing else**, enforced in PostgreSQL. A-150 resolved Volume 8 Chapter 8.4 §1's *"cannot modify any table"* against Chapter 4.7 §1 step 4's first-login creation as: no UPDATE, no DELETE, INSERT permitted. Verified live — `has_table_privilege('vump_auth_verify','users','UPDATE')` is false, and no role but this one can read `users` at all.
+
+  `audit_log` is append-only by the same method: no role holds UPDATE or DELETE on it, so Chapter 4.2 §2's rule cannot be bypassed by a session variable. Mission 6.3.
+
+- **2026-08-18** — **The Data API client had no retry for a cluster that scales to zero**, a defect in Mission 6.2's merged code that Mission 6.3 found by hitting it on its first probe. `min_capacity = 0` means the first call after idle fails with `DatabaseResumingException`; nothing handled it, and nothing broke only because no handler issues a statement yet.
+
+  Fixed in `@vump/shared` rather than in the migration runner, so all seven functions inherit it. Only the resuming condition is retried — retrying a `BadRequestException` would turn a deterministic defect into an intermittent one. A-156. Mission 6.3.
+
+  **The deployed functions do not contain this retry, and that is correct.** Downloading the live artifact shows `DatabaseResumingException`, `withResumeRetry` and `RDSDataClient` all absent while `verifyIdToken` is present: esbuild eliminated the Data API path because no handler calls `execute()` yet. The fix enters a bundle in the same build that first calls it — a build that is already a redeploy of the changed handler — so it never causes a deployment of its own. Recorded because the natural reading of the entry above is that the live Lambdas carry it. Mission 6.3.
 
 - **2026-08-18** — **Volume 8 Chapter 8.3 §4's dependency scan is implemented.** It named the tool — *"an automated vulnerability scan (npm audit or an equivalent SCA tool) gating CI"* — and nothing ran it. `npm audit` now gates the new `Backend` CI job at `high`, one level stricter than the chapter's `critical` floor.
 

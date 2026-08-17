@@ -5,6 +5,19 @@
 # execution roles. No Lambda function, no API Gateway, no schema, no Firebase.
 
 locals {
+  # The seven functions, named once. ADR-015's six domains with chunks split in
+  # two (A-143). The api-gateway module derives the same list from its route
+  # table; this is the copy the credential and IAM modules share.
+  lambda_functions = [
+    "auth-verify",
+    "projects",
+    "tasks",
+    "sessions",
+    "chunks-upload",
+    "chunks-verify",
+    "metadata",
+  ]
+
   # The .tmpl files in infrastructure/aws/iam/ are rendered here rather than
   # restated in HCL, so the S3 grants have one definition. Their placeholders
   # predate Terraform and use __TOKEN__ rather than ${...}, so they are
@@ -48,6 +61,18 @@ module "database" {
   security_group_ids = [module.network.aurora_security_group_id]
 }
 
+# Mission 6.3. One database credential per function.
+#
+# Containers only — no password is generated here, because a `random_password`
+# would put every database credential into Terraform state. `npm run
+# db:bootstrap` fills them. See the module for the full reasoning.
+module "db_credentials" {
+  source = "../../modules/db-credentials"
+
+  environment_slug = var.environment_slug
+  function_names   = toset(local.lambda_functions)
+}
+
 module "iam" {
   source = "../../modules/iam"
 
@@ -55,6 +80,7 @@ module "iam" {
   cluster_arn               = module.database.cluster_arn
   master_user_secret_arn    = module.database.master_user_secret_arn
   chunk_s3_policy_documents = local.chunk_s3_policy_documents
+  db_credential_secret_arns = module.db_credentials.secret_arns
 }
 
 # Mission 6.2. The seven Lambda functions and the REST API in front of them.

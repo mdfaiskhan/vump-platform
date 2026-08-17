@@ -2,6 +2,7 @@
   "files": [],
   "references": [
     { "path": "./packages/shared" },
+    { "path": "./packages/migrate" },
     { "path": "./functions/auth-verify" },
     { "path": "./functions/projects" },
     { "path": "./functions/tasks" },

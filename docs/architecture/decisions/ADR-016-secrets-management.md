@@ -54,7 +54,16 @@ In AWS, credentials come from the **Lambda execution role**, resolved by the SDK
 
 Per V8.4 §2. Lambda environment variables carry the **ARN**; the function resolves the value at runtime through its execution role.
 
-Two secrets are known today: the Firebase Admin service account key, rotated manually on an annual cadence or immediately on suspected compromise, and the Aurora credentials, rotated automatically by Secrets Manager's native RDS rotation. Naming convention: `vump/{environment}/{secret-name}`.
+Two secrets were known when this record was written: the Firebase Admin service account key, rotated manually on an annual cadence or immediately on suspected compromise, and the Aurora credentials, rotated automatically by Secrets Manager's native RDS rotation. Naming convention: `vump/{environment}/{secret-name}`.
+
+**Mission 6.3 makes it nine**, and the reason is enforcement rather than convenience. ADR-044 records that `rds-data` actions scope to the *cluster*, so Volume 8 Chapter 8.4 §1's table-level restrictions cannot be expressed in IAM at all. They are PostgreSQL `GRANT`s against seven per-function database roles — and the Data API authenticates as whichever user its secret names, so one shared credential would make every function the master user and every GRANT decoration.
+
+So each function gets `vump/{environment}/db-{function}`, and its execution role may read exactly that one. A function cannot act as another's database role because it cannot read another's credential: **enforced by IAM rather than by handler discipline**, which is the distinction A-143 was raised to protect.
+
+Two consequences this record has to carry rather than the mission's:
+
+- **Rotation is not automatic for the seven.** V8.4 §2's *"Aurora credentials rotate automatically via Secrets Manager's native RDS rotation"* covers the RDS-managed master secret only. The per-function secrets are rotated by re-running `npm run db:bootstrap`, which is a manual cadence with nothing scheduling it — the same shape of gap as the Firebase key's annual rotation, and recorded here rather than implied.
+- **No password reaches Terraform state or source control.** Terraform creates empty secret containers; migration `0007` creates the roles `NOLOGIN`; the bootstrap command generates each password, sets it, and writes it to Secrets Manager. The value exists in that process, in PostgreSQL and in Secrets Manager, and nowhere else. A-158.
 
 ### Compromise means rotate first
 
@@ -96,10 +105,12 @@ A committed secret is disclosed permanently. Deleting it in a later commit does 
 | Mobile holds no secret | Required | ✅ Verified, and enforced by CI |
 | `mobile/.env.example` | `APP_ENV` only | ✅ Created |
 | `--dart-define-from-file` | Mechanism adopted | ✅ Implemented in Mission 0.17.17 |
-| Backend uses IAM roles | Required | ⬜ Backend does not exist |
-| Secrets Manager for values | Required | ⬜ No secret created; no Lambda to read one |
+| Backend uses IAM roles | Required | ✅ Seven Lambda execution roles live; each reads exactly one credential, proven by `iam simulate-principal-policy` (A-160) |
+| Secrets Manager for values | Required | ✅ **8 secrets live** — the RDS-managed master plus seven per-function database credentials, populated by `npm run db:bootstrap` |
 | `backend/.env.example` | Contract documented | ✅ Created |
 | `.gitignore` blocks secrets | Required | ✅ Verified against 9 patterns |
 | CI secret scanning | Required | ✅ Implemented |
 
-The `--dart-define` mechanism this ADR depends on was implemented in Mission 0.17.17. The outstanding items are backend-side and blocked on the backend not existing.
+The `--dart-define` mechanism this ADR depends on was implemented in Mission 0.17.17. The backend-side items closed in Mission 6.3.2: the seven per-function database credentials are live, generated outside both git and Terraform state, and each Lambda role can read only its own (A-160).
+
+**One property is still manual.** Volume 8 Chapter 8.4 §2's automatic rotation covers the RDS-managed master secret only. The seven per-function secrets rotate by re-running `npm run db:bootstrap`, which is a person deciding to, not a schedule.

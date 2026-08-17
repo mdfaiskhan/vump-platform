@@ -245,7 +245,7 @@ forecloses, and what must now be maintained.
 
 ## Current State
 
-`decisions/` holds ADR-001 through ADR-045.
+`decisions/` holds ADR-001 through ADR-046.
 
 All are Accepted and therefore binding, except ADR-021 (**Superseded** by ADR-038) and ADR-009 (**Superseded** by ADR-039).
 
@@ -296,6 +296,7 @@ All are Accepted and therefore binding, except ADR-021 (**Superseded** by ADR-03
 | ADR-043 | Infrastructure as code: Terraform |
 | ADR-044 | Database access via the RDS Data API |
 | ADR-045 | Backend dependency and toolchain standards |
+| ADR-046 | Database migrations |
 
 ADR-043 and ADR-044 both close deferrals rather than opening arguments. ADR-043 discharges Volume 4, Chapter 4.9 §5's infrastructure-as-code choice, which was deferred to Volume 7 and never made there. ADR-044 resolves a contradiction between Volume 4, Chapter 4.9 §2 and Volume 8, Chapter 8.4 §1 over how a Lambda function reaches Aurora — the same shape as ADR-015, and discovered the same way, by an implementation that could not start without an answer.
 

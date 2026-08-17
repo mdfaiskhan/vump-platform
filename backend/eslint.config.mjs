@@ -73,7 +73,13 @@ export default tseslint.config(
   },
 
   {
-    files: ['packages/shared/src/logger.ts'],
+    // console is the CloudWatch transport in the logger, and the actual output
+    // of the two migration commands — a CLI that cannot print is not a CLI.
+    files: [
+      'packages/shared/src/logger.ts',
+      'packages/migrate/src/cli.ts',
+      'packages/migrate/src/bootstrap.ts',
+    ],
     rules: { 'no-console': 'off' },
   },
 

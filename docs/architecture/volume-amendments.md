@@ -5331,3 +5331,308 @@ The output prints **all four paths and values**, not just the disagreement — s
 ### What is still not checked
 
 The `Backend` job does not run against `mobile/` or `infrastructure/`, and the Terraform job does not run against `backend/`. That is correct — but it means **no job checks that the two agree about anything except the Node major**. The route templates in `modules/api-gateway/main.tf` and the route table in each handler are the same strings, and nothing compares them; a route added to one and not the other is a 404 discovered at runtime. Named here rather than fixed, because it needs a check that parses both HCL and TypeScript, and that is a larger piece of work than this mission.
+
+---
+
+### A-154 — `orgs` is Chapter 4.3's ninth table, and Chapter 4.4 never defined it
+
+| | |
+|---|---|
+| **Volume** | 4 — Backend Architecture, Chapter 4.4 |
+| **Says** | Eight tables. `users.org_id uuid No FK → orgs.id`, `projects.org_id uuid No FK → orgs.id`. |
+| **Should say** | Nine. `orgs` is referenced by two NOT NULL foreign keys and has no section of its own. |
+| **Authority** | Project owner's decision, Mission 6.3.1 |
+| **Class** | Missing definition |
+| **Status** | **Closed** — defined in migration `0002` |
+| **Date** | 2026-08-18, Mission 6.3 |
+
+Chapter 4.3 is titled *"How the **Nine** Core Tables Connect"*. Its ERD opens `orgs ──< users ──< task_assignments …`, and its relationship table carries two rows for it: `orgs → users 1:N` (*"BR-20 — an Admin belongs to exactly one org; scopes every query"*) and `orgs → projects 1:N`.
+
+Chapter 4.2 §2 lists eight tables. Chapter 4.4 defines those same eight. Eight plus `orgs` is the nine Chapter 4.3 counts — so the omission is a gap in one chapter rather than a disagreement between two.
+
+**It is not cosmetic.** Two `NOT NULL` foreign keys point at it, so the schema is not creatable without it, and BR-20 — the entire tenant-isolation rule — hangs off the column it keys.
+
+Defined as the minimum the references require:
+
+```sql
+CREATE TABLE orgs (
+  id         uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
+  name       text        NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+```
+
+Nothing more was invented. There is no `slug`, no `settings`, no `plan` — Chapter 4.6 has no route that reads or writes an org, so **no function is granted any privilege on it** (0007). A column added now would be a guess about a shape no chapter states.
+
+**This is the third gap of its class.** Mission 6.1 found the chunk-registration naming mismatch; 6.2 found V8.4 §1 naming four functions where ADR-015 gives six domains; this is a table two chapters use and a third never defines. The pattern is consistent: the volumes are internally consistent about *concepts* and inconsistent about *inventories*, and the inconsistency only surfaces when something tries to enumerate them.
+
+---
+
+### A-155 — Chapter 4.5's metadata shape has three fields Chapter 4.4 has no column for
+
+| | |
+|---|---|
+| **Volume** | 4, Chapter 4.4 §7 against Chapter 4.5 §2 |
+| **Says** | Ch 4.4's `chunk_metadata` has 17 columns, including `bitrate`. Ch 4.5 §2's canonical JSON carries `identity.device_id`, `capture.camera` and `capture.bitrate_kbps`. |
+| **Should say** | `device_id` and `camera` need columns; `bitrate` is in kbps and only one chapter says so. |
+| **Authority** | Project owner's decision, Mission 6.3.1 |
+| **Class** | Missing definition / unit ambiguity |
+| **Status** | **Closed** — migration `0004` |
+| **Date** | 2026-08-18, Mission 6.3 |
+
+Chapter 4.5 §2 is the wire format the mobile app already sends, and §4 makes every field except `collector_authored` *"written once, at creation"* — so these are not optional extras that can arrive later.
+
+| Chapter 4.5 field | Chapter 4.4 | Resolution |
+|---|---|---|
+| `identity.device_id` | **no column** | Added, `text NOT NULL` |
+| `capture.camera` (`"rear-wide"`) | **no column** | Added, `text NOT NULL` |
+| `capture.bitrate_kbps` (`8000`) | `bitrate integer` | Renamed `bitrate_kbps` |
+| `timing.duration_seconds` | no column | **Not added** — derivable from `captured_start_at`/`captured_end_at`, and a stored copy is a second source of truth that can disagree |
+| `identity.session_id`/`project_id`/`task_id`/`collector_id` | no columns | **Not added** — reachable by joining `chunks → sessions → tasks → projects` |
+
+**The rename is the one worth noticing.** Chapter 4.4 called it `bitrate` with no unit; Chapter 4.5 gives `bitrate_kbps: 8000`, which is the only place the unit appears anywhere. A column called `bitrate` holding kbps is a value whose meaning lives in a different document — the class of ambiguity that produces a number off by a factor of 1000 and no error.
+
+---
+
+### A-156 — The Data API client had no retry for a cluster that scales to zero
+
+| | |
+|---|---|
+| **Record** | ADR-044 (Data API), ADR-043 (`min_capacity = 0`) |
+| **Was** | `@vump/shared`'s client had no handling for `DatabaseResumingException`. |
+| **Is** | Bounded retry on that condition only, shared by the handlers and the migration runner. |
+| **Authority** | ADR-044 |
+| **Class** | Defect in prior-mission code, found by this one |
+| **Status** | **Closed** |
+| **Date** | 2026-08-18, Mission 6.3 |
+
+Mission 6.1 set `min_capacity = 0`, so the dev cluster auto-pauses after 300 seconds idle. Mission 6.2 shipped a Data API client with no handling for the exception that produces. **Mission 6.3 found it by hitting it on its very first probe of the live cluster:**
+
+> `DatabaseResumingException: The Aurora DB instance db-S2RSCTAOWSVVCXIMAKAMGQKMTE is resuming after being auto-paused. Please wait a few seconds and try again.`
+
+Nothing was broken by it, only because no handler issues a statement yet. It would have broken the moment one did.
+
+### Why it is fixed in the shared client, not in the runner
+
+The migration runner hit it first, and fixing it there would have left the same defect in seven Lambda functions. It belongs where every caller inherits it.
+
+### Only one condition is retried
+
+`DatabaseResumingException` and `DatabaseNotFoundException` — the latter because a resuming cluster briefly reports its database as absent. **Nothing else.** A `BadRequestException` or a constraint violation is a defect, and retrying converts a deterministic failure into an intermittent one, which is strictly harder to diagnose. Idempotency does not arise: the statement never reached the database, which is what the exception means.
+
+Six attempts over roughly 30 seconds, then the error escapes. A caller may still time out on a cold cluster — that is the honest behaviour, and better than hanging for the full resume and returning nothing either way.
+
+**Proved by the fix working live.** The first real migration run began against a paused cluster and logged three retries before succeeding:
+
+```
+{"level":"info","message":"cluster resuming, retrying","attempt":1,"delayMs":1000}
+{"level":"info","message":"cluster resuming, retrying","attempt":2,"delayMs":2000}
+{"level":"info","message":"cluster resuming, retrying","attempt":3,"delayMs":4000}
+```
+
+### A second defect found while fixing the first
+
+`dataApiClient()` read the whole backend configuration to obtain a region, which quietly coupled every caller to the Lambda environment: the migration runner resolves its own target from AWS and has no `CHUNK_BUCKET`, yet could not construct a client without one. A client needs a region; requiring six unrelated variables to get it was the defect. It now takes the region from the SDK's own provider chain, which Lambda always populates.
+
+---
+
+### A-157 — BR-22 read literally forbids the write Chapter 4.5 §3 requires
+
+| | |
+|---|---|
+| **Volume** | 4, Chapter 4.2 §3 against Chapter 4.5 §3 |
+| **Says** | Ch 4.2 §3: a trigger "rejects any change to a system-generated column, allowing only the notes/tags column to change". Ch 4.5 §3: the backend sets `chunk_metadata.verified_at` after verifying the checksum. |
+| **Should say** | No column may change except `notes_tags`, and `verified_at` may transition NULL → a value exactly once. |
+| **Authority** | Mission 6.3, by the same reasoning A-150 used |
+| **Class** | Contradiction resolved |
+| **Status** | **Closed** — migration `0006` |
+| **Date** | 2026-08-18, Mission 6.3 |
+
+Read literally, "allowing only the notes/tags column to change" blocks `verified_at`, which Chapter 4.5 §3 requires the backend to set after insert — and without which no chunk can ever reach `complete`, because BR-21's gate depends on it. The two chapters cannot both be satisfied by the literal reading.
+
+Resolved the way A-150 resolved the auth-verify contradiction: **narrowly, by what the rule protects.** BR-22 protects the *captured* record from being rewritten — NFR-META-03's *"zero exceptions, enforced server-side"*. `verified_at` is not part of the capture; it is the backend's own attestation about it, written once by the backend and never by a Collector.
+
+So the trigger allows `notes_tags` freely, allows `verified_at` to go from NULL to a value once, and freezes the other fifteen columns. Verified behaviourally against the live database: changing `resolution` or `device_id` is refused, re-setting `verified_at` to a different time is refused, clearing it to NULL is refused, and `notes_tags` succeeds.
+
+**One test-writing trap worth recording.** The first attempt to prove the `verified_at` rule appeared to fail. It did not: `now()` in PostgreSQL is the **transaction** timestamp and does not advance, so `SET verified_at = now()` inside the same transaction wrote the identical value and the trigger correctly saw no change. The schema was right and the test was wrong — an offset was needed to make it a real mutation.
+
+---
+
+### A-158 — The per-function GRANTs, against V8.4 §1 line by line
+
+| | |
+|---|---|
+| **Volume** | 8, Chapter 8.4 §1 |
+| **Class** | Specification implemented, with three tightenings and one widening |
+| **Status** | Open — the widening is carried |
+| **Date** | 2026-08-18, Mission 6.3 |
+
+V8.4 §1 tabulates four functions; ADR-015 and A-143 give seven. Migration `0007` implements it, and every departure is below rather than in a commit message.
+
+### Honoured exactly
+
+| V8.4 §1 | Implemented as |
+|---|---|
+| `chunk-registration` → chunks, sessions | `vump_chunks_upload`: SELECT+INSERT chunks, SELECT sessions |
+| `metadata-write` → chunk_metadata only | `vump_metadata`: SELECT+INSERT chunk_metadata |
+| `projects-tasks` → projects, tasks, task_assignments | split across `vump_projects` and `vump_tasks` |
+| `auth-verify` → users, read-only + A-150's INSERT | `vump_auth_verify`: SELECT+INSERT users |
+
+### Three tightenings
+
+1. **`projects-tasks` split in two.** Each function gets only its own resource, so `projects` cannot touch `tasks` and vice versa. Tighter than the chapter, which grants all three to one principal.
+2. **`chunks-verify` holds no UPDATE on `chunks` beyond one column.** Completion goes through `complete_chunk()`, which is `SECURITY DEFINER`, so the role needs EXECUTE and not UPDATE. The queued → uploading → failed transitions are a **column-level** `GRANT UPDATE (status)`, so the role cannot alter `s3_object_key`, `checksum_sha256` or `file_size_bytes` even on a row it may transition. `verified_at` is granted the same way.
+3. **`sessions` is not granted SELECT on `tasks`.** A foreign-key check does not require SELECT on the referenced table, so INSERT works without it.
+
+### One widening, and Chapter 4.5 §5 is the reason
+
+`vump_metadata` holds **SELECT on `chunks`**, which V8.4 §1's *"chunk_metadata only"* does not allow. Chapter 4.5 §5 requires it: `GET /v1/chunks/{id}/metadata` *"returns the same JSON shape above plus verified_at and **the chunk's current status**"*, and status lives on `chunks`. Read-only, one table, and recorded here rather than taken quietly.
+
+### What no role holds
+
+No DELETE anywhere. No UPDATE or DELETE on `audit_log` — Chapter 4.2 §2's *"append-only"*, enforced by withholding the grant rather than by a trigger, because a grant never issued cannot be bypassed. No privilege of any kind on `orgs`. And no role but `auth-verify` touches `users`, which is A-159's subject.
+
+### Two gaps in Chapter 4.6 this surfaced
+
+- **`audit_log` has no writer specified anywhere.** Chapter 4.2 §2 scopes it to *"Admin actions on Projects/Tasks/Assignments"*, which is what decided the INSERT grants for `projects` and `tasks` — but no chapter says so directly.
+- **FR-META-07's collector-editable notes/tags has no route.** Chapter 4.5 §4 refers to *"any subsequent PATCH"* of metadata; Chapter 4.6 lists no PATCH for it. So `vump_metadata` holds no UPDATE, and the grant waits for the route.
+
+---
+
+### A-159 — `org_id` becomes a Firebase custom claim: decided, and deliberately not implemented
+
+| | |
+|---|---|
+| **Volume** | 4, Chapter 4.7 §2 (extension), against Chapter 4.7 §1 step 4 and Volume 8, Chapter 8.4 §1 |
+| **Says** | Ch 4.7 §1 step 3: every Lambda verifies the token. Step 4: it looks the caller up and attaches `role + org_id`. V8.4 §1: `chunk-registration` "cannot touch users/projects/tasks tables". |
+| **Should say** | `org_id` travels in the token as a custom claim alongside `role`, so a function needs no `users` read to scope by org. |
+| **Authority** | Project owner's decision, Mission 6.3.1 |
+| **Class** | Target architecture decided, implementation deferred |
+| **Status** | Open — blocked on Mission 6.5 |
+| **Date** | 2026-08-18, Mission 6.3 |
+
+Only `auth-verify` may read `users`. Every other function therefore cannot perform Chapter 4.7 §1 step 4's caller lookup, and cannot obtain the `org_id` that BR-20 requires it to scope every query by. The three tables are consistent with each other and jointly unimplementable.
+
+Chapter 4.7 §2 already puts `role` in the token as a custom claim, for a reason that applies identically to `org_id`: *"a client can never claim its own role"*, and *"the backend can check it without an extra database round-trip on every request"*. Extending that to `org_id` resolves the conflict without weakening V8.4 §1 — no function gains a `users` grant.
+
+**Not implemented, and the reason is the same trap Mission 6.2 avoided.** Writing a custom claim needs the Firebase Admin SDK acting on the project, which needs a service-account key — the operation ADR-036 line 35 identifies as *"the operation that needs privilege"*, as distinct from verification, which needs nothing. That key is Mission 6.5's, or arrives with `functions/`'s retirement (deferred item 10). Implementing it here would pull 6.5 forward.
+
+So `resolveCaller` in `backend/packages/shared/src/handler.ts` **stays stubbed**, returning `undefined` for `userId` and `orgId` rather than inventing them. A handler that needs an org scope must fail rather than silently query a fabricated one — which is the property that makes this safe to leave open.
+
+---
+
+### A-160 — The backend is live, and per-function isolation is enforced at two layers rather than one
+
+| | |
+|---|---|
+| **Record** | ADR-043 (Terraform), ADR-044 (Data API), ADR-016 (secrets), ADR-046 (migrations) |
+| **Was** | 6.2's 24 resources and 6.3's 7 secret containers were both planned and neither applied. The seven database roles existed `NOLOGIN`, so Volume 8 Chapter 8.4 §1's per-function restrictions were written but not reachable. |
+| **Is** | 31 resources applied, 7 IAM policies repointed, 7 credentials generated and stored. Every role authenticates, and only as itself. |
+| **Authority** | Project owner's decision, Mission 6.3.2 |
+| **Class** | Implementation applied to a live environment |
+| **Status** | **Closed** for development. Staging and production do not exist |
+| **Date** | 2026-08-18, Mission 6.3 |
+
+`terraform apply` reported **31 added, 7 changed, 0 destroyed**, and the follow-up plan reported no changes. 6.2's resources and 6.3's applied in a single operation with no ordering conflict — expected rather than lucky, because the only edge between them is the IAM policy's reference to the secret ARNs, and Terraform's graph orders that edge itself.
+
+### What the seven changes actually changed
+
+Each function's role previously fell back to the **master** credential, because `lookup(var.db_credential_secret_arns, each.key, var.master_user_secret_arn)` had an empty map to look in. Applying the containers populated the map, so the change is every Lambda losing its access to the master secret and gaining access to exactly one credential. Verified with `iam simulate-principal-policy` for `vump-dev-chunks-upload`:
+
+| Resource | Decision |
+|---|---|
+| its own `vump/dev/db-chunks-upload` | `allowed` |
+| `vump/dev/db-chunks-verify` | `implicitDeny` |
+| the Aurora master secret | `implicitDeny` |
+
+### The isolation holds twice, and the layers fail differently
+
+This is the property worth recording, because either layer alone would be weaker than it looks.
+
+**IAM decides which credential a function can read.** **PostgreSQL decides what that credential may then do.** A defect in the first is contained by the second, and the reverse. Proved live, as the roles themselves rather than by reading the catalogue:
+
+| Attempt, using `chunks-upload`'s own secret | Result |
+|---|---|
+| `SET ROLE` to each of the other six roles | `42501 permission denied to set role` — six times |
+| `SET ROLE vump_admin` | `42501 permission denied to set role` |
+| `SELECT FROM users` / `orgs` | `42501 permission denied for table` |
+| `UPDATE` or `DELETE` on `chunks` | `42501 permission denied for table` |
+| `INSERT INTO audit_log` | `42501 permission denied for table` |
+| `CREATE TABLE` in `public` | `42501 permission denied for schema public` |
+
+No `vump_` function role is a member of any other role. The only membership in the database is `vump_admin → rds_superuser`, which RDS creates for the master user and no migration touches.
+
+### `complete_chunk()` is still exactly one role's to call
+
+Attempted from all seven roles in turn. Six were refused at the permission layer; `chunks-verify` was refused **by the function body** — `BR-21: no such chunk` — which is a different failure and the one that proves the grant.
+
+```
+complete_chunk(p_chunk_id uuid) :: vump_admin=X/vump_admin , vump_chunks_verify=X/vump_admin
+```
+
+`has_function_privilege('public', 'complete_chunk(uuid)', 'EXECUTE')` is **false**, so migration `0008` holds after the apply.
+
+### The deployed Lambdas do not contain the retry fix, and that is correct
+
+Mission 6.3.1 answered the redeploy question with *"no redeploy is needed, because nothing is deployed."* True then, and no longer the whole answer now that seven functions are live. The precise position, established by downloading the deployed artifact rather than reasoning about it:
+
+```
+vump-dev-chunks-verify  index.mjs
+  DatabaseResumingException   -> ABSENT
+  withResumeRetry             -> ABSENT
+  RDSDataClient               -> ABSENT
+  verifyIdToken               -> PRESENT
+```
+
+**esbuild removed it, because nothing reaches it.** `@vump/shared` exports `withResumeRetry` and `execute`, but no handler calls either — `resolveCaller` is still stubbed (A-159) and no route issues a query. Unreachable code is eliminated, taking `@aws-sdk/client-rds-data` with it. `verifyIdToken` survives in the same bundle because `auth.ts` *is* reached, which is what makes this tree-shaking rather than a build defect.
+
+So the retry fix costs nothing today and enters the artifact at the exact moment it becomes necessary: the first handler that calls `execute()` pulls `resume.ts` and the Data API client into its bundle **in the same build that adds the call**. That build is a redeploy of that function regardless, because the handler itself changed. **The fix therefore never creates a deployment of its own** — which is the property 6.3.1 was asked about, reached by a different route than the one stated then.
+
+Worth recording because the plausible misreading is load-bearing: someone reading A-156 would reasonably assume the live functions carry the retry. They do not, and nothing is wrong.
+
+### One earlier claim, restated more precisely
+
+Mission 6.3.1 reported that PUBLIC holds no table grants. Re-checked without scoping it to a schema, PUBLIC holds **189** — 127 in `pg_catalog` and 62 in `information_schema`, all PostgreSQL's own. On schema `public` it holds **none**, which is what the original claim meant and what matters. PUBLIC does retain `USAGE` on the schema, and that is deliberate: `0001` revokes everything and then re-grants `USAGE` on the following line. `USAGE` permits name resolution and no object access, which the `CREATE TABLE` and `SELECT` refusals above demonstrate.
+
+---
+
+### A-161 — Nothing runs migrations except a person, and closing that is a credential decision, not a missing check
+
+| | |
+|---|---|
+| **Record** | ADR-046 (*"Run deliberately, never by CI"*), `folder-structure.md` §1.3, A-148 and A-153 (the same *shape* of gap, resolved differently) |
+| **Says** | ADR-046: a migration is applied by a developer running `npm run db:migrate`. |
+| **Should say** | Undecided. Nothing detects a merged migration that was never applied, and the obvious fix has a cost the obvious fixes for A-148 and A-153 did not. |
+| **Authority** | Deferred to a future mission by the project owner, Mission 6.3.2 |
+| **Class** | Enforcement gap — **open**, and deliberately not closed here |
+| **Status** | Open. Deferred item 11 |
+| **Date** | 2026-08-18, Mission 6.3 |
+
+A migration can be written, reviewed, merged and released without ever reaching a database. Nothing in CI, and nothing in the runner, notices. The schema and the repository can disagree indefinitely, and the first symptom is a handler failing on a column that exists in `git` and not in Postgres.
+
+### Why this is filed apart from A-148 and A-153, which look identical
+
+All three are the same sentence — *a standard was written and nothing executed it*. The resemblance stops at the remedy.
+
+| | A-148 | A-153 | **A-161** |
+|---|---|---|---|
+| What was unenforced | `terraform fmt`/`validate`/`tflint` | `npm run verify` | applying a merged migration |
+| What closing it required | a CI job | a CI job | **a decision about credentials** |
+| New access granted to CI | none | none | **AWS write access to a live database** |
+| Closed in | Mission 6.1.7 | Mission 6.2.2 | not closed |
+
+A-148 and A-153 were reflexive: both closed by running, in CI, a command that already existed and that reads without writing. **Their remedy cost nothing but minutes.** A runner that migrates must hold a credential that can `CREATE`, `ALTER` and `DROP` on a live database — which is precisely what ADR-046 and `folder-structure.md` §1.3 refuse, in the same words used of `terraform apply`: *"a pipeline that can migrate a database is a pipeline that can drop one."*
+
+So closing this one means overturning an accepted decision, and the question underneath it is not about migrations at all: **should CI ever hold AWS write credentials?** That governs deployment, `terraform apply` and the Firebase service-account key of Mission 6.5 alongside migrations, and answering it inside a schema mission would settle a platform-wide question as a side effect.
+
+### What was deliberately not done here
+
+Not a reflexive CI job, and not a partial one. Three options were visible and none is obviously right:
+
+- **A read-only drift check** — CI compares `schema_migrations` against the files and fails when they differ. Needs only read access, so it is the cheapest, and it detects the problem without being able to fix it.
+- **CI applies migrations** on merge to `develop`, with a scoped role. Fixes it, and grants CI the write access ADR-046 refuses.
+- **A release checklist item** — no credential, no automation, and the failure mode ADR-036 already names: *"no CI check can detect that it has happened"*.
+
+The first is likely the answer and is still not taken here, because a check that reads a production database from CI needs a principal that does not exist — deferred item 8's unscoped `faisal-admin` is the only one that does, and CI must never use it.
+
+**A trace/decide for a future sub-mission.** Logged so the gap is tracked rather than closed badly.

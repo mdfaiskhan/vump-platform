@@ -73,9 +73,9 @@ The check that works is the AWS region-and-version table, corroborated by `rds-d
 | Engine version Data API-supported | Required | ✅ 16.14, against a 16.1 floor |
 | `password_encryption = scram-sha-256` | Required | ✅ Confirmed **from inside the database**, not from the parameter group |
 | One writer, no reader | Required | ✅ `vump-dev-aurora-writer`, `db.serverless`; 0 readers |
-| Pagination on Admin reads | Required | ⬜ Mission 6.2 — no backend exists |
-| Per-table permission | Volume 8, Chapter 8.4 §1 | ⬜ **Not expressible in IAM.** Mission 6.3, via PostgreSQL `GRANT` |
-| Applied to AWS | — | ✅ All 35 resources live; `terraform plan` reports `No changes` |
+| Pagination on Admin reads | Required | ⬜ No handler issues a query yet — `resolveCaller` is still stubbed (A-159) |
+| Per-table permission | Volume 8, Chapter 8.4 §1 | ✅ **Not expressible in IAM**, so enforced in PostgreSQL by seven per-function roles — proven live as the roles themselves (A-158, A-160) |
+| Applied to AWS | — | ✅ All 66 managed resources live; `terraform plan` reports `No changes` |
 
 ### The access path is proven, not merely configured
 

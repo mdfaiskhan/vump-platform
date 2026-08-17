@@ -17,6 +17,12 @@ const ENV = {
   FIREBASE_PROJECT_ID: 'vump-platform-f86af',
 };
 
+function awsError(name: string): Error {
+  const e = new Error(`${name}: from the SDK`);
+  e.name = name;
+  return e;
+}
+
 beforeEach(() => {
   rds.reset();
   resetDataApiClientForTest();
@@ -25,8 +31,6 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  // Assigning undefined rather than `delete`: the dynamic-delete rule is on,
-  // and `loadConfig` treats undefined and absent identically.
   for (const key of Object.keys(ENV)) {
     process.env[key] = undefined;
   }
@@ -44,21 +48,76 @@ describe('the Data API client', () => {
   it('is constructed once and reused while warm', () => {
     expect(dataApiClient()).toBe(dataApiClient());
   });
+});
 
-  it('refuses to run a statement in Mission 6.2 rather than returning empty', () => {
-    // An empty result set is a plausible answer, and would let a caller believe
-    // the database had been consulted. A named refusal cannot be mistaken.
-    expect(() => execute('SELECT 1')).toThrow(/not implemented yet/);
+describe('execute', () => {
+  it('sends the statement against the configured target', async () => {
+    rds.on(ExecuteStatementCommand).resolves({ records: [[{ longValue: 1 }]] });
+
+    const out = await execute('SELECT 1');
+
+    expect(out.records).toEqual([[{ longValue: 1 }]]);
+    const input = rds.commandCalls(ExecuteStatementCommand)[0]?.args[0].input;
+    expect(input?.sql).toBe('SELECT 1');
+    expect(input?.resourceArn).toBe(ENV.DATABASE_CLUSTER_ARN);
+    expect(input?.database).toBe('vump_dev');
   });
 
-  it('sends nothing to AWS — the scaffold issues no queries at all', async () => {
+  it('passes named parameters through rather than interpolating', async () => {
     rds.on(ExecuteStatementCommand).resolves({ records: [] });
 
-    expect(() => execute('SELECT 1')).toThrow();
+    await execute('SELECT * FROM users WHERE firebase_uid = :uid', {
+      parameters: [{ name: 'uid', value: { stringValue: 'abc' } }],
+    });
 
-    // The assertion that matters for Mission 6.2's scope: no rds-data call was
-    // made. If a future change wires a real query in, this fails.
-    expect(rds.commandCalls(ExecuteStatementCommand)).toHaveLength(0);
-    await Promise.resolve();
+    const input = rds.commandCalls(ExecuteStatementCommand)[0]?.args[0].input;
+    expect(input?.parameters).toEqual([{ name: 'uid', value: { stringValue: 'abc' } }]);
+  });
+
+  it('joins a transaction when one is supplied', async () => {
+    rds.on(ExecuteStatementCommand).resolves({ records: [] });
+
+    await execute('SET ROLE x', { transactionId: 'tx-1' });
+
+    expect(rds.commandCalls(ExecuteStatementCommand)[0]?.args[0].input.transactionId).toBe('tx-1');
+  });
+
+  it('omits transactionId entirely when there is no transaction', async () => {
+    rds.on(ExecuteStatementCommand).resolves({ records: [] });
+
+    await execute('SELECT 1');
+
+    const input = rds.commandCalls(ExecuteStatementCommand)[0]?.args[0].input;
+    expect(Object.hasOwn(input ?? {}, 'transactionId')).toBe(false);
+  });
+
+  it('lets a caller override the target, which the migration runner needs', async () => {
+    rds.on(ExecuteStatementCommand).resolves({ records: [] });
+
+    await execute('SELECT 1', {
+      target: { resourceArn: 'other-cluster', secretArn: 'other-secret', database: 'other_db' },
+    });
+
+    const input = rds.commandCalls(ExecuteStatementCommand)[0]?.args[0].input;
+    expect(input?.secretArn).toBe('other-secret');
+  });
+
+  it('retries a resuming cluster — the defect Mission 6.3 hit on its first probe', async () => {
+    rds
+      .on(ExecuteStatementCommand)
+      .rejectsOnce(awsError('DatabaseResumingException'))
+      .resolves({ records: [[{ longValue: 1 }]] });
+
+    const out = await execute('SELECT 1');
+
+    expect(out.records).toEqual([[{ longValue: 1 }]]);
+    expect(rds.commandCalls(ExecuteStatementCommand)).toHaveLength(2);
+  }, 10_000);
+
+  it('does not retry a bad statement', async () => {
+    rds.on(ExecuteStatementCommand).rejects(awsError('BadRequestException'));
+
+    await expect(execute('SELECT nope')).rejects.toThrow('BadRequestException');
+    expect(rds.commandCalls(ExecuteStatementCommand)).toHaveLength(1);
   });
 });
