@@ -915,6 +915,63 @@ jobs:
                   print(f'ok  Terraform defaults agree with environments.json '
                         f'in {len(roots)} environment root(s): {roots}')
 
+          # --- The Node major version, which lives in four places ------------
+          #
+          # ADR-045 pins Node 24 and A-151 records why it is 24 rather than
+          # either available precedent. The version is then restated in four
+          # files that no compiler, and no single tool, reads together:
+          #
+          #   backend/package.json                    engines.node
+          #   backend/scripts/build.mjs               esbuild target
+          #   .../modules/api-gateway/variables.tf    Lambda runtime
+          #   this workflow                           BACKEND_NODE_VERSION
+          #
+          # A-151 named the drift risk and left it unchecked. This is the check.
+          # The failure it prevents is specific: bundling for one Node major and
+          # deploying onto another produces syntax the runtime rejects at
+          # invocation, not at build — so it surfaces as a broken function
+          # rather than a failed pipeline.
+          node_sites = {}
+
+          pkg = json.load(io.open('backend/package.json', encoding='utf-8'))
+          engines = pkg.get('engines', {}).get('node', '')
+          m = re.search(r'>=\s*(\d+)', engines)
+          if m is None:
+              fail(f'backend/package.json: engines.node "{engines}" has no >=MAJOR bound')
+          else:
+              node_sites['backend/package.json (engines.node)'] = m.group(1)
+
+          build = io.open('backend/scripts/build.mjs', encoding='utf-8').read()
+          m = re.search(r"TARGET\s*=\s*'node(\d+)'", build)
+          if m is None:
+              fail("backend/scripts/build.mjs: no `TARGET = 'nodeNN'` found")
+          else:
+              node_sites['backend/scripts/build.mjs (esbuild target)'] = m.group(1)
+
+          tf = io.open(
+              'infrastructure/terraform/modules/api-gateway/variables.tf', encoding='utf-8'
+          ).read()
+          m = re.search(r'default\s*=\s*"nodejs(\d+)\.x"', tf)
+          if m is None:
+              fail('api-gateway/variables.tf: no `default = "nodejsNN.x"` runtime found')
+          else:
+              node_sites['api-gateway/variables.tf (Lambda runtime)'] = m.group(1)
+
+          workflow = io.open('.github/workflows/ci.yml', encoding='utf-8').read()
+          m = re.search(r'BACKEND_NODE_VERSION:\s*(\d+)', workflow)
+          if m is None:
+              fail('.github/workflows/ci.yml: no BACKEND_NODE_VERSION found')
+          else:
+              node_sites['.github/workflows/ci.yml (BACKEND_NODE_VERSION)'] = m.group(1)
+
+          if len(set(node_sites.values())) > 1:
+              fail('Node major version disagrees across the files that restate it:')
+              for where, major in sorted(node_sites.items()):
+                  print(f'::error::  {where} -> Node {major}')
+          elif node_sites:
+              agreed = next(iter(set(node_sites.values())))
+              print(f'ok  Node major agrees in {len(node_sites)} places: {agreed}')
+
           sys.exit(status)
           PY
 
