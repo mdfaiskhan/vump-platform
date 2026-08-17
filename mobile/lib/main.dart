@@ -368,19 +368,27 @@ final Provider<RandomUuidGenerator> _uuidGeneratorProvider =
 
 /// Records which environment this build resolved to, and warns if it fell back.
 ///
-/// ADR-007 requires an unrecognised `APP_ENV` to be logged rather than
-/// silently defaulting. A silent fallback hides a typo in a release pipeline —
-/// the build succeeds, ships, and points at the wrong infrastructure.
+/// ADR-007 requires an unrecognised environment selector to be logged rather
+/// than silently defaulting. A silent fallback hides a typo in a release
+/// pipeline — the build succeeds, ships, and points at the wrong
+/// infrastructure.
+///
+/// Since ADR-047 the selector is normally `--flavor`, so the warning names the
+/// flavor when there was one. Naming the *resolved* value instead would print
+/// the fallback rather than the mistake, which is the one thing this message
+/// exists to avoid.
 ///
 /// This runs before anything else so the first line in any diagnostic report
 /// says which environment produced everything after it.
 void _announceEnvironment(AppLogger logger) {
   if (!AppConfig.environmentWasRecognised) {
+    const String selector = AppConfig.flavor != null
+        ? '--flavor was "${AppConfig.flavor}"'
+        : 'APP_ENV was set to "${AppConfig.rawEnvironmentValue}"';
     logger.warning(
-      'APP_ENV was set to "${AppConfig.rawEnvironmentValue}", which is not a '
-      'recognised environment. Falling back to '
+      '$selector, which is not a recognised environment. Falling back to '
       '${AppEnvironment.defaultEnvironment.label}. Expected one of: '
-      '${AppEnvironment.values.map((AppEnvironment e) => e.key).join(', ')}.',
+      '${AppEnvironment.values.map((AppEnvironment e) => e.slug).join(', ')}.',
     );
   }
 

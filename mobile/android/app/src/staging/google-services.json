@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "1095961928374",
+    "project_id": "vump-staging",
+    "storage_bucket": "vump-staging.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1095961928374:android:38ce99c68ee24f5050fc17",
+        "android_client_info": {
+          "package_name": "com.vump.humanarchive.staging"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDdYrjof1IwPVOeWAthLQYExvRP6e0SOsY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

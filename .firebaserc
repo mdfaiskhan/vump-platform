@@ -1,5 +1,24 @@
 {
+  "_comment": [
+    "Project aliases for the three environments created in Mission 6.4.",
+    "ADR-047 makes the build flavor the environment selector on the app side;",
+    "this is the same selection for the Firebase CLI, so a deploy names an",
+    "environment rather than a project ID nobody can check at a glance.",
+    "",
+    "There is deliberately no 'default'. A deploy must say which environment it",
+    "means: `firebase deploy --only firestore:rules -P dev`. The previous",
+    "default pointed at vump-platform-f86af, which is exactly the shape of",
+    "mistake that ships a rules change to the wrong project.",
+    "",
+    "vump-platform-f86af is still listed, because it is still live and still",
+    "holds the four pre-split accounts. It is retired only once the new dev",
+    "project is verified, and it is named 'legacy' so it cannot be reached by",
+    "typing an environment name."
+  ],
   "projects": {
-    "default": "vump-platform-f86af"
+    "dev": "vump-dev",
+    "staging": "vump-staging",
+    "prod": "vump-prod",
+    "legacy": "vump-platform-f86af"
   }
 }

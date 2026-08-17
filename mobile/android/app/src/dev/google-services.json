@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "348203353299",
+    "project_id": "vump-dev",
+    "storage_bucket": "vump-dev.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:348203353299:android:d094f224bbd359d71e0026",
+        "android_client_info": {
+          "package_name": "com.vump.humanarchive.dev"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBV-77JGatennfGkmCXu0TOzP3Yl2RzHJI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

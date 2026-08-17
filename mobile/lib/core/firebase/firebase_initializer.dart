@@ -3,7 +3,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:mobile/app/config/app_environment.dart';
 import 'package:mobile/core/firebase/firebase_constants.dart';
 import 'package:mobile/core/firebase/firebase_initialization_exception.dart';
-import 'package:mobile/core/firebase/firebase_options.dart';
+import 'package:mobile/core/firebase/firebase_options_for_environment.dart';
 import 'package:mobile/core/logging/app_logger.dart';
 
 /// Brings up the Firebase platform, exactly once.
@@ -91,7 +91,7 @@ class FirebaseInitializer {
 
     try {
       final FirebaseApp app = await Firebase.initializeApp(
-        options: DefaultFirebaseOptions.currentPlatform,
+        options: firebaseOptionsForEnvironment(environment),
       ).timeout(timeout);
 
       _app = app;
