@@ -4770,13 +4770,15 @@ That README's sentence is now wrong for anything provisioned from this mission o
 
 ### What Mission 6.1 provisioned — as a plan, not as infrastructure
 
-**Nothing was applied.** `terraform plan` reports **32 to add, 0 to change, 0 to destroy**, and the mission stopped there. What the plan contains:
+**Nothing was applied.** `terraform plan` reports **35 to add, 0 to change, 0 to destroy**, and the mission stopped there. What the plan contains:
 
 | Module | Resources | Notes |
 |---|---|---|
 | network | 8 | VPC `10.0.0.0/16`, two private DB subnets in `ap-south-1a`/`1b`, one route table with only the local route, two associations, the Aurora security group, the emptied default security group |
 | database | 4 | Aurora Serverless v2 PostgreSQL 16.14, one writer, DB subnet group, cluster parameter group |
-| iam | 20 | Six roles (ADR-015's domains) + six log policies + six Data API policies + two S3 policies on `chunks` |
+| iam | 23 | Seven roles across ADR-015's six domains + seven log policies + seven Data API policies + two S3 policies, one on each chunks role |
+
+The plan was **32** as first written, with a single `chunks` role holding both S3 policies. Mission 6.1.3 split that role in two (A-143), which added one role and its two attendant policies.
 
 Two things were provisioned outside Terraform, deliberately and documented:
 
@@ -4829,8 +4831,8 @@ This is the same shape as ADR-015: two accepted documents disagreeing, discovere
 | **Volume** | 4 — Backend Architecture, Chapter 4.9 §2; Volume 8, Chapter 8.4 §1 |
 | **Concerns** | ADR-015's six-domain decomposition against per-function S3 narrowness |
 | **Authority** | ADR-015 (domain count), Volume 4 Ch. 4.9 §2 (narrowness) |
-| **Class** | Least-privilege regression, accepted deliberately |
-| **Status** | Open — carried to Mission 6.2 |
+| **Class** | Least-privilege regression, found and closed within the same mission |
+| **Status** | **Closed** — fixed in Mission 6.1.3, before anything was applied |
 | **Date** | 2026-08-17, Mission 6.1 |
 
 ADR-015 fixes **six** resource domains. Volume 8, Chapter 8.4 §1 and `docs/architecture/aws-sdk-integration.md` describe **two separate S3 permission sets** for chunk work — one that presigns uploads, one that reads objects to verify integrity — and both belong to the `chunks` domain.
@@ -4847,11 +4849,46 @@ The registration role now holds `s3:GetObject`. The property that document descr
 
 **Concrete failure:** a defect or an injection in the chunk-registration path that reaches the presigner with a `GetObject` command produces a URL that reads raw footage — a URL that can leave the trust boundary, since presigned URLs are handed to devices by design. Under the previous split the same defect produces an `AccessDenied` from S3.
 
-### The fix, if it is taken
+### The fix, taken in Mission 6.1.3
 
-Split `chunks` into two roles — `vump-{env}-chunks-registration` and `vump-{env}-chunks-verification` — while keeping ADR-015's six *domains*. A domain is a unit of code decomposition; a role is a unit of privilege, and nothing requires them to be one-to-one. That is a change to `modules/iam/main.tf`'s `domains` map and one `for_each`.
+**The `chunks` domain now carries two roles**, and ADR-015's six domains are unchanged:
 
-**Not done here**, because six roles for six domains was the decision taken for this mission. Recorded so the choice is visible before Mission 6.2 writes a presigner against it, rather than discovered in a later review.
+| Role | Actions | Cannot |
+|---|---|---|
+| `vump-{env}-chunks-upload` | `s3:PutObject`, `s3:AbortMultipartUpload`, `s3:ListMultipartUploadParts` | read any object — no `s3:GetObject` |
+| `vump-{env}-chunks-verify` | `s3:GetObject`, `s3:GetObjectAttributes`, `s3:GetObjectVersionAttributes` | write any object — no `s3:PutObject` |
+
+Neither holds `s3:DeleteObject`; no role in this project does.
+
+**A domain is a unit of code decomposition; a role is a unit of privilege, and
+nothing requires them to be one-to-one.** That is the whole of the fix. The
+module's map is keyed by role rather than by domain, each entry naming the domain
+it serves, so two roles sharing a domain needs no special case.
+
+The property `aws-sdk-integration.md` calls *"real rather than conventional"* is
+real again: the upload role cannot presign a read, however the handler is
+written.
+
+### What this obliges Mission 6.2 to do
+
+**A Lambda function has exactly one execution role.** Two chunks roles therefore
+mean the chunks domain deploys **two functions**, not one — which is a
+refinement of ADR-015's *"one function per resource domain"* rather than a
+contradiction of it, and it is the shape the volumes already describe: Volume 8,
+Chapter 8.4 §1 tabulates `chunk-registration` as its own function, and
+`aws-sdk-integration.md` lists chunk-registration and chunk-verification
+separately.
+
+Recorded here because the alternative reading — one chunks function that somehow
+holds both roles — is not implementable, and 6.2 should not discover that while
+writing handlers.
+
+### Caught before anything existed
+
+Nothing had been applied when this was found, so the fix is a plan diff rather
+than an IAM change against a live role. **That is the argument for stopping at
+`plan` rather than applying and reviewing after.** Had 6.1 applied, closing this
+would have meant detaching a policy from a role a function was already using.
 
 ---
 

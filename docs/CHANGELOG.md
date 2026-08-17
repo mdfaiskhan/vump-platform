@@ -42,7 +42,7 @@ Mission 4.8's security review found it, by reading `git log` against this file r
 
 - **2026-08-17** — **The development AWS environment is described in Terraform, and nothing has been applied.** ADR-043 closes Volume 4 Chapter 4.9 §5's infrastructure-as-code deferral — which pointed at Volume 7, where the choice was never made — and `infrastructure/terraform/` now holds three modules (network, database, iam) and one root module per environment, of which only `dev` exists.
 
-  The plan is **32 to add, 0 to change, 0 to destroy**: a `10.0.0.0/16` VPC with two private database subnets and no gateway of any kind, an Aurora Serverless v2 PostgreSQL 16.14 cluster scaling 0–2 ACU with a single writer, and six Lambda execution roles, one per ADR-015 resource domain, with no function attached to any of them.
+  The plan is **35 to add, 0 to change, 0 to destroy**: a `10.0.0.0/16` VPC with two private database subnets and no gateway of any kind, an Aurora Serverless v2 PostgreSQL 16.14 cluster scaling 0–2 ACU with a single writer, and seven Lambda execution roles across ADR-015's six resource domains, with no function attached to any of them.
 
   `terraform validate`, `terraform fmt -recursive -check` and `tflint --recursive` are all clean. **`terraform apply` has not been run**, so none of this exists in AWS. A-141. Mission 6.1.
 
@@ -129,9 +129,11 @@ Mission 4.8's security review found it, by reading `git log` against this file r
 
   **Nothing was exposed.** All three chunk buckets already carried per-bucket Block Public Access with all four settings on, and every bucket policy reported `IsPublic: false`. What was missing is the backstop for the *next* bucket — and `vump-platform-tfstate`, created in the same mission, is exactly that case. Applied as a one-time authorised exception to Mission 6.1's report-don't-fix rule, in its own commit. A-145. Mission 6.1.
 
-- **2026-08-17** — **The `chunks` execution role holds `s3:PutObject` and `s3:GetObject` together, and that is a narrowing lost.** ADR-015 fixes six resource domains, so both chunk policy templates attach to one role. `aws-sdk-integration.md` records why the previous split mattered: a presigned URL carries the signer's permissions, so a registration role without `GetObject` *cannot* produce a URL that reads footage, however the handler is written.
+- **2026-08-17** — **The chunks domain carries two execution roles, so no principal can both write and read a chunk.** `vump-{env}-chunks-upload` holds `s3:PutObject`, `s3:AbortMultipartUpload` and `s3:ListMultipartUploadParts`; `vump-{env}-chunks-verify` holds `s3:GetObject`, `s3:GetObjectAttributes` and `s3:GetObjectVersionAttributes`. Neither holds the other's actions, and neither holds `s3:DeleteObject`.
 
-  The role can now. A defect in the registration path that reaches the presigner with a `GetObject` command yields a URL that reads raw footage — and presigned URLs are handed to devices by design. Recorded rather than fixed, because six-roles-for-six-domains was the decision taken; the fix is two roles under one domain. A-143, carried to Mission 6.2.
+  This matters because **a presigned URL carries the signer's permissions**: the upload role *cannot* produce a URL that reads footage, however the handler that calls it is written. ADR-015's six resource domains are unchanged — a domain is a unit of code decomposition, a role is a unit of privilege, and the chunks domain needs two of the latter. The consequence for Mission 6.2 is that chunks deploys two functions, since a Lambda has exactly one execution role.
+
+  Mission 6.1 first merged both policies onto a single `chunks` role. That was caught and corrected in 6.1.3 **before anything was applied**, so the widened role never existed in AWS. A-143, closed. Mission 6.1.
 
 - **2026-08-17** — **No database password exists in any file.** The Aurora cluster uses `manage_master_user_password`, so RDS creates and rotates the credential in Secrets Manager directly, per Volume 8 Chapter 8.4 §2. Nothing expresses a password in Terraform, so nothing writes one into Terraform state — which is why the state bucket's encryption and versioning were configured before the first `plan` ran. A documented exception to Mission 6.1's "create no Secrets Manager entries" scope line. ADR-043, ADR-044. Mission 6.1.
 

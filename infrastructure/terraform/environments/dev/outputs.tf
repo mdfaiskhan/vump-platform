@@ -23,6 +23,14 @@ output "database_name" {
 }
 
 output "lambda_role_arns" {
-  description = "Execution role ARNs by ADR-015 domain. Mission 6.2 attaches functions to these."
+  description = "Execution role ARNs by role name. Mission 6.2 attaches functions to these."
   value       = module.iam.role_arns
+}
+
+output "lambda_roles_by_domain" {
+  description = <<-EOT
+    Role names grouped by ADR-015 resource domain. The chunks domain carries two
+    roles, so it deploys two functions — a Lambda has exactly one execution role.
+  EOT
+  value       = module.iam.roles_by_domain
 }
