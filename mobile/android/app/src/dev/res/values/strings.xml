@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The launcher name for the dev flavor.
+
+  Per-flavor rather than a single value, so that dev, staging and production —
+  which install side by side under three application IDs (ADR-047) — are
+  tellable apart on the device without opening them.
+-->
+<resources>
+    <string name="app_name">Human Archive Dev</string>
+</resources>

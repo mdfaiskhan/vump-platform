@@ -1,4 +1,4 @@
-package com.example.mobile
+package com.vump.humanarchive
 
 import android.os.StatFs
 import io.flutter.plugin.common.BinaryMessenger

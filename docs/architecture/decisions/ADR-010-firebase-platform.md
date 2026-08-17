@@ -86,7 +86,9 @@ ADR-007's prohibition is unchanged and absolute for service account keys, server
 
 Verified by static check and by test: exactly one `Firebase.initializeApp` call site, exactly one awaiting call site, no `firebase_core` import outside `core/firebase/`, and concurrent callers provably share one initialisation attempt.
 
-Missions 0.15, 0.15.1 and 0.15.2 are complete. What remains is platform configuration rather than architecture: the iOS plist, and the placeholder `com.example.mobile` application identifier.
+Missions 0.15, 0.15.1 and 0.15.2 are complete. ~~What remains is platform configuration rather than architecture: the iOS plist, and the placeholder `com.example.mobile` application identifier.~~
+
+**Mission 6.4 closed both on Android and neither on iOS.** The identifier is now `com.vump.humanarchive`, the Kotlin package moved with it, and `firebase_options.dart` became three generated files chosen by build flavor (ADR-047) against three Firebase projects. The iOS plists exist per environment at `ios/config/{flavor}/`, and nothing wires them into a scheme — there is no Mac and no Apple Developer account, so iOS remains registered rather than built. Deferred item 2.
 
 ### Provisional: startup tolerates initialisation failure — DISCHARGED by ADR-017
 

@@ -198,7 +198,13 @@ A cost the original design did not carry, recorded rather than left implicit. Th
 
 ## Implementation Status
 
-**Implemented and deployed to `vump-platform-f86af`.**
+**Implemented and deployed to `vump-platform-f86af`, which is now the development environment.**
+
+Mission 6.4 created `vump-staging` and `vump-prod` and released `firestore.rules` to both. `redeemInviteCode` is deployed **only** to `f86af` and remains so. Staging and production have no Auth and no billing, so functions cannot deploy to them — and deliberately will not until a release branch is cut (ADR-014). That is the intended state, not a gap.
+
+`f86af` was originally to be retired in favour of a new `vump-dev`; Mission 6.4.2 reversed that and deleted `vump-dev` instead. The deployment recorded here was therefore never interrupted. Amendment A-162.
+
+The function's behaviour is unchanged and deliberately so — it still sets `role: "collector"` from a literal and still uses `org_id: "vump-default"`. Mission 6.4 multiplies the deployment sites; it does not fix the organisation model, and A-163 corrects A-159's claim that the `org_id` claim was unimplemented. Deferred item 12.
 
 | Artefact | Where |
 |---|---|

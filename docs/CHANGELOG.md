@@ -40,6 +40,12 @@ Mission 4.8's security review found it, by reading `git log` against this file r
 
 ### Added
 
+- **2026-08-18** — **Firebase is three projects, and the build flavor picks one.** `vump-platform-f86af` (development), `vump-staging` and `vump-prod`, each with its own Firestore in `asia-south1` and delete protection on. Volume 7 Chapter 7.7 §1 asked for this so that a dev build cannot touch production data; deferred item 3 is closed.
+
+  ADR-047 is new: Gradle product flavors select the environment, and `APP_ENV` is *derived* from the flavor rather than passed beside it. One flag picks the Firebase project, the application ID, the launcher name and `AppConfig.environment` together, so they cannot disagree — the defect ADR-007 rejected for the base URL, applied one level up. The application identifier is now `com.vump.humanarchive`, with `.dev` and `.staging` suffixes that let all three install side by side. Mission 6.4.
+
+  The development environment is the pre-existing project rather than a new one: a fresh `vump-dev` was created and then deleted, because `f86af` already had Authentication and billing that the CLI cannot enable. Amendment A-162. Mission 6.4.
+
 - **2026-08-18** — **The backend is live.** `terraform apply` created 31 resources — Mission 6.2's seven Lambdas, REST API, stage, log groups and invoke permissions, which had been planned and never applied, alongside Mission 6.3's seven credential containers — and repointed seven IAM policies. 66 managed resources now, and `terraform plan` reports `No changes`.
 
   `npm run db:bootstrap` gave each of the seven database roles a password and wrote it to that function's secret. Per-function isolation is now enforced **twice**: IAM decides which credential a Lambda can read, PostgreSQL decides what that credential may do. Both were proved live rather than read from configuration — `simulate-principal-policy` returns `implicitDeny` for another function's secret and for the master, and `SET ROLE` between function roles is refused `42501`. A-160. Mission 6.3.

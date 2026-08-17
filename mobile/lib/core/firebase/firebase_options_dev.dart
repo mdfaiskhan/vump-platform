@@ -8,7 +8,7 @@ import 'package:flutter/foundation.dart'
 ///
 /// Example:
 /// ```dart
-/// import 'firebase_options.dart';
+/// import 'firebase_options_dev.dart';
 /// // ...
 /// await Firebase.initializeApp(
 ///   options: DefaultFirebaseOptions.currentPlatform,
@@ -17,7 +17,10 @@ import 'package:flutter/foundation.dart'
 class DefaultFirebaseOptions {
   static FirebaseOptions get currentPlatform {
     if (kIsWeb) {
-      return web;
+      throw UnsupportedError(
+        'DefaultFirebaseOptions have not been configured for web - '
+        'you can reconfigure this by running the FlutterFire CLI again.',
+      );
     }
     switch (defaultTargetPlatform) {
       case TargetPlatform.android:
@@ -25,9 +28,15 @@ class DefaultFirebaseOptions {
       case TargetPlatform.iOS:
         return ios;
       case TargetPlatform.macOS:
-        return macos;
+        throw UnsupportedError(
+          'DefaultFirebaseOptions have not been configured for macos - '
+          'you can reconfigure this by running the FlutterFire CLI again.',
+        );
       case TargetPlatform.windows:
-        return windows;
+        throw UnsupportedError(
+          'DefaultFirebaseOptions have not been configured for windows - '
+          'you can reconfigure this by running the FlutterFire CLI again.',
+        );
       case TargetPlatform.linux:
         throw UnsupportedError(
           'DefaultFirebaseOptions have not been configured for linux - '
@@ -40,47 +49,21 @@ class DefaultFirebaseOptions {
     }
   }
 
-  static const FirebaseOptions web = FirebaseOptions(
-    apiKey: 'AIzaSyCtwh9qS0F4mwdrMKZKEoZxNh4yeg_DpWU',
-    appId: '1:434336914712:web:9d87a4d14c567fc36cd26d',
-    messagingSenderId: '434336914712',
-    projectId: 'vump-platform-f86af',
-    authDomain: 'vump-platform-f86af.firebaseapp.com',
-    storageBucket: 'vump-platform-f86af.firebasestorage.app',
-  );
-
   static const FirebaseOptions android = FirebaseOptions(
     apiKey: 'AIzaSyAbtliU8Vv9TQXtTJBcyBpLDRu4eGmJyv0',
-    appId: '1:434336914712:android:354d893c347c13916cd26d',
+    appId: '1:434336914712:android:e6e2bee3e711ae856cd26d',
     messagingSenderId: '434336914712',
     projectId: 'vump-platform-f86af',
     storageBucket: 'vump-platform-f86af.firebasestorage.app',
   );
-
   static const FirebaseOptions ios = FirebaseOptions(
     apiKey: 'AIzaSyDipvD18WEAmYvDXDtdmJAA7f6nQFHj1FE',
-    appId: '1:434336914712:ios:44df9e701043e8136cd26d',
+    appId: '1:434336914712:ios:13ac5be7725d33406cd26d',
     messagingSenderId: '434336914712',
     projectId: 'vump-platform-f86af',
     storageBucket: 'vump-platform-f86af.firebasestorage.app',
-    iosBundleId: 'com.example.mobile',
-  );
-
-  static const FirebaseOptions macos = FirebaseOptions(
-    apiKey: 'AIzaSyDipvD18WEAmYvDXDtdmJAA7f6nQFHj1FE',
-    appId: '1:434336914712:ios:44df9e701043e8136cd26d',
-    messagingSenderId: '434336914712',
-    projectId: 'vump-platform-f86af',
-    storageBucket: 'vump-platform-f86af.firebasestorage.app',
-    iosBundleId: 'com.example.mobile',
-  );
-
-  static const FirebaseOptions windows = FirebaseOptions(
-    apiKey: 'AIzaSyCtwh9qS0F4mwdrMKZKEoZxNh4yeg_DpWU',
-    appId: '1:434336914712:web:53f01902b48ed3446cd26d',
-    messagingSenderId: '434336914712',
-    projectId: 'vump-platform-f86af',
-    authDomain: 'vump-platform-f86af.firebaseapp.com',
-    storageBucket: 'vump-platform-f86af.firebasestorage.app',
+    iosClientId:
+        '434336914712-idlang9mftb9ro41qpq092uq2556apcs.apps.googleusercontent.com',
+    iosBundleId: 'com.vump.humanarchive.dev',
   );
 }

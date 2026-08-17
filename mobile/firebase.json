@@ -1,1 +1,48 @@
-{"flutter": {"platforms": {"android": {"default": {"projectId": "vump-platform-f86af", "appId": "1:434336914712:android:354d893c347c13916cd26d", "fileOutput": "android/app/google-services.json"}}, "dart": {"lib/core/firebase/firebase_options.dart": {"projectId": "vump-platform-f86af", "configurations": {"android": "1:434336914712:android:354d893c347c13916cd26d", "ios": "1:434336914712:ios:44df9e701043e8136cd26d", "macos": "1:434336914712:ios:44df9e701043e8136cd26d", "web": "1:434336914712:web:9d87a4d14c567fc36cd26d", "windows": "1:434336914712:web:53f01902b48ed3446cd26d"}}}}}}
+{
+  "flutter": {
+    "platforms": {
+      "android": {
+        "buildConfigurations": {
+          "src/dev": {
+            "projectId": "vump-platform-f86af",
+            "appId": "1:434336914712:android:e6e2bee3e711ae856cd26d",
+            "fileOutput": "android/app/src/dev/google-services.json"
+          },
+          "src/staging": {
+            "projectId": "vump-staging",
+            "appId": "1:1095961928374:android:38ce99c68ee24f5050fc17",
+            "fileOutput": "android/app/src/staging/google-services.json"
+          },
+          "src/prod": {
+            "projectId": "vump-prod",
+            "appId": "1:277590490895:android:1039c7be0c61ca5898487a",
+            "fileOutput": "android/app/src/prod/google-services.json"
+          }
+        }
+      },
+      "dart": {
+        "lib/core/firebase/firebase_options_dev.dart": {
+          "projectId": "vump-platform-f86af",
+          "configurations": {
+            "android": "1:434336914712:android:e6e2bee3e711ae856cd26d",
+            "ios": "1:434336914712:ios:13ac5be7725d33406cd26d"
+          }
+        },
+        "lib/core/firebase/firebase_options_staging.dart": {
+          "projectId": "vump-staging",
+          "configurations": {
+            "android": "1:1095961928374:android:38ce99c68ee24f5050fc17",
+            "ios": "1:1095961928374:ios:3c97bd4fb34d0c4350fc17"
+          }
+        },
+        "lib/core/firebase/firebase_options_prod.dart": {
+          "projectId": "vump-prod",
+          "configurations": {
+            "android": "1:277590490895:android:1039c7be0c61ca5898487a",
+            "ios": "1:277590490895:ios:9f28d3adfad5fd0e98487a"
+          }
+        }
+      }
+    }
+  }
+}

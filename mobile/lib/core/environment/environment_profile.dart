@@ -1,5 +1,5 @@
 import 'package:mobile/app/config/app_config.dart';
-import 'package:mobile/core/firebase/firebase_options.dart';
+import 'package:mobile/core/firebase/firebase_options_for_environment.dart';
 import 'package:mobile/core/logging/app_logger.dart';
 import 'package:mobile/core/logging/log_level.dart';
 import 'package:mobile/core/network/network_config.dart';
@@ -27,7 +27,7 @@ import 'package:mobile/core/network/network_config.dart';
 /// | [apiBaseUrl] | `NetworkConfig.baseUrlFor` | ADR-007 |
 /// | [chunkBucket] | `NetworkConfig.chunkBucketFor` | ADR-011 |
 /// | [cloudFrontDomain] | not provisioned | ADR-011 |
-/// | [firebaseProjectId] | `DefaultFirebaseOptions` | ADR-010 |
+/// | [firebaseProjectId] | per-environment options | ADR-010, ADR-047 |
 /// | [logLevel] | `AppLogger.minimumLevelFor` | ADR-016 |
 /// | [featureFlags] | `AppFeatureFlags.forEnvironment` | ADR-017 |
 ///
@@ -69,20 +69,21 @@ class EnvironmentProfile {
 
   /// Firebase project backing this environment.
   ///
-  /// **Currently identical in all three environments.** One project,
-  /// `vump-platform-f86af`, serves development, staging and production,
-  /// because only one was created. Volume 7 Chapter 7.10 §2 expects one per
-  /// environment.
+  /// ~~Currently identical in all three environments.~~ **Closed by Mission
+  /// 6.4.** `vump-platform-f86af` (development), `vump-staging` and
+  /// `vump-prod` are three separate projects, selected by the build flavor per
+  /// ADR-047, which is what Volume 7 Chapter 7.7 §1 asks for.
   ///
-  /// This is a real gap, not a design choice: production analytics, crash
-  /// reports and auth users are presently indistinguishable from development
-  /// ones. Closing it means running `flutterfire configure` against two
-  /// further projects; it is deliberately not faked here.
+  /// The gap this used to describe was real: one project meant development
+  /// auth users and production ones were the same records. They are now
+  /// separated by the project boundary, which is the only boundary Firebase
+  /// enforces.
   ///
   /// Platform-dependent, so it is a getter rather than a constant — reading it
-  /// requires a platform the Firebase options were generated for.
+  /// requires a platform the Firebase options were generated for, which is
+  /// Android or iOS.
   String get firebaseProjectId =>
-      DefaultFirebaseOptions.currentPlatform.projectId;
+      firebaseOptionsForEnvironment(environment).projectId;
 
   /// Least severe level this environment emits.
   LogLevel get logLevel => AppLogger.minimumLevelFor(environment);

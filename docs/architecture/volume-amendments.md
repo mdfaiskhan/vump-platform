@@ -5636,3 +5636,137 @@ Not a reflexive CI job, and not a partial one. Three options were visible and no
 The first is likely the answer and is still not taken here, because a check that reads a production database from CI needs a principal that does not exist — deferred item 8's unscoped `faisal-admin` is the only one that does, and CI must never use it.
 
 **A trace/decide for a future sub-mission.** Logged so the gap is tracked rather than closed badly.
+
+---
+
+### A-162 — One Firebase project became three, and what that did and did not fix
+
+| | |
+|---|---|
+| **Volume** | 7, Chapter 7.7 §1 |
+| **Says** | *"Three Firebase Projects, Not One … a bug in a dev build must never be able to send a real push notification to a production Collector's device or pollute production Crashlytics data."* |
+| **Was** | One project, `vump-platform-f86af`, serving development, staging and production. Deferred item 3. |
+| **Is** | `vump-platform-f86af` (development), `vump-staging`, `vump-prod`. |
+| **Authority** | Project owner's decision, Mission 6.4.1 |
+| **Class** | Specification implemented |
+| **Status** | **Closed** — deferred item 3 |
+| **Date** | 2026-08-18, Mission 6.4 |
+
+### What exists, verified by reading each project rather than by the create command succeeding
+
+| | `vump-platform-f86af` | `vump-staging` | `vump-prod` |
+|---|---|---|---|
+| Project number | 434336914712 | 1095961928374 | 277590490895 |
+| Android package | `com.vump.humanarchive.dev` | `…​.staging` | `com.vump.humanarchive` |
+| iOS bundle | same as Android, per project | | |
+| Firestore | `(default)`, **asia-south1**, STANDARD | same | same |
+| Delete protection | pre-existing, unchanged | **ENABLED** | **ENABLED** |
+| Auth | **enabled**, Email/Password + Google | none | none |
+| Billing | **Blaze** | none | none |
+| `redeemInviteCode` | deployed | not deployed | not deployed |
+| Security rules | released | released | released |
+
+`asia-south1` matches the existing project and ADR-011's `ap-south-1`, and Chapter 7.7 §1's separation argument is what the split satisfies.
+
+### The location was set wrongly first, and the recovery is worth recording
+
+`firebase firestore:databases:create --location asia-south1` fails on a new project: the Firestore API is not enabled, and no read-only CLI command enables it. `firebase deploy --only firestore` **does** enable it — and creates the database as a side effect, in **`nam5`**, a US multi-region, without asking.
+
+ADR-036 already warned about exactly this: *"The Firestore location is a one-time, irreversible choice … it should be made deliberately rather than accepted as a console default."* The deploy accepted a default on the mission's behalf.
+
+Recovered by deleting each database and recreating it in `asia-south1`. That worked only because the databases were seconds old and empty; `(default)` is also reserved for roughly five minutes after deletion, so the recovery is not instant. **Had this been noticed after data existed, it would not have been recoverable at all** — which is the reason it is written down rather than quietly fixed.
+
+### The development project was created, then deleted, and the original kept instead
+
+**Planned (Mission 6.4):** create `vump-dev`, verify it, then retire `vump-platform-f86af`.
+
+**Actual (Mission 6.4.2):** `vump-dev` was created, never used by any build that mattered, and **deleted**. `vump-platform-f86af` is the development environment.
+
+The reversal is not a change of taste. Mission 6.4 finished with two blockers, both console-only: the three new projects had **no Authentication** — `accounts:signInWithPassword` returned `CONFIGURATION_NOT_FOUND`, meaning Auth had never been initialised — and **no billing**, so Cloud Functions could not deploy. Neither can be fixed from the Firebase CLI, which offers no command to initialise Auth and none to link a billing account.
+
+`vump-platform-f86af` already had both, because it has been the working project since Mission 0.15. Repurposing it made the development environment complete immediately; keeping `vump-dev` would have meant performing two console actions to reach a state that already existed one project over.
+
+What this cost, stated plainly:
+
+- **The four pre-split accounts remain in the development environment.** They were going to be left behind in a retired project; they are now dev's user table. Each still carries `org_id: "vump-default"` — deferred item 12, unchanged and unfixed by this mission.
+- **Development shares a project number with everything Missions 0.15 to 5 created**, including the deployed `redeemInviteCode` and the `org_invite_codes` collection. Nothing was migrated because nothing moved.
+- **Chapter 7.7 §1's separation argument still holds**, which is the thing that actually mattered: a dev build cannot reach staging or production data, because those are separate projects. The chapter asks for three projects, not for three *new* ones.
+
+The dev app identifiers were registered into `f86af` alongside the existing `com.example.mobile` app, so its `google-services.json` now lists two clients and the Gradle plugin selects by package name. `redeemInviteCode` was unaffected by that registration and remains deployed, verified after the fact.
+
+**Nothing references `vump-dev` any more.** The alias, both config files, three ADRs, the changelog and the deferred-items log were swept. The `vump-dev-*` strings that remain are AWS resource names — `vump-dev-aurora`, `AWS_PROFILE=vump-dev` — which predate Firebase and are a genuine name collision rather than a leftover.
+
+### No user data was migrated, and the reason is a schema incompatibility rather than a limitation
+
+The brief for this mission stated that Firebase cannot move users between projects. **That is not correct, and it was worth checking:** `firebase auth:import` consumes exactly what `auth:export` emits — `localId`, `passwordHash`, `salt` and `customAttributes` — so UIDs, working passwords and custom claims all survive a move. The project's scrypt signer key is the one input not in the export, and it is readable from the console.
+
+Migration was therefore available and was still declined, for a better reason. All four accounts in `vump-platform-f86af` carry `org_id: "vump-default"`, a literal string. Mission 6.3 defines `users.org_id uuid NOT NULL REFERENCES orgs(id)`. Importing them would have copied a value that cannot exist in the schema into three projects instead of one. See deferred item 12.
+
+The four accounts are unverified, were created within 47 minutes of each other on 2026-08-13, and all hold `role: collector` — test accounts, on a product that has not shipped. All three environments are seeded fresh.
+
+### Staging and production are deliberately incomplete
+
+Both have Firestore in `asia-south1`, delete protection and released rules. Neither has Authentication or billing, so `redeemInviteCode` cannot deploy to them and the Artifact Registry cleanup policy cannot be applied.
+
+**That is the correct state, not a gap.** ADR-014 provisions an environment when there is something to put in it; no release branch has been cut, nothing deploys to staging or production, and enabling Auth on a project no build points at would create user tables nobody uses. The work is one console visit each, at the moment it is first needed.
+
+### The WIF-versus-key question was not touched, and following Volume 7 literally would have touched it
+
+ADR-036 defers *"how the ported endpoint obtains claim-writing privilege without a long-lived key"*. This mission created **no service accounts, no keys and no Workload Identity Federation pools**, and nothing it provisioned presupposes either answer.
+
+That required departing from Chapter 7.7 §3 — see A-164. Generating the per-environment service-account key that chapter asks for would have decided the deferred question as a side effect of a provisioning step, which is the one thing the scope boundary existed to prevent.
+
+---
+
+### A-163 — A-159 was stale the day it was written: the `org_id` claim is already live
+
+| | |
+|---|---|
+| **Record** | A-159, ADR-036, Volume 4 Chapter 4.7 §2 |
+| **Said** | *"`org_id` becomes a Firebase custom claim: decided, and deliberately not implemented … blocked on Mission 6.5."* |
+| **Should say** | The claim is written today, by `redeemInviteCode`. What is unimplemented is the backend **reading** it, and a writer that survives `functions/`'s retirement. |
+| **Authority** | Live state of `vump-platform-f86af`, Mission 6.4 |
+| **Class** | Correction to a prior amendment |
+| **Status** | **A-159 amended**, not withdrawn |
+| **Date** | 2026-08-18, Mission 6.4 |
+
+`functions/src/index.ts` has done this since Mission 2.9:
+
+```ts
+await getAuth().setCustomUserClaims(uid, { role: "collector", org_id: orgId });
+```
+
+All four live accounts carry `{"role":"collector","org_id":"vump-default"}`. A-159 asserted the claim was not implemented while four accounts in the project it describes were already carrying it.
+
+**A-159's reasoning was right and its scope was wrong.** Writing a claim needs a credential *only when the writer runs outside Google*. Inside Cloud Functions the runtime authenticates through the metadata server, so the Firebase-side half needs nothing — and was built two missions before A-159 claimed it could not be.
+
+What genuinely remains open is narrower than A-159 stated:
+
+- `resolveCaller` in `backend/packages/shared/src/handler.ts` still returns `undefined` and trusts no claim. **Unchanged by this mission.**
+- The writer is a Cloud Function ADR-036 marks temporary. When it retires, claim-writing moves to AWS and *then* needs the deferred credential decision.
+
+The distinction matters because A-159 as written would have let a reader conclude that Mission 6.5 must build claim-writing from nothing. It must instead **port** a working implementation across a trust boundary, which is a different job with a different risk.
+
+---
+
+### A-164 — Chapter 7.7 §3 requires a service-account key for an operation that does not take one
+
+| | |
+|---|---|
+| **Volume** | 7, Chapter 7.7 §3 |
+| **Says** | *"A Firebase Admin SDK service account key is generated per environment for the backend's token-verification step (Volume 4, Chapter 4.7) — stored as an encrypted secret in the CI/CD system."* |
+| **Should say** | Token verification needs no credential. A key is needed only for privileged operations such as **writing** a custom claim. |
+| **Authority** | Measured in Mission 6.2 and unchanged since |
+| **Class** | False premise in a specification |
+| **Status** | Open — the chapter is wrong; no key was created |
+| **Date** | 2026-08-18, Mission 6.4 |
+
+`verifyIdToken` validates a signature against Google's **public** certificates. Mission 6.2 established this by running it rather than by reading about it, and shipped `@vump/shared`'s `verifyToken` with no credential of any kind. Chapter 4.7 §1 step 3 — which §3 cites as its justification — describes only verification.
+
+**The cost of following it literally would have been three long-lived keys**, one per environment, each able to mint an `admin` claim on any organisation. ADR-036 describes exactly that credential as *"a silent, total authorization bypass"* if leaked, and it is the credential whose necessity ADR-036 deliberately left undecided.
+
+So Chapter 7.7 §3 does not merely over-provision. **It would have silently resolved a question another record explicitly deferred**, by making the key exist before anyone decided it should — and the mission that created it would have had no reason to notice, because it was following the specification.
+
+Recorded independently of Mission 6.4's outcome: the premise is wrong whether or not three projects exist, and it will mislead the next reader of Chapter 7.7 unless it is contradicted here.
+
+**What is true**: verification needs nothing. Claim-writing needs privilege. Those are different operations on the same SDK, and ADR-036 line 35 already draws the line — Chapter 7.7 §3 draws it in the wrong place.
