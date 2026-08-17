@@ -62,7 +62,8 @@ class DefaultFirebaseOptions {
     messagingSenderId: '434336914712',
     projectId: 'vump-platform-f86af',
     storageBucket: 'vump-platform-f86af.firebasestorage.app',
-    iosClientId: '434336914712-idlang9mftb9ro41qpq092uq2556apcs.apps.googleusercontent.com',
+    iosClientId:
+        '434336914712-idlang9mftb9ro41qpq092uq2556apcs.apps.googleusercontent.com',
     iosBundleId: 'com.vump.humanarchive.dev',
   );
 }
