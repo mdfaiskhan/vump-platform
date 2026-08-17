@@ -40,6 +40,10 @@ Mission 4.8's security review found it, by reading `git log` against this file r
 
 ### Added
 
+- **2026-08-18** — **The backend is live.** `terraform apply` created 31 resources — Mission 6.2's seven Lambdas, REST API, stage, log groups and invoke permissions, which had been planned and never applied, alongside Mission 6.3's seven credential containers — and repointed seven IAM policies. 66 managed resources now, and `terraform plan` reports `No changes`.
+
+  `npm run db:bootstrap` gave each of the seven database roles a password and wrote it to that function's secret. Per-function isolation is now enforced **twice**: IAM decides which credential a Lambda can read, PostgreSQL decides what that credential may do. Both were proved live rather than read from configuration — `simulate-principal-policy` returns `implicitDeny` for another function's secret and for the master, and `SET ROLE` between function roles is refused `42501`. A-160. Mission 6.3.
+
 - **2026-08-18** — **The Aurora schema exists.** Nine tables, three functions, two triggers and seven database roles, applied to the development cluster through the Data API. `orgs` is Volume 4 Chapter 4.3's ninth table, which Chapter 4.4 referenced from two NOT NULL foreign keys and never defined (A-154).
 
   Volume 4 Chapter 4.2 §3's business rules are enforced by the database rather than by handler discipline, as that chapter requires: BR-08 and BR-11 as constraints, BR-21 as a `SECURITY DEFINER` procedure with a trigger that makes it the *only* path to `complete`, BR-22 as a `BEFORE UPDATE` trigger. Each was proved behaviourally against the live database — a direct `UPDATE … status='complete'` is refused, and so is changing `resolution` after insert.
@@ -180,6 +184,8 @@ Mission 4.8's security review found it, by reading `git log` against this file r
 - **2026-08-18** — **The Data API client had no retry for a cluster that scales to zero**, a defect in Mission 6.2's merged code that Mission 6.3 found by hitting it on its first probe. `min_capacity = 0` means the first call after idle fails with `DatabaseResumingException`; nothing handled it, and nothing broke only because no handler issues a statement yet.
 
   Fixed in `@vump/shared` rather than in the migration runner, so all seven functions inherit it. Only the resuming condition is retried — retrying a `BadRequestException` would turn a deterministic defect into an intermittent one. A-156. Mission 6.3.
+
+  **The deployed functions do not contain this retry, and that is correct.** Downloading the live artifact shows `DatabaseResumingException`, `withResumeRetry` and `RDSDataClient` all absent while `verifyIdToken` is present: esbuild eliminated the Data API path because no handler calls `execute()` yet. The fix enters a bundle in the same build that first calls it — a build that is already a redeploy of the changed handler — so it never causes a deployment of its own. Recorded because the natural reading of the entry above is that the live Lambdas carry it. Mission 6.3.
 
 - **2026-08-18** — **Volume 8 Chapter 8.3 §4's dependency scan is implemented.** It named the tool — *"an automated vulnerability scan (npm audit or an equivalent SCA tool) gating CI"* — and nothing ran it. `npm audit` now gates the new `Backend` CI job at `high`, one level stricter than the chapter's `critical` floor.
 
