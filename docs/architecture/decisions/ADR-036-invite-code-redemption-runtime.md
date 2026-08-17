@@ -198,7 +198,11 @@ A cost the original design did not carry, recorded rather than left implicit. Th
 
 ## Implementation Status
 
-**Implemented and deployed to `vump-platform-f86af`.**
+**Implemented and deployed to `vump-platform-f86af`. Not yet deployed to the three projects that replace it.**
+
+Mission 6.4 created `vump-dev`, `vump-staging` and `vump-prod` and released `firestore.rules` to all three. `redeemInviteCode` is **not** deployed to any of them: Cloud Functions requires the Blaze plan, and the new projects have no billing account linked. Deferred item 13.
+
+The function's behaviour is unchanged and deliberately so — it still sets `role: "collector"` from a literal and still uses `org_id: "vump-default"`. Mission 6.4 multiplies the deployment sites; it does not fix the organisation model, and A-163 corrects A-159's claim that the `org_id` claim was unimplemented. Deferred item 12.
 
 | Artefact | Where |
 |---|---|
