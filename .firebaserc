@@ -1,24 +1,28 @@
 {
   "_comment": [
-    "Project aliases for the three environments created in Mission 6.4.",
-    "ADR-047 makes the build flavor the environment selector on the app side;",
-    "this is the same selection for the Firebase CLI, so a deploy names an",
-    "environment rather than a project ID nobody can check at a glance.",
+    "Project aliases for the three environments. ADR-047 makes the build flavor",
+    "the environment selector on the app side; this is the same selection for",
+    "the Firebase CLI, so a deploy names an environment rather than a project ID",
+    "nobody can check at a glance.",
     "",
     "There is deliberately no 'default'. A deploy must say which environment it",
-    "means: `firebase deploy --only firestore:rules -P dev`. The previous",
-    "default pointed at vump-platform-f86af, which is exactly the shape of",
-    "mistake that ships a rules change to the wrong project.",
+    "means: `firebase deploy --only firestore:rules -P dev`. A default is how a",
+    "rules change reaches the wrong project.",
     "",
-    "vump-platform-f86af is still listed, because it is still live and still",
-    "holds the four pre-split accounts. It is retired only once the new dev",
-    "project is verified, and it is named 'legacy' so it cannot be reached by",
-    "typing an environment name."
+    "dev IS vump-platform-f86af. Mission 6.4 planned to create a fresh vump-dev",
+    "and retire this project; Mission 6.4.2 reversed that. f86af already had",
+    "Authentication enabled and Blaze billing linked, and the new vump-dev had",
+    "neither and could not be given either from the CLI. vump-dev was deleted.",
+    "There is no 'legacy' alias any more, because there is no legacy project —",
+    "it is the development environment. Amendment A-162.",
+    "",
+    "staging and prod exist with Firestore and rules, and are deliberately left",
+    "without Auth or billing until a release branch is cut (ADR-014). Deploying",
+    "functions to either will fail until then, and that is the intended state."
   ],
   "projects": {
-    "dev": "vump-dev",
+    "dev": "vump-platform-f86af",
     "staging": "vump-staging",
-    "prod": "vump-prod",
-    "legacy": "vump-platform-f86af"
+    "prod": "vump-prod"
   }
 }

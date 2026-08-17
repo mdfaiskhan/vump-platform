@@ -4,8 +4,8 @@
       "android": {
         "buildConfigurations": {
           "src/dev": {
-            "projectId": "vump-dev",
-            "appId": "1:348203353299:android:d094f224bbd359d71e0026",
+            "projectId": "vump-platform-f86af",
+            "appId": "1:434336914712:android:e6e2bee3e711ae856cd26d",
             "fileOutput": "android/app/src/dev/google-services.json"
           },
           "src/staging": {
@@ -22,10 +22,10 @@
       },
       "dart": {
         "lib/core/firebase/firebase_options_dev.dart": {
-          "projectId": "vump-dev",
+          "projectId": "vump-platform-f86af",
           "configurations": {
-            "android": "1:348203353299:android:d094f224bbd359d71e0026",
-            "ios": "1:348203353299:ios:7e7df0897e648f851e0026"
+            "android": "1:434336914712:android:e6e2bee3e711ae856cd26d",
+            "ios": "1:434336914712:ios:13ac5be7725d33406cd26d"
           }
         },
         "lib/core/firebase/firebase_options_staging.dart": {

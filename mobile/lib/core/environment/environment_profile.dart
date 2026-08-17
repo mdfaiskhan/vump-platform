@@ -70,9 +70,9 @@ class EnvironmentProfile {
   /// Firebase project backing this environment.
   ///
   /// ~~Currently identical in all three environments.~~ **Closed by Mission
-  /// 6.4.** `vump-dev`, `vump-staging` and `vump-prod` are three separate
-  /// projects, selected by the build flavor per ADR-047, which is what
-  /// Volume 7 Chapter 7.7 §1 asks for.
+  /// 6.4.** `vump-platform-f86af` (development), `vump-staging` and
+  /// `vump-prod` are three separate projects, selected by the build flavor per
+  /// ADR-047, which is what Volume 7 Chapter 7.7 §1 asks for.
   ///
   /// The gap this used to describe was real: one project meant development
   /// auth users and production ones were the same records. They are now

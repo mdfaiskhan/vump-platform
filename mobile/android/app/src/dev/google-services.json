@@ -1,26 +1,79 @@
 {
   "project_info": {
-    "project_number": "348203353299",
-    "project_id": "vump-dev",
-    "storage_bucket": "vump-dev.firebasestorage.app"
+    "project_number": "434336914712",
+    "project_id": "vump-platform-f86af",
+    "storage_bucket": "vump-platform-f86af.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:348203353299:android:d094f224bbd359d71e0026",
+        "mobilesdk_app_id": "1:434336914712:android:354d893c347c13916cd26d",
         "android_client_info": {
-          "package_name": "com.vump.humanarchive.dev"
+          "package_name": "com.example.mobile"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "434336914712-p9jfbobkc2brblvcn6547hamssnsineg.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
-          "current_key": "AIzaSyBV-77JGatennfGkmCXu0TOzP3Yl2RzHJI"
+          "current_key": "AIzaSyAbtliU8Vv9TQXtTJBcyBpLDRu4eGmJyv0"
         }
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "434336914712-p9jfbobkc2brblvcn6547hamssnsineg.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "434336914712-d6mumm57m1l89kr8mr90iutotdtebivd.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.mobile"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:434336914712:android:e6e2bee3e711ae856cd26d",
+        "android_client_info": {
+          "package_name": "com.vump.humanarchive.dev"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "434336914712-p9jfbobkc2brblvcn6547hamssnsineg.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAbtliU8Vv9TQXtTJBcyBpLDRu4eGmJyv0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "434336914712-p9jfbobkc2brblvcn6547hamssnsineg.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "434336914712-d6mumm57m1l89kr8mr90iutotdtebivd.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.mobile"
+              }
+            }
+          ]
         }
       }
     }

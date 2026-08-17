@@ -5646,7 +5646,7 @@ The first is likely the answer and is still not taken here, because a check that
 | **Volume** | 7, Chapter 7.7 §1 |
 | **Says** | *"Three Firebase Projects, Not One … a bug in a dev build must never be able to send a real push notification to a production Collector's device or pollute production Crashlytics data."* |
 | **Was** | One project, `vump-platform-f86af`, serving development, staging and production. Deferred item 3. |
-| **Is** | `vump-dev`, `vump-staging`, `vump-prod`. |
+| **Is** | `vump-platform-f86af` (development), `vump-staging`, `vump-prod`. |
 | **Authority** | Project owner's decision, Mission 6.4.1 |
 | **Class** | Specification implemented |
 | **Status** | **Closed** — deferred item 3 |
@@ -5654,13 +5654,16 @@ The first is likely the answer and is still not taken here, because a check that
 
 ### What exists, verified by reading each project rather than by the create command succeeding
 
-| | `vump-dev` | `vump-staging` | `vump-prod` |
+| | `vump-platform-f86af` | `vump-staging` | `vump-prod` |
 |---|---|---|---|
-| Project number | 348203353299 | 1095961928374 | 277590490895 |
+| Project number | 434336914712 | 1095961928374 | 277590490895 |
 | Android package | `com.vump.humanarchive.dev` | `…​.staging` | `com.vump.humanarchive` |
 | iOS bundle | same as Android, per project | | |
 | Firestore | `(default)`, **asia-south1**, STANDARD | same | same |
-| Delete protection | **ENABLED** | **ENABLED** | **ENABLED** |
+| Delete protection | pre-existing, unchanged | **ENABLED** | **ENABLED** |
+| Auth | **enabled**, Email/Password + Google | none | none |
+| Billing | **Blaze** | none | none |
+| `redeemInviteCode` | deployed | not deployed | not deployed |
 | Security rules | released | released | released |
 
 `asia-south1` matches the existing project and ADR-011's `ap-south-1`, and Chapter 7.7 §1's separation argument is what the split satisfies.
@@ -5673,6 +5676,26 @@ ADR-036 already warned about exactly this: *"The Firestore location is a one-tim
 
 Recovered by deleting each database and recreating it in `asia-south1`. That worked only because the databases were seconds old and empty; `(default)` is also reserved for roughly five minutes after deletion, so the recovery is not instant. **Had this been noticed after data existed, it would not have been recoverable at all** — which is the reason it is written down rather than quietly fixed.
 
+### The development project was created, then deleted, and the original kept instead
+
+**Planned (Mission 6.4):** create `vump-dev`, verify it, then retire `vump-platform-f86af`.
+
+**Actual (Mission 6.4.2):** `vump-dev` was created, never used by any build that mattered, and **deleted**. `vump-platform-f86af` is the development environment.
+
+The reversal is not a change of taste. Mission 6.4 finished with two blockers, both console-only: the three new projects had **no Authentication** — `accounts:signInWithPassword` returned `CONFIGURATION_NOT_FOUND`, meaning Auth had never been initialised — and **no billing**, so Cloud Functions could not deploy. Neither can be fixed from the Firebase CLI, which offers no command to initialise Auth and none to link a billing account.
+
+`vump-platform-f86af` already had both, because it has been the working project since Mission 0.15. Repurposing it made the development environment complete immediately; keeping `vump-dev` would have meant performing two console actions to reach a state that already existed one project over.
+
+What this cost, stated plainly:
+
+- **The four pre-split accounts remain in the development environment.** They were going to be left behind in a retired project; they are now dev's user table. Each still carries `org_id: "vump-default"` — deferred item 12, unchanged and unfixed by this mission.
+- **Development shares a project number with everything Missions 0.15 to 5 created**, including the deployed `redeemInviteCode` and the `org_invite_codes` collection. Nothing was migrated because nothing moved.
+- **Chapter 7.7 §1's separation argument still holds**, which is the thing that actually mattered: a dev build cannot reach staging or production data, because those are separate projects. The chapter asks for three projects, not for three *new* ones.
+
+The dev app identifiers were registered into `f86af` alongside the existing `com.example.mobile` app, so its `google-services.json` now lists two clients and the Gradle plugin selects by package name. `redeemInviteCode` was unaffected by that registration and remains deployed, verified after the fact.
+
+**Nothing references `vump-dev` any more.** The alias, both config files, three ADRs, the changelog and the deferred-items log were swept. The `vump-dev-*` strings that remain are AWS resource names — `vump-dev-aurora`, `AWS_PROFILE=vump-dev` — which predate Firebase and are a genuine name collision rather than a leftover.
+
 ### No user data was migrated, and the reason is a schema incompatibility rather than a limitation
 
 The brief for this mission stated that Firebase cannot move users between projects. **That is not correct, and it was worth checking:** `firebase auth:import` consumes exactly what `auth:export` emits — `localId`, `passwordHash`, `salt` and `customAttributes` — so UIDs, working passwords and custom claims all survive a move. The project's scrypt signer key is the one input not in the export, and it is readable from the console.
@@ -5681,9 +5704,11 @@ Migration was therefore available and was still declined, for a better reason. A
 
 The four accounts are unverified, were created within 47 minutes of each other on 2026-08-13, and all hold `role: collector` — test accounts, on a product that has not shipped. All three environments are seeded fresh.
 
-### `vump-platform-f86af` is still alive
+### Staging and production are deliberately incomplete
 
-Deliberately. It is retired once the new dev project is confirmed working end to end, not before, and it is aliased `legacy` in `.firebaserc` so that no environment name reaches it.
+Both have Firestore in `asia-south1`, delete protection and released rules. Neither has Authentication or billing, so `redeemInviteCode` cannot deploy to them and the Artifact Registry cleanup policy cannot be applied.
+
+**That is the correct state, not a gap.** ADR-014 provisions an environment when there is something to put in it; no release branch has been cut, nothing deploys to staging or production, and enabling Auth on a project no build points at would create user tables nobody uses. The work is one console visit each, at the moment it is first needed.
 
 ### The WIF-versus-key question was not touched, and following Volume 7 literally would have touched it
 

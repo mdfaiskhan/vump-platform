@@ -50,19 +50,19 @@ class DefaultFirebaseOptions {
   }
 
   static const FirebaseOptions android = FirebaseOptions(
-    apiKey: 'AIzaSyBV-77JGatennfGkmCXu0TOzP3Yl2RzHJI',
-    appId: '1:348203353299:android:d094f224bbd359d71e0026',
-    messagingSenderId: '348203353299',
-    projectId: 'vump-dev',
-    storageBucket: 'vump-dev.firebasestorage.app',
+    apiKey: 'AIzaSyAbtliU8Vv9TQXtTJBcyBpLDRu4eGmJyv0',
+    appId: '1:434336914712:android:e6e2bee3e711ae856cd26d',
+    messagingSenderId: '434336914712',
+    projectId: 'vump-platform-f86af',
+    storageBucket: 'vump-platform-f86af.firebasestorage.app',
   );
-
   static const FirebaseOptions ios = FirebaseOptions(
-    apiKey: 'AIzaSyAEDX-me736aLT1wSyN9NU5nmApBUMIdOI',
-    appId: '1:348203353299:ios:7e7df0897e648f851e0026',
-    messagingSenderId: '348203353299',
-    projectId: 'vump-dev',
-    storageBucket: 'vump-dev.firebasestorage.app',
+    apiKey: 'AIzaSyDipvD18WEAmYvDXDtdmJAA7f6nQFHj1FE',
+    appId: '1:434336914712:ios:13ac5be7725d33406cd26d',
+    messagingSenderId: '434336914712',
+    projectId: 'vump-platform-f86af',
+    storageBucket: 'vump-platform-f86af.firebasestorage.app',
+    iosClientId: '434336914712-idlang9mftb9ro41qpq092uq2556apcs.apps.googleusercontent.com',
     iosBundleId: 'com.vump.humanarchive.dev',
   );
 }

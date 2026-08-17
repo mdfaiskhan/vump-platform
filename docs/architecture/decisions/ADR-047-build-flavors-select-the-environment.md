@@ -104,6 +104,7 @@ This is stated rather than hidden because it matches how iOS has been carried si
 | Unrecognised flavor reported | ADR-007 | ✅ Checked at the flavor |
 | Namespace / package renamed | Required | ✅ `com.vump.humanarchive` |
 | `flutter analyze` / `flutter test` | Required | ✅ clean / 1038 passing |
-| **Live on device** | — | ✅ **CPH2707: `Firebase initialised for Development (project "vump-dev")`** |
+| **Live on device** | — | ✅ **CPH2707: `Firebase initialised for Development (project "vump-platform-f86af")`**, and a real sign-in against it |
 | iOS schemes | Required by Ch 7.11 §2 | ❌ **Not wired.** No Mac, no Apple account |
 | Verified for staging/prod flavors on device | — | ⬜ Only `dev` was installed |
+| **Real sign-in through the dev flavor** | — | ✅ **CPH2707, live**: authenticated against `vump-platform-f86af`, landed on the Dashboard, session survived a cold restart |

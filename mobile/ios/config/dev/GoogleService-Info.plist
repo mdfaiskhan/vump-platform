@@ -2,18 +2,22 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>CLIENT_ID</key>
+	<string>434336914712-idlang9mftb9ro41qpq092uq2556apcs.apps.googleusercontent.com</string>
+	<key>REVERSED_CLIENT_ID</key>
+	<string>com.googleusercontent.apps.434336914712-idlang9mftb9ro41qpq092uq2556apcs</string>
 	<key>API_KEY</key>
-	<string>AIzaSyAEDX-me736aLT1wSyN9NU5nmApBUMIdOI</string>
+	<string>AIzaSyDipvD18WEAmYvDXDtdmJAA7f6nQFHj1FE</string>
 	<key>GCM_SENDER_ID</key>
-	<string>348203353299</string>
+	<string>434336914712</string>
 	<key>PLIST_VERSION</key>
 	<string>1</string>
 	<key>BUNDLE_ID</key>
 	<string>com.vump.humanarchive.dev</string>
 	<key>PROJECT_ID</key>
-	<string>vump-dev</string>
+	<string>vump-platform-f86af</string>
 	<key>STORAGE_BUCKET</key>
-	<string>vump-dev.firebasestorage.app</string>
+	<string>vump-platform-f86af.firebasestorage.app</string>
 	<key>IS_ADS_ENABLED</key>
 	<false></false>
 	<key>IS_ANALYTICS_ENABLED</key>
@@ -25,6 +29,6 @@
 	<key>IS_SIGNIN_ENABLED</key>
 	<true></true>
 	<key>GOOGLE_APP_ID</key>
-	<string>1:348203353299:ios:7e7df0897e648f851e0026</string>
+	<string>1:434336914712:ios:13ac5be7725d33406cd26d</string>
 </dict>
 </plist>
