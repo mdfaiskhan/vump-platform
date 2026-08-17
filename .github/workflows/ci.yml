@@ -59,6 +59,12 @@ env:
   TERRAFORM_VERSION: 1.15.8
   TFLINT_VERSION: v0.64.0
 
+  # The backend's Node major, pinned for the same reason. This is one of four
+  # places the version lives — the others are backend/package.json's `engines`,
+  # backend/scripts/build.mjs's esbuild target, and the Terraform `runtime`
+  # variable. The Environment consistency job checks all four agree.
+  BACKEND_NODE_VERSION: 24
+
 jobs:
   # The three checks run as separate jobs rather than as steps in one, so a
   # failure in any of them still reports the results of the others. Sequential
@@ -1107,3 +1113,70 @@ jobs:
         run: |
           tflint --init
           tflint --recursive --format=compact
+
+  backend:
+    name: Backend
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # Overrides the workflow-level `mobile` default — the same trap open item
+    # 49 records for the three jobs above.
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          # Pinned for the reason FLUTTER_VERSION is: CI and a developer's
+          # machine must not run two different major versions. Keep in step
+          # with backend/package.json's `engines`, scripts/build.mjs's esbuild
+          # target and the Terraform `runtime` variable — the Environment
+          # consistency job checks all four agree.
+          node-version: ${{ env.BACKEND_NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install
+        # `ci`, not `install`: it installs exactly the committed lockfile and
+        # fails if package.json and the lockfile disagree. ADR-045 commits the
+        # lockfile precisely so this is reproducible.
+        run: npm ci
+
+      - name: Format
+        run: npx prettier --check .
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Type-check
+        run: npm run typecheck
+
+      - name: Test
+        run: npm run test
+
+      - name: Audit
+        # Volume 8, Chapter 8.3 §4 names the tool and the threshold: "an
+        # automated vulnerability scan (npm audit or an equivalent SCA tool)
+        # gating CI", and "Any dependency with a published critical CVE blocks
+        # deployment until patched or explicitly risk-accepted by the project
+        # owner."
+        #
+        # Gated at `high` rather than `critical`, which is stricter than the
+        # chapter requires. The chapter's floor is the point at which a
+        # deployment is blocked; a high-severity advisory in a request path
+        # this project has not written yet is worth failing on while the tree
+        # is small enough to fix it.
+        #
+        # This is the check ADR-045 recorded as owed and unbuilt. At the time
+        # of writing the tree carries six moderate advisories, all transitive
+        # through firebase-admin, and none high or critical.
+        run: npm run audit
+
+      - name: Build
+        # The bundles are what Terraform packages, so a configuration that
+        # type-checks and cannot bundle is still broken. Cheap, and it is the
+        # only step that exercises esbuild.
+        run: npm run build
