@@ -4770,7 +4770,7 @@ That README's sentence is now wrong for anything provisioned from this mission o
 
 ### What Mission 6.1 provisioned — as a plan, not as infrastructure
 
-**Nothing was applied.** `terraform plan` reports **35 to add, 0 to change, 0 to destroy**, and the mission stopped there. What the plan contains:
+**All 35 resources are live.** The mission planned first and applied second, in two attempts — see A-146 for why there were two. `terraform plan` now reports `No changes` at `-detailed-exitcode` 0. What was provisioned:
 
 | Module | Resources | Notes |
 |---|---|---|
@@ -4779,6 +4779,8 @@ That README's sentence is now wrong for anything provisioned from this mission o
 | iam | 23 | Seven roles across ADR-015's six domains + seven log policies + seven Data API policies + two S3 policies, one on each chunks role |
 
 The plan was **32** as first written, with a single `chunks` role holding both S3 policies. Mission 6.1.3 split that role in two (A-143), which added one role and its two attendant policies.
+
+Live counts, read from AWS rather than from state: 1 VPC, 2 subnets, 1 custom route table, 2 associations, 2 security groups, 1 DB subnet group, 1 cluster parameter group, 1 cluster, 1 instance, 7 roles, 16 inline role policies. **0 internet gateways, 0 NAT gateways, 0 VPC endpoints.**
 
 Two things were provisioned outside Terraform, deliberately and documented:
 
@@ -4944,3 +4946,48 @@ What was missing is exactly what V8.4 §3 justifies the account-level control by
 Mission 6.1's standing instruction is to **report** security findings and not fix them. This one was fixed under **explicit, specific authorisation**, recorded here so the exception is not read as precedent. The reasoning that earned the authorisation: a documented requirement in an accepted volume, unimplemented; one idempotent API call; and zero functional risk, since no bucket policy in the account is public and CloudFront — the one service that would need an exception — is not provisioned and uses Origin Access Control rather than public access when it is (ADR-011).
 
 It was applied as its own commit, touching no infrastructure code.
+
+---
+
+### A-146 — The AWS account moved from the Free plan to the Paid plan mid-mission, and why that appears in the history
+
+| | |
+|---|---|
+| **Volume** | 7 — Development Environment, Chapter 7.8 |
+| **Concerns** | Account plan as a precondition for provisioning — a class of constraint no volume names |
+| **Was** | `accountPlanType: FREE`, $120 credits, expiring 2027-02-09 |
+| **Is** | `accountPlanType: PAID`, `ACTIVE`, credits carried over, no expiration |
+| **Authority** | Observation, plus the owner's decision to upgrade |
+| **Class** | Precondition recorded |
+| **Status** | **Closed** |
+| **Date** | 2026-08-17, Mission 6.1 |
+
+Mission 6.1's first `terraform apply` created 26 of 35 resources and then failed:
+
+> `Error: creating RDS Cluster (vump-dev-aurora): api error FreeTierRestrictionError: The specified backup retention period exceeds the maximum available to free tier customers. To remove all limitations, upgrade your account plan.`
+
+Recorded because **an account-plan error in a mission's history reads as a configuration mistake, and this was not one.** `backup_retention_period = 7` was a deliberate decision; it was never changed to work around the restriction, and the eventual apply used the same value.
+
+### Why `terraform plan` could not have caught it
+
+Account-plan restrictions are invisible to the AWS provider. They are not in any resource schema, no data source exposes them, and `plan` computes a diff without calling `CreateDBCluster`. **The plan was correct and the apply still failed** — which is a real limit on what a clean plan proves, and worth knowing before treating one as a safety gate.
+
+What did work as intended: the failure was atomic per resource. No partial cluster existed, Terraform state matched AWS exactly at 26 resources, and the remaining 9 applied later with no edit to any `.tf` file.
+
+### The reason the upgrade mattered more than the retention number
+
+The retention cap was the visible symptom. The disqualifying property was in AWS's own description of the Free plan:
+
+> *"Your free account plan ends after six months or when your credits are fully used — whichever occurs first. After your free account plan expires, your account closes automatically, and you lose access to your resources and data."*
+
+ADR-014 places **all three environments, production included, in this single account**. An account that deletes its own contents on a date is not a foundation for evidentiary footage held under Volume 8, Chapter 8.7's retention obligations. The upgrade removed a constraint that would have expired the platform, not merely a limit on a backup setting.
+
+### What this adds to Volume 7, Chapter 7.8
+
+Chapter 7.8 covers IAM users, CLI profiles and credential hygiene — everything about *who* may call AWS, and nothing about *what the account is permitted to run*. Those are different preconditions and only the first was written down. **The account plan is now a checkable precondition** for any mission that provisions:
+
+```bash
+aws freetier get-account-plan-state
+```
+
+`PAID` / `ACTIVE` is the state this project requires. It is one call and belongs beside the credential checks rather than being discovered by a failed apply.

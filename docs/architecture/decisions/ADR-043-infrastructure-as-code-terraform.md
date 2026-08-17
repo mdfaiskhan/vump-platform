@@ -72,7 +72,7 @@ Licensing is noted rather than resolved: Terraform is BUSL-licensed since 1.5. N
 
 ## Implementation Status
 
-**Implemented, not applied.**
+**Implemented and applied.**
 
 | | Decision | Current state |
 |---|---|---|
@@ -84,5 +84,20 @@ Licensing is noted rather than resolved: Terraform is BUSL-licensed since 1.5. N
 | Provider lock committed | Required | ✅ `.terraform.lock.hcl`, aws v6.60.0 |
 | `terraform validate` clean | Required | ✅ |
 | `tflint` clean | Required | ✅ 0 issues, `terraform` + `aws` rulesets |
-| Applied to AWS | — | ❌ **Nothing applied.** Plan only: 35 to add, 0 to change, 0 to destroy |
+| Applied to AWS | — | ✅ **All 35 resources live in `ap-south-1`.** `terraform plan` reports `No changes` at `-detailed-exitcode` 0 |
+| State in S3, locking works | Required | ✅ 95,329 bytes at `dev/terraform.tfstate`; lock objects acquired and released across four runs, none stale |
 | CI runs Terraform checks | Not decided here | ❌ Not built |
+
+**The apply took two attempts, and the first failure was not a defect in this
+configuration.** AWS rejected the cluster with `FreeTierRestrictionError` —
+account `929570731524` was on the Free account plan, which caps backup retention
+below the seven days ADR-014's environment model called for. 26 of 35 resources
+were created before the error; the account was upgraded to the Paid plan, and
+the remaining 9 applied unchanged, with `backup_retention_period` still 7.
+Amendment **A-146** records the transition, because an account-plan error
+otherwise looks like a configuration mistake in this mission's history.
+
+**Terraform could not have caught this at `plan`.** Account-plan restrictions are
+invisible to the provider — they surface only on the create call. That is a real
+limit of plan-as-a-safety-gate, and it is the argument for applying to a
+disposable environment first, which is what happened here.
