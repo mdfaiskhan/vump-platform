@@ -40,6 +40,12 @@ Mission 4.8's security review found it, by reading `git log` against this file r
 
 ### Added
 
+- **2026-08-18** — **CI gained a twelfth job, and the Node version now checks itself in four places.** ADR-045 wrote a backend standard and nothing executed it — the same gap A-148 recorded for infrastructure, in a second directory. The `Backend` job runs prettier, eslint, `tsc --build`, Vitest, `npm audit` and the esbuild bundle.
+
+  `Environment consistency` was **extended rather than duplicated**, gaining a fourth agreement check: the Node major restated in `engines`, the esbuild target, the Terraform `runtime` variable and `BACKEND_NODE_VERSION` must agree. Proven non-vacuous by moving each of the four sites in turn; each failed with all four paths and values printed, so the message names which one moved.
+
+  The drift is worth a check because of its shape: bundling for one Node major and deploying onto another produces syntax the runtime rejects **at invocation, not at build**, so the pipeline stays green and the defect surfaces as a 502 on the first real request. A-153. Mission 6.2.
+
 - **2026-08-18** — **`backend/` exists.** ADR-015 fixed the runtime as AWS Lambda with Node and TypeScript in August and left the directory empty; Mission 6.2 filled it with an npm workspace, a shared package and seven functions behind a REST API. Fifteen routes, matching Volume 4 Chapter 4.6's catalogue exactly and asserted against it by test.
 
   **Seven functions across six ADR-015 domains.** The `chunks` domain deploys two, because A-143 gave it two execution roles — one that can write an object and not read it, one the reverse — and a Lambda has exactly one execution role. Chapter 4.6 already had the two routes; the split was not retrofitted onto the specification.
@@ -152,6 +158,10 @@ Mission 4.8's security review found it, by reading `git log` against this file r
 - **2026-08-15** — Camera module, capability ladder and fixed capture specification (BR-01/BR-02). Mission 3.1. (`4c7f3d1`)
 
 ### Security
+
+- **2026-08-18** — **Volume 8 Chapter 8.3 §4's dependency scan is implemented.** It named the tool — *"an automated vulnerability scan (npm audit or an equivalent SCA tool) gating CI"* — and nothing ran it. `npm audit` now gates the new `Backend` CI job at `high`, one level stricter than the chapter's `critical` floor.
+
+  Six moderate advisories currently sit below that line, all transitive through `firebase-admin`. They are visible and do not block. A-153. Mission 6.2.
 
 - **2026-08-18** — **The backend verifies Firebase ID tokens with no service-account secret, and that was tested rather than assumed.** ADR-036 claimed `verifyIdToken` is satisfiable by Google's public certificates alone. A probe initialised `firebase-admin` with no credential and every ADC environment variable deleted, then verified a well-formed unsigned token: the SDK failed with *"`kid` claim which does not correspond to a known public key"* — an error only reachable after fetching Google's certificate set.
 

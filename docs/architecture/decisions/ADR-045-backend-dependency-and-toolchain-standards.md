@@ -56,7 +56,7 @@ Checked against what Lambda supports rather than defaulted to either available p
 
 Volume 8, Chapter 8.3 §4 names the tool directly: *"an automated vulnerability scan (npm audit or an equivalent SCA tool) gating CI"*, and *"Any dependency with a published critical CVE blocks deployment until patched or explicitly risk-accepted by the project owner."*
 
-`npm audit --audit-level=high` is available as `npm run audit`. **It is not yet a CI job** — that belongs with the mission that adds a backend CI job, and its absence is recorded rather than implied.
+`npm audit --audit-level=high` runs as `npm run audit` and **gates the `Backend` CI job**. The threshold is stricter than the chapter's: V8.3 §4 blocks on *critical*, and this fails on *high*, because a high-severity advisory is worth failing on while the tree is small enough to fix it.
 
 This is the one place the backend is better off than `mobile/`: ADR-030 records that `dart pub audit` *"does not exist as a subcommand in this SDK"*, so `mobile/` has no equivalent.
 
@@ -114,9 +114,9 @@ A numeric gate becomes reasonable when 6.3 gives the handlers real behaviour to 
 - `backend/` has a toolchain: `npm run verify` runs format, lint, typecheck and tests in one command.
 - **A third language and a third dependency tree.** `mobile/` (pub), `functions/` (npm, retiring per ADR-036), `backend/` (npm). Two of the three are npm and neither shares a lockfile with the other.
 - The bundles are ~1.6 MiB each and cold-start cost is dominated by `firebase-admin`, not by anything this project wrote. If cold starts become a measured problem, the lever is Chapter 4.7's every-function verification requirement, not the layout.
-- **`npm audit` is available and not enforced.** V8.3 §4 is unmet until a backend CI job exists.
+- **V8.3 §4 is met.** `npm audit` gates CI at `high`, one level stricter than the chapter's critical floor. Six moderate advisories currently sit below that line, all transitive through `firebase-admin`; they are visible and do not block.
 - ADR-020 rejected commitlint because it *"would mean a Node toolchain and a lockfile at the root of a Flutter repository"* and said *"Revisit when `backend/` exists."* It exists. The condition is met; the revisit is not this mission's.
-- Node 24 will need revisiting before 2028-04-30, and the `engines` range, `scripts/build.mjs`'s esbuild target and the Terraform `runtime` variable all have to move together.
+- Node 24 will need revisiting before 2028-04-30. **Four** files restate the major — `engines`, the esbuild target, the Terraform `runtime` variable and `BACKEND_NODE_VERSION` — and `Environment consistency` now fails if they disagree, so the upgrade is a four-file change that CI enforces rather than a four-file change someone has to remember.
 
 ## Related Missions
 
@@ -138,5 +138,7 @@ A numeric gate becomes reasonable when 6.3 gives the handlers real behaviour to 
 | Vitest | Required | ✅ 49 tests, 8 files |
 | esbuild per-function bundles | Required | ✅ 7 bundles, tree-shaking verified |
 | `npm audit` script | Required | ✅ available |
-| `npm audit` in CI | V8.3 §4 | ❌ **No backend CI job exists** |
+| `npm audit` in CI | V8.3 §4 | ✅ Gates the `Backend` job, at `high` |
+| Backend CI job | lint, type-check, test, audit, build | ✅ Twelfth job |
+| Node major checked across its four sites | A-151's named risk | ✅ `Environment consistency`, proven non-vacuous |
 | Coverage gate | Deliberately absent | ⬜ Revisit at 6.3 |

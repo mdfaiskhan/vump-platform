@@ -5263,3 +5263,71 @@ Each bundle is **~1.6 MiB**, dominated by `firebase-admin`.
 Tree-shaking works — `RDSDataClient` is provably absent from `auth-verify`'s bundle, because that function's routes never reach the Data API client. So the workspace layout is not what costs the size.
 
 **Chapter 4.7 §1 step 3 is.** *"Each Lambda function verifies the token"* means every one of the seven carries the Firebase Admin SDK, and a package-per-function layout would produce the same seven copies. If cold starts become a measured problem, the lever is that requirement, not the layout — and the alternative would be an API Gateway authorizer, which is an architectural change and would need its own record.
+
+---
+
+### A-153 — The backend's standard is enforced, and the Node major now checks itself
+
+| | |
+|---|---|
+| **Record** | ADR-045 (backend standards), A-148 (the same gap, for infrastructure), A-151 (which named this drift risk) |
+| **Was** | Twelve files of backend standard and zero CI jobs reading them. Four files restating the Node major, with nothing comparing them. |
+| **Is** | A `Backend` job — the twelfth — and a fourth agreement check inside `Environment consistency`. |
+| **Authority** | ADR-045; Volume 8, Chapter 8.3 §4 |
+| **Class** | Enforcement gap closed |
+| **Status** | **Closed** |
+| **Date** | 2026-08-18, Mission 6.2 |
+
+This is A-148 happening a second time, in a second directory, for the same reason: **a standard was written and nothing executed it.** A-148 closed it for `infrastructure/terraform/`; ADR-045 created the identical exposure for `backend/` on the day it was accepted, and Mission 6.2 shipped a scaffold whose entire verification story was `npm run verify` on one laptop.
+
+Worth naming as a pattern rather than as two incidents: **this project's failure mode is not writing the standard, it is that writing it feels like enforcing it.** Both times the gap was found by asking what a grep of `ci.yml` returns, and both times the answer was nothing.
+
+### The `Backend` job
+
+Six steps, scoped to `backend/`: `prettier --check`, `eslint`, `tsc --build`, `vitest run`, `npm audit`, `npm run build`.
+
+**`npm ci`, not `npm install`** — it installs exactly the committed lockfile and fails when `package.json` and the lockfile disagree, which is the property ADR-045 commits the lockfile for in the first place.
+
+**The audit step closes Volume 8, Chapter 8.3 §4**, which named the tool and had no implementation: *"an automated vulnerability scan (npm audit or an equivalent SCA tool) gating CI"*. Gated at `high`, one level stricter than the chapter's `critical` floor. The tree currently carries six moderate advisories, all transitive through `firebase-admin` — visible, below the line, and not blocking.
+
+**The build step is not redundant with type-check.** The esbuild bundles are what Terraform packages; a configuration that type-checks and cannot bundle is still broken, and this is the only step that exercises esbuild at all.
+
+### The Node major, in four places
+
+ADR-045 pins Node 24 and A-151 explains why it is 24 rather than either available precedent. A-151 also recorded the drift risk and left it as an observation:
+
+> *"Three places hold this version and must move together … Nothing checks that they agree. That is a small, real gap — the same shape as the cross-language drift the `Environment consistency` CI job exists to catch, and a candidate for it."*
+
+It is now four places, because the CI job added its own pin, and the check exists:
+
+| File | Holds |
+|---|---|
+| `backend/package.json` | `engines.node` |
+| `backend/scripts/build.mjs` | esbuild `target` |
+| `infrastructure/terraform/modules/api-gateway/variables.tf` | Lambda `runtime` |
+| `.github/workflows/ci.yml` | `BACKEND_NODE_VERSION` |
+
+**Extended rather than added as a job**, for the reason the Terraform check was in 6.1.7: `Environment consistency` already owns agreement between values that no compiler spans, and this is exactly that shape — now across JSON, JavaScript, HCL and YAML.
+
+### Why this particular drift is worth a check
+
+The failure is unusually badly-shaped. **Bundling for one Node major and deploying onto another produces syntax the runtime rejects at invocation, not at build.** The pipeline stays green, the deploy succeeds, and the defect surfaces as a function that returns a 502 on its first real request — the furthest possible point from the one-character change that caused it.
+
+### Proven non-vacuous at every site
+
+A check that passes proves nothing until it has been made to fail. Each of the four sites was moved in turn:
+
+| Planted | Result |
+|---|---|
+| esbuild target left at `node22` | ✅ failed — named `build.mjs (esbuild target) -> Node 22` against three 24s |
+| Terraform runtime at `nodejs22.x` | ✅ failed — named `variables.tf (Lambda runtime) -> Node 22` |
+| `engines` bumped to `>=26 <27` | ✅ failed — named `package.json (engines.node) -> Node 26` |
+| CI pin left behind at `22` | ✅ failed — named `ci.yml (BACKEND_NODE_VERSION) -> Node 22` |
+
+The unmodified tree passes with `ok  Node major agrees in 4 places: 24`.
+
+The output prints **all four paths and values**, not just the disagreement — so the message says which one moved, rather than only that they differ. With four sites and one wrong, the useful information is which.
+
+### What is still not checked
+
+The `Backend` job does not run against `mobile/` or `infrastructure/`, and the Terraform job does not run against `backend/`. That is correct — but it means **no job checks that the two agree about anything except the Node major**. The route templates in `modules/api-gateway/main.tf` and the route table in each handler are the same strings, and nothing compares them; a route added to one and not the other is a 404 discovered at runtime. Named here rather than fixed, because it needs a check that parses both HCL and TypeScript, and that is a larger piece of work than this mission.
