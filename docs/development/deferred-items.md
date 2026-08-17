@@ -30,6 +30,8 @@ An item leaves this table only when its owning mission closes it. Nothing is del
 | 4 | BR-04 is unenforced: the Recording Screen is a top-level route, so it is reachable without passing the Pre-Recording Checklist | Mission 3 | [router.dart:313-317](../../mobile/lib/app/router.dart#L313-L317) |
 | 5 | Ch. 2.4 §4's Role Router does not exist. `/collector` and `/admin` are both directly reachable by anyone | Mission 2 | [router.dart](../../mobile/lib/app/router.dart) — zero `redirect:` declarations |
 | 6 | Typed route arguments unresolved. Every parameter is a raw `String` from `pathParameters`, defaulted to `''` when absent | The first mission adding a parameterised route | [router.dart](../../mobile/lib/app/router.dart) — 7 `pathParameters` reads; ADR-004 Consequences |
+| 7 | `main` and `develop` are 189 commits behind the work. Every mission from 0.17 onward — `infrastructure/`, `backend/`, ADR-011 through ADR-042, `docs/volumes/` — exists only on `mission-0.18.4-ci` | Mission 6.4/6.5 | `git rev-list --count main..mission-0.18.4-ci` → 189. `git ls-tree main docs/architecture/decisions` → ADR-001..010 only |
+| 8 | No scoped per-developer IAM user exists. Volume 7 Ch. 7.8 §1 requires one *"scoped to the dev environment only"*; the single configured profile is `default`, resolving to `user/faisal-admin` | Unassigned — needs a mission | `aws configure list-profiles` → `default`; `aws sts get-caller-identity` → `arn:aws:iam::929570731524:user/faisal-admin`. Amendment A-144 |
 
 ## Notes on individual entries
 
@@ -40,3 +42,7 @@ An item leaves this table only when its owning mission closes it. Nothing is del
 **Items 4 and 5 are both redirect-shaped.** Both close with a route-level `redirect`, which ADR-004's Consequences already name as the home for exactly this. Neither is decided here. Item 5's owner precedes item 4's, so the mechanism will exist before item 4 needs it.
 
 **Item 6 has no fixed mission number** because it is triggered by circumstance rather than scheduled. The parameterised routes already exist as of Mission 1.3, so the trigger is met and the next mission to touch route arguments inherits it.
+
+**Item 7 is a branch-topology defect, not a code defect.** ADR-019 assigns `develop` the role of "everything merged but not yet a release candidate", and `develop` was cut from `main` — which predates Mission 0.17. Mission 6.1 was originally branched from it and had to be recut from `mission-0.18.4-ci`, because none of the ADRs, volumes or infrastructure it was told to read existed on the branch. Recorded here rather than fixed in 6.1: a 189-commit reconciliation onto two protected branches is its own piece of work with its own review, and folding it into an infrastructure mission would hide it inside an unrelated diff.
+
+**Item 8 is not blocking and is not free.** Every `terraform plan`, and every `apply` that follows, runs with administrative rights in the account that holds `vump-platform-prod`. ADR-014 already names IAM as the only thing separating environments in a single account; item 8 is that argument applied to the human rather than to a service role. It has no owning mission yet, which is itself the thing to fix.

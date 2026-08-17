@@ -40,11 +40,18 @@ Volume 4, Chapter 4.9 §2 is specific: *"the chunk-registration Lambda can gener
 
 Two policy templates implement that, in `infrastructure/aws/iam/`:
 
-| Function | Actions | Deliberately absent |
+| Template | Actions | Deliberately absent |
 |---|---|---|
-| chunk-registration | `s3:PutObject`, `s3:AbortMultipartUpload`, `s3:ListMultipartUploadParts` | `s3:GetObject` — it presigns uploads; it never reads footage |
-| chunk-verification | `s3:GetObject`, `s3:GetObjectAttributes`, `s3:GetObjectVersionAttributes` | `s3:PutObject` — it checks integrity; it never writes |
+| `chunks-presign-upload-s3-policy` | `s3:PutObject`, `s3:AbortMultipartUpload`, `s3:ListMultipartUploadParts` | `s3:GetObject` — it presigns uploads; it never reads footage |
+| `chunks-verify-object-s3-policy` | `s3:GetObject`, `s3:GetObjectAttributes`, `s3:GetObjectVersionAttributes` | `s3:PutObject` — it checks integrity; it never writes |
 | metadata | *(no S3 policy)* | everything — it touches Aurora only |
+
+**Both templates now attach to one role.** Mission 6.1 created six execution
+roles, one per ADR-015 domain, and both of these belong to `chunks` — so
+`vump-{env}-chunks` holds `s3:PutObject` and `s3:GetObject` together. The "deliberately
+absent" column above describes each *template*, and no longer describes the
+*principal*. Amendment **A-143** records the consequence and the two-role fix;
+the paragraph below is the reason it matters.
 
 **No role has `s3:DeleteObject`.** Deletion of raw footage is lifecycle's job, and ADR-013 gates it behind legal-hold enforcement. A backend role that can delete a chunk is a backend bug that can destroy evidence.
 

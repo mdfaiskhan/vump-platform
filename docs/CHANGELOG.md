@@ -40,6 +40,14 @@ Mission 4.8's security review found it, by reading `git log` against this file r
 
 ### Added
 
+- **2026-08-17** — **The development AWS environment is described in Terraform, and nothing has been applied.** ADR-043 closes Volume 4 Chapter 4.9 §5's infrastructure-as-code deferral — which pointed at Volume 7, where the choice was never made — and `infrastructure/terraform/` now holds three modules (network, database, iam) and one root module per environment, of which only `dev` exists.
+
+  The plan is **32 to add, 0 to change, 0 to destroy**: a `10.0.0.0/16` VPC with two private database subnets and no gateway of any kind, an Aurora Serverless v2 PostgreSQL 16.14 cluster scaling 0–2 ACU with a single writer, and six Lambda execution roles, one per ADR-015 resource domain, with no function attached to any of them.
+
+  `terraform validate`, `terraform fmt -recursive -check` and `tflint --recursive` are all clean. **`terraform apply` has not been run**, so none of this exists in AWS. A-141. Mission 6.1.
+
+- **2026-08-17** — **The two IAM policy templates are rendered by something for the first time.** `infrastructure/aws/iam/*.json.tmpl` have carried `__ENV__` and `__BUCKET__` placeholders since Mission 0.17 with no tool that substituted them; the Terraform root module now does, so they are the single definition of the chunk S3 grants rather than a declaration nothing read. Renamed to sit under ADR-015's `chunks` domain: `chunks-presign-upload-s3-policy.json.tmpl` and `chunks-verify-object-s3-policy.json.tmpl`. A-141. Mission 6.1.
+
 - **2026-08-17** — **Chapter 2.10's accessibility guidelines are now enforced by machine, not by review.** Three sweeps run across all ten screens Mission 5 built: `androidTapTargetGuideline`, whose `Size(48, 48)` is the same number Chapter 2.10 §3 states, so the threshold is not this project's to restate in a third place; `labeledTapTargetGuideline` for §4; and `textContrastGuideline` for §2.3, in **both themes**, because §2.3 asks for dark mode as *"a validated second pass … never an automatic filter"*.
 
   All three ship inside `flutter_test`. **No dependency was added**, and a hand-rolled bounds assertion was rejected for the reason that it would restate a published threshold with nothing tying the copies together. This closes open item 105, where `AppSizes.minTouchTarget` held the number and nothing checked it.
@@ -116,6 +124,12 @@ Mission 4.8's security review found it, by reading `git log` against this file r
 - **2026-08-15** — Camera module, capability ladder and fixed capture specification (BR-01/BR-02). Mission 3.1. (`4c7f3d1`)
 
 ### Security
+
+- **2026-08-17** — **The `chunks` execution role holds `s3:PutObject` and `s3:GetObject` together, and that is a narrowing lost.** ADR-015 fixes six resource domains, so both chunk policy templates attach to one role. `aws-sdk-integration.md` records why the previous split mattered: a presigned URL carries the signer's permissions, so a registration role without `GetObject` *cannot* produce a URL that reads footage, however the handler is written.
+
+  The role can now. A defect in the registration path that reaches the presigner with a `GetObject` command yields a URL that reads raw footage — and presigned URLs are handed to devices by design. Recorded rather than fixed, because six-roles-for-six-domains was the decision taken; the fix is two roles under one domain. A-143, carried to Mission 6.2.
+
+- **2026-08-17** — **No database password exists in any file.** The Aurora cluster uses `manage_master_user_password`, so RDS creates and rotates the credential in Secrets Manager directly, per Volume 8 Chapter 8.4 §2. Nothing expresses a password in Terraform, so nothing writes one into Terraform state — which is why the state bucket's encryption and versioning were configured before the first `plan` ran. A documented exception to Mission 6.1's "create no Secrets Manager entries" scope line. ADR-043, ADR-044. Mission 6.1.
 
 - **2026-08-17** — **A new key is persisted to `shared_preferences`, and `shared_preferences` gained a fourth owner.** `onboarding_seen_v1` is a single boolean recording that C-01's permission-priming carousel has run to completion on this device. It is written once, only ever as `true`, and read synchronously by `OnboardingGuard` inside GoRouter's redirect.
 
