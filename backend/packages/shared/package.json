@@ -1,0 +1,19 @@
+{
+  "name": "@vump/shared",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Code every Lambda needs: the Chapter 4.6 envelope, the error taxonomy, token verification, the Data API client and the logger.",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "dependencies": {
+    "@aws-sdk/client-rds-data": "^3.1111.0",
+    "firebase-admin": "^14.2.0"
+  }
+}

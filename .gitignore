@@ -85,6 +85,20 @@ target/
 !example.tfvars
 
 # ---------------------------------------------------------------------------
+# Backend build output - see ADR-045
+# ---------------------------------------------------------------------------
+# `backend/artifacts/` holds the esbuild bundles and the zips Terraform packages
+# from them; `dist/` holds tsc output. Both are rebuilt by `npm run build` from
+# committed sources, and neither is read from a clean checkout without it.
+#
+# `backend/package-lock.json` is NOT ignored. ADR-045 commits it for the same
+# reason ADR-030 commits pubspec.lock: it is what makes an install reproducible.
+backend/artifacts/
+backend/**/dist/
+backend/.tsbuildinfo
+backend/**/*.tsbuildinfo
+
+# ---------------------------------------------------------------------------
 # Dependencies
 # ---------------------------------------------------------------------------
 node_modules/
