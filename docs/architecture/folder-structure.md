@@ -58,9 +58,11 @@ Each top-level directory is a **deployment or governance boundary**, not a group
 | | |
 |---|---|
 | **Purpose** | Declared AWS state, version-controlled. |
-| **Owns** | `aws/s3/` (bucket policies, lifecycle rules), `aws/iam/` (policy templates), `aws/cloudfront/` (distributions, Origin Access Control), `aws/config/environments.json`, and the shell that applies them. |
+| **Owns** | `aws/s3/` (bucket policies, lifecycle rules), `aws/iam/` (policy templates), `aws/cloudfront/` (distributions, Origin Access Control), `aws/config/environments.json`, the shell that applies them, and `terraform/` (ADR-043). |
 | **Must not contain** | Application code of any language, or secrets. Credentials come from the AWS profile and Secrets Manager (ADR-016). |
-| **Deploys as** | AWS API calls, applied deliberately and never by CI. |
+| **Deploys as** | AWS API calls, applied deliberately and never by CI — `terraform apply` included. |
+
+**Two mechanisms, and the boundary between them.** `aws/` is declared state applied by hand; `terraform/` is infrastructure as code with real state and drift detection. ADR-043 draws the line at **what already existed**: the three S3 buckets and their policies stay in `aws/`, because they hold evidentiary footage that cannot be recreated and are deliberately outside the blast radius of a `terraform destroy`. Everything provisioned from Mission 6.1 onward is Terraform's. A reader must know which governs what, and both READMEs say so.
 
 The separation from `backend/` is the one most easily confused. **`backend/` is code that runs; `infrastructure/` is state that exists.** A Lambda handler is `backend/`; the IAM policy that lets it read a bucket is `infrastructure/`.
 

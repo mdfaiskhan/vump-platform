@@ -10,7 +10,11 @@ Every file here is the **declared** state. AWS is the **actual** state. They are
 
 A configuration applied by hand in the console has no history, no review, and no way to tell whether staging and production drifted apart. These files are reviewable in a pull request, diffable between environments, and reapplyable after a mistake.
 
-This is not infrastructure-as-code. There is no state file and nothing detects drift — Volume 4, Chapter 4.9 §5 defers the CDK/Terraform choice to Volume 7. Until that decision is taken, these files plus the verification commands below are the substitute, and the gap should be understood rather than assumed away.
+This is not infrastructure-as-code. There is no state file and nothing detects drift, **for the resources in this directory**.
+
+That was the whole picture until Mission 6.1. It is not any longer: **ADR-043 adopts Terraform**, and everything provisioned from that mission onward lives in `infrastructure/terraform/` with real state and real drift detection. Volume 4, Chapter 4.9 §5's deferral is closed (amendment A-141).
+
+**The resources here were deliberately not migrated.** ADR-043 records why: these buckets hold evidentiary footage under Volume 8, Chapter 8.7's retention obligations and are the one thing in this account that cannot be recreated, so they stay outside the blast radius of a `terraform destroy`. The cost is that two mechanisms now govern AWS state, and a reader has to know which governs what. **The boundary is what already existed:** the buckets, their policies and their lifecycle rules are applied by hand from this README; everything newer is Terraform's.
 
 ---
 
