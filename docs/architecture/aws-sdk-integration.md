@@ -38,20 +38,26 @@ This is not stylistic. Role-derived credentials rotate automatically, expire on 
 
 Volume 4, Chapter 4.9 §2 is specific: *"the chunk-registration Lambda can generate presigned S3 URLs but cannot itself read arbitrary S3 objects; the metadata Lambda can write to `chunk_metadata` but has no S3 permissions at all."*
 
-Two policy templates implement that, in `infrastructure/aws/iam/`:
+Two policy templates implement that, in `infrastructure/aws/iam/`, and **each
+attaches to its own role** — the separation is enforced by the principal, not by
+the template:
 
-| Template | Actions | Deliberately absent |
-|---|---|---|
-| `chunks-presign-upload-s3-policy` | `s3:PutObject`, `s3:AbortMultipartUpload`, `s3:ListMultipartUploadParts` | `s3:GetObject` — it presigns uploads; it never reads footage |
-| `chunks-verify-object-s3-policy` | `s3:GetObject`, `s3:GetObjectAttributes`, `s3:GetObjectVersionAttributes` | `s3:PutObject` — it checks integrity; it never writes |
-| metadata | *(no S3 policy)* | everything — it touches Aurora only |
+| Role | Template | Actions | Deliberately absent |
+|---|---|---|---|
+| `vump-{env}-chunks-upload` | `chunks-presign-upload-s3-policy` | `s3:PutObject`, `s3:AbortMultipartUpload`, `s3:ListMultipartUploadParts` | `s3:GetObject` — it presigns uploads; it never reads footage |
+| `vump-{env}-chunks-verify` | `chunks-verify-object-s3-policy` | `s3:GetObject`, `s3:GetObjectAttributes`, `s3:GetObjectVersionAttributes` | `s3:PutObject` — it checks integrity; it never writes |
+| `vump-{env}-metadata` | *(none)* | *(no S3 policy)* | everything — it touches Aurora only |
 
-**Both templates now attach to one role.** Mission 6.1 created six execution
-roles, one per ADR-015 domain, and both of these belong to `chunks` — so
-`vump-{env}-chunks` holds `s3:PutObject` and `s3:GetObject` together. The "deliberately
-absent" column above describes each *template*, and no longer describes the
-*principal*. Amendment **A-143** records the consequence and the two-role fix;
-the paragraph below is the reason it matters.
+**Seven roles across ADR-015's six domains.** The `chunks` domain carries two,
+because a domain is a unit of code decomposition and a role is a unit of
+privilege; the other five domains carry one each. Mission 6.1 briefly merged
+both chunk policies onto a single role and that is recorded, with the reasoning,
+in amendment **A-143**.
+
+**Two chunks roles means two chunks functions.** A Lambda has exactly one
+execution role, so the `chunks` domain deploys `chunk-registration` and
+`chunk-verification` as separate functions — which is how Volume 8, Chapter 8.4
+§1 already tabulates them.
 
 **No role has `s3:DeleteObject`.** Deletion of raw footage is lifecycle's job, and ADR-013 gates it behind legal-hold enforcement. A backend role that can delete a chunk is a backend bug that can destroy evidence.
 

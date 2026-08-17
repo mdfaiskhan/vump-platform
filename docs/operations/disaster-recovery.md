@@ -115,11 +115,11 @@ aws s3api get-bucket-policy-status --bucket vump-platform-prod   # IsPublic must
 
 ### 5. IAM recovery
 
-Policy templates are in `infrastructure/aws/iam/`. **Still not applied** — Mission 6.1 planned six execution roles but applied nothing, so no role exists in AWS yet.
+Policy templates are in `infrastructure/aws/iam/`. **Still not applied** — Mission 6.1 planned seven execution roles but applied nothing, so no role exists in AWS yet.
 
 Recovery is no longer re-rendering and re-attaching by hand: the roles are Terraform's (ADR-043), so recovery is `terraform apply` from `infrastructure/terraform/environments/{slug}/`, which re-renders these templates itself. The invariants to re-verify after any IAM change:
 
-- ~~`chunk-registration` has **no** `s3:GetObject`~~ — **no longer holds.** Mission 6.1 consolidated both chunk policies onto the single `chunks` role per ADR-015's six domains, so that role holds `s3:PutObject` and `s3:GetObject` together. A presigned URL carries the signer's permissions, so this is a real widening — amendment **A-143** records it and the two-role fix.
+- **`vump-{env}-chunks-upload` has no `s3:GetObject`, and `vump-{env}-chunks-verify` has no `s3:PutObject`.** A presigned URL carries the signer's permissions, so this is what makes the narrowness real rather than a property of the handler code. Mission 6.1 briefly merged both onto one `chunks` role; A-143 records that and its correction. **Re-verify this after any change to `modules/iam/main.tf`'s `roles` map** — it is one line away from being undone.
 - **No role has `s3:DeleteObject`.** A backend role that can delete a chunk is a backend bug that can destroy evidence.
 
 ### 6. Secrets Manager recovery

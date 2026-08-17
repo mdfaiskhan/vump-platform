@@ -115,7 +115,7 @@ tflint --recursive                        # from infrastructure/terraform/
 | **Security groups** | The Aurora group carries **no rules**. The VPC's default group is adopted and emptied. |
 | **Aurora** | Serverless v2, PostgreSQL 16.14, 0–2 ACU, one writer, no reader. Encrypted, 7-day backups. |
 | **Data API** | Enabled. It is the only way to reach the cluster. |
-| **IAM** | Six execution roles, one per ADR-015 domain, with no function attached yet. |
+| **IAM** | Seven execution roles across ADR-015's six domains — `chunks` carries two, `chunks-upload` and `chunks-verify`, with opposite S3 grants. No function attached yet. |
 
 ### The CIDR plan, including what is not built
 

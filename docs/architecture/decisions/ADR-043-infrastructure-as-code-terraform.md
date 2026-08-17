@@ -84,5 +84,5 @@ Licensing is noted rather than resolved: Terraform is BUSL-licensed since 1.5. N
 | Provider lock committed | Required | ✅ `.terraform.lock.hcl`, aws v6.60.0 |
 | `terraform validate` clean | Required | ✅ |
 | `tflint` clean | Required | ✅ 0 issues, `terraform` + `aws` rulesets |
-| Applied to AWS | — | ❌ **Nothing applied.** Plan only: 32 to add, 0 to change, 0 to destroy |
+| Applied to AWS | — | ❌ **Nothing applied.** Plan only: 35 to add, 0 to change, 0 to destroy |
 | CI runs Terraform checks | Not decided here | ❌ Not built |
