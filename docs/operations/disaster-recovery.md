@@ -115,7 +115,7 @@ aws s3api get-bucket-policy-status --bucket vump-platform-prod   # IsPublic must
 
 ### 5. IAM recovery
 
-Policy templates are in `infrastructure/aws/iam/`. **Still not applied** — Mission 6.1 planned seven execution roles but applied nothing, so no role exists in AWS yet.
+Policy templates are in `infrastructure/aws/iam/`, and are **applied** — Mission 6.1 created seven execution roles in `ap-south-1`, each carrying its policies inline. No AWS-managed policy is attached to any of them, so `list-attached-role-policies` returns `[]` and `list-role-policies` is the call that shows what a role holds.
 
 Recovery is no longer re-rendering and re-attaching by hand: the roles are Terraform's (ADR-043), so recovery is `terraform apply` from `infrastructure/terraform/environments/{slug}/`, which re-renders these templates itself. The invariants to re-verify after any IAM change:
 

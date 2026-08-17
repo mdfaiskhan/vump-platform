@@ -62,16 +62,42 @@ The check that works is the AWS region-and-version table, corroborated by `rds-d
 
 ## Implementation Status
 
-**Implemented, not applied.**
+**Implemented, applied, and proven to work.**
 
 | | Decision | Current state |
 |---|---|---|
-| `enable_http_endpoint` | Required | ✅ In the plan |
-| No NAT, no IGW, no VPC endpoints | Required | ✅ None in the configuration |
-| Aurora security group with no rules | Required | ✅ |
-| No `AWSLambdaVPCAccessExecutionRole` | Required | ✅ Attached to no role |
+| `enable_http_endpoint` | Required | ✅ `HttpEndpointEnabled: true` on the live cluster |
+| No NAT, no IGW, no VPC endpoints | Required | ✅ Verified live: **0 / 0 / 0** in `vpc-0e115e399af65c305` |
+| Aurora security group with no rules | Required | ✅ `vump-dev-aurora-sg`, 0 ingress and 0 egress |
+| No `AWSLambdaVPCAccessExecutionRole` | Required | ✅ All seven roles report `AttachedPolicies: []` |
 | Engine version Data API-supported | Required | ✅ 16.14, against a 16.1 floor |
-| `password_encryption = scram-sha-256` | Required | ✅ Cluster parameter group |
+| `password_encryption = scram-sha-256` | Required | ✅ Confirmed **from inside the database**, not from the parameter group |
+| One writer, no reader | Required | ✅ `vump-dev-aurora-writer`, `db.serverless`; 0 readers |
 | Pagination on Admin reads | Required | ⬜ Mission 6.2 — no backend exists |
 | Per-table permission | Volume 8, Chapter 8.4 §1 | ⬜ **Not expressible in IAM.** Mission 6.3, via PostgreSQL `GRANT` |
-| Applied to AWS | — | ❌ Plan only |
+| Applied to AWS | — | ✅ All 35 resources live; `terraform plan` reports `No changes` |
+
+### The access path is proven, not merely configured
+
+A cluster can be correctly configured and still unreachable. `rds-data
+execute-statement` against the live cluster, authenticating with the
+RDS-managed master credential by ARN:
+
+```
+SELECT 1
+  → { "records": [[{ "longValue": 1 }]] }
+
+SELECT current_database(), current_user, version(), current_setting('password_encryption')
+  → vump_dev
+    vump_admin
+    PostgreSQL 16.14 on aarch64-unknown-linux-gnu …
+    scram-sha-256
+```
+
+That one round trip exercises the whole chain — IAM authorises `rds-data` on the
+cluster ARN, Secrets Manager yields the credential to a caller holding only its
+ARN, and the HTTPS endpoint reaches a cluster that has **no network route to
+anything**. It also confirms four separate decisions from inside the database
+rather than from the API that configured it: the database name, the named master
+user, the engine version, and the `scram-sha-256` setting the Data API depends
+on.

@@ -40,11 +40,19 @@ Mission 4.8's security review found it, by reading `git log` against this file r
 
 ### Added
 
-- **2026-08-17** — **The development AWS environment is described in Terraform, and nothing has been applied.** ADR-043 closes Volume 4 Chapter 4.9 §5's infrastructure-as-code deferral — which pointed at Volume 7, where the choice was never made — and `infrastructure/terraform/` now holds three modules (network, database, iam) and one root module per environment, of which only `dev` exists.
+- **2026-08-17** — **The development AWS environment exists, and it is described in Terraform.** ADR-043 closes Volume 4 Chapter 4.9 §5's infrastructure-as-code deferral — which pointed at Volume 7, where the choice was never made — and `infrastructure/terraform/` now holds three modules (network, database, iam) and one root module per environment, of which only `dev` exists.
 
-  The plan is **35 to add, 0 to change, 0 to destroy**: a `10.0.0.0/16` VPC with two private database subnets and no gateway of any kind, an Aurora Serverless v2 PostgreSQL 16.14 cluster scaling 0–2 ACU with a single writer, and seven Lambda execution roles across ADR-015's six resource domains, with no function attached to any of them.
+  **35 resources applied**: a `10.0.0.0/16` VPC with two private database subnets and no gateway of any kind, an Aurora Serverless v2 PostgreSQL 16.14 cluster scaling 0–2 ACU with a single writer, and seven Lambda execution roles across ADR-015's six resource domains, with no function attached to any of them. `terraform plan` reports `No changes`; every resource was also confirmed by reading AWS directly rather than the state file.
 
-  `terraform validate`, `terraform fmt -recursive -check` and `tflint --recursive` are all clean. **`terraform apply` has not been run**, so none of this exists in AWS. A-141. Mission 6.1.
+  **The Data API path is proven, not just configured.** `SELECT 1` through `rds-data execute-statement`, authenticating with the RDS-managed master credential by ARN, returns `1` from a cluster that has no network route to anything.
+
+  `terraform validate`, `terraform fmt -recursive -check` and `tflint --recursive` are clean. A-141, A-146. Mission 6.1.
+
+- **2026-08-17** — **The AWS account moved from the Free plan to the Paid plan, and that is a precondition nobody had written down.** The first apply created 26 of 35 resources and then failed with `FreeTierRestrictionError` — the Free plan caps RDS backup retention below the seven days ADR-014's model calls for.
+
+  `backup_retention_period` was never changed to work around it; the account was upgraded and the remaining 9 resources applied with the same value. The retention cap was only the visible symptom: a Free-plan account *"closes automatically"* when its credits run out or its term ends, deleting its resources — and ADR-014 puts production in this same account.
+
+  **`terraform plan` cannot catch this.** Account-plan restrictions are in no resource schema and no data source; they surface only on the create call. `aws freetier get-account-plan-state` must report `PAID` / `ACTIVE`, and it now belongs beside the credential checks in Volume 7 Chapter 7.8. A-146, deferred item 9. Mission 6.1.
 
 - **2026-08-17** — **The two IAM policy templates are rendered by something for the first time.** `infrastructure/aws/iam/*.json.tmpl` have carried `__ENV__` and `__BUCKET__` placeholders since Mission 0.17 with no tool that substituted them; the Terraform root module now does, so they are the single definition of the chunk S3 grants rather than a declaration nothing read. Renamed to sit under ADR-015's `chunks` domain: `chunks-presign-upload-s3-policy.json.tmpl` and `chunks-verify-object-s3-policy.json.tmpl`. A-141. Mission 6.1.
 
