@@ -4880,3 +4880,30 @@ The naming half is cosmetic — the volume's is pre-rename (A-002), and `.env.ex
 **The scope half is not cosmetic.** V7.8 §1 requires a per-developer user scoped to dev. The live principal is an administrator, and every read in this mission — and every `terraform plan` and future `apply` — runs with administrative rights in an account that also holds `vump-platform-prod`. ADR-014 already records that in a single-account model IAM is the only thing preventing a development context from reaching production. That statement is about service roles; it applies at least as strongly to the human.
 
 Not fixed in Mission 6.1, whose IAM scope is roles rather than users.
+
+---
+
+### A-145 — Volume 8 Chapter 8.4 §3's account-level Block Public Access was absent, and is now set
+
+| | |
+|---|---|
+| **Volume** | 8 — Security, Chapter 8.4 §3 |
+| **Says** | *"S3 bucket public access is blocked at the account level (AWS's Block Public Access setting), not just at the individual bucket policy level, so a future misconfiguration can't accidentally expose it."* |
+| **Was** | Not configured. `get-public-access-block` returned `NoSuchPublicAccessBlockConfiguration` for account 929570731524. |
+| **Is** | All four settings `true` at the account level. |
+| **Authority** | Volume 8, Chapter 8.4 §3 — an accepted requirement, unimplemented |
+| **Class** | Requirement implemented |
+| **Status** | **Closed** |
+| **Date** | 2026-08-17, Mission 6.1 |
+
+### What was and was not exposed
+
+Nothing was public. All three chunk buckets already carried **per-bucket** Block Public Access with all four settings enabled, and `get-bucket-policy-status` reported `IsPublic: false` for each.
+
+What was missing is exactly what V8.4 §3 justifies the account-level control by: the **future** bucket. A bucket created without per-bucket BPA — by a script, by a console click, by a Terraform resource that omits it — would have had no backstop. `vump-platform-tfstate`, created in this same mission, is precisely such a bucket; it was given per-bucket BPA explicitly, which is the kind of step that gets forgotten once.
+
+### Why this was fixed rather than reported
+
+Mission 6.1's standing instruction is to **report** security findings and not fix them. This one was fixed under **explicit, specific authorisation**, recorded here so the exception is not read as precedent. The reasoning that earned the authorisation: a documented requirement in an accepted volume, unimplemented; one idempotent API call; and zero functional risk, since no bucket policy in the account is public and CloudFront — the one service that would need an exception — is not provisioned and uses Origin Access Control rather than public access when it is (ADR-011).
+
+It was applied as its own commit, touching no infrastructure code.
