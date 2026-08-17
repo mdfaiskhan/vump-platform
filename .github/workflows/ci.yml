@@ -53,6 +53,12 @@ env:
   # Bump deliberately, in a `build:` commit, alongside the local toolchain.
   FLUTTER_VERSION: 3.44.9
 
+  # Pinned for the same reason, and to the versions Mission 6.1 used locally.
+  # An unpinned Terraform would change the `fmt` result under this workflow
+  # without anyone editing a `.tf` file.
+  TERRAFORM_VERSION: 1.15.8
+  TFLINT_VERSION: v0.64.0
+
 jobs:
   # The three checks run as separate jobs rather than as steps in one, so a
   # failure in any of them still reports the results of the others. Sequential
@@ -790,16 +796,22 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Verify Dart, infrastructure config and shell agree
+      - name: Verify Dart, infrastructure config, shell and Terraform agree
         run: |
-          # The environment model is expressed in three languages: Dart
-          # (app_environment.dart), JSON (environments.json) and shell
-          # (env.sh). No compiler checks across that boundary, so this does.
+          # The environment model is expressed in four languages: Dart
+          # (app_environment.dart), JSON (environments.json), shell (env.sh)
+          # and HCL (infrastructure/terraform/environments/*/variables.tf). No
+          # compiler checks across that boundary, so this does.
+          #
+          # Terraform is the fourth and newest (ADR-043). It was added by
+          # Mission 6.1 and restates the region and bucket names that
+          # environments.json already owns — a fourth copy, which is precisely
+          # what this job exists to catch.
           #
           # Drift here is not cosmetic — a staging build pointed at the
           # production bucket is exactly this class of defect.
           python3 - <<'PY'
-          import json, io, re, sys
+          import json, io, os, re, sys
           status = 0
           def fail(m):
               global status
@@ -836,6 +848,66 @@ jobs:
               fail("env.sh region is not ap-south-1 (ADR-011)")
           if not status:
               print("ok  region is ap-south-1 everywhere")
+
+          # --- Terraform, the fourth language holding these same values ------
+          #
+          # ADR-043 added infrastructure/terraform/, and its variable defaults
+          # restate the region and the bucket names that environments.json
+          # already owns. That is a fourth copy with no compiler between it and
+          # the other three, which is precisely what this job exists to catch.
+          #
+          # HCL is parsed by regex rather than a library: the job installs
+          # nothing, and the shapes read here are variable defaults holding a
+          # quoted scalar. A `default` inside a heredoc description would fool
+          # it, so only the first `default =` in each variable block is taken.
+          tf_root = 'infrastructure/terraform/environments'
+          if not os.path.isdir(tf_root):
+              print('--  no infrastructure/terraform/environments — nothing to cross-check')
+          else:
+              slug_for = {env: slug for env, slug in dart_map.items()}
+              env_for = {slug: env for env, slug in slug_for.items()}
+              roots = sorted(
+                  d for d in os.listdir(tf_root)
+                  if os.path.isfile(os.path.join(tf_root, d, 'variables.tf'))
+              )
+              if not roots:
+                  fail(f'{tf_root} exists but holds no environment root with variables.tf')
+
+              for slug_dir in roots:
+                  path = os.path.join(tf_root, slug_dir, 'variables.tf')
+                  hcl = io.open(path, encoding='utf-8').read()
+
+                  defaults = {}
+                  for block in re.split(r'\nvariable\s+"', '\n' + hcl)[1:]:
+                      name = block.split('"', 1)[0]
+                      m = re.search(r'^\s*default\s*=\s*"([^"]*)"', block, re.M)
+                      if m:
+                          defaults[name] = m.group(1)
+
+                  if slug_dir not in env_for:
+                      fail(f'{path}: directory "{slug_dir}" is not an AWS slug '
+                           f'({sorted(env_for)}) — see naming-conventions.md §7.1')
+                      continue
+                  env = env_for[slug_dir]
+
+                  got = defaults.get('environment_slug')
+                  if got != slug_dir:
+                      fail(f'{path}: environment_slug default "{got}" != directory "{slug_dir}"')
+
+                  got = defaults.get('region')
+                  if got != cfg['region']:
+                      fail(f'{path}: region default "{got}" != environments.json '
+                           f'"{cfg["region"]}" (ADR-011)')
+
+                  got = defaults.get('chunk_bucket')
+                  want = cfg['environments'][env]['chunkBucket']
+                  if got != want:
+                      fail(f'{path}: chunk_bucket default "{got}" != environments.json '
+                           f'chunkBucket "{want}" for {env}')
+
+              if not status:
+                  print(f'ok  Terraform defaults agree with environments.json '
+                        f'in {len(roots)} environment root(s): {roots}')
 
           sys.exit(status)
           PY
@@ -973,3 +1045,65 @@ jobs:
             || echo "ok  no hardcoded AWS endpoint in lib/"
 
           exit $status
+
+  terraform:
+    name: Terraform
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # Overrides the workflow-level `mobile` default. This job's subject is
+    # `infrastructure/terraform/`, and every command below is written relative
+    # to it — the same trap open item 49 records for the two jobs above.
+    defaults:
+      run:
+        working-directory: infrastructure/terraform
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TERRAFORM_VERSION }}
+          # The wrapper rewrites stdout to feed step outputs, which turns a
+          # clean `fmt -check` diff into unreadable noise. Nothing here reads
+          # step outputs.
+          terraform_wrapper: false
+
+      - name: terraform fmt
+        run: terraform fmt -recursive -check -diff
+
+      - name: terraform init and validate
+        # `-backend=false` is what makes this runnable with no credentials.
+        # A real `init` would reach the S3 backend in ap-south-1, and this
+        # workflow has no secrets by design — see the header. Validation needs
+        # the provider schema and the module sources, not the state.
+        #
+        # Each environment root is validated separately. Modules are validated
+        # transitively: every one is reachable from a root through `source`.
+        run: |
+          shopt -s nullglob
+          roots=(environments/*/)
+          if [ ${#roots[@]} -eq 0 ]; then
+            echo "::error::no environment roots under infrastructure/terraform/environments/"
+            exit 1
+          fi
+          for d in "${roots[@]}"; do
+            echo "--- $d"
+            terraform -chdir="$d" init -backend=false -input=false -no-color
+            terraform -chdir="$d" validate -no-color
+          done
+
+      - name: Set up TFLint
+        uses: terraform-linters/setup-tflint@v4
+        with:
+          tflint_version: ${{ env.TFLINT_VERSION }}
+
+      - name: tflint
+        # `--init` fetches the AWS ruleset pinned in .tflint.hcl. The bundled
+        # terraform ruleset catches unused declarations and missing version
+        # constraints; the AWS one catches values the provider will reject at
+        # apply time — an invalid instance class, an engine version that does
+        # not exist — which is the half a clean `validate` does not cover.
+        run: |
+          tflint --init
+          tflint --recursive --format=compact
