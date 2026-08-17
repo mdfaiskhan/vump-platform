@@ -4749,3 +4749,42 @@ Recorded so they are not re-litigated.
 | V8, Ch. 8.4 | SSE-S3, upgradeable to SSE-KMS only on contractual trigger | Correct and implemented. Not a placeholder — do not "upgrade" without the trigger. |
 | V4, Ch. 4.10 §3 | No public access | Correct and implemented. |
 | V4, Ch. 4.9 §4 | One bucket per environment | Correct and implemented, at the permitted minimum tier. |
+
+---
+
+### A-147 — ADR-019's squash-into-`develop` rule is suspended once, for the reconciliation merge
+
+| | |
+|---|---|
+| **Record** | ADR-019 — Branching Strategy, "Merge strategy — and why it differs per target" |
+| **Says** | *"Into `develop` — **Squash** — One unit of work, one commit."* |
+| **Exception** | This one merge uses a **merge commit**. The rule is not changed and applies to every other pull request. |
+| **Authority** | ADR-019 remains binding; this is a recorded deviation, not an amendment to it |
+| **Class** | One-time exception |
+| **Status** | **Closed** on merge |
+| **Date** | 2026-08-17, Mission 6.1.7 |
+
+`develop` was created in Mission 6.1 by branching from `main`, and `main` predates Mission 0.17. The result is that `develop` is **189 commits behind the work** — `infrastructure/`, `backend/`, ADR-011 through ADR-042, `docs/volumes/` and every Flutter feature from Missions 1 through 5 exist only on `mission-0.18.4-ci`. This is deferred item 7.
+
+This pull request closes that gap. It is not a feature change and contains no new work beyond this entry.
+
+### Why squashing here would be wrong
+
+ADR-019's reason for squashing into `develop` is stated plainly: *"One unit of work, one commit. `develop`'s history reads as a list of completed changes, not of the fumbling that produced them."*
+
+**This is not one unit of work.** It is 189 commits spanning Missions 0.17 through 5 — a CI pipeline, an authentication feature, a recording engine, an upload pipeline, ten screens, thirty-two ADRs and a hundred and forty amendments. Squashing them would produce a single commit containing 83,000 lines and would erase, permanently:
+
+- **Which mission introduced which change.** Every `git blame` on 398 Flutter files would resolve to one reconciliation commit dated today, rather than to the mission that wrote the line and the message explaining why.
+- **The traceability ADR-019 itself depends on.** The same record requires history to be *"written for the person doing archaeology"* and every commit on a shared branch to build and pass tests. One 83,000-line commit satisfies neither.
+
+ADR-019 already contains the argument against doing this, in its own alternatives: *"**Squash everything, including into `main`** — rejected. It would collapse a release into one commit and erase which changes it contained."* The reasoning is about `main`, and it applies with more force to 189 commits than to one release.
+
+### Why this is an exception and not a new rule
+
+The squash rule is correct for what it governs: a feature branch representing one unit of work. This branch is not that, and it exists only because `develop` was created late and from the wrong base. **Once merged, the situation cannot recur** — `develop` will be current, and every subsequent pull request will be a normal feature branch that squashes.
+
+The exception is recorded rather than taken quietly because a rule bypassed without a record is a rule that erodes. ADR-019 says as much about its own review requirement: *"a rule that is routinely ignored teaches that rules are optional."*
+
+### Numbering, so the gap is not read as a loss
+
+This entry is **A-147**, and A-141 through A-146 do not exist on this branch. They are Mission 6.1's, written on `mission/6.1-aws-foundations`, and they land in `develop` when that pull request merges. The gap is reserved, not missing.
