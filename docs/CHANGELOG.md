@@ -125,6 +125,10 @@ Mission 4.8's security review found it, by reading `git log` against this file r
 
 ### Security
 
+- **2026-08-17** — **Account-level S3 Block Public Access is set on account `929570731524`, where it had never been configured.** Volume 8 Chapter 8.4 §3 requires it *"not just at the individual bucket policy level, so a future misconfiguration can't accidentally expose it"*, and `get-public-access-block` returned `NoSuchPublicAccessBlockConfiguration`.
+
+  **Nothing was exposed.** All three chunk buckets already carried per-bucket Block Public Access with all four settings on, and every bucket policy reported `IsPublic: false`. What was missing is the backstop for the *next* bucket — and `vump-platform-tfstate`, created in the same mission, is exactly that case. Applied as a one-time authorised exception to Mission 6.1's report-don't-fix rule, in its own commit. A-145. Mission 6.1.
+
 - **2026-08-17** — **The `chunks` execution role holds `s3:PutObject` and `s3:GetObject` together, and that is a narrowing lost.** ADR-015 fixes six resource domains, so both chunk policy templates attach to one role. `aws-sdk-integration.md` records why the previous split mattered: a presigned URL carries the signer's permissions, so a registration role without `GetObject` *cannot* produce a URL that reads footage, however the handler is written.
 
   The role can now. A defect in the registration path that reaches the presigner with a `GetObject` command yields a URL that reads raw footage — and presigned URLs are handed to devices by design. Recorded rather than fixed, because six-roles-for-six-domains was the decision taken; the fix is two roles under one domain. A-143, carried to Mission 6.2.
