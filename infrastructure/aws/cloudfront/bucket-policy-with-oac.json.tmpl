@@ -1,0 +1,55 @@
+{
+  "Version": "2012-10-17",
+  "Id": "__BUCKET__-guardrails",
+  "Statement": [
+    {
+      "Sid": "DenyInsecureTransport",
+      "Effect": "Deny",
+      "Principal": "*",
+      "Action": "s3:*",
+      "Resource": [
+        "arn:aws:s3:::__BUCKET__",
+        "arn:aws:s3:::__BUCKET__/*"
+      ],
+      "Condition": {
+        "Bool": { "aws:SecureTransport": "false" }
+      }
+    },
+    {
+      "Sid": "DenyOutdatedTlsVersions",
+      "Effect": "Deny",
+      "Principal": "*",
+      "Action": "s3:*",
+      "Resource": [
+        "arn:aws:s3:::__BUCKET__",
+        "arn:aws:s3:::__BUCKET__/*"
+      ],
+      "Condition": {
+        "NumericLessThan": { "s3:TlsVersion": "1.2" }
+      }
+    },
+    {
+      "Sid": "DenyEncryptionDowngradeOnUpload",
+      "Effect": "Deny",
+      "Principal": "*",
+      "Action": "s3:PutObject",
+      "Resource": "arn:aws:s3:::__BUCKET__/*",
+      "Condition": {
+        "Null": { "s3:x-amz-server-side-encryption": "false" },
+        "StringNotEquals": { "s3:x-amz-server-side-encryption": "AES256" }
+      }
+    },
+    {
+      "Sid": "AllowCloudFrontOacReadOnly",
+      "Effect": "Allow",
+      "Principal": { "Service": "cloudfront.amazonaws.com" },
+      "Action": "s3:GetObject",
+      "Resource": "arn:aws:s3:::__BUCKET__/*",
+      "Condition": {
+        "StringEquals": {
+          "AWS:SourceArn": "arn:aws:cloudfront::__ACCOUNT_ID__:distribution/__DISTRIBUTION_ID__"
+        }
+      }
+    }
+  ]
+}

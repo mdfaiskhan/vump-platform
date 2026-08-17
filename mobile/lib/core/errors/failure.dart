@@ -1,5 +1,5 @@
-import 'app_exception.dart';
-import 'error_codes.dart';
+import 'package:mobile/core/errors/app_exception.dart';
+import 'package:mobile/core/errors/error_codes.dart';
 
 /// A failure as exposed to the application and presentation layers.
 ///
@@ -25,8 +25,8 @@ final class Failure {
   /// Builds a failure from an exception, discarding its diagnostic detail.
   ///
   /// This is the single sanctioned conversion point. Routing every exception
-  /// through it is what guarantees that [cause] and stack traces cannot reach
-  /// the application layer by accident.
+  /// through it is what guarantees that [AppException.cause] and stack traces
+  /// cannot reach the application layer by accident.
   ///
   /// Pass [message] to substitute a description intended for display; omit it
   /// to carry the exception's own message across. Presentation is expected to

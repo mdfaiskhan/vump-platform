@@ -1,0 +1,975 @@
+name: CI
+
+# Runs on every pull request and on the protected branches.
+#
+# No secrets are used by this workflow. Nothing here needs credentials —
+# `flutter pub get` fetches only public packages — and per ADR-007 a workflow
+# is as public as the repository. If a future job needs a secret, it must come
+# from GitHub Actions secrets and never from a file in the repository.
+
+on:
+  push:
+    # ADR-019 requires release/* and hotfix/* to run on push, not only when a
+    # pull request opens. Both accumulate commits while stabilising, and a
+    # hotfix is the worst possible place to first discover a failure.
+    branches:
+      - main
+      - develop
+      - 'release/**'
+      - 'hotfix/**'
+  pull_request:
+    branches: [main, develop]
+  workflow_dispatch:
+    inputs:
+      update_goldens:
+        description: >-
+          Regenerate golden baselines instead of verifying them. Use this once
+          to bootstrap, and after an intentional visual change. The regenerated
+          images are uploaded as an artifact to be committed by hand - this
+          workflow has `contents: read` and cannot commit them itself.
+        type: boolean
+        default: false
+
+# A new push to the same branch cancels the previous run. Reviewers should see
+# the result for the current head, not for a commit already replaced.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# Read-only. This workflow publishes nothing and needs no write access.
+permissions:
+  contents: read
+
+defaults:
+  run:
+    working-directory: mobile
+
+env:
+  # Volume 7, Chapter 7.13 §2: CI must use "the same pinned Flutter version
+  # as local development -- CI and a developer's machine are never running two
+  # different SDK versions". `channel: stable` breaks that the moment stable
+  # moves, and it moves without anyone changing this file.
+  #
+  # Bump deliberately, in a `build:` commit, alongside the local toolchain.
+  FLUTTER_VERSION: 3.44.9
+
+jobs:
+  # The three checks run as separate jobs rather than as steps in one, so a
+  # failure in any of them still reports the results of the others. Sequential
+  # steps would stop at the first failure and hide the rest.
+
+  format:
+    name: Format
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - name: Check formatting
+        run: |
+          # Generated sources are excluded. The generators do not emit
+          # formatter-clean output, and reformatting them would be undone by
+          # the next build_runner run.
+          files=$(git ls-files '*.dart' \
+            | grep -v '\.g\.dart$' \
+            | grep -v '\.freezed\.dart$' \
+            || true)
+
+          if [ -z "$files" ]; then
+            echo "No hand-written Dart files to check."
+            exit 0
+          fi
+
+          echo "$files" | wc -l | xargs echo "Checking files:"
+          dart format --output=none --set-exit-if-changed $files
+
+  analyze:
+    name: Analyze
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - name: Report Flutter version
+        run: flutter --version
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      # Generated sources are committed, so no build_runner step is needed.
+      # If that policy changes, generation must run here before analysis.
+      - name: Analyze
+        run: flutter analyze
+
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Test
+        # --coverage writes coverage/lcov.info. Volume 9, Chapter 9.5 §2 sets
+        # per-layer targets (domain 90%+, data 80%+), and a target nothing
+        # measures is a target nobody meets.
+        #
+        # No threshold is enforced yet — but the reason has changed, and the
+        # old one ("`lib/features/` is empty, so any gate would be vacuous")
+        # stopped being true at Mission 2.1.
+        #
+        # Mission 2.8 measured the layers for the first time; Mission 2.9
+        # closed the gap it found. features/auth/ now reads data 99.4%,
+        # presentation 96.2%, application 93.8% — all clear of Volume 9
+        # §9.5 §2's targets.
+        #
+        # What still blocks a repository-wide gate is core/: `core/database`
+        # and `core/storage` convert third-party errors and neither has a
+        # boundary test, so a gate set today would fail on those rather than
+        # on the auth tree.
+        #
+        # --exclude-tags golden, because the golden tests do NOT skip here.
+        # They skip on GITHUB_ACTIONS being unset, which is exactly the
+        # condition CI does not satisfy - so without this filter they run
+        # inside the unit-test job as well as inside the Golden tests job, and
+        # a single pixel diff fails both. Confirmed by measurement rather than
+        # inference: `flutter test` reports 789 passed / 2 skipped locally and
+        # 791 passed with GITHUB_ACTIONS=true.
+        #
+        # A visual regression must be reported by the job that guards visuals.
+        # Reporting it as a unit-test failure sends whoever reads it looking
+        # for a logic bug that is not there. A-095.
+        run: flutter test --coverage --exclude-tags golden --reporter expanded
+
+      - name: Report coverage
+        run: |
+          if [ ! -f coverage/lcov.info ]; then
+            echo "::error::coverage/lcov.info was not produced"
+            exit 1
+          fi
+          hit=$(grep -c '^DA:.*,[1-9]' coverage/lcov.info || true)
+          total=$(grep -c '^DA:' coverage/lcov.info || true)
+          files=$(grep -c '^SF:' coverage/lcov.info || true)
+          if [ "$total" -gt 0 ]; then
+            echo "coverage: $hit/$total lines across $files files ($((hit * 100 / total))%)"
+          else
+            echo "coverage: no instrumented lines"
+          fi
+
+  codegen-drift:
+    name: Generated code drift
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Regenerate and compare
+        run: |
+          # Volume 7, Chapter 7.13 §2 requires this check by name: "a generated
+          # code drift check (re-running build_runner and diffing against
+          # committed *.g.dart files) fails the build if a contributor forgot
+          # to regenerate and commit".
+          #
+          # Generated files are committed deliberately (Volume 6 §6.2, Volume 3
+          # §3.6 §5) so a fresh clone builds before anyone runs build_runner.
+          # That only holds while what is committed matches what the generator
+          # produces — which nothing else verifies.
+          dart run build_runner build --delete-conflicting-outputs
+
+          if git diff --quiet -- '*.g.dart' '*.freezed.dart'; then
+            echo "ok  generated files match the committed output"
+            exit 0
+          fi
+
+          echo "::error::Committed generated files are stale. Run:"
+          echo "  cd mobile && dart run build_runner build --delete-conflicting-outputs"
+          echo "  then commit the result."
+          echo ""
+          git diff --stat -- '*.g.dart' '*.freezed.dart'
+          exit 1
+
+  architecture:
+    name: Architecture boundaries
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Verify layer boundaries
+        run: |
+          # Each third-party package is confined to the layer that owns it, so
+          # that layer stays replaceable. These rules come from the accepted
+          # ADRs; a violation is a defect, not a style preference.
+          #
+          #   dio                    → core/network            (ADR-007)
+          #   isar                   → core/database
+          #                            + features/*/data/collections/
+          #                            + features/*/data/isar_*.dart   (ADR-039)
+          #   flutter_secure_storage → core/storage            (ADR-008)
+          #   firebase_core          → core/firebase           (ADR-010)
+          #   firebase_auth          → features/auth/data      (ADR-034)
+          #   google_sign_in         → features/auth/data      (ADR-034)
+          #   cloud_functions        → features/auth/data      (ADR-036)
+          #   camera                 → features/recording/data (V3 Ch. 3.1)
+          #   shared_preferences     → features/recording/data
+          #                            + main.dart              (A-057, A-067)
+          #   crypto                 → features/recording/data (V5 Ch. 5.5)
+          #   cloud_firestore        → features/auth/data      (ADR-036)
+          #   battery_plus           → features/recording/data (FR-CHK-03)
+          #   connectivity_plus      → features/recording/data (FR-CHK-04)
+          #                            + main.dart              (V5 Ch. 5.12 §2)
+          #   flutter_foreground_task → features/upload/data   (V5 Ch. 5.11)
+          #
+          # The last two are owned by a feature rather than by core/. ADR-010
+          # keeps the Firebase *platform* in core/firebase/; a Firebase
+          # *product* belongs to the module that consumes it, which is what
+          # makes features/auth/ the replaceable unit rather than core/.
+          #
+          # isar has three owners, which is why its owner argument is an
+          # extended regex rather than a literal prefix. ADR-039 draws the same
+          # platform/product line inside one package: core/database/ owns the
+          # engine, its lifecycle, its migrations and its own infrastructure
+          # collections; a feature owns the collections it defines, in
+          # data/collections/, plus the one engine-named file at its data/ root
+          # that opens transactions over them. Nowhere else in data/, and
+          # nothing above data/ may name an Isar type at all.
+          #
+          # The naming prefix is deliberate: the permission is visible in the
+          # filename, the way shared_preferences_*.dart and camera_*.dart
+          # already are, rather than in a directory anyone can add a file to.
+          #
+          # shared_preferences names main.dart as a second owner for a
+          # different reason: SharedPreferences.getInstance() is asynchronous,
+          # and the composition root is where this project resolves async
+          # platform instances so a provider override can be supplied at
+          # container construction — the same shape ADR-009 Caveat 2 already
+          # forces for the database directory. The permission is one FILE, not
+          # a directory, so nothing else can acquire it by being added nearby.
+          # Recorded as A-067.
+
+          status=0
+
+          # Matches import and export DIRECTIVES, not the package name anywhere
+          # in the file.
+          #
+          # It used to match the bare string. That was a false positive waiting
+          # to happen, and Mission 4.2 tripped it twice in one sweep: two files
+          # documenting that they deliberately do NOT import a confined package
+          # were reported as importing it. A rule that fails on a true
+          # statement about itself teaches people to stop writing the
+          # statement.
+          #
+          # No coverage is lost. A package can only be used by importing it,
+          # and `export` is checked too so a re-export cannot smuggle one
+          # across the boundary.
+          check() {
+            package="$1"
+            owner="$2"
+            hits=$(grep -rlE "^\s*(import|export)\s+'package:${package}[/']" \
+              lib/ --include='*.dart' 2>/dev/null \
+              | grep -Ev "^(${owner})" || true)
+            if [ -n "$hits" ]; then
+              echo "::error::${package} is imported outside ${owner}:"
+              echo "$hits" | sed 's/^/  /'
+              status=1
+            else
+              echo "ok  ${package} confined to ${owner}"
+            fi
+          }
+
+          check dio                    lib/core/network/
+          check isar                   'lib/core/database/|lib/features/[^/]+/data/collections/|lib/features/[^/]+/data/isar_[^/]*\.dart'
+          check flutter_secure_storage lib/core/storage/
+          check firebase_core          lib/core/firebase/
+          check firebase_auth          lib/features/auth/data/
+          check google_sign_in         lib/features/auth/data/
+          check cloud_functions        lib/features/auth/data/
+          check cloud_firestore        lib/features/auth/data/
+          check camera                 lib/features/recording/data/
+          # main_cleanup_probe.dart joins main.dart as an owner for the same
+          # A-067 reason, not a weaker one: it is a second composition root.
+          # It builds its own ProviderContainer and binds recordingOverrides,
+          # which needs a resolved SharedPreferences instance, and resolving
+          # one is asynchronous. Both files are named individually - the
+          # permission is two FILES, not a directory or a glob, so a third
+          # entrypoint cannot acquire it by being added nearby.
+          # The fourth owner is ONE FILE, named in full, joining the two
+          # entrypoints above on the same terms rather than the directory
+          # grant `lib/features/recording/data/` holds. Mission 5.4 needed a
+          # single boolean — "has this device seen C-01" — persisted for
+          # OnboardingGuard, and a `lib/features/onboarding/data/` grant would
+          # have permitted every future file in that directory to reach the
+          # plugin for anything at all.
+          #
+          # ADR-039 states the convention this relies on: "the file that may
+          # import [the package] announces it in its own filename … greppable
+          # and self-declaring instead of a directory anyone can drop a file
+          # into." The filename carries the permission, so a second onboarding
+          # file cannot acquire it by being added nearby.
+          check shared_preferences     'lib/features/recording/data/|lib/main\.dart|lib/main_cleanup_probe\.dart|lib/features/onboarding/data/shared_preferences_onboarding_seen_store\.dart'
+          check crypto                 lib/features/recording/data/
+          check battery_plus           lib/features/recording/data/
+          # connectivity_plus gains main.dart as a second owner, on exactly the
+          # precedent shared_preferences set (A-067): the composition root is
+          # where this project resolves a platform instance so one object can
+          # be shared by more than one port.
+          #
+          # Here the sharing is the requirement, not a convenience. Volume 5
+          # Ch. 5.12 §2 says the queue and the dispatcher "neither polls it
+          # independently, avoiding duplicated battery cost", and there are two
+          # ports above this plugin - NetworkReader for FR-CHK-04's one-shot
+          # checklist row, ConnectivitySource for §4's transition stream. One
+          # Connectivity instance behind both is what satisfies §2, and the
+          # composition root is the only place allowed to name the type.
+          #
+          # The permission is one FILE, not a directory, so nothing else can
+          # acquire it by being added nearby. A-081.
+          check connectivity_plus      'lib/features/recording/data/|lib/main\.dart'
+
+          # The fourteenth rule, added by Mission 4.3. Volume 3 Ch. 3.1 §2
+          # names the package; Volume 5 Ch. 5.11 §1 is what it implements.
+          #
+          # Owned by a feature rather than by core/, on ADR-034's line: an OS
+          # capability belongs to the module that consumes it, which is what
+          # keeps features/upload/ the replaceable unit. UploadDispatcher lives
+          # in application/ and reaches the service only through
+          # UploadServiceHost, so this rule is what keeps that indirection real
+          # rather than nominal.
+          #
+          # Open item 41's question, asked of this mission: adding a package
+          # wakes a dormant rule, and a rule with no subject passes trivially.
+          # Verified by deliberate breakage before this line was committed.
+          check flutter_foreground_task lib/features/upload/data/
+
+          # -----------------------------------------------------------------
+          # ADR-022 R3 — no cross-feature imports, in either direction.
+          #
+          # Stated in folder-structure.md since Mission 0.18 and unenforced
+          # until now: ADR-022 itself records that R3 "is binding in writing
+          # and unenforced in fact", because with zero features the check was
+          # vacuous. It is not vacuous any more.
+          #
+          # ADR-040 is what makes this checkable. features/upload/ reads the
+          # queue rows features/recording/ writes, and it does so through a
+          # contract in core/queue/ rather than by importing a sibling. That
+          # only holds if something enforces it - a rule living only in a
+          # document is exactly what let S1 (Mission 3.11) sit red for two
+          # missions.
+          #
+          # Every ordered pair is checked, not just the pair ADR-040 created,
+          # so a future feature cannot quietly reach into another one.
+          # -----------------------------------------------------------------
+
+          cross_feature() {
+            from="$1"
+            to="$2"
+            hits=$(grep -rn "package:mobile/features/${to}/" \
+              "lib/features/${from}/" --include='*.dart' 2>/dev/null || true)
+            if [ -n "$hits" ]; then
+              echo "::error::features/${from}/ imports features/${to}/ — ADR-022 R3 forbids this in either direction. Invert through a contract in core/ (ADR-040)."
+              echo "$hits" | sed 's/^/  /'
+              status=1
+            else
+              echo "ok  features/${from}/ does not import features/${to}/"
+            fi
+          }
+
+          features=$(ls -1 lib/features 2>/dev/null)
+          for a in $features; do
+            for b in $features; do
+              [ "$a" = "$b" ] && continue
+              cross_feature "$a" "$b"
+            done
+          done
+
+          # ADR-040 — core/queue/ is a contract, not a place for feature code.
+          #
+          # The contract only decouples the two features while it stays free of
+          # either one's types. If core/queue/ ever imports a feature it stops
+          # being neutral ground and becomes a third party that both features
+          # are coupled through, which is worse than the import it replaced.
+          #
+          # I41 already forbids core/ importing features/ generally; this is
+          # the narrower, louder check for the module whose whole purpose is to
+          # sit between two of them.
+          #
+          # Mission 4.4 added a third: core/connectivity/ holds Chapter 5.12
+          # §2's ConnectivityService contract, implemented by
+          # features/recording/ (which owns connectivity_plus) and consumed by
+          # features/upload/'s dispatcher. The most lopsided instance of
+          # ADR-040 so far - the implementing feature does not consume it
+          # through this contract at all - which A-081 records rather than
+          # hides.
+          #
+          # Mission 4.2 added a second such module. core/upload/ holds Chapter
+          # 5.10's three contracts: ChunkUploadSource and ChunkMetadataSource,
+          # implemented by features/recording/ and consumed by
+          # features/upload/, plus SessionRegistrar, which features/upload/
+          # consumes and features/projects_tasks/ will eventually implement.
+          # Three feature pairs, none of which may name each other.
+          #
+          # DERIVED FROM THE FILESYSTEM, not from a list. It was a list —
+          # `queue upload connectivity` — written so that "adding a third
+          # contract module is one word rather than ten lines someone can
+          # forget to keep in step". Mission 5.4 then added a FOURTH,
+          # core/onboarding/, and the one word was forgotten anyway.
+          #
+          # Mission 5.7's security review found the gap: nine of core/'s twelve
+          # modules were unchecked. None of them leaked — verified by hand at
+          # the time — but the check could not have said so.
+          #
+          # Enumerating the directory removes the failure mode instead of
+          # patching this instance of it. It also widens the check from the
+          # three ADR-040 contract modules to all of core/, which is correct
+          # regardless: invariant I41 forbids ANY core/ module from importing
+          # features/, and the contract modules were only ever the loudest
+          # case rather than the only one.
+          for module in $(find lib/core -mindepth 1 -maxdepth 1 -type d \
+              -exec basename {} \; | sort); do
+            leak=$(grep -rn "package:mobile/features/" "lib/core/${module}" \
+              --include='*.dart' 2>/dev/null || true)
+            if [ -n "$leak" ]; then
+              echo "::error::core/${module}/ imports a feature — core/ names no feature (invariant I41); for a contract module, neither side (ADR-040, ADR-041)."
+              echo "$leak" | sed 's/^/  /'
+              status=1
+            else
+              echo "ok  core/${module}/ names no feature"
+            fi
+          done
+
+          # ADR-041 — dio stays inside core/network/, and the reason the
+          # neutral transfer types exist is that it otherwise would not.
+          #
+          # DioClient's verb methods return Response<T>, a Dio type, so any
+          # caller outside core/network/ must import package:dio. The rule
+          # above was green only because nothing outside core/network/ had ever
+          # called DioClient. Mission 4.2 is the first feature consumer, and it
+          # goes through VumpApi, TransferHandle and TransferProgress instead —
+          # none of which publishes a Dio type.
+          #
+          # The `check dio` sweep above already enforces this. This is the
+          # explicit note for the next person who reaches for DioClient from a
+          # feature and finds it does not compile: the answer is another
+          # neutral type in core/network/, not a wider confinement rule.
+
+          exit $status
+
+      - name: Verify design tokens
+        run: |
+          # Every screen draws spacing, radius and size from lib/app/theme/'s
+          # transcribed scale rather than from a raw number, so the scale stays
+          # the one place a value changes.
+          #
+          # WHAT THIS DOES NOT CHECK, and the distinction is load-bearing:
+          # `lib/app/theme/` is a TRANSCRIPTION of Volume 2 Chapter 2.8, and
+          # Chapter 2.8 itself is not in this repository (open item 74). This
+          # job verifies INTERNAL consistency — that screens use the tokens the
+          # project has — and says nothing about whether those tokens match the
+          # design system they were copied from. A green run here does not
+          # close item 74 and is not a Chapter 2.8 compliance audit.
+          #
+          # Scoped to presentation/: `core/` and `data/` hold no layout, and
+          # `app/theme/` is where the literals are supposed to live.
+          #
+          # KNOWN LIMITATION, stated rather than discovered later: this is a
+          # line-based grep. A constructor `dart format` has split across
+          # several lines puts its numbers on their own lines, where no pattern
+          # here matches them: a fromLTRB whose arguments each sit on their
+          # own line passes silently. A raw value sitting beside a token on one line is also
+          # skipped, because the token exclusion is line-granular. The check
+          # therefore catches the common single-line case and is not a proof of
+          # absence — item 41's rule about a green check applies to this job as
+          # much as to any other.
+          #
+          # Duration is deliberately absent. AppDuration is a MOTION scale,
+          # while Duration(days: 7) for an invite-code expiry and
+          # Duration(seconds: 1) for a timer tick are business and behavioural
+          # values. Flagging them would be a false positive, and a check that
+          # cries wolf is one people learn to skip.
+
+          status=0
+
+          # Same as `scan`, with one file excluded by path and by argument, so
+          # the exemption is stated at the call site rather than buried.
+          scan_except() {
+            label="$1"
+            pattern="$2"
+            exempt="$3"
+            hits=$(grep -rnE "$pattern" mobile/lib/features/*/presentation/ \
+              --include='*.dart' 2>/dev/null \
+              | grep -vE 'AppSpacing|AppRadius|AppSizes|AppOpacity|AppElevation' \
+              | grep -vE 'DESIGN-TOKEN-EXEMPT' \
+              | grep -vF "$exempt" || true)
+            if [ -n "$hits" ]; then
+              echo "::error::${label} — use a token from lib/app/theme/."
+              echo "$hits" | sed 's/^/  /'
+              status=1
+            else
+              echo "ok  ${label} (except ${exempt})"
+            fi
+          }
+
+          scan() {
+            label="$1"
+            pattern="$2"
+            hits=$(grep -rnE "$pattern" mobile/lib/features/*/presentation/               --include='*.dart' 2>/dev/null               | grep -vE 'AppSpacing|AppRadius|AppSizes|AppOpacity|AppElevation'               | grep -vE 'DESIGN-TOKEN-EXEMPT' || true)
+            if [ -n "$hits" ]; then
+              echo "::error::${label} — use a token from lib/app/theme/, or mark the line DESIGN-TOKEN-EXEMPT with a reason if no token has that value."
+              echo "$hits" | sed 's/^/  /'
+              status=1
+            else
+              echo "ok  ${label}"
+            fi
+          }
+
+          # Raw numerics inside the constructors that carry layout values. A
+          # closed list rather than "any number", so maxLines, flex, itemCount
+          # and index arithmetic are not swept up.
+          scan "raw spacing in EdgeInsets"             "EdgeInsets\.(all|symmetric|only|fromLTRB)\([^)]*[0-9]"
+          scan "raw spacing in SizedBox"             "SizedBox\([^)]*(height|width):[[:space:]]*[0-9]"
+          scan "raw radius"             "(Radius|BorderRadius)\.circular\([[:space:]]*[0-9]"
+          scan "raw icon size"             "Icon\([^)]*size:[[:space:]]*[0-9]"
+
+          # Colour must come through the theme (ADR-005), never a literal or
+          # the raw Material palette.
+          #
+          # C-09 is exempt from the Material-palette rule as a whole file, not
+          # line by line, because its case is one argument rather than eight:
+          # the surround behind a full-bleed camera preview is black as an
+          # absence of light, and its red indicator is a question Chapter 2.7
+          # raises and open item 98 records. Naming the file here is more
+          # visible than eight scattered markers would be, and its own doc
+          # comment carries the reasoning.
+          scan "colour literal" "Color\(0x"
+          scan_except "raw Material colour" "Colors\.[a-z]" \
+            "recording/presentation/recording_screen.dart"
+          scan "raw font size" "fontSize:"
+
+          exit $status
+
+
+  goldens:
+    name: Golden tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      # Volume 9 Chapter 9.7 §2: every Design System component has a golden in
+      # both themes, and "a golden test failing on an unintentional pixel diff
+      # is a hard CI gate".
+      #
+      # These run HERE AND NOWHERE ELSE. The tests skip themselves when
+      # GITHUB_ACTIONS is unset, so a local run reports them as skipped rather
+      # than omitting them silently. A-095.
+      #
+      # golden_toolkit is not used: it is discontinued (A-027), and
+      # matchesGoldenFile is built into flutter_test.
+      - name: Decide whether to regenerate or verify
+        id: goldens
+        run: |
+          # Three reasons to regenerate rather than verify, and the first is
+          # why this job no longer depends on a manual dispatch:
+          #
+          #   1. No baselines exist. Bootstrapping used to require
+          #      workflow_dispatch, which GitHub only offers when the workflow
+          #      is on the default branch - and ci.yml is not on main (open
+          #      item 48). A job that could only be unblocked by a button
+          #      nobody can press is not a mechanism.
+          #
+          #   2. The pull request carries the `update-goldens` label. Chapter
+          #      9.7 §2 requires an intentional visual change to be
+          #      "explicitly regenerating and committing the new golden image
+          #      as part of that PR", which is a recurring need rather than a
+          #      one-off. A commit-message marker cannot serve here: a
+          #      pull_request event carries no head_commit.
+          #
+          #   3. A workflow_dispatch asked for it, if one ever becomes
+          #      available.
+          count=$(find test -type d -name goldens -exec find {} -name '*.png' \; 2>/dev/null | wc -l)
+          echo "Found $count committed baseline image(s)."
+
+          if [ "$count" -eq 0 ]; then
+            echo "regenerate=true" >> "$GITHUB_OUTPUT"
+            echo "reason=no baselines exist yet" >> "$GITHUB_OUTPUT"
+          elif [ "$LABELLED" = "true" ] || [ "$DISPATCHED" = "true" ]; then
+            echo "regenerate=true" >> "$GITHUB_OUTPUT"
+            echo "reason=regeneration was explicitly requested" >> "$GITHUB_OUTPUT"
+          else
+            echo "regenerate=false" >> "$GITHUB_OUTPUT"
+          fi
+        env:
+          LABELLED: ${{ contains(github.event.pull_request.labels.*.name, 'update-goldens') }}
+          DISPATCHED: ${{ github.event.inputs.update_goldens }}
+
+      - name: Verify goldens
+        if: steps.goldens.outputs.regenerate != 'true'
+        run: flutter test --tags golden
+
+      - name: Regenerate goldens
+        if: steps.goldens.outputs.regenerate == 'true'
+        run: flutter test --tags golden --update-goldens
+
+      - name: Upload regenerated goldens
+        if: steps.goldens.outputs.regenerate == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: goldens
+          path: mobile/test/**/goldens/**
+
+      # Regenerating is never a pass. The images are produced for a human to
+      # inspect and commit; a job that generated its own expected values and
+      # then reported success would verify nothing, which is the vacuous-green
+      # shape open items 41, 50 and 51 already cost this project three times.
+      #
+      # This workflow is also contents: read and cannot commit them itself,
+      # deliberately - a gate that rewrites its own expected values is not a
+      # gate.
+      - name: Explain what to do with them
+        if: steps.goldens.outputs.regenerate == 'true'
+        run: |
+          echo "::error::Goldens were regenerated (${{ steps.goldens.outputs.reason }}) and are NOT verified."
+          echo ""
+          echo "  1. Download the 'goldens' artifact from this run."
+          echo "  2. Unpack it over mobile/test/ and commit the images."
+          echo "  3. Re-run: the job will verify against them instead."
+          echo ""
+          echo "  If you were regenerating after an intentional visual change,"
+          echo "  remove the 'update-goldens' label once the new images are in."
+          exit 1
+
+      # A pixel diff is unreadable as a log line; the images are the report.
+      - name: Upload failure diffs
+        if: failure() && steps.goldens.outputs.regenerate != 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: golden-failures
+          path: mobile/test/**/failures/**
+
+  commit-convention:
+    name: Commit convention
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    # Reads only the pull request title from the event payload — it never
+    # checks out the repository, so it needs no access to its contents.
+    permissions: {}
+    # Only on pull requests: the thing being validated is the PR title, which
+    # ADR-019 makes the squash-merge commit message — the message that actually
+    # lands in develop's history.
+    if: github.event_name == 'pull_request'
+    # Overrides the workflow-level `mobile` default. This job has no checkout,
+    # so `mobile/` does not exist on the runner and the step could not start —
+    # it failed with a process-start error that reads as "your PR title is
+    # wrong", which is the most misleading of open item 51's three
+    # manifestations. `$GITHUB_WORKSPACE` itself is created by the runner
+    # before any step, so `.` is a real directory even with nothing checked
+    # out, and no checkout is needed to fix this.
+    defaults:
+      run:
+        working-directory: .
+    steps:
+      - name: Validate the pull request title
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          python3 - <<'PY'
+          import os, re, sys
+
+          TYPES = ["feat", "fix", "docs", "refactor", "test", "chore",
+                   "perf", "style", "ci", "build", "revert"]
+
+          HEADER = re.compile(
+              r'^(?P<type>' + "|".join(TYPES) + r')'
+              r'(?:\((?P<scope>[a-z0-9\-/]+)\))?'
+              r'(?P<bang>!)?: (?P<subject>.+)$'
+          )
+          # Git generates these; they are not authored messages.
+          EXEMPT = re.compile(r'^(Merge |Revert ")')
+
+          title = os.environ["PR_TITLE"].strip()
+          if EXEMPT.match(title):
+              print(f"ok  git-generated message, exempt: {title}")
+              sys.exit(0)
+
+          errors = []
+          m = HEADER.match(title)
+          if not m:
+              errors.append(
+                  "must match 'type(scope): subject'. "
+                  f"Allowed types: {', '.join(TYPES)}"
+              )
+          else:
+              subject = m.group("subject")
+              if len(title) > 72:
+                  errors.append(f"header is {len(title)} characters; the limit is 72")
+              if subject[0].isupper():
+                  errors.append("subject must start with a lowercase letter")
+              if subject.endswith("."):
+                  errors.append("subject must not end with a full stop")
+              if re.match(r'^(added|fixed|updated|changed|removed|adds|fixes)\b',
+                          subject, re.I):
+                  errors.append("subject must be imperative mood — 'add', not 'added'")
+
+          if errors:
+              print(f"::error::Pull request title does not follow ADR-020: {title}")
+              for e in errors:
+                  print(f"  - {e}")
+              print("")
+              print("  This title becomes the squash commit in develop (ADR-019),")
+              print("  so it is the message that survives. See")
+              print("  docs/git/commit-conventions.md")
+              sys.exit(1)
+
+          print(f"ok  {title}")
+          PY
+
+  environment-consistency:
+    name: Environment consistency
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    # Overrides the workflow-level `mobile` default. This job's subject is the
+    # repository, not the Flutter package: it reads two files under
+    # `infrastructure/` and one under `mobile/`, all written repo-root-relative.
+    # Under the default they resolved one level down — `mobile/infrastructure/…`
+    # and `mobile/mobile/lib/…` — so it died on FileNotFoundError before
+    # evaluating a single assertion, from the commit that created it. Open
+    # item 49.
+    defaults:
+      run:
+        working-directory: .
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Verify Dart, infrastructure config and shell agree
+        run: |
+          # The environment model is expressed in three languages: Dart
+          # (app_environment.dart), JSON (environments.json) and shell
+          # (env.sh). No compiler checks across that boundary, so this does.
+          #
+          # Drift here is not cosmetic — a staging build pointed at the
+          # production bucket is exactly this class of defect.
+          python3 - <<'PY'
+          import json, io, re, sys
+          status = 0
+          def fail(m):
+              global status
+              print(f"::error::{m}")
+              status = 1
+
+          cfg = json.load(io.open('infrastructure/aws/config/environments.json', encoding='utf-8'))
+          dart = io.open('mobile/lib/app/config/app_environment.dart', encoding='utf-8').read()
+          sh = io.open('infrastructure/aws/env.sh', encoding='utf-8').read()
+
+          pairs = re.findall(r"\w+\('[^']*',\s*'([^']+)',\s*'([^']+)'\)", dart)
+          dart_map = {k: s for k, s in pairs}
+          if len(dart_map) != 3:
+              fail(f"expected 3 environments in Dart, found {sorted(dart_map)}")
+
+          if set(cfg['environments']) != set(dart_map):
+              fail(f"environments.json {sorted(cfg['environments'])} != Dart {sorted(dart_map)}")
+          else:
+              print(f"ok  environment sets agree: {sorted(dart_map)}")
+
+          for env, slug in dart_map.items():
+              want = f"vump-platform-{slug}"
+              got = cfg['environments'].get(env, {}).get('chunkBucket')
+              if got != want:
+                  fail(f"{env}: environments.json bucket '{got}' breaks the ADR-011 rule '{want}'")
+              if f'VUMP_SLUG="{slug}"' not in sh or env not in sh:
+                  fail(f"{env}/{slug} missing from infrastructure/aws/env.sh")
+          if not status:
+              print("ok  bucket names derive from the ADR-011 slug rule in all three")
+
+          if cfg['region'] != 'ap-south-1':
+              fail(f"environments.json region is {cfg['region']}, expected ap-south-1 (ADR-011)")
+          if 'VUMP_REGION="ap-south-1"' not in sh:
+              fail("env.sh region is not ap-south-1 (ADR-011)")
+          if not status:
+              print("ok  region is ap-south-1 everywhere")
+
+          sys.exit(status)
+          PY
+
+  secret-scan:
+    name: Secret scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    # Overrides the workflow-level `mobile` default, and this is the one that
+    # mattered. `git ls-files` and `git grep -- .` are both scoped to the
+    # current directory, so under the default this job scanned 444 of 561
+    # tracked files and **zero** under `infrastructure/` — where the AWS
+    # configuration lives — while reporting green. A committed key there would
+    # have passed. Open item 50; a hollow green is worse than a red.
+    defaults:
+      run:
+        working-directory: .
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Scan tracked files for committed credentials
+        run: |
+          # A committed credential is disclosed permanently — deleting it in a
+          # later commit does not remove it from history. ADR-016 requires
+          # rotation as the first response, not history rewriting.
+          #
+          # Deliberately narrow: high-confidence patterns only, so a failure
+          # here always means something real. GitHub secret scanning with push
+          # protection is the broader net and should also be enabled — see
+          # docs/development/secrets-management.md.
+
+          status=0
+          fail() { echo "::error::$1"; echo "$2" | sed 's/^/  /'; status=1; }
+
+          hits=$(git ls-files | grep -Ei '(^|/)\.env$|\.(pem|key|p12|pfx|keystore|jks)$|service-account.*\.json$|firebase-adminsdk.*\.json$' || true)
+          [ -n "$hits" ] \
+            && fail "A credential-bearing file is tracked by git. Rotate the credential first, then remove it from history." "$hits" \
+            || echo "ok  no credential-bearing filenames tracked"
+
+          hits=$(git grep -nIE '\b(AKIA|ASIA)[0-9A-Z]{16}\b' -- . || true)
+          [ -n "$hits" ] \
+            && fail "An AWS access key ID is committed. Treat it as compromised and rotate it now." "$hits" \
+            || echo "ok  no AWS access key IDs"
+
+          hits=$(git grep -nIE 'BEGIN (RSA |EC |OPENSSH |PGP )?PRIVATE KEY' -- . || true)
+          [ -n "$hits" ] \
+            && fail "A private key block is committed." "$hits" \
+            || echo "ok  no private key blocks"
+
+          hits=$(git grep -nIE 'aws_secret_access_key[[:space:]]*[=:][[:space:]]*["'"'"'][A-Za-z0-9/+=]{40}' -- . || true)
+          [ -n "$hits" ] \
+            && fail "A hardcoded AWS secret access key is committed." "$hits" \
+            || echo "ok  no hardcoded AWS secret keys"
+
+          hits=$(git grep -nIE '"type"[[:space:]]*:[[:space:]]*"service_account"' -- . || true)
+          [ -n "$hits" ] \
+            && fail "A Google service-account key is committed. Rotate it in the Firebase console immediately." "$hits" \
+            || echo "ok  no service-account keys"
+
+          exit $status
+
+  aws-credential-isolation:
+    name: AWS credential isolation
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Verify the mobile app holds no AWS credential
+        run: |
+          # The mobile app must never hold an AWS credential of any kind.
+          # Volume 4, Chapter 4.10 §2: "the mobile app never holds a raw AWS
+          # credential". A Flutter binary is distributed to devices outside our
+          # control and can be decompiled, so a credential compiled into it is
+          # a credential published.
+          #
+          # Uploads reach S3 through presigned URLs issued by the backend —
+          # a capability scoped to one object and one operation, not an
+          # identity. See docs/architecture/aws-sdk-integration.md.
+
+          status=0
+
+          fail() { echo "::error::$1"; echo "$2" | sed 's/^/  /'; status=1; }
+
+          hits=$(grep -nE '^\s+(aws[_-]|amplify[_-]|minio|s3_)' pubspec.yaml || true)
+          [ -n "$hits" ] \
+            && fail "An AWS SDK package is declared in mobile/pubspec.yaml. The app must reach S3 only via backend-issued presigned URLs." "$hits" \
+            || echo "ok  no AWS SDK dependency"
+
+          hits=$(grep -rnE '\b(AKIA|ASIA)[0-9A-Z]{16}\b' lib test 2>/dev/null || true)
+          [ -n "$hits" ] \
+            && fail "An AWS access key ID appears in the mobile source. Treat it as compromised and rotate it." "$hits" \
+            || echo "ok  no access key literal"
+
+          hits=$(grep -rniE 'aws_secret_access_key|aws_access_key_id|aws_session_token' lib test 2>/dev/null || true)
+          [ -n "$hits" ] \
+            && fail "AWS credential identifiers referenced in the mobile source." "$hits" \
+            || echo "ok  no credential references"
+
+          # SCOPED TO lib/ ONLY, unlike the three checks above.
+          #
+          # This one looks for a hardcoded *endpoint*, which is a design
+          # defect rather than a disclosure: shipping code that names an S3
+          # host has stopped waiting for the backend to presign a URL. That
+          # fault can only exist in shipped code, so test/ is out of scope.
+          #
+          # The three checks above stay over `lib test`, deliberately. They
+          # look for credential *material* — an access key id, a secret, a
+          # session token — and a real one of those committed under test/ is
+          # every bit as disclosed as one under lib/. Narrowing them would
+          # trade a real guarantee for a green tick.
+          #
+          # Why this changed (open item 47): the check ran over `lib test` and
+          # failed on four Mission 4.2 test fixtures — three in
+          # s3_transfer_client_test.dart and one in fake_backend_adapter.dart.
+          # Each was read before this line was changed. They are presigned-URL
+          # fixtures whose assertions are `isNot(contains('X-Amz-Signature'))`
+          # and `isNot(contains('AKIAEXAMPLE'))` — tests that exist to prove a
+          # credential is stripped, and which need a realistically shaped URL
+          # to prove anything at all. Their placeholder is `AKIAEXAMPLE`, four
+          # characters plus seven, chosen so it cannot match the AKIA pattern
+          # above.
+          #
+          # So the job was failing on the evidence that the rule it protects
+          # is being followed. A check that fires on its own proof is the same
+          # fault A-075 recorded when the confinement rule matched a comment
+          # saying a package was deliberately not imported.
+          hits=$(grep -rn 'amazonaws\.com' lib 2>/dev/null || true)
+          [ -n "$hits" ] \
+            && fail "A hardcoded AWS endpoint appears in the mobile app's shipped source. S3 URLs arrive at runtime from the backend, presigned." "$hits" \
+            || echo "ok  no hardcoded AWS endpoint in lib/"
+
+          exit $status

@@ -1,7 +1,7 @@
 import 'package:dio/dio.dart';
 
-import '../../logging/app_logger.dart';
-import '../network_constants.dart';
+import 'package:mobile/core/logging/app_logger.dart';
+import 'package:mobile/core/network/network_constants.dart';
 
 /// Records every request, response and failure through [AppLogger].
 ///

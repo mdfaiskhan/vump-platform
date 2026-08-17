@@ -88,12 +88,14 @@ Verified by static check and by test: exactly one `Firebase.initializeApp` call 
 
 Missions 0.15, 0.15.1 and 0.15.2 are complete. What remains is platform configuration rather than architecture: the iOS plist, and the placeholder `com.example.mobile` application identifier.
 
-### Provisional: startup tolerates initialisation failure
+### Provisional: startup tolerates initialisation failure — DISCHARGED by ADR-017
 
 `main.dart` catches `AppException` from initialisation, logs it as an error, and continues to `runApp`.
 
 This is **not** a decision that Firebase is optional. It exists because no feature depends on Firebase yet, so a build that starts without the platform is degraded in theory and identical in practice. iOS is also not fully configured, so aborting on failure would make the application unrunnable there while nothing yet depends on it.
 
-The original justification — that the project was unconfigured — expired in Mission 0.15.2. The tolerance now rests solely on there being no dependent feature, which is a weaker footing and a shorter fuse.
+The original justification — that the project was unconfigured — expired in Mission 0.15.2.
+
+**Resolved in Mission 0.17.17.** ADR-017 makes the behaviour environment-driven: tolerant in development, fatal in staging and production. The obligation this section recorded is discharged; the text is retained because it is the record of why the decision was owed.
 
 When the first Firebase-dependent feature lands, starting without Firebase stops being degraded operation and becomes silent breakage. At that point the tolerance must either be removed, making initialisation fatal, or be replaced by an explicit degraded-mode decision recorded in its own ADR. It must not be allowed to persist by inertia.

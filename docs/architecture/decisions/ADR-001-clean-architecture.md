@@ -44,4 +44,17 @@ Dependencies point inward. `presentation` and `data` may depend on `domain`; `do
 
 ## Implementation Status
 
-The four layer directories exist under `lib/features/` and are empty. No feature has yet been built, so the layering is scaffolded and binding but not exercised. The first feature mission will be the first real test of this decision.
+`lib/features/` is empty. No feature has yet been built, so the layering is binding but not exercised. The first feature mission will be the first real test of this decision.
+
+**Correction (Mission 0.18.1).** `lib/features/` previously contained four directories named `data/`, `domain/`, `application/` and `presentation/` — scaffolded in Mission 0.6.2 and described here as compliance. They were not. Four layer directories at the root of `features/` is the **layer-first structure this ADR explicitly rejects**; the layers belong *inside* each feature:
+
+```
+features/
+└── recording/          <- the feature owns the layers
+    ├── data/
+    ├── domain/
+    ├── application/
+    └── presentation/
+```
+
+The directories were empty and have been removed. The distinction matters because the first feature built against the old scaffold would have inherited exactly the structure the Alternatives section rejects.

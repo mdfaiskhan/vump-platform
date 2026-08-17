@@ -1,13 +1,13 @@
 import 'package:logger/logger.dart';
 
-import 'log_level.dart';
+import 'package:mobile/core/logging/log_level.dart';
 
 /// Renders a log event as plain, readable lines.
 ///
 /// Output is one line per event, with the error and stack trace indented
 /// beneath it when present:
 ///
-/// ```
+/// ```text
 /// 2026-08-09T14:32:07.118Z [ERROR  ] Token refresh failed
 ///   error: NetworkException(NETWORK_TIMEOUT): request timed out
 ///   stack:

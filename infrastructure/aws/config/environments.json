@@ -1,0 +1,30 @@
+{
+  "$comment": [
+    "Single source of truth for which AWS resources each environment uses.",
+    "Consumed by the backend at startup and by infrastructure scripts.",
+    "Contains no credential — see ADR-007. Every value here is a non-secret",
+    "identifier, permitted in source for the same reason a base URL is.",
+    "Authority: ADR-011 (buckets, region), ADR-014 (environment model)."
+  ],
+  "region": "ap-south-1",
+  "environments": {
+    "development": {
+      "chunkBucket": "vump-platform-dev",
+      "cloudFrontDomain": null,
+      "presignExpirySeconds": 3600,
+      "objectRetention": "30 days"
+    },
+    "staging": {
+      "chunkBucket": "vump-platform-staging",
+      "cloudFrontDomain": null,
+      "presignExpirySeconds": 3600,
+      "objectRetention": "90 days"
+    },
+    "production": {
+      "chunkBucket": "vump-platform-prod",
+      "cloudFrontDomain": null,
+      "presignExpirySeconds": 3600,
+      "objectRetention": "24 months (policy; expiration rule withheld per ADR-013)"
+    }
+  }
+}

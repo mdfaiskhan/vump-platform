@@ -1,0 +1,107 @@
+name: Bug Report
+description: Something behaves incorrectly.
+title: "fix: "
+labels: ["bug", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Before filing: search existing issues, and check whether the behaviour
+        contradicts an accepted ADR — where code and an accepted ADR disagree,
+        the ADR is correct and the code is the defect.
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: What happens
+      description: The incorrect behaviour, in one or two sentences.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What should happen
+      description: If an ADR or specification defines the correct behaviour, cite it.
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Numbered, from a known starting state. A bug that cannot be reproduced cannot be verified as fixed.
+      placeholder: |
+        1. Launch the app on a cold start
+        2. Navigate to …
+        3. Tap …
+        4. Observe …
+    validations:
+      required: true
+
+  - type: dropdown
+    id: frequency
+    attributes:
+      label: How often
+      options:
+        - Every time
+        - Often, but not always
+        - Rarely / intermittent
+        - Once, not reproduced since
+    validations:
+      required: true
+
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      multiple: true
+      options:
+        - Android
+        - iOS
+        - Web
+        - Windows
+        - macOS
+        - Linux
+    validations:
+      required: true
+
+  - type: input
+    id: environment
+    attributes:
+      label: Build environment
+      description: Which environment the build targets — development, staging or production.
+      placeholder: development
+    validations:
+      required: true
+
+  - type: textarea
+    id: versions
+    attributes:
+      label: Versions
+      description: Output of `flutter --version`, plus the app version and device or emulator.
+      render: text
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs and stack trace
+      description: |
+        Relevant output. **Redact before pasting** — remove `Authorization`
+        headers, access and refresh tokens, and any credential. ADR-007
+        forbids these in source; an issue is equally public.
+      render: text
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: confirmations
+    attributes:
+      label: Before submitting
+      options:
+        - label: I searched for an existing issue describing this.
+          required: true
+        - label: I removed every credential and token from the logs above.
+          required: true

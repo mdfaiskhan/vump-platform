@@ -1,0 +1,156 @@
+# Vump Technologies — repository-wide ignores
+#
+# Per-package ignores live alongside their package; mobile/.gitignore covers
+# the Flutter build outputs. This file covers the repository root and the
+# non-Flutter directories.
+
+# ---------------------------------------------------------------------------
+# Secrets — see ADR-007 and ADR-008
+# ---------------------------------------------------------------------------
+# A committed credential is disclosed permanently: deleting it later does not
+# remove it from history, and history is public to everyone with repository
+# access. Nothing matching these patterns may ever be committed.
+
+.env
+.env.*
+!.env.example
+
+*.pem
+*.p12
+*.pfx
+*.key
+*.keystore
+*.jks
+
+# Google and Firebase service accounts — backend credentials, never client
+# config. Distinct from the client identifiers described below.
+service-account*.json
+*-service-account.json
+serviceAccountKey.json
+firebase-adminsdk*.json
+
+# Cloud provider credentials
+.aws/
+aws-credentials*
+*.credentials
+
+# Signing configuration
+key.properties
+android/key.properties
+mobile/android/key.properties
+
+# NOT ignored, deliberately:
+#   mobile/android/app/google-services.json
+#   mobile/ios/Runner/GoogleService-Info.plist
+#   mobile/lib/core/firebase/firebase_options.dart
+#
+# These hold client identifiers — API key, app ID, project ID — not
+# credentials. ADR-010 records the reasoning: Firebase protects projects with
+# Security Rules and App Check, not by concealing values that are extractable
+# from any shipped binary. Ignoring them would break every clean checkout and
+# every CI run to protect nothing.
+
+# ---------------------------------------------------------------------------
+# Build output
+# ---------------------------------------------------------------------------
+build/
+dist/
+out/
+target/
+*.o
+*.a
+
+# ---------------------------------------------------------------------------
+# Dependencies
+# ---------------------------------------------------------------------------
+node_modules/
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# ---------------------------------------------------------------------------
+# Dart and Flutter, at the repository root
+# ---------------------------------------------------------------------------
+.dart_tool/
+.packages
+.pub-cache/
+.pub/
+.flutter-plugins
+.flutter-plugins-dependencies
+
+# ---------------------------------------------------------------------------
+# Test and coverage output
+# ---------------------------------------------------------------------------
+coverage/
+*.lcov
+test-results/
+failures/
+
+# ---------------------------------------------------------------------------
+# Editors and IDEs
+# ---------------------------------------------------------------------------
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+!.vscode/launch.json
+*.swp
+*.swo
+*~
+
+# ---------------------------------------------------------------------------
+# Operating system
+# ---------------------------------------------------------------------------
+.DS_Store
+.DS_Store?
+._*
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# ---------------------------------------------------------------------------
+# Logs and temporary files
+# ---------------------------------------------------------------------------
+*.log
+logs/
+tmp/
+temp/
+*.tmp
+*.bak
+
+# Rendered infrastructure templates (contain no secrets, but are generated)
+infrastructure/aws/cloudfront/.rendered-*.json
+
+# ---------------------------------------------------------------------------
+# Cloud Functions build output — see ADR-036
+# ---------------------------------------------------------------------------
+# `functions/lib/` is TypeScript compiled to JavaScript by the predeploy step.
+# Unlike the Dart generated code this repository commits deliberately, nothing
+# reads it from a clean checkout: `firebase deploy` rebuilds it every time.
+functions/lib/
+
+# ---------------------------------------------------------------------------
+# Session report artifacts
+# ---------------------------------------------------------------------------
+# Per-mission reports written by a Claude Code session. They are a working
+# summary of one session, not a governed document, and they fail ADR-022's
+# root admission test: a top-level entry must ship or govern independently,
+# and these do neither.
+#
+# Nothing is lost by ignoring them. What a mission decided lives in its ADR,
+# what it changed lives in its commit message, and both are governed. A report
+# at the root is a third copy that nothing keeps current.
+#
+# Anchored with a leading slash so it applies at the repository root only,
+# where they are written — not to any similarly named file inside a package.
+# Both forms. The rule originally named `.txt` alone, which is the format the
+# first reports were written in; Mission 3 began rendering the same artifact to
+# PDF for handoff, and Missions 2-4's PDFs then sat untracked at the root
+# because nothing named them. Same artifact, same reasoning, both ignored.
+/mission-*-report.txt
+/mission-*-report.pdf

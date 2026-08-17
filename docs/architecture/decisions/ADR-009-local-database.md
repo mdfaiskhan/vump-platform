@@ -1,8 +1,10 @@
 # ADR-009 — Local Database Architecture
 
-- **Status:** Accepted
+- **Status:** Superseded by ADR-039 (2026-08-15)
 - **Date:** 2026-08-09
 - **Supersedes:** none
+
+**Superseded because** §"Isar does not escape the layer" confines `isar` to `core/database/` alone, and an Isar collection cannot be declared without importing the package — so a feature that owns local tables cannot own them where it lives. ADR-039 widens the confinement to `core/database/` plus any feature's `data/collections/`, and assigns `local_task_cache` to `features/projects_tasks/`. **Every other decision in this record is carried forward unchanged and remains binding**, including the engine choice, `DatabaseService`'s exclusive lifecycle ownership, the schema registry, explicit versioning, `StorageException` conversion, and both recorded caveats. The body below is left untouched.
 
 ## Context
 

@@ -1,0 +1,43 @@
+{
+  "Version": "2012-10-17",
+  "Id": "vump-platform-staging-guardrails",
+  "Statement": [
+    {
+      "Sid": "DenyInsecureTransport",
+      "Effect": "Deny",
+      "Principal": "*",
+      "Action": "s3:*",
+      "Resource": [
+        "arn:aws:s3:::vump-platform-staging",
+        "arn:aws:s3:::vump-platform-staging/*"
+      ],
+      "Condition": {
+        "Bool": { "aws:SecureTransport": "false" }
+      }
+    },
+    {
+      "Sid": "DenyOutdatedTlsVersions",
+      "Effect": "Deny",
+      "Principal": "*",
+      "Action": "s3:*",
+      "Resource": [
+        "arn:aws:s3:::vump-platform-staging",
+        "arn:aws:s3:::vump-platform-staging/*"
+      ],
+      "Condition": {
+        "NumericLessThan": { "s3:TlsVersion": "1.2" }
+      }
+    },
+    {
+      "Sid": "DenyEncryptionDowngradeOnUpload",
+      "Effect": "Deny",
+      "Principal": "*",
+      "Action": "s3:PutObject",
+      "Resource": "arn:aws:s3:::vump-platform-staging/*",
+      "Condition": {
+        "Null": { "s3:x-amz-server-side-encryption": "false" },
+        "StringNotEquals": { "s3:x-amz-server-side-encryption": "AES256" }
+      }
+    }
+  ]
+}

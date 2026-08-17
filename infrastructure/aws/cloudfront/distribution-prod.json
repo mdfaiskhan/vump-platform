@@ -1,0 +1,87 @@
+{
+  "CallerReference": "vump-platform-prod-distribution-v1",
+  "Comment": "Vump Technologies - production chunk delivery. Created disabled; see infrastructure/aws/cloudfront/README.md before enabling.",
+  "Enabled": false,
+  "Origins": {
+    "Quantity": 1,
+    "Items": [
+      {
+        "Id": "s3-vump-platform-prod",
+        "DomainName": "vump-platform-prod.s3.ap-south-1.amazonaws.com",
+        "OriginPath": "",
+        "OriginAccessControlId": "__OAC_ID__",
+        "S3OriginConfig": {
+          "OriginAccessIdentity": ""
+        },
+        "ConnectionAttempts": 3,
+        "ConnectionTimeout": 10,
+        "OriginShield": {
+          "Enabled": false
+        },
+        "CustomHeaders": {
+          "Quantity": 0
+        }
+      }
+    ]
+  },
+  "OriginGroups": {
+    "Quantity": 0
+  },
+  "DefaultCacheBehavior": {
+    "TargetOriginId": "s3-vump-platform-prod",
+    "ViewerProtocolPolicy": "https-only",
+    "AllowedMethods": {
+      "Quantity": 2,
+      "Items": ["GET", "HEAD"],
+      "CachedMethods": {
+        "Quantity": 2,
+        "Items": ["GET", "HEAD"]
+      }
+    },
+    "CachePolicyId": "658327ea-f89d-4fab-a63d-7e88639e58f6",
+    "Compress": false,
+    "SmoothStreaming": false,
+    "FieldLevelEncryptionId": "",
+    "TrustedKeyGroups": {
+      "Enabled": false,
+      "Quantity": 0
+    },
+    "TrustedSigners": {
+      "Enabled": false,
+      "Quantity": 0
+    },
+    "LambdaFunctionAssociations": {
+      "Quantity": 0
+    },
+    "FunctionAssociations": {
+      "Quantity": 0
+    }
+  },
+  "CacheBehaviors": {
+    "Quantity": 0
+  },
+  "CustomErrorResponses": {
+    "Quantity": 0
+  },
+  "PriceClass": "PriceClass_200",
+  "HttpVersion": "http2and3",
+  "IsIPV6Enabled": true,
+  "DefaultRootObject": "",
+  "ViewerCertificate": {
+    "CloudFrontDefaultCertificate": true
+  },
+  "Restrictions": {
+    "GeoRestriction": {
+      "RestrictionType": "none",
+      "Quantity": 0
+    }
+  },
+  "Logging": {
+    "Enabled": false,
+    "IncludeCookies": false,
+    "Bucket": "",
+    "Prefix": ""
+  },
+  "WebACLId": "",
+  "Staging": false
+}

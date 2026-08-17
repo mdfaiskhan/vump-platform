@@ -1,7 +1,7 @@
 import 'package:isar/isar.dart';
 
-import 'collections/database_metadata.dart';
-import 'database_constants.dart';
+import 'package:mobile/core/database/collections/database_metadata.dart';
+import 'package:mobile/core/database/database_constants.dart';
 
 /// How the database is opened.
 ///
@@ -68,9 +68,9 @@ class DatabaseConfig {
   ///
   /// ```dart
   /// databaseConfigProvider.overrideWith(
-  ///   (ref) => DatabaseConfig(directory: path).withSchemas(<CollectionSchema<dynamic>>[
-  ///     RecordingSchema,
-  ///   ]),
+  ///   (Ref<DatabaseConfig> ref) => DatabaseConfig(
+  ///     directory: path,
+  ///   ).withSchemas(<CollectionSchema<dynamic>>[RecordingSchema]),
   /// )
   /// ```
   DatabaseConfig withSchemas(List<CollectionSchema<dynamic>> schemas) {

@@ -1,6 +1,6 @@
 import 'package:isar/isar.dart';
 
-import '../database_constants.dart';
+import 'package:mobile/core/database/database_constants.dart';
 
 part 'database_metadata.g.dart';
 

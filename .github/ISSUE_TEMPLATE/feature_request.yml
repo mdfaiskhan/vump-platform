@@ -1,0 +1,82 @@
+name: Feature Request
+description: Propose a new capability.
+title: "feat: "
+labels: ["enhancement", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Proposals are evaluated against the accepted ADRs. A feature that
+        requires contradicting one needs a superseding ADR first — see
+        `docs/architecture/README.md`.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What cannot be done today, and who is blocked by it. Describe the problem, not the solution you have in mind.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed capability
+      description: What the application should be able to do. Behaviour, not implementation.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: What else would solve the problem, and why this is better. "None" is a valid answer only if you genuinely thought about it.
+    validations:
+      required: false
+
+  - type: dropdown
+    id: layer
+    attributes:
+      label: Where this most likely belongs
+      description: Best guess — triage will confirm. See ADR-001 and ADR-002.
+      options:
+        - A feature module (lib/features/)
+        - Core infrastructure (lib/core/)
+        - Application-wide (lib/app/)
+        - Shared widgets or utilities (lib/shared/)
+        - Backend
+        - Not sure
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: architecture
+    attributes:
+      label: Architecture impact
+      options:
+        - label: This may require a new or superseding ADR.
+          required: false
+        - label: This may require a new third-party dependency.
+          required: false
+        - label: This involves handling credentials or personal data.
+          required: false
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: How we will know it is done. Specific enough to write a test against.
+      placeholder: |
+        - Given …, when …, then …
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: confirmations
+    attributes:
+      label: Before submitting
+      options:
+        - label: I searched for an existing request covering this.
+          required: true
+        - label: I checked that no accepted ADR already rules this out.
+          required: true

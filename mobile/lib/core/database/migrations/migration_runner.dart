@@ -1,11 +1,11 @@
 import 'package:isar/isar.dart';
 
-import '../../errors/error_codes.dart';
-import '../../errors/exceptions/storage_exception.dart';
-import '../../logging/app_logger.dart';
-import '../collections/database_metadata.dart';
-import '../database_constants.dart';
-import 'migration.dart';
+import 'package:mobile/core/database/collections/database_metadata.dart';
+import 'package:mobile/core/database/database_constants.dart';
+import 'package:mobile/core/database/migrations/migration.dart';
+import 'package:mobile/core/errors/error_codes.dart';
+import 'package:mobile/core/errors/exceptions/storage_exception.dart';
+import 'package:mobile/core/logging/app_logger.dart';
 
 /// Brings an opened database up to the schema version the build expects.
 ///

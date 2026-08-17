@@ -1,11 +1,11 @@
 import 'package:isar/isar.dart';
 
-import '../errors/error_codes.dart';
-import '../errors/exceptions/storage_exception.dart';
-import '../logging/app_logger.dart';
-import 'database_config.dart';
-import 'migrations/migration.dart';
-import 'migrations/migration_runner.dart';
+import 'package:mobile/core/database/database_config.dart';
+import 'package:mobile/core/database/migrations/migration.dart';
+import 'package:mobile/core/database/migrations/migration_runner.dart';
+import 'package:mobile/core/errors/error_codes.dart';
+import 'package:mobile/core/errors/exceptions/storage_exception.dart';
+import 'package:mobile/core/logging/app_logger.dart';
 
 /// Sole owner of the Isar instance.
 ///
@@ -56,7 +56,7 @@ class DatabaseService {
   Isar get instance {
     final Isar? isar = _isar;
     if (isar == null || !isar.isOpen) {
-      throw StorageException(
+      throw const StorageException(
         errorCode: ErrorCode.storageUnavailable,
         message:
             'The database has not been opened. Await open() before '

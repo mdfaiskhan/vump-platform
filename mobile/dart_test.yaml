@@ -1,0 +1,16 @@
+# Test tags.
+#
+# `golden` marks Volume 9 Chapter 9.7 §2's visual-regression tests. They are
+# **generated and verified on CI only** — the tests themselves skip when
+# GITHUB_ACTIONS is unset, so a local `flutter test` reports them as skipped
+# rather than silently omitting them.
+#
+# The reason is font rendering: a golden captured on Windows does not match one
+# rendered on ubuntu-latest, so baselines committed from a developer machine
+# would fail on their first CI run and every run after. That is a hollow red —
+# a gate that fails for a reason unrelated to what it guards — and this project
+# already carries three of those (open items 41, 50, 51). Amendment A-095.
+tags:
+  golden:
+    # No skip here: the skip is expressed in the test file against the real
+    # signal (GITHUB_ACTIONS), so it is visible in the runner output.

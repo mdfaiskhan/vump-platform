@@ -53,9 +53,93 @@ dependencies:
   # Firebase platform
   firebase_core: ^4.13.0
 
+  # Firebase Authentication — the identity provider Volume 4 Chapter 4.1
+  # confirms and Chapter 4.7 designs the flow against. Confined to
+  # `features/auth/data/` by the `Architecture boundaries` CI job.
+  firebase_auth: ^6.5.7
+
+  # The native Google account picker behind SH-02's SSO entry point.
+  # FR-AUTH-02 words that entry point as enterprise SSO (SAML/OAuth); this
+  # reads it more narrowly than written, and volume-amendments.md A-053
+  # records the divergence. Confined to `features/auth/data/` with
+  # `firebase_auth`.
+  google_sign_in: ^7.2.0
+
+  # Reaches the temporary invite-code redemption function (ADR-036).
+  # Both of these are retired with it at Mission 6/7, when redemption becomes
+  # a /v1/... route on the AWS backend and Dio carries the call instead.
+  # Confined to `features/auth/data/` with the other Firebase products.
+  cloud_functions: ^6.3.6
+
+  # The Admin's invite-code generation surface writes org_invite_codes
+  # directly; Firestore security rules are the enforcement, not the UI.
+  cloud_firestore: ^6.8.0
+
+  # Camera capture. Volume 3 Chapter 3.1 names this package by name —
+  # "Flutter's official camera plugin, with a platform-channel extension for
+  # ultra-wide lens selection" — so the choice is recorded, not taken here.
+  # That same row flags the extension as an open engineering risk; amendment
+  # A-057 records that the risk is now confirmed and Android-only.
+  # Confined to `features/recording/data/`.
+  camera: ^0.12.0+2
+
+  # Caches the per-device wide-angle eligibility verdict (Volume 5.2 §2:
+  # "a fixed per-device-model decision made once at first launch and cached").
+  # NOT secure storage — ADR-008 governs secrets and this holds none, only a
+  # tier name and two version strings. Confined to `features/recording/data/`.
+  shared_preferences: ^2.5.5
+
+  # SHA-256 over each finalized chunk (Volume 5 Ch. 5.5 §1.2, FR-META-10).
+  # Already in the tree transitively via Firebase; promoted to a direct
+  # dependency because `depend_on_referenced_packages` forbids importing a
+  # package this pubspec does not declare. Dart-team owned, and
+  # `startChunkedConversion` is exactly the block-wise API §1.2 asks for.
+  # Confined to `features/recording/data/`.
+  crypto: ^3.0.7
+
+  # Battery level for FR-CHK-03's Pre-Recording Checklist row. Volume 1 §5
+  # requires the level be verified "before recording starts" and Volume 2
+  # Ch. 2.7's C-07 requires the row show its current value ("Battery: 82%"),
+  # neither of which `dart:io` can answer. Confined to
+  # `features/recording/data/`.
+  battery_plus: ^6.2.1
+
+  # Network availability for FR-CHK-04, which asks whether upload "will start
+  # immediately or be queued" — so the row needs the connection *type*, not a
+  # reachability boolean. Confined to `features/recording/data/`.
+  #
+  # Both packages are `plus` ecosystem, BSD-3-Clause, and maintained by the
+  # Flutter Community. They also make two thirds of amendment A-062's
+  # `capture_conditions` gap reachable; that is deliberately NOT wired here,
+  # because the group's third field (GPS) is still blocked on A-062 §3's
+  # unresolved product decision.
+  connectivity_plus: ^6.1.5
+
   # Local database
   isar: ^3.1.0+1
   isar_flutter_libs: ^3.1.0+1
+
+  # Writable application directory for the local database.
+  # ADR-009 Caveat 2: `databaseDirectoryProvider` is deliberately
+  # unimplemented because resolving an app directory needs a platform plugin.
+  # This is that plugin, read only in `main.dart` to supply the override.
+  path_provider: ^2.1.6
+
+  # Volume 5 Chapter 5.11 §1's Android foreground service. Volume 3 Chapter
+  # 3.1 §2 names this package by name — "a foreground service
+  # (flutter_foreground_task) driving Dio multipart uploads, with a persistent,
+  # dismissible-only-on-completion notification" — so the choice is
+  # transcribed, not taken by this mission.
+  #
+  # NOTE ON THE CITATION: Chapter 5.11's header says it expands "ADR-003
+  # (Volume 3, Chapter 3.2)". That is Volume 3's own internal ADR numbering.
+  # This repository's ADR-003 is state management (Riverpod). See A-077 and
+  # open item 34 — the third instance of this collision in three missions.
+  #
+  # Confined to `features/upload/data/`, the same way ADR-034 confines a
+  # Firebase *product* to the module that consumes it. The dispatcher in
+  # `application/` reaches it only through `UploadServiceHost`.
+  flutter_foreground_task: ^10.0.0
 
   # Code generation annotations
   freezed_annotation: ^2.4.4

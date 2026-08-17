@@ -1,10 +1,10 @@
 import 'package:firebase_core/firebase_core.dart';
 
-import '../../app/config/app_environment.dart';
-import '../logging/app_logger.dart';
-import 'firebase_constants.dart';
-import 'firebase_initialization_exception.dart';
-import 'firebase_options.dart';
+import 'package:mobile/app/config/app_environment.dart';
+import 'package:mobile/core/firebase/firebase_constants.dart';
+import 'package:mobile/core/firebase/firebase_initialization_exception.dart';
+import 'package:mobile/core/firebase/firebase_options.dart';
+import 'package:mobile/core/logging/app_logger.dart';
 
 /// Brings up the Firebase platform, exactly once.
 ///

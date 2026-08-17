@@ -93,9 +93,17 @@ This is what makes the backend replaceable. Moving to a different credential sto
 
 ## Implementation Status
 
-**Not implemented.** This ADR is a decision, not a description.
+**Implemented, and currently unused.**
 
-`flutter_secure_storage: ^9.2.2` is declared in `pubspec.yaml` and is unused. `lib/core/storage/` does not exist, no abstraction has been written, and no secret is persisted anywhere in the application.
+~~Not implemented. This ADR is a decision, not a description.~~ ~~`lib/core/storage/` does not exist, no abstraction has been written, and no secret is persisted anywhere in the application.~~
+
+**Correction (Mission 2.5, 2026-08-13).** `lib/core/storage/` was built in Mission 0.7 and holds `SecureStorageService`, `StorageKey`, the `SecureStorageRepository` interface and its provider. What remains true is the last clause: **no secret is persisted anywhere in the application, and `SecureStorageService` has zero consumers.**
+
+The reason is recorded as amendment **A-055**. Volume 6 Chapter 6.7 §2 expected the Firebase refresh token to live here, and `firebase_auth` documents `User.refreshToken` as *"an empty string for native platforms (android, iOS & macOS)"* — every platform this application ships to. The native SDK persists its own credential in the same hardware-backed keystore, so the token this service was built for never materialised. The chapter's protection goal is met; the owner of the write is the SDK.
+
+**Kept as-is rather than deleted, and that is a decision rather than inertia.** `StorageKey` already reserves `deviceToken`, and Volume 2's C-15 (Notifications, Phase 2 — *"upload failures, new assignments"*) is a plausible near-term consumer for it. Deleting a working, tested abstraction to re-add it a phase later is the more expensive of the two mistakes.
+
+**It stays unused until either a real consumer appears or a future mission explicitly decides otherwise.** Confirmed by the project owner on 2026-08-13. ADR-008 remains Accepted and binding: nothing about *how* a secret is stored has changed, only the fact that nothing is storing one yet.
 
 `shared_preferences` is not currently a dependency, so the prohibition against using it for secrets is forward-looking rather than corrective.
 

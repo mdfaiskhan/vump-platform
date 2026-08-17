@@ -3,10 +3,11 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:isar/isar.dart';
 
-import '../../logging/providers/logger_provider.dart';
-import '../database_config.dart';
-import '../database_service.dart';
-import '../migrations/migration.dart';
+import 'package:mobile/app/config/app_config.dart';
+import 'package:mobile/core/database/database_config.dart';
+import 'package:mobile/core/database/database_service.dart';
+import 'package:mobile/core/database/migrations/migration.dart';
+import 'package:mobile/core/logging/providers/logger_provider.dart';
 
 /// Writable directory the database file lives in.
 ///
@@ -57,8 +58,12 @@ final Provider<List<Migration>> databaseMigrationsProvider =
 /// ```
 final Provider<DatabaseConfig> databaseConfigProvider =
     Provider<DatabaseConfig>(
-      (Ref ref) =>
-          DatabaseConfig(directory: ref.watch(databaseDirectoryProvider)),
+      (Ref ref) => DatabaseConfig(
+        directory: ref.watch(databaseDirectoryProvider),
+        inspector: AppFeatureFlags.forEnvironment(
+          AppConfig.environment,
+        ).databaseInspectorEnabled,
+      ),
     );
 
 /// Owner of the database lifecycle.

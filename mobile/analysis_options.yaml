@@ -1,28 +1,732 @@
-# This file configures the analyzer, which statically analyzes Dart code to
-# check for errors, warnings, and lints.
+# Static analysis configuration for the Vump Technologies mobile application.
 #
-# The issues identified by the analyzer are surfaced in the UI of Dart-enabled
-# IDEs (https://dart.dev/tools#ides-and-editors). The analyzer can also be
-# invoked from the command line by running `flutter analyze`.
+# Governed by ADR-021. Volume 3, Chapter 3.7 §2 fixes a six-rule floor chosen
+# "to enforce the layer and module boundaries fixed in Chapters 3.4 and 3.5";
+# ADR-021 keeps every one of those and builds the production rule set on top.
+# Amendment A-031 records the widening.
+#
+# Two principles govern what is in here.
+#
+#   1. Every rule has a reason. A rule enabled because it exists is a rule
+#      nobody can defend when it fires inconveniently, and it will be deleted
+#      the first time it does. Rules that are merely fashionable are absent.
+#
+#   2. Nothing is disabled to make analysis pass. Where a rule is excluded,
+#      the exclusion is recorded below with the conflict or the architectural
+#      requirement that caused it — never with "it was noisy".
+#
+# Adding or removing a rule is an amendment to ADR-021. It is a documented
+# decision, not a preference, and the reason belongs in this file.
+#
+# Verified against Flutter 3.44.9 / Dart 3.12.2 (the version CI pins): zero
+# errors, zero warnings, zero infos, across `lib/`, `test/` and every
+# committed generated file.
 
-# The following line activates a set of recommended lints for Flutter apps,
-# packages, and plugins designed to encourage good coding practices.
+# ---------------------------------------------------------------------------
+# Base rule set
+# ---------------------------------------------------------------------------
+#
+# `flutter_lints` is the only include, and it is the one Flutter itself
+# maintains against each SDK release. It layers `package:lints/recommended`
+# (which layers `package:lints/core`) and adds the Flutter-specific rules.
+#
+# No second include is added. A community meta-package — `very_good_analysis`,
+# `lint`, `pedantic_mono` — would import a rule set this project does not
+# control, so an upstream release could change what CI enforces without a
+# commit here. The rules below are enumerated explicitly for exactly that
+# reason: the set is auditable and versioned in this repository.
 include: package:flutter_lints/flutter.yaml
 
-linter:
-  # The lint rules applied to this project can be customized in the
-  # section below to disable rules from the `package:flutter_lints/flutter.yaml`
-  # included above or to enable additional rules. A list of all available lints
-  # and their documentation is published at https://dart.dev/lints.
+analyzer:
+  # -------------------------------------------------------------------------
+  # Language — type-system strictness
+  # -------------------------------------------------------------------------
   #
-  # Instead of disabling a lint rule for the entire project in the
-  # section below, it can also be suppressed for a single line of code
-  # or a specific dart file by using the `// ignore: name_of_lint` and
-  # `// ignore_for_file: name_of_lint` syntax on the line or in the file
-  # producing the lint.
-  rules:
-    # avoid_print: false  # Uncomment to disable the `avoid_print` rule
-    # prefer_single_quotes: true  # Uncomment to enable the `prefer_single_quotes` rule
+  # These are not lints. They tighten the type checker itself, which is why
+  # they matter more than any single rule below: a lint reports a smell, these
+  # close holes through which `dynamic` re-enters a typed codebase.
+  language:
+    # An implicit downcast from `dynamic` becomes a compile-time error instead
+    # of a runtime `TypeError`. Every JSON payload arrives as
+    # `Map<String, dynamic>`; without this, `final int id = json['id']` is
+    # accepted here and throws on a malformed response in production.
+    strict-casts: true
 
-# Additional information about this file can be found at
-# https://dart.dev/guides/language/analysis-options
+    # An expression that would otherwise infer as `dynamic` becomes an error.
+    # This is what forces type arguments onto collection literals and closure
+    # returns rather than letting inference quietly give up.
+    strict-inference: true
+
+    # A generic type used without type arguments (`List`, `Future`, `Map`)
+    # becomes an error. `List` alone is `List<dynamic>`, which defeats the
+    # boundary typing ADR-001 depends on while looking perfectly ordinary.
+    strict-raw-types: true
+
+  # -------------------------------------------------------------------------
+  # Excludes
+  # -------------------------------------------------------------------------
+  #
+  # Nothing is excluded. `build/` and `.dart_tool/` are excluded by the
+  # analyzer itself and need no entry.
+  #
+  # Generated files are deliberately NOT excluded. They are committed
+  # (Volume 6 §6.2, Volume 3 §3.6 §5) so a fresh clone builds before anyone
+  # runs build_runner — which means they ship, and code that ships is
+  # analysed. Excluding them would hide genuine errors in generator output.
+  #
+  # This works because the generators suppress their own known violations:
+  # `isar_generator` emits an `ignore_for_file` header covering the rules its
+  # output trips (`lines_longer_than_80_chars`, `always_specify_types`,
+  # `constant_identifier_names` and others). Verified: the committed generated
+  # files produce zero issues under this configuration.
+  #
+  # This is the opposite of the CI *format* check, which does exclude them.
+  # Generators do not emit formatter-clean output, and reformatting generated
+  # files makes them diverge from what the generator produces — which the
+  # `Generated code drift` job would then fail on. Analysed but not formatted;
+  # the asymmetry is intentional.
+  #
+  # If a future generator emits code that trips a rule and does not suppress
+  # it, the fix is a targeted `ignore_for_file` request upstream or a narrow
+  # exclude for that one output pattern — not a blanket `**/*.g.dart`.
+
+  # -------------------------------------------------------------------------
+  # Errors — severity promotion
+  # -------------------------------------------------------------------------
+  #
+  # `flutter analyze` fails on any diagnostic, info included, so CI already
+  # gates on everything here. Promotion exists for the two cases where
+  # severity is the only signal:
+  #
+  #   - the IDE, where an error is a red squiggle and an info is a grey dot;
+  #   - `dart analyze --no-fatal-infos`, which a developer may run locally.
+  #
+  # The line is drawn at consequence, not at effort. Promoted: anything that
+  # ships a defect, leaks data or leaks a resource. Left at default: every
+  # style and consistency rule, however strongly held.
+  errors:
+    # --- Data leakage -------------------------------------------------------
+    # `print` bypasses AppLogger, escaping the level filtering of ADR-016 and
+    # the redaction obligations of ADR-007. A printed token is a leaked token.
+    avoid_print: error
+
+    # --- Type-safety holes --------------------------------------------------
+    # A dynamic call crosses a layer boundary the analyzer cannot see, so it
+    # defeats the enforcement Volume 3 §3.7 §2 asks these rules to provide.
+    avoid_dynamic_calls: error
+    # An unchecked downcast that the type system cannot back.
+    cast_nullable_to_non_nullable: error
+
+    # --- Comparisons that are always false ---------------------------------
+    # These read as working code and silently never match.
+    collection_methods_unrelated_type: error
+    unrelated_type_equality_checks: error
+    literal_only_boolean_expressions: error
+    no_self_assignments: error
+    test_types_in_equals: error
+    hash_and_equals: error
+
+    # --- Swallowed and lost failures ---------------------------------------
+    # An empty catch discards the error taxonomy `core/errors/` exists to
+    # maintain: the failure happened, and no layer above will ever know.
+    empty_catches: error
+    # `throw`/`return` inside `finally` discards the in-flight exception.
+    throw_in_finally: error
+    control_flow_in_finally: error
+    # Throwing a non-`Error`, non-`Exception` value cannot be caught by the
+    # `on AppException` clauses the taxonomy is built from.
+    only_throw_errors: error
+
+    # --- Dropped futures ----------------------------------------------------
+    # An unawaited future fails silently and out of order. Both rules are
+    # promoted because the failure is invisible in test and in production
+    # alike — the operation simply did not happen.
+    unawaited_futures: error
+    discarded_futures: error
+
+    # --- Leaked resources ---------------------------------------------------
+    # A subscription or sink that is never closed outlives the object that
+    # opened it. On a recording device this is a memory and battery cost that
+    # grows with session length.
+    cancel_subscriptions: error
+    close_sinks: error
+
+    # --- Flutter correctness ------------------------------------------------
+    # Using a `BuildContext` across an `await` reads a widget tree that may be
+    # gone. It is the single most common source of production crashes in a
+    # Flutter application.
+    use_build_context_synchronously: error
+    # `dart:html` and friends compile on web and break every other target.
+    avoid_web_libraries_in_flutter: error
+
+    # --- Dead code ----------------------------------------------------------
+    # `CLAUDE.md` states "do not leave dead code" as a coding standard. These
+    # are the analyzer's own diagnostics for it, promoted from warning so the
+    # standard is enforced rather than asserted.
+    dead_code: error
+    unused_import: error
+    unused_local_variable: error
+    unused_element: error
+    unused_field: error
+
+    # --- Suppression hygiene ------------------------------------------------
+    # An `ignore` comment is a hole in this configuration. `document_ignores`
+    # requires each one to say why, and `unnecessary_ignore` deletes the ones
+    # that no longer suppress anything — together they stop ignores
+    # accumulating as the residue of past failures.
+    document_ignores: warning
+    unnecessary_ignore: warning
+
+  # No analyzer plugins. `custom_lint` was evaluated and declined in
+  # amendment A-026: the `Architecture boundaries` CI job already enforces the
+  # import rules it would provide, and adopting it would add seven
+  # dependencies and a second mechanism for one outcome.
+
+# ---------------------------------------------------------------------------
+# Formatter
+# ---------------------------------------------------------------------------
+#
+# 80 is `dart format`'s default and is stated explicitly here because
+# `lines_longer_than_80_chars` below asserts the same number. Two settings
+# that must agree should have one visible source, or a future width change
+# will move the formatter and leave the lint behind, making every reformatted
+# line an analysis failure.
+formatter:
+  page_width: 80
+
+linter:
+  rules:
+    # =======================================================================
+    # SAFETY — rules whose violation is a defect
+    # =======================================================================
+    #
+    # This section is the reason the file exists. Everything below it is
+    # consistency; everything in it is correctness.
+
+    # --- Volume 3 §3.7 §2 floor -------------------------------------------
+    # Relative imports make a file's position in the tree part of its
+    # meaning, so moving a file rewrites unrelated files and two paths can
+    # resolve to the same library.
+    - always_use_package_imports
+    # See the `errors:` block above — the redaction argument.
+    - avoid_print
+    # `dynamic` defeats the type checking the layer boundaries rely on.
+    - avoid_dynamic_calls
+
+    # --- Null and type safety ---------------------------------------------
+    # A cast from a nullable type to a non-nullable one that the type system
+    # cannot justify. Fails at the point of use, not the point of the cast.
+    - cast_nullable_to_non_nullable
+    # `!` on a value whose type parameter may itself be nullable is a no-op
+    # that reads as a null check.
+    - null_check_on_nullable_type_parameter
+    # An uninitialised variable with no annotation infers `dynamic`.
+    - prefer_typing_uninitialized_variables
+    # `Null` as a return type where `void` is meant.
+    - prefer_void_to_null
+    # A type parameter that shadows an enclosing one silently changes which
+    # type a body refers to.
+    - avoid_shadowing_type_parameters
+    # A parameter whose name is a type is almost always a missing annotation.
+    - avoid_types_as_parameter_names
+    # Widening a field's or parameter's declared type in a subtype breaks
+    # substitutability in a way the compiler permits.
+    - unsafe_variance
+    - tighten_type_of_initializing_formals
+    - type_init_formals
+    - matching_super_parameters
+    # `void` inside `FutureOr` is ambiguous between "no value" and "a value
+    # that happens to be null".
+    - avoid_futureor_void
+    # A type literal in a constant pattern matches the `Type` object, not
+    # instances of the type — never what was meant.
+    - type_literal_in_constant_pattern
+    # A `case` on a type without a type pattern.
+    - switch_on_type
+    - invalid_case_patterns
+    # `void` used where a value is required, and vice versa.
+    - void_checks
+
+    # --- Comparisons and conditions that cannot work -----------------------
+    - collection_methods_unrelated_type
+    - unrelated_type_equality_checks
+    - literal_only_boolean_expressions
+    - no_self_assignments
+    - no_duplicate_case_values
+    - test_types_in_equals
+    # `hashCode` without `==`, or the reverse, breaks every hash-based
+    # collection the type is put into.
+    - hash_and_equals
+    # `is int` and `is double` overlap on web, where all numbers are doubles.
+    - avoid_double_and_int_checks
+    # An integer literal outside the range JavaScript represents exactly is a
+    # different number on web than on mobile.
+    - avoid_js_rounded_ints
+    - no_literal_bool_comparisons
+    - avoid_bool_literals_in_conditional_expressions
+    # A regular expression that does not compile throws at first use.
+    - valid_regexps
+
+    # --- Error handling ---------------------------------------------------
+    # `core/errors/` defines a taxonomy in which every failure is an
+    # `AppException` converted to a `Failure` at the boundary. These four
+    # rules are what keep a failure inside it.
+    - empty_catches
+    - only_throw_errors
+    - throw_in_finally
+    - control_flow_in_finally
+    # `rethrow` preserves the original stack trace; `throw error` replaces it
+    # with the catch site, discarding where the failure actually came from.
+    - use_rethrow_when_possible
+    # Catching `Error` catches programming mistakes — a failed assertion, a
+    # null dereference — and turns a bug into a handled condition. Catching
+    # `Exception` broadly at an infrastructure boundary remains correct and
+    # required; this rule does not restrict that.
+    - avoid_catching_errors
+
+    # --- Asynchrony -------------------------------------------------------
+    - unawaited_futures
+    - discarded_futures
+    # `await` on a non-future is dead code that reads as synchronisation.
+    - await_only_futures
+    # `async void` cannot be awaited and its errors cannot be caught. Every
+    # failure inside one is unhandled by construction.
+    - avoid_void_async
+    # An `async` function with no `await` adds a microtask hop and an
+    # asynchronous signature for nothing.
+    - unnecessary_async
+    # `return await` outside a `try` adds a hop and obscures the stack trace.
+    - unnecessary_await_in_return
+    # The synchronous `dart:io` variants block the isolate. On a recording
+    # device that is a dropped frame at best.
+    - avoid_slow_async_io
+    # A closure passed where a callback is required, but which returns null.
+    - null_closures
+
+    # --- Resource ownership -----------------------------------------------
+    - cancel_subscriptions
+    - close_sinks
+
+    # --- Flutter correctness ----------------------------------------------
+    - use_build_context_synchronously
+    - avoid_web_libraries_in_flutter
+    # `createState` must return a fresh, unconfigured state object; logic
+    # there runs before the element is mounted.
+    - no_logic_in_create_state
+    # A 6-digit colour literal is transparent, not opaque — the alpha channel
+    # is zero, and the widget renders invisibly.
+    - use_full_hex_values_for_flutter_colors
+
+    # --- Runtime type reflection ------------------------------------------
+    # `runtimeType.toString()` is minified in release builds, so any log line
+    # or branch that depends on it behaves differently in production than in
+    # debug. ADR-007's redaction and the logging layer both format errors for
+    # a log aggregator; a minified type name there is unreadable.
+    - avoid_type_to_string
+    - no_runtimeType_toString
+
+    # --- Encapsulation ----------------------------------------------------
+    # A private type in a public signature cannot be named by the caller,
+    # which makes the API unusable from outside its own library. In a layered
+    # architecture that is a boundary violation the compiler allows.
+    - library_private_types_in_public_api
+    # Importing another package's `src/` reaches past its public API and
+    # binds this codebase to its internals.
+    - implementation_imports
+    # A field redeclared in a subclass shadows the inherited one; two fields
+    # exist and one is silently unreachable.
+    - overridden_fields
+    # `@override` is what makes a renamed supertype member a compile error
+    # instead of a silently orphaned method.
+    - annotate_overrides
+    - annotate_redeclares
+    # Reopening a class narrows what subtypes are permitted; doing it
+    # implicitly hides a restriction from the reader.
+    - implicit_reopen
+    # A value type is meant to be constructed, not implemented — an
+    # implementation cannot satisfy its equality contract.
+    - avoid_implementing_value_types
+    # A getter that returns itself recurses until the stack overflows.
+    - recursive_getters
+    # A wildcard (`_`) is a declaration, not a reference; using one as a
+    # value reads a variable nobody meant to declare.
+    - no_wildcard_variable_uses
+    # `late` on a private field lets the analyzer prove initialisation.
+    - use_late_for_private_fields_and_variables
+
+    # --- Deprecation ------------------------------------------------------
+    # Our own deprecations must be honoured inside this package too, or the
+    # deprecation is advice to callers and nothing more.
+    - deprecated_member_use_from_same_package
+    - provide_deprecation_message
+
+    # --- Supply chain -----------------------------------------------------
+    # A `git:` or `http:` dependency URL in `pubspec.yaml` fetches code over
+    # a channel nobody verifies. ADR-020 records the deliberate
+    # zero-third-party-action position in CI; this is the same position for
+    # package sources.
+    - secure_pubspec_urls
+
+    # =======================================================================
+    # TYPE EXPLICITNESS
+    # =======================================================================
+    #
+    # This project annotates types everywhere — `final ProviderContainer
+    # container = ProviderContainer();`, `List<CollectionSchema<dynamic>>`,
+    # `(BuildContext context, GoRouterState state)`. That is the established
+    # style, not a new imposition; the rules below make it binding.
+    #
+    # The trade-off is real and taken deliberately. Annotations are longer to
+    # write and can restate the obvious. What they buy is that a changed
+    # return type upstream becomes a compile error at every call site rather
+    # than an inferred type quietly propagating a new type through code that
+    # still compiles. In a layered architecture where the boundary *is* the
+    # type, that is the property worth paying for.
+    #
+    # These rules are mutually exclusive with `omit_local_variable_types`,
+    # `omit_obvious_local_variable_types`, `avoid_types_on_closure_parameters`
+    # and `avoid_annotating_with_dynamic` — see EXCLUDED below.
+    - always_specify_types
+    # Kept alongside `always_specify_types`, which subsumes it. If the broader
+    # rule is ever relaxed, return types are the part that must not be lost:
+    # an omitted return type infers from the body, so changing the body
+    # changes the signature.
+    - always_declare_return_types
+    - strict_top_level_inference
+    - use_function_type_syntax_for_parameters
+    - prefer_generic_function_type_aliases
+
+    # =======================================================================
+    # PERFORMANCE
+    # =======================================================================
+    #
+    # Flutter rebuilds widget subtrees on every frame. A `const` widget is
+    # canonicalised once and skipped on rebuild, so these are not
+    # micro-optimisations — they change how much work a frame does. Volume 1's
+    # reliability NFRs are about a device recording video; frame budget is not
+    # a spare resource here.
+    - prefer_const_constructors
+    - prefer_const_constructors_in_immutables
+    - prefer_const_declarations
+    - prefer_const_literals_to_create_immutables
+    - unnecessary_const
+    # A field initialiser in a const class prevents const construction.
+    - avoid_field_initializers_in_const_classes
+    - use_named_constants
+
+    # `final` lets the compiler prove a value never changes.
+    - prefer_final_locals
+    - prefer_final_fields
+    - prefer_final_in_for_each
+
+    # --- Widget tree cost -------------------------------------------------
+    # A `Container` with no decoration is a layout node that does nothing.
+    - avoid_unnecessary_containers
+    - sized_box_for_whitespace
+    - sized_box_shrink_expand
+    # `ColoredBox` and `DecoratedBox` are const-constructible where the
+    # equivalent `Container` is not.
+    - use_colored_box
+    - use_decorated_box
+
+    # --- Allocation -------------------------------------------------------
+    # Repeated `+` on strings allocates an intermediate string per operation.
+    - use_string_buffers
+    - prefer_interpolation_to_compose_strings
+    - prefer_adjacent_string_concatenation
+    # `whereType<T>()` is one pass; `where(...).cast<T>()` is two.
+    - prefer_iterable_whereType
+    # `.contains` on a Set or Map is constant time; `.any` is linear.
+    - prefer_contains
+    - prefer_collection_literals
+    - prefer_spread_collections
+    - prefer_inlined_adds
+    - unnecessary_to_list_in_spreads
+    - prefer_for_elements_to_map_fromIterable
+    - prefer_if_elements_to_conditional_expressions
+    # `isEmpty` short-circuits; `length == 0` walks a lazy iterable.
+    - prefer_is_empty
+    - prefer_is_not_empty
+    # A closure that only forwards its arguments allocates a new object per
+    # call where a tear-off allocates none.
+    - unnecessary_lambdas
+    - implicit_call_tearoffs
+    - prefer_function_declarations_over_variables
+    - noop_primitive_operations
+    - use_truncating_division
+    - use_is_even_rather_than_modulo
+
+    # =======================================================================
+    # API DESIGN
+    # =======================================================================
+    #
+    # ADR-001 puts an interface at every layer boundary, so the shape of a
+    # public signature is architecture, not taste.
+
+    # A positional boolean at a call site is unreadable — `save(true, false)`
+    # says nothing. Named parameters carry the meaning.
+    - avoid_positional_boolean_parameters
+    # A setter with no getter is a write-only property; the asymmetry is
+    # almost always an oversight.
+    - avoid_setters_without_getters
+    - avoid_return_types_on_setters
+    - avoid_returning_null_for_void
+    # A method returning `this` for chaining fights Dart's cascade operator.
+    - avoid_returning_this
+    - use_setters_to_change_properties
+    # A getter/setter pair that only forwards to a field should be the field.
+    - unnecessary_getters_setters
+    # An override that only calls `super` adds a frame and no behaviour.
+    - unnecessary_overrides
+    # A constructor parameter that is never used is a caller obligation with
+    # no effect.
+    - avoid_unused_constructor_parameters
+    - prefer_initializing_formals
+    - use_super_parameters
+    - prefer_asserts_in_initializer_lists
+    # A factory constructor is discoverable where a static method is not.
+    - prefer_constructors_over_static_methods
+    # Reassigning a parameter makes the argument and the local diverge, so a
+    # reader cannot trust the signature partway down the body.
+    - parameter_assignments
+    # A top-level declaration nothing reaches is dead code.
+    - unreachable_from_main
+
+    # =======================================================================
+    # DOCUMENTATION COMMENTS
+    # =======================================================================
+    #
+    # Doc comments in this codebase carry ADR references and explain why a
+    # thing is built the way it is. That makes them load-bearing, and a
+    # load-bearing comment must be checked like code.
+    #
+    # `[Reference]` links are the part that rots: a renamed class leaves a
+    # bracket that renders as literal text and points nowhere.
+    - comment_references
+    - slash_for_doc_comments
+    - dangling_library_doc_comments
+    - missing_code_block_language_in_doc_comment
+    - unintended_html_in_doc_comment
+    # A TODO with no author and no issue is a note to nobody.
+    - flutter_style_todos
+
+    # `public_member_api_docs` is NOT enabled here — deliberately.
+    #
+    # Volume 3 §3.7 §2 scopes it to "domain/ and data/ layers only
+    # (Section 5)". The Dart analyzer cannot scope a lint to a subdirectory
+    # from this file; that needs an `analysis_options.yaml` inside the
+    # directory itself.
+    #
+    # Neither layer exists yet — `lib/features/` is empty (ADR-001), and per
+    # ADR-001 the layers live inside each feature. Enabling it here would
+    # apply it to `core/` and `app/`, which §2 does not ask for, and would
+    # report 122 issues against code the chapter deliberately exempts.
+    #
+    # The first feature must carry its own configuration:
+    #
+    #   lib/features/<feature>/domain/analysis_options.yaml
+    #   lib/features/<feature>/data/analysis_options.yaml
+    #
+    #     include: ../../../../../analysis_options.yaml
+    #     linter:
+    #       rules:
+    #         - public_member_api_docs
+    #
+    # Registered as amendment A-025.
+
+    # =======================================================================
+    # STYLE AND CONSISTENCY
+    # =======================================================================
+    #
+    # These rules do not prevent defects. They exist so that a diff shows a
+    # change in behaviour rather than a change in habit, and so that
+    # reviewers spend their attention on the change instead of on layout.
+    # Every one is mechanically checkable, which is the test for belonging
+    # here: a convention a machine cannot check is a convention nobody keeps.
+
+    # --- Naming -----------------------------------------------------------
+    - file_names
+    - non_constant_identifier_names
+    - constant_identifier_names
+    - library_prefixes
+    - package_prefixed_library_names
+    - unnecessary_library_name
+    - unnecessary_library_directive
+    - use_string_in_part_of_directives
+    - unnecessary_underscores
+
+    # --- Imports ----------------------------------------------------------
+    # A deterministic import order makes an added import a one-line diff
+    # instead of a reshuffle.
+    - directives_ordering
+    - combinators_ordering
+
+    # --- Layout -----------------------------------------------------------
+    # 80 columns, matching `formatter.page_width` above. The number is not
+    # important; agreeing on one is, because it is what stops formatting
+    # churn appearing in unrelated diffs.
+    - lines_longer_than_80_chars
+    # A trailing comma is what makes `dart format` put one argument per line,
+    # so a changed argument is a one-line diff.
+    - require_trailing_commas
+    - curly_braces_in_flow_control_structures
+    - avoid_multiple_declarations_per_line
+    - eol_at_end_of_file
+    - leading_newlines_in_multiline_strings
+    # Constructors first, unnamed before named — so the reader finds how to
+    # build a thing before what to do with it.
+    - sort_constructors_first
+    - sort_unnamed_constructors_first
+    # `child` last keeps a widget's own configuration above its subtree,
+    # which is what makes deeply nested build methods readable.
+    - sort_child_properties_last
+
+    # --- Strings ----------------------------------------------------------
+    - prefer_single_quotes
+    - avoid_escaping_inner_quotes
+    - unnecessary_string_escapes
+    - unnecessary_string_interpolations
+    - unnecessary_brace_in_string_interps
+    - use_raw_strings
+    # Two adjacent string literals with no space between them concatenate
+    # into a run-on word — a real bug in a wrapped log message.
+    - missing_whitespace_between_adjacent_strings
+    # Adjacent strings inside a list literal are almost always a missing
+    # comma, silently producing one element instead of two.
+    - no_adjacent_strings_in_list
+
+    # --- Redundancy -------------------------------------------------------
+    # Each of these is a construct that expresses something the language
+    # already provides more directly. Removing them is not tidying: every
+    # redundant form is one more thing a reader must decide is unimportant.
+    - empty_constructor_bodies
+    - empty_statements
+    - avoid_empty_else
+    - unnecessary_breaks
+    - unnecessary_constructor_name
+    - unnecessary_late
+    - unnecessary_new
+    - unnecessary_null_aware_assignments
+    - unnecessary_null_aware_operator_on_extension_on_nullable
+    - unnecessary_null_checks
+    - unnecessary_null_in_if_null_operators
+    - unnecessary_nullable_for_final_variable_declarations
+    - unnecessary_parenthesis
+    - unnecessary_statements
+    - unnecessary_this
+    - prefer_if_null_operators
+    - prefer_null_aware_operators
+    - prefer_null_aware_method_calls
+    - prefer_is_not_operator
+    - use_enums
+    - use_test_throws_matchers
+
+    # --- Suppression hygiene ----------------------------------------------
+    # See the `errors:` block. An undocumented ignore is a decision with no
+    # record; a stale one is a rule silently disabled.
+    - document_ignores
+    - unnecessary_ignore
+
+# ===========================================================================
+# EXCLUDED RULES — considered and rejected
+# ===========================================================================
+#
+# Recorded so they are not re-litigated, and so that a reader can tell a
+# deliberate omission from an oversight. Each entry names the conflict or the
+# requirement that caused it. None was excluded because it was noisy.
+#
+# --- Excluded because an accepted ADR requires the pattern -----------------
+#
+#   do_not_use_environment
+#     Forbids `String.fromEnvironment`. ADR-007 and ADR-016 make
+#     `--dart-define=APP_ENV` read through exactly that mechanism, and
+#     ADR-006 requires it to be const-evaluable. Enabling this rule would
+#     make the accepted environment strategy unimplementable.
+#
+#   avoid_classes_with_only_static_members
+#     ADR-005 and ADR-006 define the theme tokens and configuration as
+#     `abstract final class` holders of static constants — `AppColors`,
+#     `AppSpacing`, `AppConfig`. That is the documented shape of both
+#     decisions, and const-evaluability depends on it.
+#
+#   avoid_catches_without_on_clauses
+#     `core/errors/app_exception.dart` states the invariant that no
+#     third-party exception escapes infrastructure: a Dio error, an Isar
+#     exception, a platform channel failure and a Firebase error are each
+#     caught at the boundary where they arise and rethrown as an
+#     `AppException`. Honouring that requires a catch-all at every such
+#     boundary, so the rule would force an `ignore` comment at each one —
+#     converting a design invariant into per-site suppression. Catching
+#     `Error` specifically is still forbidden, by `avoid_catching_errors`.
+#
+#   prefer_relative_imports, always_use_package_imports_or_relative
+#     Directly contradict `always_use_package_imports`, which Volume 3
+#     §3.7 §2 requires.
+#
+# --- Excluded because they conflict with a rule that is enabled ------------
+#
+#   omit_local_variable_types, omit_obvious_local_variable_types,
+#   specify_nonobvious_local_variable_types, avoid_types_on_closure_parameters,
+#   avoid_annotating_with_dynamic
+#     All incompatible with `always_specify_types`. The last is the least
+#     obvious: `Map<String, dynamic>.map((String name, dynamic value) => …)`
+#     needs the `dynamic` annotation to satisfy `always_specify_types`, and
+#     `avoid_annotating_with_dynamic` forbids writing it.
+#
+#   prefer_final_parameters / avoid_final_parameters
+#     A mutually contradictory pair; enabling either is a coin toss.
+#     `parameter_assignments` already forbids the behaviour that matters.
+#
+# --- Excluded because the rule fires on committed generated code -----------
+#
+#   cascade_invocations
+#     Fires in `database_metadata.g.dart`, which `isar_generator` does not
+#     cover in its `ignore_for_file` header. Generated files are analysed by
+#     policy (see Excludes above) and cannot be edited, so keeping this rule
+#     would mean either excluding generated code or ignoring a rule in a file
+#     nobody wrote. The rule is a readability preference; the policy is not.
+#
+# --- Excluded because the project's own convention is the opposite ---------
+#
+#   avoid_redundant_argument_values
+#     `DioClient` passes `responseType: ResponseType.json` and
+#     `FirebaseInitializer` passes `FirebaseConstants.defaultAppName`, both
+#     equal to the package default. Restating them is deliberate: it makes
+#     the value this project's decision rather than a third party's, which
+#     is the same position ADR-007 takes on the API base URL. A default that
+#     changes in a minor release would otherwise change our behaviour
+#     silently.
+#
+#   unnecessary_raw_strings
+#     Every `RegExp` pattern is written raw whether or not it currently
+#     contains an escape, so that adding a backslash later cannot introduce
+#     a bug. `use_raw_strings` is enabled to require raw where escapes exist;
+#     this rule would forbid it where they do not.
+#
+#   sort_pub_dependencies
+#     `pubspec.yaml` groups dependencies by purpose under explanatory
+#     comments — state management, navigation, networking, code generation.
+#     Alphabetical order would destroy the grouping, which is the more
+#     useful organisation of about a dozen entries.
+#
+# --- Excluded as taste, with no defect it prevents -------------------------
+#
+#   one_member_abstracts
+#     ADR-001 puts a repository interface at every layer boundary, and some
+#     will legitimately have one method. This rule would push those to
+#     `typedef`s, which cannot be implemented by a class or mocked.
+#
+#   prefer_foreach, join_return_with_assignment, use_to_and_as_if_applicable,
+#   prefer_expression_function_bodies, always_put_control_body_on_new_line,
+#   diagnostic_describe_all_properties
+#     Formatting and naming preferences that prevent no defect. The last is
+#     genuinely useful for widget debugging but requires a
+#     `debugFillProperties` override on every class, which is a large,
+#     permanent cost for a diagnostic aid.
+#
+#   type_annotate_public_apis
+#     Fully subsumed by `always_specify_types`.
+#
+#   use_if_null_to_convert_nulls_to_bools
+#     Deprecated in the current linter; enabling it produces a
+#     `deprecated_lint` warning.

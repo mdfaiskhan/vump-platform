@@ -1,0 +1,23 @@
+{
+  "name": "vump-functions",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Temporary invite-code redemption runtime. Retired at Mission 6/7 — see ADR-036.",
+  "engines": {
+    "node": "22"
+  },
+  "main": "lib/index.js",
+  "scripts": {
+    "build": "tsc",
+    "lint": "tsc --noEmit",
+    "serve": "npm run build && firebase emulators:start --only functions,firestore",
+    "deploy": "npm run build && firebase deploy --only functions"
+  },
+  "dependencies": {
+    "firebase-admin": "^14.2.0",
+    "firebase-functions": "^7.3.2"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.2"
+  }
+}

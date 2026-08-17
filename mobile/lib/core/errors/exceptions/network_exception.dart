@@ -1,5 +1,5 @@
-import '../app_exception.dart';
-import '../error_codes.dart';
+import 'package:mobile/core/errors/app_exception.dart';
+import 'package:mobile/core/errors/error_codes.dart';
 
 /// Raised when a request to a remote service fails.
 ///
