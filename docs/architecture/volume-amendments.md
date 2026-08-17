@@ -5572,6 +5572,24 @@ complete_chunk(p_chunk_id uuid) :: vump_admin=X/vump_admin , vump_chunks_verify=
 
 `has_function_privilege('public', 'complete_chunk(uuid)', 'EXECUTE')` is **false**, so migration `0008` holds after the apply.
 
+### The deployed Lambdas do not contain the retry fix, and that is correct
+
+Mission 6.3.1 answered the redeploy question with *"no redeploy is needed, because nothing is deployed."* True then, and no longer the whole answer now that seven functions are live. The precise position, established by downloading the deployed artifact rather than reasoning about it:
+
+```
+vump-dev-chunks-verify  index.mjs
+  DatabaseResumingException   -> ABSENT
+  withResumeRetry             -> ABSENT
+  RDSDataClient               -> ABSENT
+  verifyIdToken               -> PRESENT
+```
+
+**esbuild removed it, because nothing reaches it.** `@vump/shared` exports `withResumeRetry` and `execute`, but no handler calls either — `resolveCaller` is still stubbed (A-159) and no route issues a query. Unreachable code is eliminated, taking `@aws-sdk/client-rds-data` with it. `verifyIdToken` survives in the same bundle because `auth.ts` *is* reached, which is what makes this tree-shaking rather than a build defect.
+
+So the retry fix costs nothing today and enters the artifact at the exact moment it becomes necessary: the first handler that calls `execute()` pulls `resume.ts` and the Data API client into its bundle **in the same build that adds the call**. That build is a redeploy of that function regardless, because the handler itself changed. **The fix therefore never creates a deployment of its own** — which is the property 6.3.1 was asked about, reached by a different route than the one stated then.
+
+Worth recording because the plausible misreading is load-bearing: someone reading A-156 would reasonably assume the live functions carry the retry. They do not, and nothing is wrong.
+
 ### One earlier claim, restated more precisely
 
 Mission 6.3.1 reported that PUBLIC holds no table grants. Re-checked without scoping it to a schema, PUBLIC holds **189** — 127 in `pg_catalog` and 62 in `information_schema`, all PostgreSQL's own. On schema `public` it holds **none**, which is what the original claim meant and what matters. PUBLIC does retain `USAGE` on the schema, and that is deliberate: `0001` revokes everything and then re-grants `USAGE` on the following line. `USAGE` permits name resolution and no object access, which the `CREATE TABLE` and `SELECT` refusals above demonstrate.
