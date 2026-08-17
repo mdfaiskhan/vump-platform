@@ -40,6 +40,28 @@ Mission 4.8's security review found it, by reading `git log` against this file r
 
 ### Added
 
+- **2026-08-17** — **CI gained an eleventh job, because the first Terraform pull request proved the other ten could not see it.** `grep -E "terraform|\.tf"` over `ci.yml` returned nothing: `fmt`, `validate` and `tflint` were run by hand, and six of the seven required checks would have passed identically over a diff that was Terraform and nothing else.
+
+  The new `Terraform` job runs `fmt -recursive -check`, `init -backend=false` + `validate` per environment root, and `tflint --recursive`. `Environment consistency` was **extended rather than duplicated** — ADR-043 made Terraform a fourth language holding the region and bucket names that Dart, JSON and shell already hold, and that job already owns their agreement.
+
+  Proven non-vacuous before commit: three planted drifts each failed it with a named path and value, including a `vump-platform-prod` bucket in the `dev` root. **No CI job checks IAM least-privilege** — the A-143 class of defect is still caught only by review, and that is named rather than left implied. A-148. Mission 6.1.7.
+
+- **2026-08-17** — **The development AWS environment exists, and it is described in Terraform.** ADR-043 closes Volume 4 Chapter 4.9 §5's infrastructure-as-code deferral — which pointed at Volume 7, where the choice was never made — and `infrastructure/terraform/` now holds three modules (network, database, iam) and one root module per environment, of which only `dev` exists.
+
+  **35 resources applied**: a `10.0.0.0/16` VPC with two private database subnets and no gateway of any kind, an Aurora Serverless v2 PostgreSQL 16.14 cluster scaling 0–2 ACU with a single writer, and seven Lambda execution roles across ADR-015's six resource domains, with no function attached to any of them. `terraform plan` reports `No changes`; every resource was also confirmed by reading AWS directly rather than the state file.
+
+  **The Data API path is proven, not just configured.** `SELECT 1` through `rds-data execute-statement`, authenticating with the RDS-managed master credential by ARN, returns `1` from a cluster that has no network route to anything.
+
+  `terraform validate`, `terraform fmt -recursive -check` and `tflint --recursive` are clean. A-141, A-146. Mission 6.1.
+
+- **2026-08-17** — **The AWS account moved from the Free plan to the Paid plan, and that is a precondition nobody had written down.** The first apply created 26 of 35 resources and then failed with `FreeTierRestrictionError` — the Free plan caps RDS backup retention below the seven days ADR-014's model calls for.
+
+  `backup_retention_period` was never changed to work around it; the account was upgraded and the remaining 9 resources applied with the same value. The retention cap was only the visible symptom: a Free-plan account *"closes automatically"* when its credits run out or its term ends, deleting its resources — and ADR-014 puts production in this same account.
+
+  **`terraform plan` cannot catch this.** Account-plan restrictions are in no resource schema and no data source; they surface only on the create call. `aws freetier get-account-plan-state` must report `PAID` / `ACTIVE`, and it now belongs beside the credential checks in Volume 7 Chapter 7.8. A-146, deferred item 9. Mission 6.1.
+
+- **2026-08-17** — **The two IAM policy templates are rendered by something for the first time.** `infrastructure/aws/iam/*.json.tmpl` have carried `__ENV__` and `__BUCKET__` placeholders since Mission 0.17 with no tool that substituted them; the Terraform root module now does, so they are the single definition of the chunk S3 grants rather than a declaration nothing read. Renamed to sit under ADR-015's `chunks` domain: `chunks-presign-upload-s3-policy.json.tmpl` and `chunks-verify-object-s3-policy.json.tmpl`. A-141. Mission 6.1.
+
 - **2026-08-17** — **Chapter 2.10's accessibility guidelines are now enforced by machine, not by review.** Three sweeps run across all ten screens Mission 5 built: `androidTapTargetGuideline`, whose `Size(48, 48)` is the same number Chapter 2.10 §3 states, so the threshold is not this project's to restate in a third place; `labeledTapTargetGuideline` for §4; and `textContrastGuideline` for §2.3, in **both themes**, because §2.3 asks for dark mode as *"a validated second pass … never an automatic filter"*.
 
   All three ship inside `flutter_test`. **No dependency was added**, and a hand-rolled bounds assertion was rejected for the reason that it would restate a published threshold with nothing tying the copies together. This closes open item 105, where `AppSizes.minTouchTarget` held the number and nothing checked it.
@@ -116,6 +138,18 @@ Mission 4.8's security review found it, by reading `git log` against this file r
 - **2026-08-15** — Camera module, capability ladder and fixed capture specification (BR-01/BR-02). Mission 3.1. (`4c7f3d1`)
 
 ### Security
+
+- **2026-08-17** — **Account-level S3 Block Public Access is set on account `929570731524`, where it had never been configured.** Volume 8 Chapter 8.4 §3 requires it *"not just at the individual bucket policy level, so a future misconfiguration can't accidentally expose it"*, and `get-public-access-block` returned `NoSuchPublicAccessBlockConfiguration`.
+
+  **Nothing was exposed.** All three chunk buckets already carried per-bucket Block Public Access with all four settings on, and every bucket policy reported `IsPublic: false`. What was missing is the backstop for the *next* bucket — and `vump-platform-tfstate`, created in the same mission, is exactly that case. Applied as a one-time authorised exception to Mission 6.1's report-don't-fix rule, in its own commit. A-145. Mission 6.1.
+
+- **2026-08-17** — **The chunks domain carries two execution roles, so no principal can both write and read a chunk.** `vump-{env}-chunks-upload` holds `s3:PutObject`, `s3:AbortMultipartUpload` and `s3:ListMultipartUploadParts`; `vump-{env}-chunks-verify` holds `s3:GetObject`, `s3:GetObjectAttributes` and `s3:GetObjectVersionAttributes`. Neither holds the other's actions, and neither holds `s3:DeleteObject`.
+
+  This matters because **a presigned URL carries the signer's permissions**: the upload role *cannot* produce a URL that reads footage, however the handler that calls it is written. ADR-015's six resource domains are unchanged — a domain is a unit of code decomposition, a role is a unit of privilege, and the chunks domain needs two of the latter. The consequence for Mission 6.2 is that chunks deploys two functions, since a Lambda has exactly one execution role.
+
+  Mission 6.1 first merged both policies onto a single `chunks` role. That was caught and corrected in 6.1.3 **before anything was applied**, so the widened role never existed in AWS. A-143, closed. Mission 6.1.
+
+- **2026-08-17** — **No database password exists in any file.** The Aurora cluster uses `manage_master_user_password`, so RDS creates and rotates the credential in Secrets Manager directly, per Volume 8 Chapter 8.4 §2. Nothing expresses a password in Terraform, so nothing writes one into Terraform state — which is why the state bucket's encryption and versioning were configured before the first `plan` ran. A documented exception to Mission 6.1's "create no Secrets Manager entries" scope line. ADR-043, ADR-044. Mission 6.1.
 
 - **2026-08-17** — **A new key is persisted to `shared_preferences`, and `shared_preferences` gained a fourth owner.** `onboarding_seen_v1` is a single boolean recording that C-01's permission-priming carousel has run to completion on this device. It is written once, only ever as `true`, and read synchronously by `OnboardingGuard` inside GoRouter's redirect.
 

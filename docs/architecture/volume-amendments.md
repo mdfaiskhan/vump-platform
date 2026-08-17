@@ -4752,6 +4752,248 @@ Recorded so they are not re-litigated.
 
 ---
 
+### A-141 — Volume 4 Chapter 4.9 §5's IaC deferral is closed: Terraform
+
+| | |
+|---|---|
+| **Volume** | 4 — Backend Architecture, Chapter 4.9 §5 |
+| **Says** | *"Infrastructure-as-code tooling (CDK/Terraform/CloudFormation) choice — Volume 7."* |
+| **Should say** | Terraform. The deferral to Volume 7 was never discharged there. |
+| **Authority** | ADR-043 |
+| **Class** | Deferral closed |
+| **Status** | Open |
+| **Date** | 2026-08-17, Mission 6.1 |
+
+Volume 7, Chapter 7.8 is the chapter the deferral points at. It covers per-developer IAM users, CLI profile naming and credential hygiene, and **never makes the choice**. The deferral has been outstanding since Volume 4 was written, and `infrastructure/aws/README.md` has carried the consequence in its own words: *"This is not infrastructure-as-code. There is no state file and nothing detects drift."*
+
+That README's sentence is now wrong for anything provisioned from this mission onward, and it has been corrected in place rather than left to mislead.
+
+### What Mission 6.1 provisioned — as a plan, not as infrastructure
+
+**All 35 resources are live.** The mission planned first and applied second, in two attempts — see A-146 for why there were two. `terraform plan` now reports `No changes` at `-detailed-exitcode` 0. What was provisioned:
+
+| Module | Resources | Notes |
+|---|---|---|
+| network | 8 | VPC `10.0.0.0/16`, two private DB subnets in `ap-south-1a`/`1b`, one route table with only the local route, two associations, the Aurora security group, the emptied default security group |
+| database | 4 | Aurora Serverless v2 PostgreSQL 16.14, one writer, DB subnet group, cluster parameter group |
+| iam | 23 | Seven roles across ADR-015's six domains + seven log policies + seven Data API policies + two S3 policies, one on each chunks role |
+
+The plan was **32** as first written, with a single `chunks` role holding both S3 policies. Mission 6.1.3 split that role in two (A-143), which added one role and its two attendant policies.
+
+Live counts, read from AWS rather than from state: 1 VPC, 2 subnets, 1 custom route table, 2 associations, 2 security groups, 1 DB subnet group, 1 cluster parameter group, 1 cluster, 1 instance, 7 roles, 16 inline role policies. **0 internet gateways, 0 NAT gateways, 0 VPC endpoints.**
+
+Two things were provisioned outside Terraform, deliberately and documented:
+
+- **`vump-platform-tfstate`** — the state bucket, created by four `aws s3api` calls (create, versioning, encryption, public-access-block). It cannot be created by the configuration that stores its state in it. The commands are in `infrastructure/terraform/README.md`.
+- **Account-level S3 Block Public Access** — see A-145.
+
+### The two `.tmpl` policies are rendered for the first time
+
+`infrastructure/aws/iam/*.json.tmpl` have existed since Mission 0.17 with `__ENV__` and `__BUCKET__` placeholders that **nothing ever substituted**. The Terraform root module now renders them, so they are load-bearing rather than declarative. They were renamed to sit under ADR-015's `chunks` domain:
+
+| Was | Is |
+|---|---|
+| `chunk-registration-s3-policy.json.tmpl` | `chunks-presign-upload-s3-policy.json.tmpl` |
+| `chunk-verification-s3-policy.json.tmpl` | `chunks-verify-object-s3-policy.json.tmpl` |
+
+Their contents are unchanged apart from the `Id` field, which tracked the old names.
+
+---
+
+### A-142 — Volume 4 Chapter 4.9 §2 and Volume 8 Chapter 8.4 §1 describe different database access paths
+
+| | |
+|---|---|
+| **Volume** | 4 — Backend Architecture, Chapter 4.9 §2, against Volume 8 — Security, Chapter 8.4 §1 |
+| **Says** | V4.9 §2: Aurora *"reachable only from the Lambda functions (via a VPC-attached execution role)"*. V8.4 §1: every function's permission is `rds-data:ExecuteStatement`. |
+| **Should say** | The RDS Data API. V4.9 §2's mechanism clause is superseded; its intent — never exposed to the public internet — is preserved and strengthened. |
+| **Authority** | ADR-044 |
+| **Class** | Contradiction resolved |
+| **Status** | Open |
+| **Date** | 2026-08-17, Mission 6.1 |
+
+A VPC-attached function opens a TCP connection to port 5432. A Data API caller makes a signed HTTPS request to an endpoint **outside** the VPC and never joins it. The two designs need different subnets, different security groups, a different execution role, and — decisively — one needs a NAT gateway and the other does not.
+
+This is the same shape as ADR-015: two accepted documents disagreeing, discovered because implementation could not begin without an answer. Neither half was a typo. V8.4 §1's action names are specific enough to have been written against the Data API deliberately.
+
+### Why the CLI cannot verify Data API availability, recorded so it is not re-attempted
+
+`aws rds describe-db-engine-versions --engine aurora-postgresql` returns **no `SupportsHttpEndpoint` field at all** for any version in `ap-south-1`. The obvious reading is "unsupported", and it is wrong: the same query against `us-east-1` and `ap-southeast-1`, where the Data API demonstrably works, also returns no such field. The attribute is simply no longer emitted. The CLI was current (`aws-cli/2.36.17`), so this is not a stale client.
+
+**What answers it:** the AWS region-and-version table, which lists Asia Pacific (Mumbai) as supported at PostgreSQL 17.4+, 16.1+, 15.3+, 14.8+ and 13.11+; corroborated by `rds-data.ap-south-1.amazonaws.com` resolving.
+
+**PostgreSQL 18 is offered in `ap-south-1` and is absent from that table.** An upgrade to 18 would silently remove the only access path this backend has, and `describe-db-engine-versions` would report 18.4 as perfectly available.
+
+---
+
+### A-143 — Consolidating the two chunk policies onto one role widens what a presigned URL can do
+
+| | |
+|---|---|
+| **Volume** | 4 — Backend Architecture, Chapter 4.9 §2; Volume 8, Chapter 8.4 §1 |
+| **Concerns** | ADR-015's six-domain decomposition against per-function S3 narrowness |
+| **Authority** | ADR-015 (domain count), Volume 4 Ch. 4.9 §2 (narrowness) |
+| **Class** | Least-privilege regression, found and closed within the same mission |
+| **Status** | **Closed** — fixed in Mission 6.1.3, before anything was applied |
+| **Date** | 2026-08-17, Mission 6.1 |
+
+ADR-015 fixes **six** resource domains. Volume 8, Chapter 8.4 §1 and `docs/architecture/aws-sdk-integration.md` describe **two separate S3 permission sets** for chunk work — one that presigns uploads, one that reads objects to verify integrity — and both belong to the `chunks` domain.
+
+Six roles means both sets attach to one principal. `vump-dev-chunks` therefore holds `s3:PutObject` **and** `s3:GetObject` on `vump-platform-dev/*`.
+
+### Why that is not merely untidy
+
+`aws-sdk-integration.md` states the mechanism it breaks:
+
+> *"A presigned URL carries the signer's permissions. This is the part that catches people out: if the registration role held `s3:GetObject`, a presigned URL it generated could be crafted to read objects. Withholding `GetObject` from that role is what makes the narrowness real rather than conventional."*
+
+The registration role now holds `s3:GetObject`. The property that document describes as *"real rather than conventional"* has become conventional again: it now depends on the handler code not presigning a `GetObject`, rather than on the role being unable to.
+
+**Concrete failure:** a defect or an injection in the chunk-registration path that reaches the presigner with a `GetObject` command produces a URL that reads raw footage — a URL that can leave the trust boundary, since presigned URLs are handed to devices by design. Under the previous split the same defect produces an `AccessDenied` from S3.
+
+### The fix, taken in Mission 6.1.3
+
+**The `chunks` domain now carries two roles**, and ADR-015's six domains are unchanged:
+
+| Role | Actions | Cannot |
+|---|---|---|
+| `vump-{env}-chunks-upload` | `s3:PutObject`, `s3:AbortMultipartUpload`, `s3:ListMultipartUploadParts` | read any object — no `s3:GetObject` |
+| `vump-{env}-chunks-verify` | `s3:GetObject`, `s3:GetObjectAttributes`, `s3:GetObjectVersionAttributes` | write any object — no `s3:PutObject` |
+
+Neither holds `s3:DeleteObject`; no role in this project does.
+
+**A domain is a unit of code decomposition; a role is a unit of privilege, and
+nothing requires them to be one-to-one.** That is the whole of the fix. The
+module's map is keyed by role rather than by domain, each entry naming the domain
+it serves, so two roles sharing a domain needs no special case.
+
+The property `aws-sdk-integration.md` calls *"real rather than conventional"* is
+real again: the upload role cannot presign a read, however the handler is
+written.
+
+### What this obliges Mission 6.2 to do
+
+**A Lambda function has exactly one execution role.** Two chunks roles therefore
+mean the chunks domain deploys **two functions**, not one — which is a
+refinement of ADR-015's *"one function per resource domain"* rather than a
+contradiction of it, and it is the shape the volumes already describe: Volume 8,
+Chapter 8.4 §1 tabulates `chunk-registration` as its own function, and
+`aws-sdk-integration.md` lists chunk-registration and chunk-verification
+separately.
+
+Recorded here because the alternative reading — one chunks function that somehow
+holds both roles — is not implementable, and 6.2 should not discover that while
+writing handlers.
+
+### Caught before anything existed
+
+Nothing had been applied when this was found, so the fix is a plan diff rather
+than an IAM change against a live role. **That is the argument for stopping at
+`plan` rather than applying and reviewing after.** Had 6.1 applied, closing this
+would have meant detaching a policy from a role a function was already using.
+
+---
+
+### A-144 — Volume 7 Chapter 7.8 §2's CLI profiles do not exist, and the live principal is an administrator
+
+| | |
+|---|---|
+| **Volume** | 7 — Development Environment, Chapter 7.8 §1 and §2 |
+| **Says** | §2: profiles `human-archive-dev` / `-staging` / `-prod`. §1: *"Each developer gets their own IAM user… scoped to the dev environment only."* |
+| **Should say** | One profile exists, `default`, and it resolves to `arn:aws:iam::929570731524:user/faisal-admin`. |
+| **Authority** | Observation — no ADR grants this; it is a divergence, not a decision |
+| **Class** | Unimplemented requirement |
+| **Status** | Open — own open item, not blocking |
+| **Date** | 2026-08-17, Mission 6.1 |
+
+Three names are in play and none agrees with another:
+
+| Source | Profile |
+|---|---|
+| Volume 7, Ch. 7.8 §2 | `human-archive-dev` |
+| `backend/.env.example:64` | `vump-dev` |
+| `aws configure list-profiles` | `default` |
+
+The naming half is cosmetic — the volume's is pre-rename (A-002), and `.env.example` uses the current project name.
+
+**The scope half is not cosmetic.** V7.8 §1 requires a per-developer user scoped to dev. The live principal is an administrator, and every read in this mission — and every `terraform plan` and future `apply` — runs with administrative rights in an account that also holds `vump-platform-prod`. ADR-014 already records that in a single-account model IAM is the only thing preventing a development context from reaching production. That statement is about service roles; it applies at least as strongly to the human.
+
+Not fixed in Mission 6.1, whose IAM scope is roles rather than users.
+
+---
+
+### A-145 — Volume 8 Chapter 8.4 §3's account-level Block Public Access was absent, and is now set
+
+| | |
+|---|---|
+| **Volume** | 8 — Security, Chapter 8.4 §3 |
+| **Says** | *"S3 bucket public access is blocked at the account level (AWS's Block Public Access setting), not just at the individual bucket policy level, so a future misconfiguration can't accidentally expose it."* |
+| **Was** | Not configured. `get-public-access-block` returned `NoSuchPublicAccessBlockConfiguration` for account 929570731524. |
+| **Is** | All four settings `true` at the account level. |
+| **Authority** | Volume 8, Chapter 8.4 §3 — an accepted requirement, unimplemented |
+| **Class** | Requirement implemented |
+| **Status** | **Closed** |
+| **Date** | 2026-08-17, Mission 6.1 |
+
+### What was and was not exposed
+
+Nothing was public. All three chunk buckets already carried **per-bucket** Block Public Access with all four settings enabled, and `get-bucket-policy-status` reported `IsPublic: false` for each.
+
+What was missing is exactly what V8.4 §3 justifies the account-level control by: the **future** bucket. A bucket created without per-bucket BPA — by a script, by a console click, by a Terraform resource that omits it — would have had no backstop. `vump-platform-tfstate`, created in this same mission, is precisely such a bucket; it was given per-bucket BPA explicitly, which is the kind of step that gets forgotten once.
+
+### Why this was fixed rather than reported
+
+Mission 6.1's standing instruction is to **report** security findings and not fix them. This one was fixed under **explicit, specific authorisation**, recorded here so the exception is not read as precedent. The reasoning that earned the authorisation: a documented requirement in an accepted volume, unimplemented; one idempotent API call; and zero functional risk, since no bucket policy in the account is public and CloudFront — the one service that would need an exception — is not provisioned and uses Origin Access Control rather than public access when it is (ADR-011).
+
+It was applied as its own commit, touching no infrastructure code.
+
+---
+
+### A-146 — The AWS account moved from the Free plan to the Paid plan mid-mission, and why that appears in the history
+
+| | |
+|---|---|
+| **Volume** | 7 — Development Environment, Chapter 7.8 |
+| **Concerns** | Account plan as a precondition for provisioning — a class of constraint no volume names |
+| **Was** | `accountPlanType: FREE`, $120 credits, expiring 2027-02-09 |
+| **Is** | `accountPlanType: PAID`, `ACTIVE`, credits carried over, no expiration |
+| **Authority** | Observation, plus the owner's decision to upgrade |
+| **Class** | Precondition recorded |
+| **Status** | **Closed** |
+| **Date** | 2026-08-17, Mission 6.1 |
+
+Mission 6.1's first `terraform apply` created 26 of 35 resources and then failed:
+
+> `Error: creating RDS Cluster (vump-dev-aurora): api error FreeTierRestrictionError: The specified backup retention period exceeds the maximum available to free tier customers. To remove all limitations, upgrade your account plan.`
+
+Recorded because **an account-plan error in a mission's history reads as a configuration mistake, and this was not one.** `backup_retention_period = 7` was a deliberate decision; it was never changed to work around the restriction, and the eventual apply used the same value.
+
+### Why `terraform plan` could not have caught it
+
+Account-plan restrictions are invisible to the AWS provider. They are not in any resource schema, no data source exposes them, and `plan` computes a diff without calling `CreateDBCluster`. **The plan was correct and the apply still failed** — which is a real limit on what a clean plan proves, and worth knowing before treating one as a safety gate.
+
+What did work as intended: the failure was atomic per resource. No partial cluster existed, Terraform state matched AWS exactly at 26 resources, and the remaining 9 applied later with no edit to any `.tf` file.
+
+### The reason the upgrade mattered more than the retention number
+
+The retention cap was the visible symptom. The disqualifying property was in AWS's own description of the Free plan:
+
+> *"Your free account plan ends after six months or when your credits are fully used — whichever occurs first. After your free account plan expires, your account closes automatically, and you lose access to your resources and data."*
+
+ADR-014 places **all three environments, production included, in this single account**. An account that deletes its own contents on a date is not a foundation for evidentiary footage held under Volume 8, Chapter 8.7's retention obligations. The upgrade removed a constraint that would have expired the platform, not merely a limit on a backup setting.
+
+### What this adds to Volume 7, Chapter 7.8
+
+Chapter 7.8 covers IAM users, CLI profiles and credential hygiene — everything about *who* may call AWS, and nothing about *what the account is permitted to run*. Those are different preconditions and only the first was written down. **The account plan is now a checkable precondition** for any mission that provisions:
+
+```bash
+aws freetier get-account-plan-state
+```
+
+`PAID` / `ACTIVE` is the state this project requires. It is one call and belongs beside the credential checks rather than being discovered by a failed apply.
+
+---
+
 ### A-147 — ADR-019's squash-into-`develop` rule is suspended once, for the reconciliation merge
 
 | | |
@@ -4788,3 +5030,49 @@ The exception is recorded rather than taken quietly because a rule bypassed with
 ### Numbering, so the gap is not read as a loss
 
 This entry is **A-147**, and A-141 through A-146 do not exist on this branch. They are Mission 6.1's, written on `mission/6.1-aws-foundations`, and they land in `develop` when that pull request merges. The gap is reserved, not missing.
+
+---
+
+### A-148 — CI had no gate on infrastructure, and the first Terraform pull request is what showed it
+
+| | |
+|---|---|
+| **Record** | ADR-019 — required status checks; ADR-043 — Terraform |
+| **Was** | Ten jobs, every one Dart-scoped. `grep -E "terraform|\.tf\b"` over `ci.yml` returned nothing. |
+| **Is** | Eleven jobs. A `Terraform` job runs `fmt -check`, `validate` and `tflint`; `Environment consistency` reads `.tf` variable defaults as a fourth language. |
+| **Authority** | ADR-019 (required checks), ADR-043 (Terraform as the IaC tool) |
+| **Class** | Enforcement gap closed |
+| **Status** | **Closed** |
+| **Date** | 2026-08-17, Mission 6.1.7 |
+
+Mission 6.1.6 pushed the first branch carrying a Terraform change and watched the suite run over it. Every job passed, and the passing was the finding: **six of the seven required checks would have passed exactly the same way over a diff that was Terraform and nothing else.** `Format` and `Analyze` read `mobile/`. `Test` re-runs the Dart suite. `Architecture boundaries`' 63 checks are all `lib/`-scoped. `AWS credential isolation` reads `mobile/pubspec.yaml` and `lib/`.
+
+A green pipeline over an unexamined change is worse than no pipeline, because it reads as verification.
+
+### What CI would not have caught
+
+Three concrete things from Mission 6.1's own history:
+
+- **`terraform validate`, `fmt` and `tflint` failures.** All three were run by hand. tflint found six real issues on its first run — every module missing `required_version` and `required_providers` — and nothing in CI would have.
+- **A `.tf` region or bucket disagreeing with `environments.json`.** ADR-043 made Terraform a **fourth** language holding values that Dart, JSON and shell already hold, and `Environment consistency` — the job written precisely to stop those three drifting — did not read it.
+- **The A-143 privilege regression**, where one role held both `s3:PutObject` and `s3:GetObject`. Still not caught, and deliberately so: see below.
+
+### Two changes, and one thing deliberately not changed
+
+**A `Terraform` job.** `fmt -recursive -check`, then `init -backend=false` and `validate` per environment root, then `tflint --recursive`. `-backend=false` is what makes it runnable with no credentials — a real `init` reaches the S3 backend in `ap-south-1`, and `ci.yml`'s header commits to a workflow that uses no secrets. Validation needs the provider schema and the module sources, not the state.
+
+**`Environment consistency` extended, not duplicated.** That job already owns cross-language agreement for the environment model; Terraform is a fourth holder of the same values. A second job would have split one invariant across two places, which is the failure the job itself exists to prevent.
+
+**The Dart-scoped jobs are untouched.** `Architecture boundaries` and `AWS credential isolation` are about `lib/`, and teaching either to reason about an IAM policy would make them two jobs wearing one name. **The consequence is that no CI job checks IAM least-privilege**, so the A-143 class of defect is still caught only by review. That is a known, named gap rather than an oversight.
+
+### Proven non-vacuous before it was committed
+
+A check that passes is not evidence until it has been shown to fail. The extended script was extracted from `ci.yml` and run against three planted drifts, each of which failed it with a named path and value:
+
+| Planted | Result |
+|---|---|
+| `chunk_bucket` default set to `vump-platform-prod` in the `dev` root | ✅ failed — *"chunk_bucket default 'vump-platform-prod' != environments.json chunkBucket 'vump-platform-dev' for development"* |
+| `region` default set to `us-east-1` | ✅ failed — *"region default 'us-east-1' != environments.json 'ap-south-1' (ADR-011)"* |
+| `environment_slug` default set to `staging` in the `dev` directory | ✅ failed — *"environment_slug default 'staging' != directory 'dev'"* |
+
+The unmodified tree passes. The first of those three is a staging-or-worse build pointed at the production bucket, which is the exact defect class `Environment consistency` was created for — expressed in the one language it could not read until now.
