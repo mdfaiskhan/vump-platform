@@ -163,12 +163,14 @@ The file contains no credential. Every value is a non-secret identifier, permitt
 
 ## What is not implemented, and why
 
-**No SDK client code exists yet.** `backend/` is empty — no Lambda function, no `package.json`, no SDK dependency.
+**No S3 client code exists yet**, and that is now the narrow statement it sounds like rather than a description of an empty directory.
 
-The runtime is settled: **AWS Lambda, Node.js, TypeScript, behind API Gateway**, per ADR-015 confirming Volume 4, Chapter 4.1. Concretely that means **AWS SDK for JavaScript v3** — `@aws-sdk/client-s3` and `@aws-sdk/s3-request-presigner` for the presigned multipart flow, and the Firebase Admin SDK for Node for token verification.
+`backend/` exists as of Mission 6.2: an npm workspace, seven Lambda functions behind a REST API, and the shared package that holds the envelope, the error taxonomy and token verification (A-152, ADR-045). **The Firebase Admin SDK half of this document is implemented and real** — and needs no service-account secret, which A-149 establishes by experiment rather than by citation.
 
-Every design above was written runtime-agnostic and holds unchanged under that decision. Writing the client code belongs to a backend implementation mission.
+What remains unwritten is exactly the S3 half: `@aws-sdk/client-s3` and `@aws-sdk/s3-request-presigner` are not yet dependencies, and the presigned multipart flow above has no implementation. `POST /v1/sessions/{sessionId}/chunks` is provisioned and answers `NOT_IMPLEMENTED`. That work is Mission 6.3's.
 
-**No IAM role or policy is applied.** The templates are authored and version-controlled; rendering and attaching them belongs to the IAM mission, which is currently blocked alongside CloudFront.
+Every design above was written runtime-agnostic and holds unchanged.
+
+**The IAM roles are applied.** Mission 6.1 rendered these templates and created seven roles; `vump-{env}-chunks-upload` and `vump-{env}-chunks-verify` hold the two policies above, one each.
 
 **No Dart API client is written.** This document defines the contract; implementing a repository or service against it is feature work, excluded by the mission's scope rules.

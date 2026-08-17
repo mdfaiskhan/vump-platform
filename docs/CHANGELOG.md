@@ -40,6 +40,20 @@ Mission 4.8's security review found it, by reading `git log` against this file r
 
 ### Added
 
+- **2026-08-18** — **`backend/` exists.** ADR-015 fixed the runtime as AWS Lambda with Node and TypeScript in August and left the directory empty; Mission 6.2 filled it with an npm workspace, a shared package and seven functions behind a REST API. Fifteen routes, matching Volume 4 Chapter 4.6's catalogue exactly and asserted against it by test.
+
+  **Seven functions across six ADR-015 domains.** The `chunks` domain deploys two, because A-143 gave it two execution roles — one that can write an object and not read it, one the reverse — and a Lambda has exactly one execution role. Chapter 4.6 already had the two routes; the split was not retrofitted onto the specification.
+
+  ADR-045 is the new record governing backend dependencies and toolchain, filling the gap ADR-030 and ADR-021 each named and each declined to fill. A-152. Mission 6.2.
+
+- **2026-08-18** — **Token verification is real; everything behind it is a visible refusal.** Every handler answers `NOT_IMPLEMENTED` with a 501 inside a real Chapter 4.6 §1 envelope — **after** the bearer token has actually been verified. An unauthenticated request gets `AUTH_TOKEN_MISSING` and an invalid token gets `AUTH_TOKEN_INVALID`, and neither reaches the stub.
+
+  Nothing returns invented data: the Data API client throws rather than returning an empty result set, because an empty result is a plausible answer that would let a caller believe the database had been consulted. A-152. Mission 6.2.
+
+- **2026-08-18** — **Cursor pagination is in the contract before any query exists.** Chapter 4.6 §1 fixes `?cursor=…&limit=…` on every list endpoint, and ADR-044's 1 MiB Data API ceiling makes it a correctness requirement rather than a convention. The next cursor is returned as a **sibling `meta` key**, not inside `data`, so `data` stays exactly the resource asked for — the mobile client's `VumpApi` hands `data` to its callers untouched.
+
+  Settled now because adding a required parameter later is a breaking change, and Chapter 4.6 §1 says a breaking change bumps to `/v2`. A-152. Mission 6.2.
+
 - **2026-08-17** — **CI gained an eleventh job, because the first Terraform pull request proved the other ten could not see it.** `grep -E "terraform|\.tf"` over `ci.yml` returned nothing: `fmt`, `validate` and `tflint` were run by hand, and six of the seven required checks would have passed identically over a diff that was Terraform and nothing else.
 
   The new `Terraform` job runs `fmt -recursive -check`, `init -backend=false` + `validate` per environment root, and `tflint --recursive`. `Environment consistency` was **extended rather than duplicated** — ADR-043 made Terraform a fourth language holding the region and bucket names that Dart, JSON and shell already hold, and that job already owns their agreement.
@@ -138,6 +152,16 @@ Mission 4.8's security review found it, by reading `git log` against this file r
 - **2026-08-15** — Camera module, capability ladder and fixed capture specification (BR-01/BR-02). Mission 3.1. (`4c7f3d1`)
 
 ### Security
+
+- **2026-08-18** — **The backend verifies Firebase ID tokens with no service-account secret, and that was tested rather than assumed.** ADR-036 claimed `verifyIdToken` is satisfiable by Google's public certificates alone. A probe initialised `firebase-admin` with no credential and every ADC environment variable deleted, then verified a well-formed unsigned token: the SDK failed with *"`kid` claim which does not correspond to a known public key"* — an error only reachable after fetching Google's certificate set.
+
+  **This resolves an apparent conflict rather than creating one.** Chapter 4.7 §1 step 3 requires every Lambda to verify tokens, but Mission 6.1 granted the Firebase secret to `auth-verify` alone. Verification needs no secret, so all seven functions satisfy the chapter with the IAM already applied, and `auth-verify`'s grant is for the claims-*writing* path that arrives when `functions/` retires. A-149. Mission 6.2.
+
+- **2026-08-18** — **`auth-verify` may INSERT its own user row but not UPDATE or DELETE anything.** Volume 8 Chapter 8.4 §1 says it *"cannot modify any table"*; Chapter 4.7 §1 step 4 has it creating a `users` row on first login. Resolved narrowly: the threat V8.4 §1 names is *"a compromised token-verification path … leveraged into a data-write path"*, and inserting a row keyed by a `firebase_uid` just verified does not serve it.
+
+  **Not enforceable in IAM** — ADR-044 records that `rds-data` actions scope to the cluster, not the table. Enforcement is a PostgreSQL `GRANT SELECT, INSERT ON users`, flagged for Mission 6.3 and deliberately not written here against a table that does not exist. A-150. Mission 6.2.
+
+- **2026-08-18** — **An error message never leaves the process.** Any unrecognised throw becomes `INTERNAL_ERROR` with a fixed string; the real message is logged and never returned, because an exception can carry a table name, a SQL fragment or a secret ARN. Asserted by a test that plants both a relation name and a Secrets Manager ARN in a thrown error and checks neither survives. Mission 6.2.
 
 - **2026-08-17** — **Account-level S3 Block Public Access is set on account `929570731524`, where it had never been configured.** Volume 8 Chapter 8.4 §3 requires it *"not just at the individual bucket policy level, so a future misconfiguration can't accidentally expose it"*, and `get-public-access-block` returned `NoSuchPublicAccessBlockConfiguration`.
 

@@ -5076,3 +5076,190 @@ A check that passes is not evidence until it has been shown to fail. The extende
 | `environment_slug` default set to `staging` in the `dev` directory | ✅ failed — *"environment_slug default 'staging' != directory 'dev'"* |
 
 The unmodified tree passes. The first of those three is a staging-or-worse build pointed at the production bucket, which is the exact defect class `Environment consistency` was created for — expressed in the one language it could not read until now.
+
+---
+
+### A-149 — Two claims Mission 6.2 tested instead of trusting, and both held
+
+| | |
+|---|---|
+| **Claims** | (a) ADR-036: `verifyIdToken` needs no service-account secret. (b) `aws-sdk-client-mock` works under Vitest. |
+| **Result** | **Both confirmed by experiment**, before either was built on. |
+| **Authority** | ADR-036 line 35; ADR-045 (test framework) |
+| **Class** | Verification |
+| **Status** | **Closed** |
+| **Date** | 2026-08-18, Mission 6.2 |
+
+### (a) Firebase token verification needs no credential
+
+ADR-036 records an asymmetry, in the middle of an ADR about something else:
+
+> *"token **verification** does not need this. `verifyIdToken` can be satisfied with Google's public certificates and no secret at all … Writing claims is the operation that needs privilege."*
+
+Mission 6.2's whole auth scope depended on that being true, so it was tested rather than cited. A throwaway probe initialised `firebase-admin` 14.2.0 with `{ projectId }` and **no credential**, with `GOOGLE_APPLICATION_CREDENTIALS`, `FIREBASE_CONFIG`, `GCLOUD_PROJECT` and `GOOGLE_CLOUD_PROJECT` all explicitly deleted, then called `verifyIdToken` twice:
+
+| Input | Result |
+|---|---|
+| `'this-is-not-a-jwt'` | `auth/argument-error` — *"Decoding Firebase ID token failed."* |
+| A well-formed **unsigned** JWT with the correct `iss` and `aud` | `auth/argument-error` — ***"Firebase ID token has `kid` claim which does not correspond to a known public key."*** |
+
+**The second result is the finding.** That error is only reachable after the SDK has fetched Google's public certificate set and compared the token's `kid` against it. `initializeApp` returned normally; no credential was configured; verification still reached signature-key lookup. A missing-credential failure would have surfaced at initialisation or as an ADC error, and neither happened.
+
+### What that resolves
+
+Mission 6.2's trace flagged an apparent conflict: Chapter 4.7 §1 step 3 requires *"each Lambda function verifies the token"*, but Mission 6.1's IAM grants `vump/dev/firebase-service-account-*` to `auth-verify` **only** — verified live, the other six roles hold the Aurora secret and nothing else.
+
+**There is no conflict.** Verification needs no secret, so all seven functions satisfy Chapter 4.7 §1 step 3 with the IAM already applied. `auth-verify`'s Firebase grant is for the claims-*writing* path that ADR-036 identifies as the privileged one — the operation that arrives when `functions/` is retired, not one 6.2 uses.
+
+So `auth-verify`'s token verification is **built for real**, not stubbed. Only the `users`-table lookup behind it is stubbed, and that is 6.3's because the table does not exist.
+
+**One dependency worth naming:** the certificate fetch is an outbound HTTPS call. ADR-044's Shape B is what makes it free — no function joins a VPC, so none needs a NAT gateway to reach `googleapis.com`. Under the VPC-attached design this call is precisely what would have forced one.
+
+### (b) `aws-sdk-client-mock` under Vitest
+
+The library is Jest-shaped by reputation, and it is how a Data API test gets written in Mission 6.3 — so choosing Vitest without checking would have deferred the risk to the mission least able to absorb it.
+
+Tested against Vitest **4.1.10** and `aws-sdk-client-mock` **4.1.0**, exercising the four things a Data API test actually needs: stubbing `ExecuteStatementCommand` to resolve, inspecting `commandCalls` for SQL and parameters, rejecting to drive an error path, and `reset()` between tests. **4 of 4 passed.**
+
+One incidental: `vitest run --reporter=basic` fails on Vitest 4 — that reporter was removed. Noted because the failure output is a module-resolution stack trace that reads like a compatibility problem and is not one.
+
+---
+
+### A-150 — "Cannot modify any table" means no UPDATE and no DELETE; first-login INSERT is permitted
+
+| | |
+|---|---|
+| **Volume** | 8 — Security, Chapter 8.4 §1, against Volume 4 — Backend Architecture, Chapter 4.7 §1 step 4 |
+| **Says** | V8.4 §1: `auth-verify` has *"No database write access — read-only lookup on users by firebase_uid"*, and *"Cannot modify any table; a compromised token-verification path can't be leveraged into a data-write path."* V4.7 §1 step 4: *"the backend looks up (**or creates, on first login**) the matching users row via firebase_uid."* |
+| **Should say** | Both, read narrowly: **no UPDATE, no DELETE**. `INSERT` of the caller's own row on first login is permitted. |
+| **Authority** | Project owner's decision, Mission 6.2.1 |
+| **Class** | Contradiction resolved |
+| **Status** | Open — enforcement owed by Mission 6.3 |
+| **Date** | 2026-08-18, Mission 6.2 |
+
+One record says the token-verification path cannot write; the other requires it to create a row. Taken literally, a first login is impossible — Chapter 4.7 §1 step 4 has nowhere to put the user, and no other function is assigned the job.
+
+### Why the narrow reading is the right one
+
+V8.4 §1 states its own purpose in the same sentence: *"a compromised token-verification path can't be leveraged into a data-write path."* The threat is **an attacker using auth-verify to alter data** — escalating a role, reassigning an org, deleting an audit trail. Every one of those is an UPDATE or a DELETE.
+
+An INSERT of a row **keyed by the `firebase_uid` of a token the function has just verified** does not serve that threat. The attacker would be creating their own account, having already authenticated as themselves. What they cannot do under this reading is touch a row that already exists — which is exactly the escalation V8.4 §1 is protecting against.
+
+The broad reading would satisfy the sentence and defeat the chapter it appears in: no first login could ever succeed, so either the rule gets quietly ignored in code or the product does not work.
+
+### Enforcement is 6.3's, and it is not IAM's
+
+**This cannot be expressed in IAM.** ADR-044 records why: `rds-data` actions are scoped to the *cluster*, so V8.4 §1's per-table intent is not enforceable at that layer at all. The 6.1 report and ADR-044's status table both carry this as a known gap.
+
+The enforcement point is PostgreSQL, in Mission 6.3's schema work:
+
+```sql
+GRANT SELECT, INSERT ON users TO vump_auth_verify;
+-- deliberately no UPDATE, no DELETE, and no grant on any other table
+```
+
+**Flagged for 6.3, not implemented here.** Mission 6.2 owns no schema, and a grant against a table that does not exist is not a partial implementation — it is a statement that fails.
+
+Until then the constraint is documentation. `resolveCaller` in `backend/packages/shared/src/handler.ts` is stubbed and issues no statement of any kind, so nothing violates it today — but nothing enforces it either, and that is the honest position.
+
+---
+
+### A-151 — The Lambda runtime was chosen from AWS's deprecation table, not from either available precedent
+
+| | |
+|---|---|
+| **Record** | ADR-015 (Node on Lambda, version unstated), ADR-045 (this decision) |
+| **Was** | Two precedents pointed different ways and neither was checked: local Node is v24.18.0, and `functions/package.json` pins `"node": "22"`. |
+| **Is** | `nodejs24.x`, with `engines: ">=24 <25"` and esbuild targeting `node24`. |
+| **Authority** | ADR-045 |
+| **Class** | Toolchain decision |
+| **Status** | **Closed** — revisit before 2028-04-30 |
+| **Date** | 2026-08-18, Mission 6.2 |
+
+ADR-015 fixes *"Node.js on AWS Lambda"* and names no version. Two obvious defaults were available and **both would have been wrong**:
+
+| Runtime | Status today | Deprecation |
+|---|---|---|
+| `nodejs20.x` | **Deprecated** | 2026-04-30 — already past |
+| `nodejs22.x` | Supported | **2027-04-30** |
+| `nodejs24.x` | Supported | 2028-04-30 |
+| `nodejs26.x` | **Public preview** | Not scheduled |
+
+**Following `functions/`'s precedent would have shipped a new backend onto a runtime with roughly eight months of support left.** That is the kind of decision that looks like consistency and is actually a migration scheduled for someone else.
+
+`nodejs26.x` is excluded on AWS's own words: *"Preview runtimes are not covered by the Lambda SLA or Technical Support, and should not be used for production workloads."*
+
+### Two things this also settles
+
+**AWS's `create-function` API accepts identifiers it will not support.** `aws lambda create-function help` lists `nodejs10.x` through `nodejs26.x` — including six deprecated runtimes and one preview. **The CLI's accepted values are not a list of supported runtimes**, and reading them as one is how a deprecated runtime gets chosen. The supported set lives in the documented deprecation table and nowhere queryable.
+
+**Three places hold this version and must move together:** `backend/package.json`'s `engines`, `backend/scripts/build.mjs`'s esbuild `target`, and the `runtime` variable in `infrastructure/terraform/modules/api-gateway`. Nothing checks that they agree. That is a small, real gap — the same shape as the cross-language drift the `Environment consistency` CI job exists to catch, and a candidate for it.
+
+`functions/` stays on Node 22 and is not changed: it is a Firebase Cloud Function on Google's runtime schedule, not Lambda's, and ADR-036 retires it (deferred item 10).
+
+---
+
+### A-152 — The Mission 6.2 scaffold: fifteen routes, seven functions, and nothing that pretends to work
+
+| | |
+|---|---|
+| **Record** | ADR-015 (six domains), ADR-043 (Terraform), ADR-044 (Data API), ADR-045 (toolchain), A-143 (two chunks roles) |
+| **Class** | Scaffold recorded |
+| **Status** | Open — Mission 6.3 replaces the stubs |
+| **Date** | 2026-08-18, Mission 6.2 |
+
+`backend/` was empty from ADR-015 until now. It holds an npm workspace: a shared package, seven function packages, and a REST API in front of them.
+
+### The route map, and the rule that produced it
+
+Volume 4, Chapter 4.6's catalogue is **fifteen endpoints**, distributed across seven functions by **resource type rather than URL nesting**:
+
+| Function | Routes | Note |
+|---|---|---|
+| `auth-verify` | `POST /v1/auth/verify`, `GET /v1/users/me` | "users" is not one of ADR-015's six domains; the caller's own profile is part of the auth surface |
+| `projects` | `GET`/`POST /v1/projects` | |
+| `tasks` | 5, incl. `GET /v1/projects/{projectId}/tasks` | **nested under projects, served by tasks** — the thing listed is a task |
+| `sessions` | `POST`/`GET /v1/tasks/{taskId}/sessions` | same rule |
+| `chunks-upload` | `POST /v1/sessions/{sessionId}/chunks` | |
+| `chunks-verify` | `PATCH /v1/chunks/{chunkId}/status` | |
+| `metadata` | `POST`/`GET /v1/chunks/{chunkId}/metadata` | holds no S3 permission at all |
+
+**A-143's two chunks roles map cleanly onto two of Chapter 4.6's routes**, which is the confirmation the trace was looking for: registration (`POST …/chunks`, presigns an upload) and verification (`PATCH …/status`, which Chapter 4.10 §2 step 3 gates on the object's size and checksum) were already separate endpoints. The split was not retrofitted onto the specification — the specification already had two routes, and Mission 6.1 gave them two principals.
+
+### What is real and what is not
+
+**Real:** token verification (A-149), the Chapter 4.6 §1 envelope, the error taxonomy, cursor parsing, the router, and all of the infrastructure.
+
+**Stubbed:** every one of the fifteen handlers, and the `users`-row lookup.
+
+**How the stubs behave is the part that matters.** Each returns a named `NOT_IMPLEMENTED` refusal, 501, inside a real envelope — **after real token verification**. So an unauthenticated request gets `AUTH_TOKEN_MISSING` and an invalid token gets `AUTH_TOKEN_INVALID`, and neither reaches the stub. The authentication path is demonstrable today; the queries behind it are visibly absent.
+
+Nothing returns invented data. `execute()` in the Data API client throws rather than returning an empty result set, because an empty result is a plausible answer that would let a caller believe the database had been consulted. `resolveCaller` returns `undefined` for `userId` and `orgId` rather than fabricating them, so a handler needing an org scope must fail rather than silently query a fabricated one.
+
+### Pagination is in the contract before any query exists
+
+Chapter 4.6 §1 fixes cursor pagination — *"`?cursor=…&limit=…` on every list endpoint"* — and ADR-044's **1 MiB Data API ceiling** turns that from a convention into a correctness requirement.
+
+The next cursor is returned as a **sibling `meta` key**, not inside `data`. `data` stays exactly the resource the caller asked for, which matters because the mobile client's `VumpApi` returns `data` and nothing else to its callers — a cursor buried inside it would be a field every DTO has to know to ignore.
+
+This had to be settled now rather than at 6.3: adding a required parameter later is a breaking change, and Chapter 4.6 §1 says a breaking change *"bumps to `/v2` rather than mutating existing contracts"*. The client does not consume cursors yet, so the backend defines the contract and the client inherits it.
+
+### Three things this scaffold is bound by, that it did not choose
+
+**The mobile client already implements three of these endpoints.** `chunk_upload_api_impl.dart` sends `{sequence_index, file_size_bytes, checksum_sha256}` to `POST /sessions/{id}/chunks` and reads `{chunk_id, s3_object_key, upload_urls}` back, throwing if `s3_object_key` is missing. Those shapes are a contract 6.3 must satisfy, not a design space.
+
+**`CHUNK_ALREADY_REGISTERED` is load-bearing on both sides.** A Mission 4.2 test scripts that exact code against `VumpApi`. It is in the taxonomy and asserted by a test, so renaming it fails here rather than in the client.
+
+**Function names are fixed by Mission 6.1's IAM.** The logs grant is scoped to `/aws/lambda/vump-{env}-*`, so a function named anything else runs and writes nothing. The Terraform creates the log groups explicitly rather than letting Lambda create them implicitly, which also gives them a retention period instead of "never expire".
+
+### REST API, and the two later missions that decided it
+
+The volumes never name the product tier — Chapter 4.6's "REST" is the architectural style (ADR-009). Two Volume 8 requirements settle it, and both are REST-API-only features: usage plans for Chapter 8.3 §1's per-user rate limiting, and WAF attachment for Chapter 8.4 §3. **Neither is built in 6.2.** Choosing the cheaper HTTP API now would have to be undone to satisfy either, and that migration is not a configuration flag.
+
+### The cold-start cost, measured rather than assumed
+
+Each bundle is **~1.6 MiB**, dominated by `firebase-admin`.
+
+Tree-shaking works — `RDSDataClient` is provably absent from `auth-verify`'s bundle, because that function's routes never reach the Data API client. So the workspace layout is not what costs the size.
+
+**Chapter 4.7 §1 step 3 is.** *"Each Lambda function verifies the token"* means every one of the seven carries the Firebase Admin SDK, and a package-per-function layout would produce the same seven copies. If cold starts become a measured problem, the lever is that requirement, not the layout — and the alternative would be an API Gateway authorizer, which is an architectural change and would need its own record.
