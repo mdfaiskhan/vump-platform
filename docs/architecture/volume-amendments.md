@@ -5518,3 +5518,103 @@ Chapter 4.7 §2 already puts `role` in the token as a custom claim, for a reason
 **Not implemented, and the reason is the same trap Mission 6.2 avoided.** Writing a custom claim needs the Firebase Admin SDK acting on the project, which needs a service-account key — the operation ADR-036 line 35 identifies as *"the operation that needs privilege"*, as distinct from verification, which needs nothing. That key is Mission 6.5's, or arrives with `functions/`'s retirement (deferred item 10). Implementing it here would pull 6.5 forward.
 
 So `resolveCaller` in `backend/packages/shared/src/handler.ts` **stays stubbed**, returning `undefined` for `userId` and `orgId` rather than inventing them. A handler that needs an org scope must fail rather than silently query a fabricated one — which is the property that makes this safe to leave open.
+
+---
+
+### A-160 — The backend is live, and per-function isolation is enforced at two layers rather than one
+
+| | |
+|---|---|
+| **Record** | ADR-043 (Terraform), ADR-044 (Data API), ADR-016 (secrets), ADR-046 (migrations) |
+| **Was** | 6.2's 24 resources and 6.3's 7 secret containers were both planned and neither applied. The seven database roles existed `NOLOGIN`, so Volume 8 Chapter 8.4 §1's per-function restrictions were written but not reachable. |
+| **Is** | 31 resources applied, 7 IAM policies repointed, 7 credentials generated and stored. Every role authenticates, and only as itself. |
+| **Authority** | Project owner's decision, Mission 6.3.2 |
+| **Class** | Implementation applied to a live environment |
+| **Status** | **Closed** for development. Staging and production do not exist |
+| **Date** | 2026-08-18, Mission 6.3 |
+
+`terraform apply` reported **31 added, 7 changed, 0 destroyed**, and the follow-up plan reported no changes. 6.2's resources and 6.3's applied in a single operation with no ordering conflict — expected rather than lucky, because the only edge between them is the IAM policy's reference to the secret ARNs, and Terraform's graph orders that edge itself.
+
+### What the seven changes actually changed
+
+Each function's role previously fell back to the **master** credential, because `lookup(var.db_credential_secret_arns, each.key, var.master_user_secret_arn)` had an empty map to look in. Applying the containers populated the map, so the change is every Lambda losing its access to the master secret and gaining access to exactly one credential. Verified with `iam simulate-principal-policy` for `vump-dev-chunks-upload`:
+
+| Resource | Decision |
+|---|---|
+| its own `vump/dev/db-chunks-upload` | `allowed` |
+| `vump/dev/db-chunks-verify` | `implicitDeny` |
+| the Aurora master secret | `implicitDeny` |
+
+### The isolation holds twice, and the layers fail differently
+
+This is the property worth recording, because either layer alone would be weaker than it looks.
+
+**IAM decides which credential a function can read.** **PostgreSQL decides what that credential may then do.** A defect in the first is contained by the second, and the reverse. Proved live, as the roles themselves rather than by reading the catalogue:
+
+| Attempt, using `chunks-upload`'s own secret | Result |
+|---|---|
+| `SET ROLE` to each of the other six roles | `42501 permission denied to set role` — six times |
+| `SET ROLE vump_admin` | `42501 permission denied to set role` |
+| `SELECT FROM users` / `orgs` | `42501 permission denied for table` |
+| `UPDATE` or `DELETE` on `chunks` | `42501 permission denied for table` |
+| `INSERT INTO audit_log` | `42501 permission denied for table` |
+| `CREATE TABLE` in `public` | `42501 permission denied for schema public` |
+
+No `vump_` function role is a member of any other role. The only membership in the database is `vump_admin → rds_superuser`, which RDS creates for the master user and no migration touches.
+
+### `complete_chunk()` is still exactly one role's to call
+
+Attempted from all seven roles in turn. Six were refused at the permission layer; `chunks-verify` was refused **by the function body** — `BR-21: no such chunk` — which is a different failure and the one that proves the grant.
+
+```
+complete_chunk(p_chunk_id uuid) :: vump_admin=X/vump_admin , vump_chunks_verify=X/vump_admin
+```
+
+`has_function_privilege('public', 'complete_chunk(uuid)', 'EXECUTE')` is **false**, so migration `0008` holds after the apply.
+
+### One earlier claim, restated more precisely
+
+Mission 6.3.1 reported that PUBLIC holds no table grants. Re-checked without scoping it to a schema, PUBLIC holds **189** — 127 in `pg_catalog` and 62 in `information_schema`, all PostgreSQL's own. On schema `public` it holds **none**, which is what the original claim meant and what matters. PUBLIC does retain `USAGE` on the schema, and that is deliberate: `0001` revokes everything and then re-grants `USAGE` on the following line. `USAGE` permits name resolution and no object access, which the `CREATE TABLE` and `SELECT` refusals above demonstrate.
+
+---
+
+### A-161 — Nothing runs migrations except a person, and closing that is a credential decision, not a missing check
+
+| | |
+|---|---|
+| **Record** | ADR-046 (*"Run deliberately, never by CI"*), `folder-structure.md` §1.3, A-148 and A-153 (the same *shape* of gap, resolved differently) |
+| **Says** | ADR-046: a migration is applied by a developer running `npm run db:migrate`. |
+| **Should say** | Undecided. Nothing detects a merged migration that was never applied, and the obvious fix has a cost the obvious fixes for A-148 and A-153 did not. |
+| **Authority** | Deferred to a future mission by the project owner, Mission 6.3.2 |
+| **Class** | Enforcement gap — **open**, and deliberately not closed here |
+| **Status** | Open. Deferred item 11 |
+| **Date** | 2026-08-18, Mission 6.3 |
+
+A migration can be written, reviewed, merged and released without ever reaching a database. Nothing in CI, and nothing in the runner, notices. The schema and the repository can disagree indefinitely, and the first symptom is a handler failing on a column that exists in `git` and not in Postgres.
+
+### Why this is filed apart from A-148 and A-153, which look identical
+
+All three are the same sentence — *a standard was written and nothing executed it*. The resemblance stops at the remedy.
+
+| | A-148 | A-153 | **A-161** |
+|---|---|---|---|
+| What was unenforced | `terraform fmt`/`validate`/`tflint` | `npm run verify` | applying a merged migration |
+| What closing it required | a CI job | a CI job | **a decision about credentials** |
+| New access granted to CI | none | none | **AWS write access to a live database** |
+| Closed in | Mission 6.1.7 | Mission 6.2.2 | not closed |
+
+A-148 and A-153 were reflexive: both closed by running, in CI, a command that already existed and that reads without writing. **Their remedy cost nothing but minutes.** A runner that migrates must hold a credential that can `CREATE`, `ALTER` and `DROP` on a live database — which is precisely what ADR-046 and `folder-structure.md` §1.3 refuse, in the same words used of `terraform apply`: *"a pipeline that can migrate a database is a pipeline that can drop one."*
+
+So closing this one means overturning an accepted decision, and the question underneath it is not about migrations at all: **should CI ever hold AWS write credentials?** That governs deployment, `terraform apply` and the Firebase service-account key of Mission 6.5 alongside migrations, and answering it inside a schema mission would settle a platform-wide question as a side effect.
+
+### What was deliberately not done here
+
+Not a reflexive CI job, and not a partial one. Three options were visible and none is obviously right:
+
+- **A read-only drift check** — CI compares `schema_migrations` against the files and fails when they differ. Needs only read access, so it is the cheapest, and it detects the problem without being able to fix it.
+- **CI applies migrations** on merge to `develop`, with a scoped role. Fixes it, and grants CI the write access ADR-046 refuses.
+- **A release checklist item** — no credential, no automation, and the failure mode ADR-036 already names: *"no CI check can detect that it has happened"*.
+
+The first is likely the answer and is still not taken here, because a check that reads a production database from CI needs a principal that does not exist — deferred item 8's unscoped `faisal-admin` is the only one that does, and CI must never use it.
+
+**A trace/decide for a future sub-mission.** Logged so the gap is tracked rather than closed badly.

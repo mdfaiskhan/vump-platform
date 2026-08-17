@@ -135,7 +135,7 @@ A numeric gate becomes reasonable when 6.3 gives the handlers real behaviour to 
 | ESLint type-aware | Required | ✅ 0 problems |
 | Prettier | Required | ✅ clean |
 | `tsc --build` strict | Required | ✅ clean |
-| Vitest | Required | ✅ 49 tests, 8 files |
+| Vitest | Required | ✅ 81 tests, 10 files |
 | esbuild per-function bundles | Required | ✅ 7 bundles, tree-shaking verified |
 | `npm audit` script | Required | ✅ available |
 | `npm audit` in CI | V8.3 §4 | ✅ Gates the `Backend` job, at `high` |

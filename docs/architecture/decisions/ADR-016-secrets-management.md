@@ -105,10 +105,12 @@ A committed secret is disclosed permanently. Deleting it in a later commit does 
 | Mobile holds no secret | Required | ✅ Verified, and enforced by CI |
 | `mobile/.env.example` | `APP_ENV` only | ✅ Created |
 | `--dart-define-from-file` | Mechanism adopted | ✅ Implemented in Mission 0.17.17 |
-| Backend uses IAM roles | Required | ⬜ Backend does not exist |
-| Secrets Manager for values | Required | ⬜ No secret created; no Lambda to read one |
+| Backend uses IAM roles | Required | ✅ Seven Lambda execution roles live; each reads exactly one credential, proven by `iam simulate-principal-policy` (A-160) |
+| Secrets Manager for values | Required | ✅ **8 secrets live** — the RDS-managed master plus seven per-function database credentials, populated by `npm run db:bootstrap` |
 | `backend/.env.example` | Contract documented | ✅ Created |
 | `.gitignore` blocks secrets | Required | ✅ Verified against 9 patterns |
 | CI secret scanning | Required | ✅ Implemented |
 
-The `--dart-define` mechanism this ADR depends on was implemented in Mission 0.17.17. The outstanding items are backend-side and blocked on the backend not existing.
+The `--dart-define` mechanism this ADR depends on was implemented in Mission 0.17.17. The backend-side items closed in Mission 6.3.2: the seven per-function database credentials are live, generated outside both git and Terraform state, and each Lambda role can read only its own (A-160).
+
+**One property is still manual.** Volume 8 Chapter 8.4 §2's automatic rotation covers the RDS-managed master secret only. The seven per-function secrets rotate by re-running `npm run db:bootstrap`, which is a person deciding to, not a schedule.

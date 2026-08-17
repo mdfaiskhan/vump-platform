@@ -84,7 +84,7 @@ Licensing is noted rather than resolved: Terraform is BUSL-licensed since 1.5. N
 | Provider lock committed | Required | ✅ `.terraform.lock.hcl`, aws v6.60.0 |
 | `terraform validate` clean | Required | ✅ |
 | `tflint` clean | Required | ✅ 0 issues, `terraform` + `aws` rulesets |
-| Applied to AWS | — | ✅ **All 35 resources live in `ap-south-1`.** `terraform plan` reports `No changes` at `-detailed-exitcode` 0 |
+| Applied to AWS | — | ✅ **All 66 managed resources live in `ap-south-1`** — 35 from Mission 6.1, 31 from Mission 6.3.2. `terraform plan` reports `No changes` at `-detailed-exitcode` 0 |
 | State in S3, locking works | Required | ✅ 95,329 bytes at `dev/terraform.tfstate`; lock objects acquired and released across four runs, none stale |
 | CI runs Terraform checks | Not decided here | ❌ Not built |
 

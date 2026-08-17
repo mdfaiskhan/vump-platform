@@ -55,7 +55,7 @@ The one seam is the credential secrets — Terraform creates the empty container
 
 ## Consequences
 
-- Migrations run from a developer's machine with the master credential. There is no CI path and no automated deployment, which is deliberate and also means **nothing prevents a developer forgetting to run them**.
+- Migrations run from a developer's machine with the master credential. There is no CI path and no automated deployment, which is deliberate and also means **nothing prevents a developer forgetting to run them**. A-161 records why that is not closed with a CI job the way A-148 and A-153 were: those needed only a read-only command, this needs a credential that can `DROP`, and whether CI may ever hold one is a platform-wide question rather than a migration question.
 - **The runner is a fourth thing that must agree with the schema.** A-153 already records that nothing compares the Terraform routes with the handler route tables; table and column names now live in `.sql` and in the TypeScript that will query them, with nothing checking the pair.
 - The checksum guard means a typo in an applied migration cannot be fixed in place. That is the intended cost.
 - Rollback is not implemented. Every migration is forward-only; undoing one means writing another. Adding `down` migrations would double the surface for a project that has never rolled a schema back, and the honest position is that this is untested rather than unnecessary.
@@ -77,6 +77,7 @@ The one seam is the credential secrets — Terraform creates the empty container
 | Checksum guard | Required | ✅ |
 | Resume retry | A-156 | ✅ Exercised live on the first apply |
 | Applied to dev | — | ✅ 8/8, re-run skips all 8 |
+| Per-function credentials issued | `npm run db:bootstrap` | ✅ 7 roles made LOGIN, 7 secrets populated (A-160) |
 | Applied to staging/prod | — | ⬜ Neither environment exists |
 | `down` migrations | Deliberately absent | ❌ Forward-only |
-| CI runs migrations | Deliberately absent | ❌ By design |
+| CI runs migrations | Deliberately absent | ❌ By design — and nothing detects a merged-but-unapplied migration. **Open**: A-161, deferred item 11 |
