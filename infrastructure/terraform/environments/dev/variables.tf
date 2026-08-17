@@ -1,0 +1,85 @@
+variable "region" {
+  description = "AWS region. ap-south-1 for every environment, per ADR-011."
+  type        = string
+  default     = "ap-south-1"
+}
+
+variable "environment_slug" {
+  description = "AWS environment slug. Fixed to dev for this root module."
+  type        = string
+  default     = "dev"
+}
+
+variable "vpc_cidr" {
+  description = "VPC CIDR. Does not collide with the account's default VPC (172.31.0.0/16)."
+  type        = string
+  default     = "10.0.0.0/16"
+}
+
+variable "database_subnets" {
+  description = "Availability zone to CIDR, for the private database subnets."
+  type        = map(string)
+
+  default = {
+    "ap-south-1a" = "10.0.20.0/24"
+    "ap-south-1b" = "10.0.21.0/24"
+  }
+}
+
+variable "engine_version" {
+  description = "Aurora PostgreSQL version. Data API supports 16.1 and higher in ap-south-1."
+  type        = string
+  default     = "16.14"
+}
+
+variable "database_name" {
+  description = "Initial database name."
+  type        = string
+  default     = "vump_dev"
+}
+
+variable "master_username" {
+  description = "Master username. Deliberately not 'postgres'."
+  type        = string
+  default     = "vump_admin"
+}
+
+variable "min_capacity" {
+  description = "Serverless v2 minimum ACU. 0 permits scale-to-zero, so an idle dev cluster costs nothing."
+  type        = number
+  default     = 0
+}
+
+variable "max_capacity" {
+  description = "Serverless v2 maximum ACU — the dev cost ceiling."
+  type        = number
+  default     = 2
+}
+
+variable "backup_retention_period" {
+  description = "Automated backup retention, in days."
+  type        = number
+  default     = 7
+}
+
+variable "deletion_protection" {
+  description = "Off for dev. Must be reconsidered for staging and production."
+  type        = bool
+  default     = false
+}
+
+variable "skip_final_snapshot" {
+  description = <<-EOT
+    True for dev: the environment holds synthetic, disposable data (ADR-014) and
+    seven days of automated backups already cover accidental loss. Must be false
+    for staging and production.
+  EOT
+  type        = bool
+  default     = true
+}
+
+variable "chunk_bucket" {
+  description = "Chunk storage bucket for this environment. Must match environments.json."
+  type        = string
+  default     = "vump-platform-dev"
+}
