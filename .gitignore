@@ -61,6 +61,30 @@ target/
 *.a
 
 # ---------------------------------------------------------------------------
+# Terraform — see ADR-043
+# ---------------------------------------------------------------------------
+# `.terraform/` holds downloaded provider binaries — hundreds of megabytes,
+# rebuilt by `terraform init` from `.terraform.lock.hcl`, which IS committed so
+# that init resolves the same provider versions everywhere.
+.terraform/
+.terraform.tfstate.lock.info
+
+# State never enters the repository. It lives in the vump-platform-tfstate
+# bucket (ADR-043) and can contain resource attributes that are secret for some
+# resource types. A committed state file is a disclosure, not a backup.
+*.tfstate
+*.tfstate.*
+
+# Saved plans are binary and hold the full resolved configuration.
+*.tfplan
+
+# Variable files may carry environment-specific values. `variables.tf` defaults
+# are the committed form; a .tfvars file is a local override.
+*.tfvars
+*.tfvars.json
+!example.tfvars
+
+# ---------------------------------------------------------------------------
 # Dependencies
 # ---------------------------------------------------------------------------
 node_modules/
