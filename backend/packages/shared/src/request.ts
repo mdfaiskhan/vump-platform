@@ -123,6 +123,64 @@ export function optionalStringArray(
 }
 
 /**
+ * An optional, client-supplied instant — F15.
+ *
+ * ## Why a client timestamp is accepted at all
+ *
+ * `sessions.started_at` defaults to `now()`, which records **registration**
+ * time. Chapters 5.11 and 5.13 make the upload path deferred and
+ * offline-tolerant, so a session captured in the field and registered hours
+ * later would be stamped hours late — and FR-ADM-05's whole purpose is showing
+ * an Admin when work happened.
+ *
+ * The system already trusts device clocks for capture timing:
+ * `chunk_metadata.captured_start_at` and `captured_end_at` are device-supplied
+ * and always have been. Refusing one here while accepting those would be
+ * inconsistent rather than safe.
+ *
+ * ## Only the future is rejected, and there is no lower bound
+ *
+ * A timestamp after the server's own clock cannot describe something that has
+ * already been captured, so it is either a broken clock or a dishonest one, and
+ * either way the value is unusable.
+ *
+ * **There is deliberately no "too old" bound.** No requirement anywhere states
+ * how long a chunk may sit on a device before upload — Chapter 5.13 grants six
+ * automatic attempts with no wall-clock deadline, and NFR-AVL-02's *"< 30
+ * seconds"* is about resuming after connectivity returns, not about total age.
+ * Any cutoff would be invented, and an invented one would silently reject real
+ * field recordings from a crew that was offline for a week. `NetworkConstants`
+ * declined to guess an upload timeout on exactly this reasoning: *"a guessed
+ * value would be worse than none"* because it fails invisibly.
+ *
+ * A small skew allowance absorbs ordinary clock drift rather than treating it
+ * as dishonesty; a device seconds ahead of the server is not making a claim
+ * about the future.
+ */
+export function optionalPastInstant(
+  body: Record<string, unknown>,
+  field: string,
+  now: () => number = Date.now,
+): string | undefined {
+  const value = body[field];
+  if (value === undefined) {
+    return undefined;
+  }
+  if (typeof value !== 'string') {
+    throw ApiError.invalidRequest(`${field} must be an ISO-8601 string when present.`);
+  }
+  const parsed = Date.parse(value);
+  if (Number.isNaN(parsed)) {
+    throw ApiError.invalidRequest(`${field} must be a valid ISO-8601 instant.`);
+  }
+  // Sixty seconds of tolerance: ordinary drift, not a claim about the future.
+  if (parsed > now() + 60_000) {
+    throw ApiError.invalidRequest(`${field} must not be in the future.`);
+  }
+  return value;
+}
+
+/**
  * A path parameter that must be a uuid.
  *
  * Checked before any query, so a malformed id is `REQUEST_MALFORMED_ID` rather

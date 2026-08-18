@@ -46,6 +46,7 @@ export {
   requiredString,
   optionalString,
   optionalStringArray,
+  optionalPastInstant,
   pathUuid,
 } from './request.js';
 export {
