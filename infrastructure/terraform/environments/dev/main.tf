@@ -139,4 +139,33 @@ module "api_gateway" {
   # function was configured to use. A-158's per-function isolation was correct
   # in IAM and in PostgreSQL, and unreachable at runtime.
   db_credential_secret_arns = module.db_credentials.secret_arns
+
+  # chunks-verify hashes the uploaded object; the other six do small reads and
+  # writes. Volume 4 Chapter 4.5 §3 makes it verify `checksum_sha256` "against
+  # the actual uploaded S3 object", and Mission 3.8.1 measured a real chunk at
+  # 633,232,477 bytes.
+  #
+  # **Measured, not estimated** — Mission 7.3's `chunk-hash-probe`, streaming
+  # GetObject through SHA-256 on that exact object size:
+  #
+  #   |  memory | total  | throughput  | margin to API Gateway's 29s |
+  #   |---------|--------|-------------|-----------------------------|
+  #   |   512MB | 25908ms| 24.44 MB/s  | 3092ms                      |
+  #   |  1769MB |  7780ms| 81.39 MB/s  | 21220ms                     |
+  #
+  # Both tiers returned the identical digest, so this buys time and changes no
+  # result.
+  #
+  # 512MB would have fit — with 3.1 seconds to spare on a 29-second ceiling, for
+  # a call that also has to reach Aurora before and after the hash. That is not
+  # margin, it is a coin toss on a slow day.
+  #
+  # **The cost is a wash**, which is what makes this uninteresting rather than a
+  # trade-off: 25908ms x 512MB = 13,265 MB-seconds against 7780ms x 1769MB =
+  # 13,760 MB-seconds. Lambda bills memory x duration, and 3.3x the memory for
+  # 3.3x less time is the same bill. 1769MB is where a function gets one full
+  # vCPU, and network scales on the same curve.
+  lambda_overrides = {
+    "chunks-verify" = { memory_mb = 1769 }
+  }
 }
