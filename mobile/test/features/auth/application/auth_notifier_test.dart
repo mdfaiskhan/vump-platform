@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mobile/core/errors/error_codes.dart';
 import 'package:mobile/core/errors/exceptions/authentication_exception.dart';
+import 'package:mobile/core/errors/exceptions/network_exception.dart';
 import 'package:mobile/core/errors/failure.dart';
 import 'package:mobile/features/auth/application/auth_notifier.dart';
 import 'package:mobile/features/auth/application/auth_state.dart';
@@ -75,12 +76,23 @@ void main() {
       );
     });
 
-    test('a failed restore is unauthenticated, not an error state', () async {
+    test('a session that cannot be read at startup is unauthenticated, '
+        'not an error state', () async {
       // Nobody is signed in as far as this launch is concerned. Surfacing it
       // as AsyncError would put an error banner in front of a first-run user
       // who has simply never signed in.
+      //
+      // This used to be expressed as `restoreThrows`, when `build` called
+      // `restoreSession`. Since A-177 it does not, so the same condition
+      // arrives as an error on the session stream — the shape the real
+      // repository produces when Firebase failed to initialise (ADR-017).
       final ProviderContainer container = containerWith(
-        _FakeAuthRepository(restoreThrows: true),
+        _FakeAuthRepository(
+          startupError: const AuthenticationException(
+            errorCode: ErrorCode.unknown,
+            message: 'Firebase is not initialised',
+          ),
+        ),
       );
 
       expect(
@@ -266,41 +278,114 @@ void main() {
       );
     });
   });
+  group('a transient backend failure does not destroy the session', () {
+    // F5, A-178. Reproduced on CPH2707: two 502s from POST /v1/auth/verify
+    // (gap 9 — Aurora resuming from MinCapacity 0 outran the Lambda's 15s
+    // timeout) signed the Collector out completely. The session was fine; the
+    // backend was briefly not.
+
+    test('a 502 during startup does not sign the user out', () async {
+      final _FakeAuthRepository repository = _FakeAuthRepository(
+        startupError: const NetworkException(
+          errorCode: ErrorCode.networkServerError,
+          message: 'Server returned 502 for POST /v1/auth/verify',
+        ),
+      );
+      final ProviderContainer container = containerWith(repository);
+
+      expect(
+        await container.read(authNotifierProvider.future),
+        isA<AuthStateUnauthenticated>(),
+      );
+      await pumpEventQueue();
+
+      // The whole of F5. Signing out here destroys a working credential and
+      // makes recovery need the person's password rather than a working
+      // backend.
+      expect(repository.signOutCalls, 0);
+    });
+
+    test('an unprovisioned account IS still signed out', () async {
+      // The case the discard was written for, and the proof that F5's fix is
+      // a distinction rather than a blanket refusal to sign anybody out. This
+      // account authenticates and carries no usable role, so it returns on
+      // every cold start and the person could never reach Login without it.
+      final _FakeAuthRepository repository = _FakeAuthRepository(
+        startupError: const AuthenticationException(
+          errorCode: ErrorCode.authUnauthenticated,
+          message: 'no usable role claim',
+        ),
+      );
+      final ProviderContainer container = containerWith(repository);
+
+      await container.read(authNotifierProvider.future);
+      await pumpEventQueue();
+
+      expect(repository.signOutCalls, 1);
+    });
+  });
 }
 
 /// A scripted `AuthRepository`. No Firebase, no platform channels.
 class _FakeAuthRepository implements AuthRepository {
   _FakeAuthRepository({
     this.restored = const Session.unknown(),
-    this.restoreThrows = false,
+    this.startupError,
     this.signInResult,
     this.signInThrows,
   });
 
   final Session restored;
-  final bool restoreThrows;
+
+  /// An error the stream raises before any session resolves.
+  ///
+  /// Replaces `restoreThrows` for the startup case: since A-177 `build` never
+  /// calls `restoreSession`, so a repository that cannot answer expresses that
+  /// by erroring the stream, which is what the real one does.
+  final Object? startupError;
   final User? signInResult;
   final AuthenticationException? signInThrows;
 
-  final StreamController<Session> _sessions =
-      StreamController<Session>.broadcast();
+  late final StreamController<Session> _sessions = StreamController<Session>(
+    onListen: _seed,
+  );
+
+  /// Emitted on subscription, in the order the real repository emits them.
+  void _seed() {
+    _sessions.add(const Session.unknown());
+    final Object? failure = startupError;
+    if (failure != null) {
+      _sessions.addError(failure);
+      return;
+    }
+    if (restored is! SessionUnknown) {
+      _sessions.add(restored);
+    }
+  }
 
   void emit(Session session) => _sessions.add(session);
   void emitError(Object error) => _sessions.addError(error);
 
+  /// Mirrors the real repository: `Session.unknown()` first, then whatever the
+  /// platform reports, then any later emissions a test pushes with [emit].
+  ///
+  /// Seeded through `onListen` on a SINGLE-subscription controller rather than
+  /// delegated with `yield*`. Both look equivalent and are not: an `async*`
+  /// getter builds a new stream per access and forwards a broadcast
+  /// controller's events only while it sits in the delegation, so emissions a
+  /// test pushed after `build` resolved were silently dropped. One controller,
+  /// one listener, every event delivered.
+  ///
+  /// Seeding at all is what keeps this fake faithful after A-177:
+  /// `AuthNotifier.build` resolves the first session from THIS stream now — it
+  /// no longer calls `restoreSession` — so a stream that stayed silent until a
+  /// test pushed to it would leave `build` awaiting forever, modelling a
+  /// repository that does not exist.
   @override
   Stream<Session> get sessionChanges => _sessions.stream;
 
   @override
-  Future<Session> restoreSession() async {
-    if (restoreThrows) {
-      throw const AuthenticationException(
-        errorCode: ErrorCode.unknown,
-        message: 'Firebase is not initialised',
-      );
-    }
-    return restored;
-  }
+  Future<Session> restoreSession() async => restored;
 
   @override
   Future<User> signInWithEmailPassword({
@@ -321,8 +406,12 @@ class _FakeAuthRepository implements AuthRepository {
   @override
   Future<User> signUpWithGoogle({String? inviteCode}) async => _signIn();
 
+  /// How many times the notifier discarded the session — F5's evidence.
+  int signOutCalls = 0;
+
   @override
   Future<void> signOut() async {
+    signOutCalls += 1;
     final AuthenticationException? failure = signInThrows;
     if (failure != null) {
       throw failure;

@@ -230,8 +230,17 @@ class _FakeAuthRepository implements AuthRepository {
 
   int signOutCalls = 0;
 
-  final StreamController<Session> _sessions =
-      StreamController<Session>.broadcast();
+  /// Seeded on subscription, mirroring the real repository.
+  ///
+  /// A-177: `AuthNotifier.build` resolves the first session from this stream
+  /// and no longer calls `restoreSession`, so a silent stream leaves `build`
+  /// awaiting forever — the tests time out rather than fail.
+  late final StreamController<Session> _sessions = StreamController<Session>(
+    onListen: () {
+      _sessions.add(const Session.unknown());
+      _sessions.add(Session.authenticated(_user));
+    },
+  );
 
   @override
   Stream<Session> get sessionChanges => _sessions.stream;

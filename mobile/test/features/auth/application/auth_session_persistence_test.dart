@@ -50,18 +50,31 @@ void main() {
       expect(repository.signInCalls, 0, reason: 'restore is not a sign-in');
     });
 
-    test('awaiting the provider is what runs the restore', () async {
-      // Before Mission 2.5, restoreSession was implemented and wired into
-      // build() but nothing read the provider at startup, so it never ran on a
-      // cold start. This asserts the read is what triggers it.
+    test('awaiting the provider is what resolves the session', () async {
+      // Before Mission 2.5, session resolution was wired into build() but
+      // nothing read the provider at startup, so it never ran on a cold start.
+      // This asserts the read is what triggers it — the original point, which
+      // A-177 did not change.
+      //
+      // What A-177 changed is the mechanism: resolution is the
+      // `sessionChanges` subscription now, not a `restoreSession` call, so the
+      // counter that stands in for "the startup path ran" moved with it. The
+      // second assertion is the gap-11 guarantee restated where this test can
+      // see it: resolving must not also call `restoreSession`.
       final _FakeAuthRepository repository = _FakeAuthRepository(
         restored: const Session.authenticated(collector),
       );
       final ProviderContainer container = containerWith(repository);
 
-      expect(repository.restoreCalls, 0, reason: 'nothing has read it yet');
+      expect(repository.subscribeCalls, 0, reason: 'nothing has read it yet');
       await container.read(authNotifierProvider.future);
-      expect(repository.restoreCalls, 1);
+
+      expect(repository.subscribeCalls, 1);
+      expect(
+        repository.restoreCalls,
+        0,
+        reason: 'gap 11 — the startup path must resolve the session once',
+      );
     });
 
     test('no persisted session resolves to unauthenticated', () async {
@@ -203,10 +216,36 @@ class _FakeAuthRepository implements AuthRepository {
   final bool emitOnSignOut;
 
   int restoreCalls = 0;
+
+  /// How many times `sessionChanges` was subscribed — the startup path's
+  /// trigger since A-177, where `restoreCalls` used to be.
+  int subscribeCalls = 0;
   int signInCalls = 0;
 
-  final StreamController<Session> _sessions =
-      StreamController<Session>.broadcast();
+  /// Seeded on subscription, in the order the real repository emits.
+  ///
+  /// A-177: `AuthNotifier.build` resolves the first session from this stream
+  /// and no longer calls `restoreSession`, so a fake whose stream stayed silent
+  /// left `build` awaiting forever. Single-subscription rather than broadcast
+  /// because there is one listener and `onListen` is what seeds it.
+  late final StreamController<Session> _sessions = StreamController<Session>(
+    onListen: () {
+      subscribeCalls += 1;
+      _sessions.add(const Session.unknown());
+      if (restoreThrows) {
+        _sessions.addError(
+          const AuthenticationException(
+            errorCode: ErrorCode.unknown,
+            message: 'Firebase is not initialised',
+          ),
+        );
+        return;
+      }
+      if (restored is! SessionUnknown) {
+        _sessions.add(restored);
+      }
+    },
+  );
 
   void emit(Session session) => _sessions.add(session);
 

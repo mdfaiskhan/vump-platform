@@ -6207,3 +6207,155 @@ Recorded because this is the second time in Mission 7.1 that a check proved non-
 ### The one caveat, stated rather than smoothed over
 
 **CloudTrail Event history is not a durable audit trail.** A-019 records that no trail is configured, so the 90-day Event history is all there is: not exportable, not retained beyond the window, and not the account-wide trail Volume 8 Chapter 8.4 §4 requires. The finding is sound here only because the key's entire life was roughly one hour on the day of the query, far inside the window. **The same investigation ninety-one days later would return zero events for a key that had been used every day**, and nothing would distinguish the two answers. A-019 is now a gap with a worked example attached.
+
+---
+
+### A-177 — Gap 11 is fixed: one cold start, one token exchange
+
+| | |
+|---|---|
+| **Record** | `docs/development/mission-6-gap-register.md` item 11; ADR-048 |
+| **Said** | *"`POST /v1/auth/verify` fires twice per app launch… Harmless (idempotent, `ON CONFLICT DO NOTHING`) but doubled"* |
+| **Now** | Once. `AuthNotifier.build` resolves the first session from its single `sessionChanges` subscription and no longer calls `restoreSession` |
+| **Authority** | Project owner, Mission 7.2 |
+| **Class** | Defect fixed |
+| **Status** | **Closed**, proven on device |
+| **Date** | 2026-08-18, Mission 7.2 |
+
+`build` did two things that both reached `AuthRepositoryImpl._toUser`: it subscribed to `sessionChanges`, and it called `restoreSession()`. Each performed the Chapter 4.7 §1 step 2 exchange, concurrently.
+
+**The second call bought nothing.** The comment that justified it claimed awaiting the stream *"would stall `build()` for as long as the restore takes"* — but both wait on the same exchange, and the stream already yields `Session.unknown()` first, so the UI has its `AsyncLoading` either way. The restore was a duplicate of work already in flight.
+
+The first session is now resolved through the existing subscription rather than a second read of `sessionChanges`. That distinction is load-bearing: the getter is a stream that subscribes to Firebase and maps every event through `_toUser`, so reading it twice would have reintroduced the duplicate in a new place.
+
+### Measured, before and after, on CPH2707
+
+Pre-fix build, one cold start:
+
+```
+20:07:47.818  ✗ 502 POST …/v1/auth/verify (15876ms)
+20:07:47.819  ✗ 502 POST …/v1/auth/verify (15889ms)
+```
+
+Post-fix build, four cold starts:
+
+| Run | `am start -W` TotalTime | `/auth/verify` calls | Exchange |
+|---|---|---|---|
+| 0 | 2516ms | **1** | 513ms |
+| 1 | 2007ms | **1** | 346ms |
+| 2 | 1988ms | **1** | 325ms |
+| 3 | 2699ms | **1** | 669ms |
+
+### The splash is not slower, and the reason is in the old timestamps
+
+The two pre-fix calls were **one millisecond apart** — concurrent, never serialised. Removing one therefore returns duplicated server work and a duplicated `users` upsert, **not wall-clock time**. Cold start measures 1988–2699ms post-fix, and the OS splash covers it.
+
+**Stated as a limitation rather than smoothed over: there is no clean pre-fix `TotalTime` baseline.** The only pre-fix launch captured hit the 502 path and took 15.9 seconds, which is not comparable. Building a pre-fix APK purely for an A/B was considered and declined by the project owner: the concurrency argument stands on the timestamps above, and the post-fix numbers are measured. So "no slower" is *reasoned from evidence*, not *measured against a baseline*, and a future reader should not cite it as the latter.
+
+### What made it survivable for three missions
+
+Nothing could see it. `grep -rn "auth/verify" test/` returned **nothing** before this mission — every test asserted what the session *was* and none asserted what it *cost*. It shipped in 6.5, passed 6.6's audit and 6.7's security review. `test/features/auth/application/auth_cold_start_exchange_test.dart` now counts, and was proven non-vacuous by reinstating the defect (`Expected: <0> Actual: <1>`) before reverting.
+
+**Eight test fakes had to be migrated**, and the shape of that work is worth recording. Each had a silent `sessionChanges`, which under the new contract leaves `build` awaiting forever — so they **timed out rather than failed**, surfacing one full-suite run at a time. A fake that models a stream nothing emits on is not a cheap fake; it is a fake of a repository that does not exist.
+
+---
+
+### A-178 — A transient backend failure no longer destroys the session, and gap 9 has a confirmed consequence
+
+| | |
+|---|---|
+| **Record** | ADR-035; gap register item 9; `AuthNotifier._discardUnusableSession` |
+| **Was** | Any error on the session stream signed the user out |
+| **Is** | Only a genuinely unusable identity does |
+| **Authority** | Project owner, Mission 7.2 |
+| **Class** | Defect fixed — pre-existing, not introduced by A-177 |
+| **Status** | **Closed** |
+| **Date** | 2026-08-18, Mission 7.2 |
+
+Observed on CPH2707 before any of this mission's changes: two 502s from `POST /v1/auth/verify` at ~15.9s each, after which the app was sitting on the Sign in screen. `_toUser` threw a `NetworkException`, that reached the stream's `onError`, and `_discardUnusableSession()` called `signOut()`.
+
+**A working credential was destroyed because a server was briefly unavailable.** Recovery then required the person's password rather than a working backend — the one response that makes a transient failure worse.
+
+### The distinction is real, and rests on something the platform guarantees
+
+`_discardUnusableSession` now fires only for `AuthenticationException` carrying `authUnauthenticated` or `authAccountDisabled`.
+
+The obvious worry is that this masks a genuinely dead session — a revoked refresh token, a deleted account. **It cannot, because those never reach this path.** Firebase emits a *null user* for a revocation, identically to a deliberate sign-out; `AuthRepositoryImpl` says so in its own comment, and `_classify` turns it into `unauthenticated` or `expired`. Nothing arriving as a stream *error* is a revocation.
+
+What did arrive there:
+
+| Error | Meaning | Discard? |
+|---|---|---|
+| `AuthenticationException(authUnauthenticated)` | Signs in, no usable `role` claim, or no org. Returns every cold start | **Yes** — the case the discard was written for |
+| `AuthenticationException(authAccountDisabled)` | Permanent | **Yes** |
+| `NetworkException(*)` | 502, timeout, no connectivity | **No** |
+| `AuthenticationException(unknown)` | Firebase failed to initialise (ADR-017) | **No** — a local fault; `signOut` could not succeed either |
+
+Proven in both directions, because a fix that never signs anyone out would be no fix: *"a 502 during startup does not sign the user out"* and *"an unprovisioned account IS still signed out"*.
+
+**The state a transient error produces is deliberately unchanged.** `AuthGuard.redirect` treats a null `AuthState` as "not yet known" and returns no redirect, so surfacing `AsyncError` at cold start would leave the person on `/`, which renders nothing. Not signing out is the half that matters: the Firebase credential survives, so the next launch signs them straight back in.
+
+### Gap 9 is no longer hypothetical
+
+Item 9 reads *"the first request after idle **can** exceed the Lambda's 15-second timeout while the resume ladder runs to ~30 seconds"* — a possibility, filed under availability.
+
+It happened, twice, in one launch: **15876ms and 15889ms against a 15000ms timeout**, because Aurora was resuming from `MinCapacity 0`. And until this amendment its consequence was not slowness but **an ended session**.
+
+Fixing the resume is out of this sub-mission's scope. What changes here is the record: gap 9 is **confirmed, with a reproduced user-facing consequence**, not a risk awaiting evidence. Its severity is 7.x's to reassess.
+
+---
+
+### A-179 — `VumpApi` is required, and the stale-claim fallback is gone
+
+| | |
+|---|---|
+| **Record** | ADR-048; ADR-016; `AuthRepositoryImpl.backend` |
+| **Was** | `final VumpApi? backend` — when null, `org_id` came from the Firebase claim |
+| **Is** | `final VumpApi backend`, required. No claim fallback exists |
+| **Authority** | Project owner, Mission 7.2 |
+| **Class** | Latent divergence removed |
+| **Status** | **Closed** |
+| **Date** | 2026-08-18, Mission 7.2 |
+
+ADR-048 made `POST /v1/auth/verify` authoritative for `org_id`, retiring the claim because *"a claim written once goes stale the moment an account moves organisation"*. The retired path stayed in the code as the null branch, documented as "the test path".
+
+**It was unreachable by convention, not by construction** — every `main.dart` construction supplied a backend. That is the same shape as Mission 6.5's `authTokenSourceProvider` defect: correct in isolation, wrong at the composition root, and invisible until something reaches it. A type is a guarantee; a convention has to be got right again by every future call site.
+
+Tests now pass `FakeVumpApi` rather than omitting the dependency, which also makes the exchange **observable** — that fake is what A-177's regression guard counts. The three tests that asserted rejection of a missing/empty/non-string `org_id` **claim** were rewritten to assert rejection of an org the **backend** does not return, because that is where the decision now lives, and one was added asserting a valid-looking claim is ignored when the table disagrees.
+
+`_orgIdClaim` and the `claims` parameter of `_resolveOrgId` were deleted rather than left unused.
+
+---
+
+### A-180 — A sign-in performs one token exchange, not two
+
+| | |
+|---|---|
+| **Record** | A-177; gap register item 11 |
+| **Says** | Item 11 describes the duplicate as *"twice per app launch"* |
+| **Should say** | Cold start was one instance. **Sign-in was a second, with a different cause**, and item 11's wording does not cover it |
+| **Authority** | Measurement on CPH2707, Mission 7.2 |
+| **Class** | Defect fixed |
+| **Status** | **Closed** |
+| **Date** | 2026-08-18, Mission 7.2 |
+
+Captured on the **A-177-fixed** build, during a real sign-in:
+
+```
+20:49:48.523  → POST /auth/verify
+20:49:48.527  → POST /auth/verify
+20:49:48.893  ← 200 (366ms)
+20:49:49.408  ← 200 (884ms)
+```
+
+Cold start was down to one, and sign-in was still two. Different cause: `signInWithEmailPassword` calls `_toUser` to satisfy its `Future<User>` return type, then Firebase emits that same user on `authStateChanges` and `sessionChanges` calls `_toUser` again.
+
+### The smaller fix was the wrong one
+
+The returned `User` is genuinely unused — `AuthNotifier._attempt` takes a `Future<void> Function()` and discards it — so deleting the sign-in call looks like the minimal answer.
+
+**It would have moved a user-visible error off the screen.** `_toUser` also *validates*, and on the sign-in path a thrown `AuthenticationException` becomes a `Failure` that puts *"this account is not provisioned"* on the login form. Move that to the stream and it arrives as `authUnauthenticated`, which **A-178 correctly treats as an unusable session and signs out — silently, with no message**. The two fixes interact, and the interaction only appears if both are held in view at once.
+
+So the exchange is **coalesced** instead: overlapping resolutions share one in-flight request, the same single-flight `AuthInterceptor._refreshInFlight` already uses for concurrent 401s. Every semantic is preserved and only the duplicate request is removed.
+
+**It shares the in-flight future and never a completed result**, so there is no cache to go stale — once the request settles the field clears and the next resolution is a fresh call. A test asserts exactly that (*"a later resolution is a fresh call, not a cached one"*), because a single-flight that quietly became a cache would hide an org change forever. Non-vacuity was proven by removing the coalescing and watching the guard fail: `Expected: <1> Actual: <2>`.

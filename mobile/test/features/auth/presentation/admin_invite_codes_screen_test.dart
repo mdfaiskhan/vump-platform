@@ -212,8 +212,17 @@ class _FakeAuthRepository implements AuthRepository {
 
   final User? _user;
 
+  /// A-177: `AuthNotifier.build` resolves the first session from this stream
+  /// and no longer calls `restoreSession`, so an empty stream leaves `build`
+  /// awaiting forever and every test here times out rather than fails.
   @override
-  Stream<Session> get sessionChanges => const Stream<Session>.empty();
+  Stream<Session> get sessionChanges => Stream<Session>.fromIterable(<Session>[
+    const Session.unknown(),
+    if (_user == null)
+      const Session.unauthenticated()
+    else
+      Session.authenticated(_user),
+  ]);
 
   @override
   Future<Session> restoreSession() async => _user == null

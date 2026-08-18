@@ -24,9 +24,9 @@ Ordered by what a security review would want first, not by discovery.
 | 6 | **Every self-signup account lands in one shared organisation.** BR-20's tenant isolation therefore separates nobody among them. Acceptable only while ADR-036's "informal APK sharing among a trusted group" holds — **revisit before public distribution** | Tenant isolation, time-bounded | Migration `0009`, A-166 |
 | 7 | **`functions/` is not retired** and claim-writing stays in Cloud Functions. Deliberate: porting it moves the writer outside Google, which is the only thing that forces the credential ADR-036 defers | Deliberate, with a trigger | A-165, item 10 |
 | 8 | **The BR-08/11/21/22 behavioural proofs exist only as an uncommitted scratchpad script.** **Still open after ADR-049, and the reason has moved rather than gone:** the credential exists (`vump-dev-ci-db-prover`) and no CI job runs the proofs. Migration `0007` grants `DELETE` to nobody, so they cannot tear down. **This row said a read-only principal would close it; that was wrong — the proofs write** | Test coverage | 6.3.1 close-out, **A-172**, **A-173** |
-| 9 | **Aurora runs at `MinCapacity 0` and auto-pauses.** The first request after idle can exceed the Lambda's 15-second timeout while the resume ladder runs to ~30 seconds | Availability | A-156, ADR-043 |
+| 9 | **Aurora runs at `MinCapacity 0` and auto-pauses.** ~~The first request after idle *can* exceed the Lambda's 15-second timeout~~ — **CONFIRMED, and it did**: 15876ms and 15889ms against a 15000ms timeout on CPH2707, 2026-08-18. Until A-178 its consequence was not slowness but **an ended session**. Still open; reassess severity | Availability, **confirmed with consequence** | A-156, ADR-043, **A-178** |
 | 10 | **`GET /v1/users/me` and every route behind the authorizer add a Data API round-trip per request**, with `authorizerResultTtlInSeconds = 0`. Correctness was chosen over caching, unmeasured | Performance | ADR-048 |
-| 11 | **`POST /v1/auth/verify` fires twice per app launch.** `_toUser` runs on two paths — `_restoreSession` and the `sessionChanges` stream — and each performs the exchange. Harmless (idempotent, `ON CONFLICT DO NOTHING`) but doubled | Efficiency | 6.5.6 close-out |
+| 11 | **CLOSED by Mission 7.2 (A-177).** ~~`POST /v1/auth/verify` fires twice per app launch.~~ `AuthNotifier.build` no longer calls `restoreSession`; 4 of 4 cold starts on CPH2707 now perform exactly one exchange. **Two further findings came out of fixing it:** a transient 5xx used to sign the user out (A-178) and **sign-in had its own duplicate with a different cause** (A-180) — this row's "per app launch" wording never covered that | Efficiency, now closed | 6.5.6 close-out, **A-177**, **A-178**, **A-180** |
 | 12 | **`execute-api` hostnames are invisible to the AWS endpoint check** after A-168's narrowing. The three credential-material checks are unaffected and remain the disclosure guarantee | Narrowed guarantee, accepted | A-168 |
 | 13 | **iOS is registered, unwired and unverifiable.** Bundle IDs exist in all three Firebase projects and the plists are committed, but `project.pbxproj` still carries `com.example.mobile` and nothing selects a plist. No Mac, no Apple Developer account | Platform | item 2, ADR-047 |
 | 14 | **Staging and production have no Auth, no billing and no API Gateway.** Deliberate under ADR-014 until a release branch is cut | Deliberate | item 13, A-162 |
@@ -80,3 +80,17 @@ The knock-on, stated without rounding up:
 - **2 is untouched**, deliberately. It needs a DDL-capable principal.
 
 Two corrections to this file's own earlier text are recorded rather than silently applied: **A-172** (a read-only principal does not close gap 8) and **A-170** (the account held 67 resources, not ADR-043's 66; it now holds 79).
+
+
+---
+
+## What Mission 7.2 changed (2026-08-18)
+
+An auth hardening pass, not the fake-to-real swap it was originally scoped as — `FakeAuthRepository` does not exist in `lib/` and has not since Mission 6.5.
+
+- **11 closes** (A-177), device-proven.
+- **9 is confirmed rather than closed** (A-178). It was filed as a possibility and is now a reproduced observation with a user-facing consequence.
+- **Two new defects were found by fixing the first one**: A-178 (a 502 destroyed the session) and A-180 (sign-in duplicated the exchange for a different reason). Both fixed here.
+- **15 gains a cross-reference**: `features/auth/domain/` produces no `lcov` entry at all, which under A-046's rule is worse than 0% — a file no test imports does not appear as untested, it does not appear. Deferred to the coverage-gate work by decision, not oversight.
+
+One thing this pass did **not** produce is an ADR. Nothing in ADR-034, ADR-035 or ADR-048 was contradicted or amended; each was implemented incorrectly and now is not.

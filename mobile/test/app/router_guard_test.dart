@@ -309,15 +309,40 @@ class _FakeAuthRepository implements AuthRepository {
   _FakeAuthRepository({required this.restored, this.signInResult});
 
   final Session restored;
+
   final User? signInResult;
 
   int signUpCalls = 0;
 
-  final StreamController<Session> _sessions =
-      StreamController<Session>.broadcast();
+  late final StreamController<Session> _sessions = StreamController<Session>(
+    onListen: _seed,
+  );
+
+  /// Emitted on subscription, in the order the real repository emits them.
+  void _seed() {
+    _sessions.add(const Session.unknown());
+    if (restored is! SessionUnknown) {
+      _sessions.add(restored);
+    }
+  }
 
   void emit(Session session) => _sessions.add(session);
 
+  /// Mirrors the real repository: `Session.unknown()` first, then whatever the
+  /// platform reports, then any later emissions a test pushes with [emit].
+  ///
+  /// Seeded through `onListen` on a SINGLE-subscription controller rather than
+  /// delegated with `yield*`. Both look equivalent and are not: an `async*`
+  /// getter builds a new stream per access and forwards a broadcast
+  /// controller's events only while it sits in the delegation, so emissions a
+  /// test pushed after `build` resolved were silently dropped. One controller,
+  /// one listener, every event delivered.
+  ///
+  /// Seeding at all is what keeps this fake faithful after A-177:
+  /// `AuthNotifier.build` resolves the first session from THIS stream now — it
+  /// no longer calls `restoreSession` — so a stream that stayed silent until a
+  /// test pushed to it would leave `build` awaiting forever, modelling a
+  /// repository that does not exist.
   @override
   Stream<Session> get sessionChanges => _sessions.stream;
 

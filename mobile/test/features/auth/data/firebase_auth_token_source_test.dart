@@ -6,6 +6,8 @@ import 'package:mobile/core/logging/app_logger.dart';
 import 'package:mobile/features/auth/data/firebase_auth_token_source.dart';
 import 'package:mobile/features/auth/data/repositories/auth_repository_impl.dart';
 
+import 'fakes/fake_vump_api.dart';
+
 /// Covers the ADR-017 development path: Firebase startup failed, the failure
 /// was tolerated, and something now needs a token.
 ///
@@ -107,5 +109,6 @@ void main() {
 /// The logger exists for one diagnostic on a compensating delete; these tests
 /// never reach it, and a real sink would print during the run.
 AuthRepositoryImpl _repository() => AuthRepositoryImpl(
+  backend: FakeVumpApi(),
   logger: AppLogger(environment: AppEnvironment.production),
 );

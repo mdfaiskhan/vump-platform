@@ -11,6 +11,8 @@ import 'package:mobile/features/auth/data/repositories/auth_repository_impl.dart
 import 'package:mobile/features/auth/domain/entities/role.dart';
 import 'package:mobile/features/auth/domain/entities/user.dart' as domain;
 
+import 'fakes/fake_vump_api.dart';
+
 import 'fakes/google_sign_in_fakes.dart';
 
 /// The Google sign-in and sign-up paths of `AuthRepositoryImpl`.
@@ -26,6 +28,8 @@ import 'fakes/google_sign_in_fakes.dart';
 void main() {
   const Map<String, dynamic> goodClaims = <String, dynamic>{
     'role': 'collector',
+    // Retained so the claim shape stays realistic. It is no longer read:
+    // A-177 removed the fallback and the backend is authoritative (ADR-048).
     'org_id': 'org-1',
   };
 
@@ -42,6 +46,7 @@ void main() {
     _FakeAuth? auth,
   }) {
     return AuthRepositoryImpl(
+      backend: FakeVumpApi(orgId: 'org-1'),
       logger: AppLogger(environment: AppEnvironment.development, output: log),
       firebaseAuth: auth ?? _FakeAuth(_FakeUser(claims: claims)),
       googleSignIn: google ?? FakeGoogleSignIn(outcome: outcome),
