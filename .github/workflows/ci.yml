@@ -1151,12 +1151,16 @@ jobs:
       # it from inside this repository. This job is what stops that being a
       # one-line change nobody notices in review.
       - name: No pull_request_target in any workflow
+        # Matches the YAML KEY, not the bare string. The first version of this
+        # check grepped for the word and failed on its own explanatory comment
+        # three lines above — a check that cannot pass is worth no more than one
+        # that cannot fail. The anchor is "optional indent, the key, a colon".
         run: |
-          if grep -rn "pull_request_target" .github/workflows/; then
+          if grep -rnE "^[[:space:]]*pull_request_target[[:space:]]*:" .github/workflows/; then
             echo "::error::pull_request_target is forbidden (ADR-049). It runs fork code in the base-repo context, where the GitHub OIDC roles are assumable."
             exit 1
           fi
-          echo "ok  no pull_request_target in any workflow file"
+          echo "ok  no pull_request_target trigger in any workflow file"
 
   terraform:
     name: Terraform
@@ -1257,8 +1261,14 @@ jobs:
 
       - name: Build backend artifacts for the archive data source
         working-directory: backend
+        # `npm run typecheck` before `npm run build` is required, not tidy.
+        # esbuild cannot resolve @vump/shared until tsc --build has emitted its
+        # dist/, and the failure surfaces as "Could not resolve @vump/shared"
+        # from functions/auth-verify. This is the same ordering trap the Backend
+        # job hit in Mission 6.2.2, where a stale local dist/ hid it.
         run: |
           npm ci
+          npm run typecheck
           npm run build
 
       - name: Assume the plan-reader role
