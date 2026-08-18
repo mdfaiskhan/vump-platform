@@ -42,6 +42,7 @@ import {
   CreateMultipartUploadCommand,
   UploadPartCommand,
   CompleteMultipartUploadCommand,
+  ListPartsCommand,
 } from '@aws-sdk/client-s3';
 
 const BUCKET = process.env.CHUNK_BUCKET;
@@ -145,6 +146,112 @@ async function seed() {
 }
 
 /**
+ * Times `CompleteMultipartUpload` in isolation — Mission 7.3 Batch 2b.
+ *
+ * ## The one number this exists for
+ *
+ * Fork 1 option B puts MPU completion and the SHA-256 hash inside a single
+ * `PATCH /v1/chunks/{chunkId}/status` request, behind API Gateway's 29-second
+ * ceiling. F4 measured the hash at **7780ms** for a real chunk. It did not
+ * measure assembly, and Part 21 corrected an earlier claim that option B
+ * separated the two budgets — it does not, because one client request waits for
+ * both however many Lambdas are involved.
+ *
+ * So the remaining unknown is: how long does S3 take to assemble a 633 MB,
+ * 38-part object when `CompleteMultipartUpload` is called? That is what the
+ * `completeMs` figure below reports, and the design proceeds or stops on it.
+ *
+ * ## Parts are uploaded for real rather than copied
+ *
+ * `UploadPartCopy` from the existing fixture would be far quicker and is the
+ * obvious shortcut. It is not taken: the production path assembles parts that
+ * arrived as ordinary `UploadPart` writes, and a measurement of a differently
+ * constructed upload would be a plausible number for a slightly different
+ * question. `seed` already proves 633 MB in 38 parts fits inside the probe's
+ * 900-second timeout.
+ *
+ * ## It leaves an object behind, deliberately
+ *
+ * No role in this account holds `s3:DeleteObject` — the permissions boundary
+ * excludes it entirely, because ADR-013 gates deletion of raw footage behind
+ * legal-hold enforcement. So this writes to its own key and that object
+ * persists. The whole `_probe/` prefix needs clearing by hand when the probe is
+ * deleted, and this adds one more object to it rather than a new problem.
+ */
+async function timeComplete() {
+  const key = `${KEY}.complete-timing`;
+  const ms = (from, to) => Number(to - from) / 1_000_000;
+
+  const createStarted = process.hrtime.bigint();
+  const created = await s3.send(new CreateMultipartUploadCommand({ Bucket: BUCKET, Key: key }));
+  const createMs = ms(createStarted, process.hrtime.bigint());
+
+  const uploadStarted = process.hrtime.bigint();
+  const parts = [];
+  let written = 0;
+  for (let partNumber = 1; written < FIXTURE_BYTES; partNumber++) {
+    const size = Math.min(PART_BYTES, FIXTURE_BYTES - written);
+    const uploaded = await s3.send(
+      new UploadPartCommand({
+        Bucket: BUCKET,
+        Key: key,
+        UploadId: created.UploadId,
+        PartNumber: partNumber,
+        Body: randomBytes(size),
+      }),
+    );
+    parts.push({ ETag: uploaded.ETag, PartNumber: partNumber });
+    written += size;
+  }
+  const uploadMs = ms(uploadStarted, process.hrtime.bigint());
+
+  // ListParts, because Fork 1 option B has the server discover the parts rather
+  // than the client reporting them. Timed separately: it is a second call on
+  // the same critical path, and "small" is an assumption until it is a number.
+  const listStarted = process.hrtime.bigint();
+  const listed = await s3.send(
+    new ListPartsCommand({ Bucket: BUCKET, Key: key, UploadId: created.UploadId }),
+  );
+  const listMs = ms(listStarted, process.hrtime.bigint());
+
+  // **The measurement.** Everything above is setup.
+  const completeStarted = process.hrtime.bigint();
+  await s3.send(
+    new CompleteMultipartUploadCommand({
+      Bucket: BUCKET,
+      Key: key,
+      UploadId: created.UploadId,
+      MultipartUpload: {
+        Parts: (listed.Parts ?? [])
+          .map((p) => ({ ETag: p.ETag, PartNumber: p.PartNumber }))
+          .sort((a, b) => (a.PartNumber ?? 0) - (b.PartNumber ?? 0)),
+      },
+    }),
+  );
+  const completeMs = ms(completeStarted, process.hrtime.bigint());
+
+  // 29s is API Gateway's REST integration ceiling; 7780ms is F4's measured hash
+  // at this memory tier. What is left is the margin the design has to live in.
+  const HASH_MS = 7780;
+  const budgetMs = Math.round(completeMs + listMs + HASH_MS);
+
+  return {
+    memoryMb: Number(process.env.AWS_LAMBDA_FUNCTION_MEMORY_SIZE),
+    bytes: written,
+    parts: parts.length,
+    partsListedByServer: (listed.Parts ?? []).length,
+    listTruncated: listed.IsTruncated === true,
+    createMs: Math.round(createMs),
+    uploadMs: Math.round(uploadMs),
+    listMs: Math.round(listMs),
+    completeMs: Math.round(completeMs),
+    hashMsFromF4: HASH_MS,
+    syncPatchBudgetMs: budgetMs,
+    marginToApiGateway29sMs: 29_000 - budgetMs,
+  };
+}
+
+/**
  * Streams the fixture through SHA-256 and reports what it cost.
  *
  * `for await` over the SDK v3 body rather than `pipeline`, so the byte count is
@@ -231,12 +338,14 @@ export const handler = async (event) => {
     throw new Error('CHUNK_BUCKET is not set.');
   }
   const mode = event?.mode ?? 'measure';
-  if (mode !== 'seed' && mode !== 'measure') {
-    throw new Error(`Unknown mode "${mode}". Use "seed" or "measure".`);
+  if (mode !== 'seed' && mode !== 'measure' && mode !== 'time-complete') {
+    throw new Error(`Unknown mode "${mode}". Use "seed", "measure" or "time-complete".`);
   }
 
   try {
-    return mode === 'seed' ? await seed() : await measure();
+    if (mode === 'seed') return await seed();
+    if (mode === 'time-complete') return await timeComplete();
+    return await measure();
   } catch (thrown) {
     // Rethrown rather than returned, so a failure is still a FunctionError and
     // cannot be mistaken for a measurement. Only the *description* improves.
