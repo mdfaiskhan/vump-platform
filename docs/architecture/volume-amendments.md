@@ -6169,3 +6169,35 @@ What remains unproven is narrow and should not be rounded up: that a `ref`-form 
 Both trigger shapes are therefore exercised end-to-end against live AWS: `pull_request` (run 32123773224) and `ref` (run 32128742979), with a byte-identical `sub` and two different `job_workflow_ref` values, both permitted. The denial recorded above from `refs/heads/mission/7.1-…` remains the negative control.
 
 **One thing not to read off this run.** It reports 12 passed and **1 skipped** — `Commit convention` is gated on `pull_request` and does not run on a push. That is the same distinction the Mission 6 report insisted on: a skipped job is not a passed job. The full 13 ran on PR #11's final run, 32124775073.
+
+---
+
+### A-176 — `faisal-dev`'s first access key was exposed, and was killed before it was ever used
+
+| | |
+|---|---|
+| **Record** | ADR-049 D-2; `docs/development/secrets-management.md` §"If a secret is committed" |
+| **Event** | The first access key created for `faisal-dev`, `AKIA5Q3V3WYCHPS7LXBX`, was disclosed in an unrelated chat transcript shortly after creation |
+| **Response** | Deactivated and **deleted**, and a replacement generated. Both actions by the project owner, directly against AWS |
+| **Authority** | Project owner, Mission 7.1 Part 3 |
+| **Class** | Credential incident, contained |
+| **Status** | **Closed** |
+| **Date** | 2026-08-18, Mission 7.1 |
+
+**The response followed the order this project already wrote down.** `secrets-management.md` says *"Rotate first. Always"*, and ADR-016 says the same at more length: *"The first action is always to rotate the credential, not to rewrite history… A team that reverses that order spends its first hour on the part that does not stop the bleeding."* The key was killed first and the transcript dealt with afterwards, which is the correct order and worth recording as the first time the rule was actually exercised rather than merely stated.
+
+### What was verified, and how
+
+| Claim | Evidence |
+|---|---|
+| The exposed key is **deleted**, not merely deactivated | `aws iam list-access-keys --user-name faisal-dev` returns exactly one key, `AKIA5Q3V3WYCNHR6RNOF` (created 2026-08-18T10:13:08Z, Active). `AKIA5Q3V3WYCHPS7LXBX` does not appear in any state |
+| The exposed key was **never used** | `aws cloudtrail lookup-events --lookup-attributes AttributeKey=AccessKeyId,AttributeValue=AKIA5Q3V3WYCHPS7LXBX` returns **0 events** |
+| That zero is not a vacuous zero | The identical query against the replacement key returns **6 `AssumeRole` events** — the MFA verification calls. The query demonstrably detects usage when usage exists |
+
+**The blast radius was structurally small before any of that mattered, and this is the part worth carrying forward.** Under ADR-049's D-2 the key grants *nothing on its own*: `faisal-dev` holds `sts:AssumeRole` and no other permission, and both roles it may assume require `aws:MultiFactorAuthPresent`. A holder of the disclosed key, without the `2_dev_faisal` MFA device, could not read, write or describe anything — the same `AccessDenied` the negative half of the human-path proof produced deliberately.
+
+**A key disclosed under the pre-ADR-049 design would have been a different event.** The credential it replaces, `faisal-admin`'s, carries `AdministratorAccess` directly. This incident is the argument for D-2 arriving as an unplanned live test rather than as a paragraph in the Alternatives Considered.
+
+### The one caveat, stated rather than smoothed over
+
+**CloudTrail Event history is not a durable audit trail.** A-019 records that no trail is configured, so the 90-day Event history is all there is: not exportable, not retained beyond the window, and not the account-wide trail Volume 8 Chapter 8.4 §4 requires. The finding is sound here only because the key's entire life was roughly one hour on the day of the query, far inside the window. **The same investigation ninety-one days later would return zero events for a key that had been used every day**, and nothing would distinguish the two answers. A-019 is now a gap with a worked example attached.
