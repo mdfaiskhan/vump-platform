@@ -32,6 +32,7 @@ Ordered by what a security review would want first, not by discovery.
 | 14 | **Staging and production have no Auth, no billing and no API Gateway.** Deliberate under ADR-014 until a release branch is cut | Deliberate | item 13, A-162 |
 | 15 | **The backend has no coverage gate.** ADR-045 recorded it as "deliberately absent — revisit at 6.3"; 6.3 passed without revisiting | Overdue commitment | ADR-045 |
 | 16 | **The authorizer exemption is asserted, not enforced.** The Terraform `check` only evaluates during `plan`/`apply`, CI runs no `plan` (no credentials), and a failed `check` is a **warning** rather than an error even then. The guarantee is held by code review | Enforcement | ADR-048, 6.6 |
+| 17 | **No scoped principal exists for either a human or CI.** Gap 1 wants a per-developer IAM user (Volume 7 Ch 7.8 §1); gaps 8 and 16 want a read-only CI principal. Both reduce to the same question — **a long-lived key, or federated short-lived access** — and it is A-165's question asked of two new seams. Queued for its own trace/decide | Credential mechanism | A-165, item 8, gaps 1/8/16 |
 
 ---
 
@@ -52,3 +53,14 @@ The distinction that matters to 6.7 is **why** each is still open:
 ## What this register deliberately does not do
 
 It does not rank by severity. Ranking is 6.7's job and it has context this file does not — what the product is exposed to, who has access, and what ships first. Ordering here is by kind, and the sequence above is a suggestion about reading order, not a verdict.
+
+## Gap 17 absorbs gaps 1, 8 and 16's shared question — and it is A-165's question again
+
+Mission 6.7 was authorised to build both a scoped human principal and a read-only CI principal, and built neither, because each runs into the same decision from a different side:
+
+- **A human principal** needs an access key. `aws_iam_access_key` writes the secret into **Terraform state** — precisely what ADR-043 avoids for the database via `manage_master_user_password`, and what ADR-016 forbids generally. So Terraform can own the user and its policy, and the credential has to be issued out of band.
+- **A CI principal** needs credentials GitHub Actions can use. That is either **static access keys held as repository secrets** — a long-lived credential of the class ADR-036 calls *"a silent, total authorization bypass"* if leaked — or **OIDC federation**, where GitHub exchanges a short-lived token for an AWS role and no secret is stored at all.
+
+**A-165 answered exactly this shape for the AWS↔Firebase seam**, four days ago, by declining to create a long-lived key and recording Workload Identity Federation as the answer if the seam ever has to be crossed. Deciding the CI seam inside a cleanup pass would settle the same question a second time, quietly, as a side effect of a chore — which is the failure A-164 records for Volume 7 Chapter 7.7 §3.
+
+**Recommendation, not a decision: OIDC for CI, and Terraform-owned user with an out-of-band key for the human.** Both belong in one trace/decide with one ADR, because the answer to "long-lived or federated" should be the same for both seams or the difference should be argued.

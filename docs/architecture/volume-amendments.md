@@ -5951,3 +5951,55 @@ So a credential committed anywhere still fails the build, exactly as before. Wha
 ### The residue
 
 `execute-api` hostnames are now invisible to this job. If someone hardcodes a *different* environment's API Gateway URL into `lib/`, nothing here objects — `NetworkConfig` is trusted to be the only place base URLs live, and that trust is not machine-checked. It is the same class of gap A-153 and A-161 record: a rule stated in one place and executed in another, or not at all. A custom domain would remove the ambiguity entirely by moving the backend off `amazonaws.com`, and is deferred for want of a registered domain.
+
+---
+
+### A-169 — A password cannot reach CloudWatch on this path, and that was tested rather than assumed
+
+| | |
+|---|---|
+| **Record** | ADR-016, `backend/packages/migrate/src/bootstrap.ts` |
+| **Claimed** | Mission 6.7's review: a failed `ALTER ROLE … PASSWORD` writes its plaintext to CloudWatch, because Aurora exports `postgresql` logs and `log_min_error_statement = error`. |
+| **Found** | It does not. Statements issued through the RDS Data API do not surface their text into the Postgres error log. |
+| **Class** | Reported finding, retracted on testing |
+| **Status** | **Closed — no change made** |
+| **Date** | 2026-08-18, Mission 6.7 |
+
+### What was claimed, and why it was plausible
+
+`bootstrap.ts` interpolates the generated password into a SQL literal, because a Postgres utility statement takes no bind parameters:
+
+```sql
+ALTER ROLE vump_auth_verify WITH LOGIN PASSWORD '<48 bytes base64url>'
+```
+
+Two facts were read from live configuration and are true: the cluster exports `postgresql` logs to CloudWatch (`EnabledCloudwatchLogsExports: ["postgresql"]`), and `log_min_error_statement` is at its default `error`, which in an ordinary Postgres session logs the **text** of any statement that errors. From those two, the conclusion followed that a failed bootstrap would write a plaintext password into a log group.
+
+**The conclusion was never run before it was reported.**
+
+### What testing found
+
+A control and a protected case, each with a unique marker, then every event in the log group for the following hour pulled and grepped locally — rather than through a CloudWatch filter pattern, whose tokenisation had already produced one misleading result:
+
+| Statement | Protection | In the log group |
+|---|---|---|
+| `ALTER ROLE no_such_role_ctl WITH LOGIN PASSWORD '<marker>'` | **none** | **absent** |
+| `ALTER ROLE no_such_role_fix WITH LOGIN PASSWORD '<marker>'` | `SET LOCAL log_min_error_statement = 'panic'` | absent |
+| `SELECT * FROM no_such_table_<marker>` | none | **absent** |
+| `ALTER ROLE` or `PASSWORD` anywhere in 25 events | — | **absent** |
+
+**The control is the result that matters.** With no protection at all, the failing statement's text does not appear — and neither does an ordinary failing `SELECT`. So statement text is not reaching the error log on this path at all, and the mechanism the finding depended on is not in play. The Data API is the only path `bootstrap.ts` uses.
+
+No change was made. A `SET LOCAL` around the bootstrap would have been a real change carrying a false justification, which is worse than leaving it alone.
+
+### The reasoning gap is real even though the channel is closed
+
+**ADR-016 enumerates where a password may exist**: *"The value exists in that process, in PostgreSQL and in Secrets Manager, and nowhere else."* The design work behind it considered source control and Terraform state, and stopped. **Logs were never enumerated as a channel to check.**
+
+That gap survives this retraction. This particular path is closed, by measurement — but it was closed by a property of the Data API that nobody chose, recorded nowhere, and could change. A future caller that reaches PostgreSQL some other way would not inherit it.
+
+So the useful residue is not a fix but a question ADR-016 should have asked and did not: **where else can a secret be written, besides the places we decided to write it?**
+
+### Recorded because retractions are evidence too
+
+The finding was reported alongside tested ones, in the same voice, and a fix was authorised for it. `docs/development/security-finding-rubric.md` exists because of this: it requires the evidence class — tested, inferred, or reported — to be stated before the severity, so an inference cannot be read as an observation.
