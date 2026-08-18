@@ -114,7 +114,19 @@ aws iam create-access-key --user-name faisal-dev
 | CI runs `terraform plan` | Gap 16 | ✅ Run 32123773224, 13 of 13 jobs green |
 | Check-block failure fails CI | Gap 16's second half | ✅ Step present and passing |
 | `pull_request_target` guard | New | ✅ Own job, passing |
-| **`faisal-dev` access key** | Out of band | ❌ **Not yet created — the user runs this** |
-| **`faisal-admin` key rotated** | Demote to break-glass | ❌ **Not yet. Deliberate: not before the new path is proven end-to-end** |
-| **`db-prover` exercised** | Gap 8 | ❌ No CI job exists to exercise it |
+| `faisal-dev` access key | Out of band | ✅ Created by the project owner, never through Terraform and never through this assistant. One key live. A first key was disclosed and killed before use — A-176 |
+| `faisal-admin` key demoted | Break-glass only | ✅ **Deactivated 2026-08-18, not deleted.** Confirmed dead: `sts:GetCallerIdentity` with it returns `InvalidClientTokenId`. Console access is unaffected — it uses password + `1_work_laptop`, a separate credential path |
+| **`db-prover` exercised** | Gap 8 | ❌ **Still open.** No CI job exists to exercise it — A-173 |
 | `ref`-shape assumption | Both trigger shapes | ✅ Both proven. `pull_request` run 32123773224; `ref` run 32128742979 on `develop` after merge — A-175 |
+
+### What changed the day this was applied
+
+**MFA enforcement is proven on both sides**, by the project owner directly against AWS rather than through the assistant: `aws sts get-caller-identity --profile vump-dev-operator` with `mfa_serial` `2_dev_faisal` returned `arn:aws:sts::929570731524:assumed-role/vump-dev-human-operator/botocore-session-1787049243`; the same assume-role with no MFA context returned `AccessDenied`, naming `sts:AssumeRole` on `vump-dev-human-operator`. The positive and negative halves are the whole of the D-2 claim.
+
+**The operator role's scoping was confirmed by accident, which is the best kind.** After `faisal-admin`'s key was deactivated, an attempt to read that user's access keys through the operator profile failed:
+
+> `User: arn:aws:sts::929570731524:assumed-role/vump-dev-human-operator/… is not authorized to perform: iam:ListAccessKeys on resource: user faisal-admin`
+
+The operator's `ReadIam` statement scopes to `vump-dev-*` roles and the `faisal-dev` user, and deliberately not to `faisal-admin`. So the day-to-day identity cannot inspect, and therefore cannot begin to tamper with, the break-glass one.
+
+**The practical consequence is that administrative AWS reads now require the console.** Nothing on a terminal holds administrator any more. That is the intent of Gap 1 and it is also friction: `terraform apply` should now run through `vump-dev-terraform-apply`, and identity-shaped IAM changes require a console session as `faisal-admin`.
