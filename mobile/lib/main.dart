@@ -457,9 +457,14 @@ Future<void> _initializeFirebase(
 /// Volume 6 Chapter 6.7 §3 requires the session to be resolved *"only at app
 /// cold-start, to attempt silent re-authentication before falling back to the
 /// Login screen"*. Awaiting `authNotifierProvider` here is what puts that on
-/// the startup path: `AuthNotifier.build` calls `restoreSession`, and until
-/// this line existed nothing read the provider, so the restore never ran until
-/// something happened to watch it.
+/// the startup path: `AuthNotifier.build` resolves the first session from its
+/// `sessionChanges` subscription, and until this line existed nothing read the
+/// provider, so that never ran until something happened to watch it.
+///
+/// Mission 7.2 changed what `build` awaits, not whether this line is needed.
+/// It used to call `restoreSession()` *as well as* subscribing, and both
+/// performed `POST /v1/auth/verify` — gap 11, A-177. The await here is
+/// unaffected: it still blocks the first frame until the session is known.
 ///
 /// ADR-008 predicted the shape of this: *"the session cannot be known
 /// synchronously before `runApp`, so the router needs a loading state while
