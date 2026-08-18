@@ -1271,6 +1271,25 @@ jobs:
           npm run typecheck
           npm run build
 
+      # TEMPORARY (mission 7.1 verification). Prints the OIDC token's CLAIMS so
+      # the trust conditions are matched against measured values rather than
+      # assumed ones. The token itself is never printed. Removed before merge.
+      - name: Inspect OIDC claims
+        run: |
+          python3 - <<'PY'
+          import base64, json, os, urllib.request
+          req = urllib.request.Request(
+              os.environ["ACTIONS_ID_TOKEN_REQUEST_URL"] + "&audience=sts.amazonaws.com",
+              headers={"Authorization": "Bearer " + os.environ["ACTIONS_ID_TOKEN_REQUEST_TOKEN"]},
+          )
+          tok = json.load(urllib.request.urlopen(req))["value"]
+          payload = tok.split(".")[1]
+          payload += "=" * (-len(payload) % 4)
+          claims = json.loads(base64.urlsafe_b64decode(payload))
+          for k in ("sub", "aud", "repository", "job_workflow_ref", "event_name", "ref", "environment"):
+              print(f"{k} = {claims.get(k)!r}")
+          PY
+
       - name: Assume the plan-reader role
         uses: aws-actions/configure-aws-credentials@v4
         with:
