@@ -6042,6 +6042,36 @@ The numbers are the owner's and the repository's GitHub database IDs, confirmed 
 
 The form is a security improvement rather than a quirk. Renaming the account or the repository does not free the old name for someone else to register and inherit this trust. The corollary is recorded in ADR-049: if either is ever deleted and recreated, federation breaks, and breaking is the correct outcome.
 
+
+### Where the format comes from — added 2026-08-18, Mission 7.1 Part 2d
+
+The observation above was challenged on review, correctly: it contradicts the subject format in GitHub's and AWS's published examples, and an unexplained observation is a weak basis for a trust policy. The mechanism is now identified and is not a quirk of this account.
+
+**GitHub changed the default.** Immutable subject claims embed the owner's and the repository's numeric IDs in the `repo:` segment, in the form `repo:OWNER@OWNER-ID/REPO@REPO-ID:…`. They are the default for **every repository created after 2026-07-15**, and pre-existing repositories are unaffected unless they opt in via `use_immutable_subject`. `mdfaiskhan/vump-platform` was created **2026-08-07**, three weeks after the cutoff, so it received the new default and never had the old one.
+
+GitHub's own API reports the effective prefix for this repository:
+
+```
+GET /repos/mdfaiskhan/vump-platform/actions/oidc/customization/sub
+{
+  "use_default": true,
+  "use_immutable_subject": false,
+  "sub_claim_prefix": "repo:mdfaiskhan@76160659/vump-platform@1326922888"
+}
+```
+
+**`use_default: true` is the load-bearing field.** Nothing in this account customised the subject; this is the platform default, and the `sub_claim_prefix` field is GitHub stating what it will mint. Note that `use_immutable_subject: false` reads as a contradiction and is not one — that flag is the opt-in switch for repositories created *before* the cutoff, and it stays `false` on a repository that gets the format by default. Reading it alone would give exactly the wrong answer.
+
+**Three independent lines of evidence, recorded because one was not enough:**
+
+1. **The token itself.** Run 32123773224 printed `sub = 'repo:mdfaiskhan@76160659/vump-platform@1326922888:environment:ci-plan'`, 69 bytes, SHA-256 `ddb6af00…`, byte-identical to the live trust policy's `StringEquals` value.
+2. **A controlled experiment.** The trust policy was first written with the documented `repo:OWNER/REPO:…` form and the assumption was **denied** (run 32122955317). Commit `790cb75` changed the subject string and nothing else, and the next run **succeeded**. Had the documented form been correct, that change would have broken federation rather than fixed it.
+3. **First-party configuration**, quoted above, plus the creation date against the published cutoff.
+
+**The policy was briefly wrong, and it failed closed.** This was not a comment-only error. Commit `11d73b9` applied the documented format, the run was refused, and `790cb75` corrected it — all before merge, and the refusal was visible rather than silent. What lagged longest was the *comment* in `ci.yml`, which still described the documented form after the policy had been corrected; it was fixed last. The ordering is worth recording: the executable artefact was right before the prose was, which is the safer of the two ways to be inconsistent.
+
+Sources: GitHub Changelog, *Immutable subject claims for GitHub Actions OIDC tokens* (2026-04-23); GitHub Docs, *OpenID Connect reference*.
+
 ---
 
 ### A-172 — Gap 8 does not close with a read-only CI principal; the proofs write
