@@ -6299,9 +6299,29 @@ Proven in both directions, because a fix that never signs anyone out would be no
 
 Item 9 reads *"the first request after idle **can** exceed the Lambda's 15-second timeout while the resume ladder runs to ~30 seconds"* — a possibility, filed under availability.
 
-It happened, twice, in one launch: **15876ms and 15889ms against a 15000ms timeout**, because Aurora was resuming from `MinCapacity 0`. And until this amendment its consequence was not slowness but **an ended session**.
+It happened, ~~twice~~ **three times** (see the correction below), in one launch: **15876ms and 15889ms against a 15000ms timeout**, because Aurora was resuming from `MinCapacity 0`. And until this amendment its consequence was not slowness but **an ended session**.
 
 Fixing the resume is out of this sub-mission's scope. What changes here is the record: gap 9 is **confirmed, with a reproduced user-facing consequence**, not a risk awaiting evidence. Its severity is 7.x's to reassess.
+
+### Correction — a third observation existed and was not written down
+
+*(Added 2026-08-18, Mission 7.3 Part 4, on the project owner's report.)*
+
+A third occurrence was observed during Mission 7.2's F5 self-heal verification and **never entered any record**:
+
+| Time | Duration | Context |
+|---|---|---|
+| 20:07:47.818 | 15876ms | Pre-fix cold start, 502 |
+| 20:07:47.819 | 15889ms | Pre-fix cold start, 502 — concurrent with the above |
+| **21:02:37** | **15428ms** | **F5 self-heal. Observed at 7.2, recorded nowhere until now** |
+
+**It changes no conclusion and that is exactly why it went missing.** 15428ms is *below* both figures already recorded, so the worst case stays 15889ms, and Mission 7.3's timeout derivation — which is driven by AWS's own documented resume figures rather than by ours — is unaffected either way. A number that moves nothing is the easiest kind to not bother writing down.
+
+**What it is evidence of is not what the other two are evidence of.** The first two were pre-fix and ended the session; this one is post-fix and *did not* — the app self-healed, which is this amendment's own fix working on an occurrence nobody logged. So the record was missing a data point for gap 9 **and** a demonstration of A-178.
+
+**Three occurrences, not two, also changes how the frequency reads.** Two in one launch one millisecond apart is a single event observed twice. A third, 55 minutes later in a separate launch, makes it recurrent rather than a one-off — which is the shape gap 9's severity reassessment turns on.
+
+Filed as a correction rather than an edit to the paragraph above, per this register's rule that history is appended to. The strikethrough marks where the count changed; the original figures are untouched.
 
 ---
 
@@ -6359,3 +6379,175 @@ The returned `User` is genuinely unused — `AuthNotifier._attempt` takes a `Fut
 So the exchange is **coalesced** instead: overlapping resolutions share one in-flight request, the same single-flight `AuthInterceptor._refreshInFlight` already uses for concurrent 401s. Every semantic is preserved and only the duplicate request is removed.
 
 **It shares the in-flight future and never a completed result**, so there is no cache to go stale — once the request settles the field clears and the next resolution is a fresh call. A test asserts exactly that (*"a later resolution is a fresh call, not a cached one"*), because a single-flight that quietly became a cache would hide an org change forever. Non-vacuity was proven by removing the coalescing and watching the guard fail: `Expected: <1> Actual: <2>`.
+
+---
+
+### A-181 — A re-assignment is a resurrection, because the composite primary key leaves no other option
+
+| | |
+|---|---|
+| **Record** | `mobile/lib/features/projects_tasks/domain/repositories/project_task_admin_repository.dart`, `unassignCollector`'s doc comment; migration `0003_projects_tasks.sql` |
+| **Says** | *"a later re-assignment is a new row rather than a resurrection, and neither call needs to know which"* |
+| **Should say** | A second row is impossible. `task_assignments` is `PRIMARY KEY (task_id, user_id)`, so a re-assignment can only be an `UPDATE` that clears `removed_at` |
+| **Authority** | Observation — the schema, read against the comment |
+| **Class** | Documentation correction. **Backend-visible only** |
+| **Status** | **Open** — the comment stands until a mission is editing that file for another reason |
+| **Date** | 2026-08-18, Mission 7.3 Part 1, recorded Part 4 |
+
+Found while tracing `POST /v1/tasks/{taskId}/assignments` for Mission 7.3, not by reading the mobile code for its own sake.
+
+The comment's premise is Chapter 4.4 §4's soft removal, and that half is right: FR-ADM-04 keeps the row *"for audit rather than hard-deleted"*, `removed_at` exists, and `0007` grants `UPDATE` on `task_assignments` for exactly that. The inference from it is wrong. Migration `0003` closes with:
+
+```sql
+PRIMARY KEY (task_id, user_id)
+```
+
+One row per (task, collector) pair, forever. Assigning a Collector who was previously removed cannot insert a second row — it collides — so the only implementation available to the handler is
+
+```sql
+INSERT INTO task_assignments (task_id, user_id, assigned_by)
+VALUES (...)
+ON CONFLICT (task_id, user_id) DO UPDATE
+   SET removed_at = NULL, assigned_by = EXCLUDED.assigned_by, assigned_at = now()
+```
+
+which is a resurrection in the precise sense the comment rules out.
+
+**Nothing on the device is wrong, which is why this is filed as backend-visible only.** The comment's *conclusion* — that `assignCollector` and `unassignCollector` are both idempotent and *"neither call needs to know which"* — holds exactly as written, and is what A-116 and Chapter 2.7's A-06 depend on. The client cannot observe the difference between a new row and a revived one, because Chapter 4.6 §3 has no route that reads an assignment back (A-117, open item 89). Only the handler can see it, and the handler is the thing being written.
+
+**The audit consequence is the part worth having written down.** A resurrection *overwrites* `assigned_by` and `assigned_at`, so the record of who first assigned this Collector and when is gone the moment they are re-assigned. FR-ADM-04's *"kept for audit"* survives for the removal and not for the assignment history. Whether that matters is a product question about what the audit trail is for; `audit_log` is the obvious place to answer it, since `0007` already grants `tasks` an `INSERT` there and Chapter 4.2 §2 scopes it to *"Admin actions on Projects/Tasks/Assignments"* — this being one.
+
+**Not fixed in place.** The file is `mobile/lib/`, Mission 7.3 is backend-only by its own scope, and a one-line doc edit is not worth crossing that boundary on its own. Recorded here so the next mission touching that file corrects the comment rather than propagating it, and so the handler's `ON CONFLICT` is read as forced by the schema rather than as a liberty taken.
+
+---
+
+### A-182 — `Caller`'s optional fields described a state ADR-048 had already made unreachable
+
+| | |
+|---|---|
+| **Record** | `backend/packages/shared/src/handler.ts`'s `Caller` interface |
+| **Said** | `userId`, `orgId` and `role` are `string \| undefined` |
+| **Says now** | All three are `string` |
+| **Authority** | ADR-048 — the authorizer resolves the row, and `callerFromContext` throws when any is missing |
+| **Class** | Type correction |
+| **Status** | **Closed** |
+| **Date** | 2026-08-19, Mission 7.3 Batch 1 |
+
+The optionality is a fossil of Mission 6.2, when `resolveCaller` was a stub that genuinely could not produce those values. ADR-048 replaced the stub and made `callerFromContext` **fail closed** — *"a detached authorizer must not silently become an open endpoint"* — so a `Caller` with an absent field can no longer reach a handler at all.
+
+**A type that lies in the safe direction is not free.** ADR-045 adopts `strictTypeChecked`, which forbids `no-non-null-assertion`, so each of the fourteen authorized routes would have had to re-narrow three fields the wrapper already guarantees. Seven of those routes exist as of this batch; the other seven are coming. Every one of those guards would be dead code asserting something proven one frame up, and **a reader cannot tell a ceremonial guard from a real one** — which is how a genuine check eventually gets deleted as noise.
+
+Nothing outside `handler.ts` consumed the optionality, so the change was confined to the type and its own tests.
+
+---
+
+### A-183 — Cursor pagination had a validating half and no producing half, and choosing a sort order fell out of fixing it
+
+| | |
+|---|---|
+| **Volume** | 4, Ch. 4.6 §1 — *"Pagination: cursor-based (`?cursor=…&limit=…`) on every list endpoint"* |
+| **Was** | `parsePageRequest` validated an incoming cursor; `EnvelopeMeta.nextCursor` was in the envelope; `REQUEST_INVALID_CURSOR` was a published code. **Nothing produced or decoded a cursor** |
+| **Is** | `cursor.ts` — opaque base64url keyset on `(created_at, id)` |
+| **Class** | Unbuilt half of a shipped contract |
+| **Status** | **Closed** for the two list routes in Batch 1 |
+| **Date** | 2026-08-19, Mission 7.3 Batch 1 |
+
+Three missions shipped the reading half of this contract without the writing half, and nothing detected it because every list endpoint was a `NOT_IMPLEMENTED` stub — the code with no producer had no consumer either.
+
+**Keyset rather than `OFFSET`, and the reason is correctness before performance.** An offset re-reads and discards every row it skips, and a row inserted between two requests shifts every later page by one, so the reader silently sees a duplicate or misses a row. ADR-044's 1 MiB response ceiling makes pagination mandatory here rather than optional, so the pages have to be trustworthy as well as cheap.
+
+### The sort order is a decision this forced, and no chapter makes it
+
+A cursor needs a **total** order or pages overlap. No volume specifies one, and the mobile `ProjectTaskRepository` says so outright: *"Returns them in the order the backend supplied. No chapter specifies a sort, so none is imposed."*
+
+`created_at DESC` is not a total order — two rows created in one transaction share a timestamp — so the key is `(created_at DESC, id DESC)`, with `id` breaking the tie. Recorded here rather than as its own entry because it is not an independent finding: building a keyset cursor is what forced it.
+
+**The cursor is opaque so this stays changeable.** Callers are told nothing about the contents, which means the sort key can change later without it being the breaking change Ch. 4.6 §1 would send to `/v2`.
+
+---
+
+### A-184 — The mobile client cannot read past the first page, and will not notice
+
+| | |
+|---|---|
+| **Record** | `mobile/lib/features/projects_tasks/domain/repositories/project_task_repository.dart` |
+| **Says** | `Future<List<Project>> fetchProjects()` and `Future<List<Task>> fetchTasks(String projectId)` |
+| **Problem** | Neither takes a cursor, returns one, or reads `meta` — so the client sees **page one and stops** |
+| **Class** | Unexercised mechanism — the contract is now one-sided |
+| **Status** | **Open.** Owed to Mission 7.4 |
+| **Date** | 2026-08-19, Mission 7.3 Batch 1 |
+
+With A-183 built, `GET /v1/projects` and `GET /v1/projects/{id}/tasks` return at most `DEFAULT_LIMIT` — 50 — rows and a `meta.nextCursor` saying there are more. **The client discards `meta` entirely**, because `VumpApi` returns `data` and nothing else to its callers, which `envelope.ts` records as a deliberate choice made when no cursor existed.
+
+So an org with 51 Projects renders 50, with no error, no empty state and nothing on either side reporting a truncation. `pagination.ts` predicted exactly this in Mission 6.2 — *"The client does not consume cursors yet… so this side defines the contract and the client inherits it"* — and inheriting it is the part that has not happened.
+
+**Not fixable from the backend.** Widening the page size only moves the number at which it silently truncates. It needs the repository signatures to carry a cursor, which is `mobile/lib` and out of this sub-mission's scope by its own terms.
+
+---
+
+### A-185 — Archived Projects are excluded by default, and no chapter said either way
+
+| | |
+|---|---|
+| **Volume** | 4, Ch. 4.2 §1 (soft-delete) and Ch. 4.6 §3's `GET /v1/projects` row |
+| **Says** | Nothing about whether an archived Project appears in either role's list |
+| **Does now** | `WHERE p.archived_at IS NULL`, in both the Admin and Collector branches |
+| **Class** | Stated default filling a specification silence |
+| **Status** | **Open as a product question**, closed as an implementation default |
+| **Date** | 2026-08-19, Mission 7.3 Batch 1 |
+
+Ch. 4.2 §1 makes soft-delete a timestamp deliberately, *"so that archived data stays queryable"* — which settles that the row survives and settles nothing about who sees it. The mobile `Project` entity carries `archivedAt` and is explicit that it *"records the fact and decides nothing about it"*.
+
+Excluding matches what archiving is for, and it is the reversible direction: the timestamp is still on every row, so a later `?include_archived=` widens this **without** the `/v2` bump Ch. 4.6 §1 requires for a breaking change. Defaulting the other way and later narrowing would be the breaking one.
+
+**There is no such parameter today**, and FR-ADM-01 defines no archive route either — `archived_at` is written by nothing, so the filter currently excludes an empty set. That is worth knowing before anyone reads the clause as tested.
+
+---
+
+### A-186 — A resource outside the caller's org is reported absent, not forbidden
+
+| | |
+|---|---|
+| **Volume** | 4, Ch. 4.8 §3 — *"an Admin can never read or write another org's data, regardless of guessed IDs"* |
+| **Says** | That the access is refused. Not with which status |
+| **Does now** | `404 RESOURCE_NOT_FOUND`, uniformly, for cross-org projects, tasks and collector ids |
+| **Class** | Security-shaped decision, applied across every scoped route |
+| **Status** | **Closed** |
+| **Date** | 2026-08-19, Mission 7.3 Batch 1 |
+
+`403` and `404` both refuse. They leak different amounts: **403 confirms the id exists**, which is precisely what a guessed id is asking. Ch. 4.8 §3's *"regardless of guessed IDs"* is about guessing, so answering the guess would satisfy the letter of the rule and defeat its purpose.
+
+The sharpest case is `POST /v1/tasks/{taskId}/assignments`. Its assignee check has three failure modes — no such user, wrong role, wrong org — and **two of the three answer 404**. A wrong role is a 400, because the caller already knows that user exists inside their own org, so nothing is disclosed by saying why.
+
+The cost is honest and worth stating: an Admin who fat-fingers a real id inside their own org gets the same 404 as one probing another tenant, and the log is the only place the difference is visible.
+
+---
+
+### A-187 — Batch 1's grants were proved against live Aurora, including two negative probes
+
+| | |
+|---|---|
+| **Record** | Migration `0010`; gap register items 8 and 15; A-173 |
+| **Class** | Verification, positive and negative |
+| **Status** | **Closed for Batch 1's seven routes.** Gap 8 itself is untouched |
+| **Date** | 2026-08-19, Mission 7.3 Batch 1 |
+
+The mocked suite — 128 tests, two defects reinstated and caught — proves the SQL, the scope branch, the validation and the envelope, and is **structurally incapable of seeing a missing GRANT**: a scripted client returns what the test says regardless of what PostgreSQL would do. Migration `0010` exists because of exactly that blind spot, so the batch was also run against the real cluster as `vump-dev-operator`, authenticating as each function's own role.
+
+| # | Probe | Role | Result |
+|---|---|---|---|
+| 1 | BR-19's three-table join | `vump_projects` | Succeeded, `[]` |
+| 2 | `SELECT id, org_id, role FROM users` | `vump_tasks` | Succeeded, real row |
+| 3 | `projects` org check | `vump_tasks` | Succeeded, `[]` |
+| 4 | `INSERT INTO tasks` | `vump_projects` | **Refused — 42501** |
+| 5 | `SELECT *` on `users` | `vump_tasks` | **Refused — 42501** |
+
+Probe 1 is the one A-119 said was *"real and untestable until Mission 7"*: an empty result with **no permission error** is the proof, because the failure being ruled out is `42501`, not an empty set.
+
+Probe 5 is the one worth keeping. F6's `users` grant is column-level, and until this ran, *"column-level"* was a claim in a migration comment. A refused `SELECT *` alongside a successful three-column read is the difference between a documented restriction and an enforced one — the same distinction `0008` had to learn the hard way when `ALTER DEFAULT PRIVILEGES` recorded nothing and PUBLIC kept `EXECUTE` on `complete_chunk()`.
+
+### Negative permission probes need no teardown, which sidesteps A-173
+
+A-173 blocks gap 8 because the BR-08/11/21/22 proofs seed rows and **no role can delete them**. Probes 4 and 5 assert that an operation is *refused*, so nothing is written and there is nothing to clean up — and probes 1–3 are reads.
+
+**This does not close gap 8**, whose proofs are behavioural and do write. It does mean a useful class of check — every "role X cannot do Y" assertion in `0007` and `0010` — is available in CI today, ahead of whatever resolves the teardown question.
