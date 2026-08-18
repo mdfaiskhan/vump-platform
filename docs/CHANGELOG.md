@@ -179,6 +179,24 @@ Mission 4.8's security review found it, by reading `git log` against this file r
 
 ### Security
 
+- **2026-08-18** — **Every route but one now authenticates at the edge, not in the handler.** Chapter 4.8 §2 requires the middleware chain to attach `user`, `role` and `org_id` before any endpoint runs, and Chapter 8.4 §1 gives the `users` grant to `auth-verify` alone — so six functions were required to attach an org they were forbidden to read. ADR-048 resolves it with an API Gateway REQUEST authorizer served by `auth-verify` itself: one function reads `users`, fourteen routes receive the result in their request context, and no function gains a grant.
+
+  **A failed lookup is an explicit `Deny`**, so API Gateway refuses before the target function is invoked; a handler that finds no authorizer context fails rather than falling back, so a detached authorizer cannot silently become an open endpoint. `authorizerResultTtlInSeconds = 0` — caching a policy caches an authorization decision, and a removed user would keep working for the window.
+
+  **`POST /v1/auth/verify` is the one exemption**, and it is a security property rather than a convenience: the authorizer refuses a caller with no `users` row, and that route is what creates the row. Verified against live AWS — 15 routes, 14 `CUSTOM`, one `NONE`, attached per method. The exemption is asserted by a Terraform `check` that **CI does not run** (ADR-048 records the correction; gap 16). Mission 6.5.
+
+- **2026-08-18** — **The app takes `org_id` from the backend instead of from the token.** ADR-048 retires A-159's design, in which the `org_id` custom claim was to be authoritative for every function. Chapter 4.7 §2 says the opposite — the `users` table is *"the authoritative source if the claim and the table ever disagree"* — and a claim written once goes stale the moment an account moves organisation.
+
+  After Firebase sign-in the app exchanges its ID token at `POST /v1/auth/verify` and reads `orgId` from the response; `role` still comes from the claim, which Chapter 4.7 §2 specifies. Proven on device rather than asserted: the response carried `orgId: 00000000-0000-4000-8000-000000000001` while every account's claim reads `"vump-default"`, so the value in the built `User` does not exist in the token and could only have come from the backend.
+
+  **This also removed the only reason to write Firebase claims from AWS**, which is the credential question ADR-036 defers — A-165. Mission 6.5.
+
+- **2026-08-18** — **Development, staging and production no longer share one Firebase project.** Until Mission 6.4 a single project served all three, so development auth users and production auth users were the same records and a dev build could reach production data. Volume 7 Chapter 7.7 §1 requires three, *"a bug in a dev build must never be able to send a real push notification to a production Collector's device"*.
+
+  `vump-platform-f86af` (development), `vump-staging` and `vump-prod` are now separate projects, each with its own Firestore in `asia-south1` and delete protection enabled, selected by the build flavor (ADR-047). Firestore security rules are byte-identical across all three and released to each; they contain no project ID or environment literal, so there is nothing per-environment to get wrong.
+
+  **The separation is the boundary Firebase actually enforces** — a token issued by one project verifies in no other. Deferred item 3 closes. Mission 6.4.
+
 - **2026-08-18** — **A stored procedure that gates chunk completion was executable by every role.** `complete_chunk()` is BR-21's gate, and migration `0007` claimed "the only role that can complete a chunk is the one granted EXECUTE". It was not: PostgreSQL grants `EXECUTE` on new functions to `PUBLIC` by default, and the `ALTER DEFAULT PRIVILEGES … REVOKE ALL ON FUNCTIONS` intended to prevent that recorded nothing — `pg_default_acl` was empty and the function's ACL read `{=X/vump_admin,…}`, where the empty grantee is PUBLIC.
 
   Found by verifying the applied schema against the specification **by reading the database**, not by re-reading the migration — the only way this surfaces, because the SQL was accepted and the statement succeeded. Fixed in a new migration rather than by editing the applied one. A-153's shape, one layer down. Mission 6.3.
