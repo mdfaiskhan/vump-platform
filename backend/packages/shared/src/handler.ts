@@ -23,15 +23,49 @@ import { success, failure, type EnvelopeMeta } from './envelope.js';
 import { ApiError, toEnvelopeError } from './errors.js';
 import { logger } from './logger.js';
 
-/** The caller, once both the token and the `users` row are known. */
+/**
+ * The caller, once both the token and the `users` row are known.
+ *
+ * ## Why these are not optional — Mission 7.3
+ *
+ * They used to be `string | undefined`, from Mission 6.2 when `resolveCaller`
+ * was a stub that genuinely could not produce them. ADR-048 replaced that: the
+ * authorizer resolves the row, and {@link callerFromContext} **throws** when
+ * any of the three is missing rather than returning a half-built caller.
+ *
+ * So the optionality described a state that can no longer reach a handler, and
+ * it was not free. ADR-045 adopts `strictTypeChecked`, which forbids
+ * `no-non-null-assertion` — so every one of the fourteen authorized routes
+ * would have had to re-narrow three fields the wrapper already guaranteed, and
+ * each of those guards would be dead code asserting something proven one frame
+ * up. A type that lies in the safe direction still costs correctness, because
+ * the reader cannot tell a real guard from a ceremonial one.
+ */
 export interface Caller {
   readonly identity: TokenIdentity;
-  /** `users.id`. Unavailable until Mission 6.3 — see {@link resolveCaller}. */
-  readonly userId: string | undefined;
+  /** `users.id`. Guaranteed present — the wrapper refuses the request otherwise. */
+  readonly userId: string;
   /** `users.org_id`, which BR-20 scopes every Admin query by. */
-  readonly orgId: string | undefined;
+  readonly orgId: string;
   /** Authoritative role from the `users` table, not the token claim. */
-  readonly role: string | undefined;
+  readonly role: string;
+}
+
+/** The two roles Chapter 1.6 defines. */
+export type CallerRole = 'admin' | 'collector';
+
+/**
+ * Refuses a caller whose role is not [required] — Chapter 4.8 §2 step 2.
+ *
+ * The role check is its own step in the chapter's middleware chain, ahead of
+ * the scope check, and it is expressed here rather than as an `if` in each
+ * handler so that "which roles may call this" is one legible line at the top of
+ * every route.
+ */
+export function requireRole(caller: Caller, required: CallerRole): void {
+  if (caller.role !== required) {
+    throw ApiError.forbidden(`this endpoint requires the ${required} role`);
+  }
 }
 
 /** What a domain handler returns. */
