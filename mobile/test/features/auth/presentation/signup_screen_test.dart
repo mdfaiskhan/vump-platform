@@ -86,10 +86,13 @@ void main() {
 
 /// Nobody signed in, so the guard permits `/signup` and `/login`.
 class _SignedOutRepository implements AuthRepository {
-  // Nothing ever emits: this fixture only needs the guard to see "signed
-  // out", which the restore already reports.
+  // A-177: the guard sees "signed out" from this STREAM now — `build` no
+  // longer calls `restoreSession`, so an empty stream would leave it awaiting
+  // forever and every test here would time out rather than fail.
   @override
-  Stream<Session> get sessionChanges => const Stream<Session>.empty();
+  Stream<Session> get sessionChanges => Stream<Session>.fromIterable(
+    const <Session>[Session.unknown(), Session.unauthenticated()],
+  );
 
   @override
   Future<Session> restoreSession() async => const Session.unauthenticated();

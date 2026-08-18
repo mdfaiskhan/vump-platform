@@ -165,8 +165,17 @@ class _SignedInRepository implements AuthRepository {
   _SignedInRepository(this._restored);
 
   final Session _restored;
-  final StreamController<Session> _sessions =
-      StreamController<Session>.broadcast();
+  /// Seeded on subscription, mirroring the real repository.
+  ///
+  /// A-177: `AuthNotifier.build` resolves the first session from this stream
+  /// and no longer calls `restoreSession`, so a silent stream leaves `build`
+  /// awaiting forever and every test here times out rather than fails.
+  late final StreamController<Session> _sessions = StreamController<Session>(
+    onListen: () {
+      _sessions.add(const Session.unknown());
+      _sessions.add(_restored);
+    },
+  );
 
   @override
   Stream<Session> get sessionChanges => _sessions.stream;
