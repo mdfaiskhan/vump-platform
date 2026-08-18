@@ -94,6 +94,15 @@ resource "aws_iam_role" "lambda" {
 
   assume_role_policy = data.aws_iam_policy_document.assume_role.json
 
+  # ADR-049, Fork A1. Every Terraform-created role carries the boundary, and
+  # these seven are no exception — terraform-apply is denied iam:CreateRole
+  # without it, so a role added later cannot quietly skip the cap.
+  #
+  # The cap does not narrow what these roles do today: boundary.tf allows the
+  # logs, rds-data, Secrets Manager and chunk-bucket actions each of them
+  # already holds. It removes reach they never had.
+  permissions_boundary = aws_iam_policy.boundary.arn
+
   tags = {
     Name   = "vump-${var.environment_slug}-${each.key}"
     Domain = each.value.domain

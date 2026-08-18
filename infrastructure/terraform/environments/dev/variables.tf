@@ -101,3 +101,61 @@ variable "firebase_project_id" {
   type        = string
   default     = "vump-platform-f86af"
 }
+
+variable "github_repository" {
+  description = <<-EOT
+    owner/repo GitHub Actions federates from (ADR-049). The repository is
+    public, so every OIDC trust condition is an exact-match StringEquals and no
+    wildcard appears in any of them.
+  EOT
+  type        = string
+  default     = "mdfaiskhan/vump-platform"
+}
+
+variable "state_bucket" {
+  description = "Terraform state bucket (ADR-043). Must match backend.tf."
+  type        = string
+  default     = "vump-platform-tfstate"
+}
+
+variable "evidentiary_buckets" {
+  description = <<-EOT
+    Buckets holding evidentiary recordings, denied explicitly to plan-reader and
+    terraform-apply. All three environments are listed regardless of which one
+    this root provisions: a dev principal has no business reading staging or
+    production footage either, and ADR-014 records that in a single-account
+    model IAM is the only thing separating them.
+  EOT
+  type        = list(string)
+  default     = ["vump-platform-dev", "vump-platform-staging", "vump-platform-prod"]
+}
+
+variable "github_repository_owner" {
+  description = "GitHub owner login."
+  type        = string
+  default     = "mdfaiskhan"
+}
+
+variable "github_repository_name" {
+  description = "GitHub repository name without the owner."
+  type        = string
+  default     = "vump-platform"
+}
+
+variable "github_owner_id" {
+  description = <<-EOT
+    Immutable numeric GitHub ID for the owner, embedded in the OIDC subject
+    claim. Read from the REST API and confirmed against a real token's claims
+    during Mission 7.1 (A-171). It changes only if the account is deleted and
+    recreated, at which point federation should break rather than silently
+    trust a re-registered name.
+  EOT
+  type        = string
+  default     = "76160659"
+}
+
+variable "github_repository_id" {
+  description = "Immutable numeric GitHub ID for the repository, embedded in the OIDC subject claim."
+  type        = string
+  default     = "1326922888"
+}

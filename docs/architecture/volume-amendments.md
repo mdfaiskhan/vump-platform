@@ -6003,3 +6003,163 @@ So the useful residue is not a fix but a question ADR-016 should have asked and 
 ### Recorded because retractions are evidence too
 
 The finding was reported alongside tested ones, in the same voice, and a fix was authorised for it. `docs/development/security-finding-rubric.md` exists because of this: it requires the evidence class — tested, inferred, or reported — to be stated before the severity, so an inference cannot be read as an observation.
+
+---
+
+### A-170 — ADR-043's resource count was 66 and the account held 67
+
+| | |
+|---|---|
+| **Record** | ADR-043, Implementation Status table |
+| **Says** | *"All 66 managed resources live in `ap-south-1`"* — 35 from Mission 6.1, 31 from Mission 6.3.2 |
+| **Should say** | 67 at the close of Mission 6. **79 after Mission 7.1**, which adds twelve |
+| **Authority** | Observation, `terraform state list` against the live backend |
+| **Class** | Stale documentation |
+| **Status** | **Closed** by this entry. ADR-043's table is not edited in place |
+| **Date** | 2026-08-18, Mission 7.1 |
+
+ADR-043's table was written during Mission 6.3.2 and its arithmetic was correct then. Mission 6.6 added one resource — the API Gateway authorizer work behind ADR-048 — and the table was not revisited, so it understated the account by one for the rest of Mission 6. The gap register and the Mission 6 report both say 67 and are right.
+
+**Recorded rather than corrected in place**, because the table is a dated statement of what was true at 6.3.2, and rewriting it would erase the fact that the count drifted unnoticed across four sub-missions. The count is now 79 and will drift again; the covering practice is `terraform state list`, not a number in prose.
+
+---
+
+### A-171 — The GitHub OIDC subject is the immutable-identifier form, not `repo:OWNER/REPO`
+
+| | |
+|---|---|
+| **Record** | ADR-049 |
+| **Assumed** | `repo:mdfaiskhan/vump-platform:environment:ci-plan`, the form in GitHub's and AWS's published examples |
+| **Measured** | `repo:mdfaiskhan@76160659/vump-platform@1326922888:environment:ci-plan` |
+| **Authority** | Measurement — a CI job printed its own token's claims |
+| **Class** | Documented behaviour diverging from the live system |
+| **Status** | **Closed.** The trust policies are built from the measured form |
+| **Date** | 2026-08-18, Mission 7.1 |
+
+The numbers are the owner's and the repository's GitHub database IDs, confirmed independently against the REST API (`owner.id` 76160659, `id` 1326922888).
+
+**The failure mode is what makes this worth a record.** A trust policy written from documentation does not warn, degrade, or name the offending condition. It returns `Not authorized to perform sts:AssumeRoleWithWebIdentity` — the same message produced by a wrong audience, a wrong repository, a wrong workflow ref, or a provider that does not exist. Mission 7.1 spent a full CI round-trip on it and closed it only by adding a temporary step that decoded the token and printed its claims. **That step is the technique worth keeping, not the string**: any future OIDC condition should be written against measured claims rather than documented ones.
+
+The form is a security improvement rather than a quirk. Renaming the account or the repository does not free the old name for someone else to register and inherit this trust. The corollary is recorded in ADR-049: if either is ever deleted and recreated, federation breaks, and breaking is the correct outcome.
+
+
+### Where the format comes from — added 2026-08-18, Mission 7.1 Part 2d
+
+The observation above was challenged on review, correctly: it contradicts the subject format in GitHub's and AWS's published examples, and an unexplained observation is a weak basis for a trust policy. The mechanism is now identified and is not a quirk of this account.
+
+**GitHub changed the default.** Immutable subject claims embed the owner's and the repository's numeric IDs in the `repo:` segment, in the form `repo:OWNER@OWNER-ID/REPO@REPO-ID:…`. They are the default for **every repository created after 2026-07-15**, and pre-existing repositories are unaffected unless they opt in via `use_immutable_subject`. `mdfaiskhan/vump-platform` was created **2026-08-07**, three weeks after the cutoff, so it received the new default and never had the old one.
+
+GitHub's own API reports the effective prefix for this repository:
+
+```
+GET /repos/mdfaiskhan/vump-platform/actions/oidc/customization/sub
+{
+  "use_default": true,
+  "use_immutable_subject": false,
+  "sub_claim_prefix": "repo:mdfaiskhan@76160659/vump-platform@1326922888"
+}
+```
+
+**`use_default: true` is the load-bearing field.** Nothing in this account customised the subject; this is the platform default, and the `sub_claim_prefix` field is GitHub stating what it will mint. Note that `use_immutable_subject: false` reads as a contradiction and is not one — that flag is the opt-in switch for repositories created *before* the cutoff, and it stays `false` on a repository that gets the format by default. Reading it alone would give exactly the wrong answer.
+
+**Three independent lines of evidence, recorded because one was not enough:**
+
+1. **The token itself.** Run 32123773224 printed `sub = 'repo:mdfaiskhan@76160659/vump-platform@1326922888:environment:ci-plan'`, 69 bytes, SHA-256 `ddb6af00…`, byte-identical to the live trust policy's `StringEquals` value.
+2. **A controlled experiment.** The trust policy was first written with the documented `repo:OWNER/REPO:…` form and the assumption was **denied** (run 32122955317). Commit `790cb75` changed the subject string and nothing else, and the next run **succeeded**. Had the documented form been correct, that change would have broken federation rather than fixed it.
+3. **First-party configuration**, quoted above, plus the creation date against the published cutoff.
+
+**The policy was briefly wrong, and it failed closed.** This was not a comment-only error. Commit `11d73b9` applied the documented format, the run was refused, and `790cb75` corrected it — all before merge, and the refusal was visible rather than silent. What lagged longest was the *comment* in `ci.yml`, which still described the documented form after the policy had been corrected; it was fixed last. The ordering is worth recording: the executable artefact was right before the prose was, which is the safer of the two ways to be inconsistent.
+
+Sources: GitHub Changelog, *Immutable subject claims for GitHub Actions OIDC tokens* (2026-04-23); GitHub Docs, *OpenID Connect reference*.
+
+---
+
+### A-172 — Gap 8 does not close with a read-only CI principal; the proofs write
+
+| | |
+|---|---|
+| **Record** | `docs/development/mission-6-gap-register.md`; `mission-6-report.txt` §11 |
+| **Says** | *"**8** is open because the check needs live AWS and CI has none. A read-only credential would close it."* And §11: *"A read-only principal closes gap 8 … and gap 16"* |
+| **Should say** | A read-only principal closes gap 16 only. Gap 8 needs a principal that can write to the database |
+| **Authority** | Observation — the Mission 6 report's own §12 |
+| **Class** | Mischaracterisation in a hand-off record |
+| **Status** | **Closed** by this entry and by ADR-049's two-role split |
+| **Date** | 2026-08-18, Mission 7.1 |
+
+The Mission 6 report describes the proofs in its own measurement table as *"committed transactions against the live cluster, seeded and then deleted, counts verified to zero"*. Those are writes. The register's summary and the report's ranked hand-off both compressed "a CI credential" into "a **read-only** CI credential", and the compression was carried forward into Mission 7.1's Part 1 trace before it was caught.
+
+**The consequence was structural, not cosmetic.** Sized from the register, gap 17 would have produced one read-only role, and gap 8 would have remained open with its reason misfiled as "not built yet" rather than "wrong capability". ADR-049 provisions two roles precisely because the capabilities differ: `plan-reader` reads, `db-prover` writes, and merging them would give every pull-request job the ability to write to the database.
+
+Neither source record is rewritten. The register is a dated hand-off and the report is a dated artefact; this entry is the correction, and the gap register's row for item 8 now points at it.
+
+---
+
+### A-173 — No database role can delete, so the behavioural proofs cannot tear down
+
+| | |
+|---|---|
+| **Record** | Migration `0007_function_roles.sql`; gap register item 8; ADR-049 |
+| **Says** | Gap 8 closes when CI can run the BR-08/11/21/22 proofs |
+| **Should say** | The credential now exists. The proofs still cannot run in CI, for a reason that is not about credentials |
+| **Authority** | Observation — `0007` grants no `DELETE` to any of the seven roles |
+| **Class** | Blocked commitment, cause identified |
+| **Status** | **Open.** No owning mission |
+| **Date** | 2026-08-18, Mission 7.1 |
+
+Migration `0007` grants `SELECT`, `INSERT`, `UPDATE` and one `EXECUTE` across the seven per-function roles. It grants `DELETE` to none of them. The uncommitted scratchpad script therefore performed its teardown as the **master user**, and ADR-049 denies `db-prover` the master credential explicitly — on correctness grounds, because a proof run as master bypasses every `GRANT` it is meant to be testing and would pass while proving nothing.
+
+So the proofs can seed and assert, and cannot clean up. Three shapes are available and none was taken in Mission 7.1, because each is a database-design decision rather than a credential one:
+
+- **A dedicated `vump_ci_proof` role** with `DELETE` on the test tables. Clean, and it is a new migration — ADR-046 territory.
+- **Rollback-only proofs.** Complicated by each per-function secret being a separate Data API session, so one transaction cannot span the roles a cross-role proof needs.
+- **A disposable database per run.** Correct and slow, and the cluster auto-pauses at `MinCapacity 0` (A-156).
+
+**Gap 8 therefore closes to "the credential exists, the proofs are not running in CI", and it is logged exactly that way rather than rounded up.** The strongest evidence Mission 6 produced is still the least repeatable, and the reason has moved rather than gone.
+
+---
+
+### A-174 — `job_workflow_ref` pinned to a branch rejects every pull request, not only those editing the workflow
+
+| | |
+|---|---|
+| **Record** | ADR-049; Mission 7.1 Part 2a |
+| **Said** | Part 2a: pinning `job_workflow_ref` to `@refs/heads/develop` means *"a PR that modifies `ci.yml` itself cannot assume the role"* |
+| **Should say** | It means **no pull request at all** can assume the role |
+| **Authority** | Measurement — `job_workflow_ref` on PR #11 was `…/ci.yml@refs/pull/11/merge` |
+| **Class** | Self-correction of a Mission 7.1 record |
+| **Status** | **Closed.** The condition permits `refs/pull/*/merge` |
+| **Date** | 2026-08-18, Mission 7.1 |
+
+A `pull_request` run does not use the workflow file from the base branch — it uses the file at the PR's **merge** commit, so its `job_workflow_ref` sits in `refs/pull/<n>/merge` for every PR, whether or not the PR touches `ci.yml`. Pinning to `refs/heads/develop` alone would therefore have rejected plan-on-PRs entirely, which is the whole of gap 16.
+
+**Recorded rather than quietly fixed**, because the wrong version was stated to the project owner as a deliberate, accepted trade-off, and was explicitly asked to be carried into ADR-049's Consequences. Carrying it would have documented a constraint that does not exist, and hidden the one that does.
+
+The real trade is the inverse and is now in ADR-049: because `refs/pull/*/merge` is trusted, **a pull request may edit `ci.yml` and assume `plan-reader` in the same run**. Someone with write access can exercise the role from an unmerged branch. That is acceptable for a read-only role explicitly denied the evidentiary buckets, and it should be re-argued for `db-prover`, which writes, when its CI job is built.
+
+---
+
+### A-175 — The `ref`-shape role assumption is unproven until this merges to `develop`
+
+| | |
+|---|---|
+| **Record** | ADR-049, Implementation Status |
+| **Says** | The environment-scoped subject is identical across trigger shapes |
+| **Verified** | The **claim** is measured on both shapes. The **assumption** succeeded on `pull_request` only |
+| **Authority** | Two live CI runs, 32123773224 and 32124059624 |
+| **Class** | Verification gap, time-bounded |
+| **Status** | **Open** until the Mission 7.1 PR merges to `develop` |
+| **Date** | 2026-08-18, Mission 7.1 |
+
+`ci.yml` on `develop` has no OIDC job, so a `workflow_dispatch` against `develop` runs the old file and proves nothing. Dispatching against the mission branch instead produced:
+
+| | `pull_request` (run 32123773224) | `workflow_dispatch` (run 32124059624) |
+|---|---|---|
+| `sub` | `repo:mdfaiskhan@76160659/vump-platform@1326922888:environment:ci-plan` | **identical** |
+| `event_name` | `pull_request` | `workflow_dispatch` |
+| `ref` | `refs/pull/11/merge` | `refs/heads/mission/7.1-credential-mechanisms` |
+| `job_workflow_ref` | `…/ci.yml@refs/pull/11/merge` | `…/ci.yml@refs/heads/mission/7.1-…` |
+| Assumption | **succeeded** | **denied** |
+
+**Both results are the design working.** The subject is byte-identical across two different triggers, which is the central claim of the environment-scoped design and is now measured rather than argued. The denial is a negative control: the dispatch ran from a branch matching neither permitted `job_workflow_ref` value, and was refused — so that condition is not vacuous.
+
+What remains unproven is narrow and should not be rounded up: that a `ref`-form run **from `develop`** assumes successfully. It cannot be tested before the merge that puts the job on `develop`. The first post-merge run on `develop` is that test, and it is the thing to watch rather than assume.
