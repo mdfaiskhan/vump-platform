@@ -6618,3 +6618,34 @@ Probe 4 confirms the other absence. Chapter 4.2 §2 scopes `audit_log` to *"Admi
 This is worse than the `task_assignments` case A-187 sidestepped, and the difference is worth naming: **`chunks.session_id` references `sessions`**, so a stray session is not inert — it becomes permanent fixture data in a shared development database, and one that later chunk work could attach rows to. The idempotency, the 200-versus-201 distinction and the `SESSION_ALREADY_REGISTERED` refusal are covered by mocked tests and by nothing else.
 
 The caveat is in `functions/sessions/src/index.test.ts`'s own header, not only here, so a reader of the suite meets it before the assertions rather than after.
+
+---
+
+### A-190 — A retried chunk registration must succeed; `CHUNK_ALREADY_REGISTERED` is for a mismatch, not a repeat
+
+| | |
+|---|---|
+| **Volume** | 5, Ch. 5.10 §3; Volume 4 Ch. 4.6 §5; `backend/packages/shared/src/errors.ts` |
+| **Says** | Ch. 5.10 §3: *"Step 1's registration always returns the same deterministic S3 key for a given chunk_id — **a retried registration call is safe to repeat**"* |
+| **Was read as** | Mission 7.3 Part 1 traced `CHUNK_ALREADY_REGISTERED` as the answer to a second registration of the same `chunk_id` |
+| **Should say** | A repeat **succeeds** and returns the same key with fresh presigned URLs. The named refusal is for a *genuine mismatch* — the same `chunk_id` presented with a different session, sequence index or checksum |
+| **Class** | Correction to this mission's own earlier reading |
+| **Status** | **Corrected before implementation.** No code was written on the wrong premise |
+| **Date** | 2026-08-19, Mission 7.3 Batch 2b |
+
+The error code's own comment says *"The chunk is already registered"*, which reads as though registration is a once-only operation. Chapter 5.10 §3 says the opposite in the same breath as explaining why: the key is deterministic precisely **so that** a retry is safe.
+
+Refusing a repeat would break the thing the chapter is describing. Chapter 5.13 §2 grants a chunk six automatic attempts; a device that uploads some parts, loses connectivity and returns needs new presigned URLs against the **same** multipart upload — which is exactly Chapter 5.13 §4's *"the same in-progress multipart upload ID where possible"*. A registration that refused the second call would make NFR-REL-02's resumability unreachable by construction.
+
+### The shape, which 2a already built once
+
+This is `SESSION_ALREADY_REGISTERED`'s pattern one level down, and the symmetry is worth stating because it means the rule is now consistent across both identity-bearing routes:
+
+| | Repeat with matching fields | Repeat with a conflicting field |
+|---|---|---|
+| `POST /v1/tasks/{taskId}/sessions` | 200, the existing session | 409 `SESSION_ALREADY_REGISTERED` |
+| `POST /v1/sessions/{sessionId}/chunks` | 200, same key, **fresh URLs** | 409 `CHUNK_ALREADY_REGISTERED` |
+
+The mobile side is unaffected either way: Mission 4.2's test asserts only that `VumpApi` surfaces the code, and its own comment records that *"the envelope is the contract, not the status code."*
+
+**Recorded separately rather than inside Batch 2b's report** because it corrects a reading this mission itself published in Part 1, and a correction folded into the report of the work it changed is the kind that stops being findable.
