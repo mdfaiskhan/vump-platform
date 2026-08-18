@@ -81,6 +81,18 @@ module "iam" {
   master_user_secret_arn    = module.database.master_user_secret_arn
   chunk_s3_policy_documents = local.chunk_s3_policy_documents
   db_credential_secret_arns = module.db_credentials.secret_arns
+
+  # ADR-049. The GitHub OIDC provider, the two CI roles, the faisal-dev user and
+  # its two MFA-gated roles, all capped by the permissions boundary.
+  #
+  # dev owns the account-global half (the provider and the user) because it is
+  # the only environment root that exists. staging and prod must set
+  # manage_account_identity = false when they arrive.
+  github_repository       = var.github_repository
+  state_bucket            = var.state_bucket
+  chunk_bucket            = var.chunk_bucket
+  evidentiary_buckets     = var.evidentiary_buckets
+  manage_account_identity = true
 }
 
 # Mission 6.2. The seven Lambda functions and the REST API in front of them.

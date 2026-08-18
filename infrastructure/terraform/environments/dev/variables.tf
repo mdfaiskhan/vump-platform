@@ -101,3 +101,31 @@ variable "firebase_project_id" {
   type        = string
   default     = "vump-platform-f86af"
 }
+
+variable "github_repository" {
+  description = <<-EOT
+    owner/repo GitHub Actions federates from (ADR-049). The repository is
+    public, so every OIDC trust condition is an exact-match StringEquals and no
+    wildcard appears in any of them.
+  EOT
+  type        = string
+  default     = "mdfaiskhan/vump-platform"
+}
+
+variable "state_bucket" {
+  description = "Terraform state bucket (ADR-043). Must match backend.tf."
+  type        = string
+  default     = "vump-platform-tfstate"
+}
+
+variable "evidentiary_buckets" {
+  description = <<-EOT
+    Buckets holding evidentiary recordings, denied explicitly to plan-reader and
+    terraform-apply. All three environments are listed regardless of which one
+    this root provisions: a dev principal has no business reading staging or
+    production footage either, and ADR-014 records that in a single-account
+    model IAM is the only thing separating them.
+  EOT
+  type        = list(string)
+  default     = ["vump-platform-dev", "vump-platform-staging", "vump-platform-prod"]
+}

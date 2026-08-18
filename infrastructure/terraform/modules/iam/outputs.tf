@@ -20,3 +20,29 @@ output "roles_by_domain" {
     domain => [for name, cfg in local.roles : name if cfg.domain == domain]
   }
 }
+
+output "permissions_boundary_arn" {
+  description = "The boundary every Terraform-created role carries (ADR-049, Fork A1)."
+  value       = aws_iam_policy.boundary.arn
+}
+
+output "ci_role_arns" {
+  description = "GitHub Actions OIDC role ARNs, keyed by purpose. Not secrets — an ARN is an identifier (ADR-016)."
+  value = {
+    "plan-reader" = aws_iam_role.ci_plan_reader.arn
+    "db-prover"   = aws_iam_role.ci_db_prover.arn
+  }
+}
+
+output "human_role_arns" {
+  description = "The two MFA-gated roles faisal-dev may assume (ADR-049, D-2)."
+  value = {
+    "operator"        = aws_iam_role.human_operator.arn
+    "terraform-apply" = aws_iam_role.human_terraform_apply.arn
+  }
+}
+
+output "human_user_name" {
+  description = "The scoped human user. Its access key is created out of band and never enters state."
+  value       = var.manage_account_identity ? aws_iam_user.human[0].name : var.human_user_name
+}

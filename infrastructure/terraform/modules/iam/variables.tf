@@ -37,3 +37,53 @@ variable "db_credential_secret_arns" {
   type        = map(string)
   default     = {}
 }
+
+variable "github_repository" {
+  description = <<-EOT
+    owner/repo the CI roles federate with. Every OIDC trust condition is an
+    exact-match StringEquals built from this value, so a typo here fails closed
+    — the role becomes assumable by nobody rather than by anybody.
+  EOT
+  type        = string
+}
+
+variable "state_bucket" {
+  description = "Terraform state bucket (ADR-043). plan-reader reads it; terraform-apply also writes the lock."
+  type        = string
+}
+
+variable "chunk_bucket" {
+  description = "Chunk storage bucket for this environment. Capped by the permissions boundary."
+  type        = string
+}
+
+variable "evidentiary_buckets" {
+  description = <<-EOT
+    Buckets holding evidentiary recordings, denied explicitly to plan-reader and
+    to terraform-apply. ADR-043 keeps them outside Terraform's blast radius
+    because they are the one thing in this account that cannot be recreated;
+    this is that argument applied to the principals rather than to the state.
+  EOT
+  type        = list(string)
+}
+
+variable "human_user_name" {
+  description = "The scoped human IAM user (ADR-049, Gap 1). Holds sts:AssumeRole and nothing else."
+  type        = string
+  default     = "faisal-dev"
+}
+
+variable "manage_account_identity" {
+  description = <<-EOT
+    Whether this instance owns the account-global identity resources: the GitHub
+    OIDC provider and the human IAM user. Exactly ONE environment root may set
+    this true, because both are account-wide rather than per-environment.
+
+    dev owns them today because it is the only root that exists. When staging
+    and prod roots appear (Missions 6.4/6.5), they must set this false and
+    reference the same provider and user, or the apply will fail on a duplicate.
+    This flag exists so that failure is a clear message rather than a puzzle.
+  EOT
+  type        = bool
+  default     = true
+}
