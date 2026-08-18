@@ -71,6 +71,30 @@ locals {
     data.aws_caller_identity.current.account_id,
     var.environment_slug,
   )
+
+  # `logs:DescribeLogGroups` cannot be scoped to a log group, and the pattern
+  # above therefore never authorises it.
+  #
+  # It is a **list** call. IAM evaluates it against an ARN with an empty log
+  # group name, which the denial Mission 7.3 hit states verbatim:
+  #
+  #   arn:aws:logs:ap-south-1:929570731524:log-group::log-stream
+  #
+  # Nothing ending in `/aws/lambda/vump-dev-*` can match that, so every
+  # principal that was given `DescribeLogGroups` against
+  # `log_group_arn_pattern` was given an action it could never actually use.
+  #
+  # This pattern is the narrowest form that does match. It keeps the region and
+  # the account — both present in the denial above, which is what proves they
+  # are part of the evaluated ARN — and wildcards only the portion IAM leaves
+  # empty. `*` on its own would work and would also permit listing log groups
+  # in any region of any account, which is a real widening and an unnecessary
+  # one.
+  log_group_list_arn_pattern = format(
+    "arn:aws:logs:%s:%s:log-group:*",
+    data.aws_region.current.region,
+    data.aws_caller_identity.current.account_id,
+  )
 }
 
 data "aws_iam_policy_document" "assume_role" {

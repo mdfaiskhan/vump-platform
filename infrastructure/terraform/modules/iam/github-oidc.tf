@@ -257,18 +257,53 @@ data "aws_iam_policy_document" "ci_plan_reader" {
   }
 
   statement {
-    sid    = "ReadLogGroups"
+    sid    = "ReadLogGroupTags"
     effect = "Allow"
 
-    actions = [
-      "logs:DescribeLogGroups",
-      "logs:ListTagsForResource",
-    ]
+    actions = ["logs:ListTagsForResource"]
 
     resources = [
       local.log_group_arn_pattern,
       "${local.log_group_arn_pattern}:*",
     ]
+  }
+
+  # Split out of `ReadLogGroups` above, which granted `DescribeLogGroups`
+  # against a resource pattern that can never match it — see
+  # `log_group_list_arn_pattern` in main.tf.
+  #
+  # **plan-reader carried the identical defect to terraform-apply**, and it is
+  # corrected here because it is the same bug, not a related one. It went
+  # unnoticed for a reason worth stating: the CI plan step pipes `terraform
+  # plan` into `tee` under a shell with no `pipefail`, so the step reports
+  # `tee`'s exit code and is green whether the plan succeeded or not. The
+  # gap-16 evidence is therefore weaker than ADR-049 records. Reported to the
+  # project owner at Mission 7.3 Part 5 rather than fixed here, because fixing
+  # the pipe turns CI red until this policy change is applied.
+  #
+  # ## This statement is INERT on its own, and that is not an oversight
+  #
+  # plan-reader carries the permissions boundary, and the boundary scopes
+  # `logs:DescribeLogGroups` to `log_group_arn_pattern` with the same
+  # never-matching result. Effective permission is the intersection, so until
+  # `boundary.tf` gets the matching statement **this grant buys plan-reader
+  # nothing.**
+  #
+  # The boundary fix was written and then deliberately withdrawn at Mission 7.3
+  # Part 6: `aws_iam_policy.boundary` is an upstream dependency of both the
+  # probe role and every Lambda execution role, so any pending change to it is
+  # dragged into a `-target`ed apply — and terraform-apply is denied writing it
+  # (ADR-049 D-3), which would fail the apply part-way. Removing the *diff* was
+  # the only way to run a clean targeted apply without a break-glass session.
+  #
+  # The withdrawn change is one statement identical to this one, and it must
+  # land in `boundary.tf` before CI's plan can actually work. Whoever does the
+  # faisal-admin identity pass applies both together.
+  statement {
+    sid       = "DescribeLogGroupsIsAListCall"
+    effect    = "Allow"
+    actions   = ["logs:DescribeLogGroups"]
+    resources = [local.log_group_list_arn_pattern]
   }
 
   statement {
