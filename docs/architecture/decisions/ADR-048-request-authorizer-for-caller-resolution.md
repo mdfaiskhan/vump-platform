@@ -28,7 +28,7 @@ A-159 resolved that by moving `org_id` into the token as a custom claim. Mission
 
 A separate authorizer would need `SELECT` on `users`, which means an eighth database role, an eighth credential and an eighth secret — to run the query the existing function is already the only principal permitted to run. Mission 6.5 adds **zero** secrets, and this is how.
 
-### Exactly one route is exempt, and the exemption is machine-checked
+### Exactly one route is exempt, and the exemption is asserted but not enforced
 
 `POST /v1/auth/verify` is not behind the authorizer. Chapter 4.7 reads as self-contradictory —
 
@@ -39,7 +39,16 @@ A separate authorizer would need `SELECT` on `users`, which means an eighth data
 
 Applying "reject" uniformly deadlocks the platform, and this is not hypothetical: four Firebase accounts existed with `users` empty, nothing writes to that table, and `redeemInviteCode` creates Firebase accounts without an Aurora row. Every account, existing and future, would have been refused at every door including the one meant to let them in. A-166.
 
-A second exemption would open an endpoint with nothing in front of it, so a Terraform `check` asserts the exempt list is exactly `["POST /v1/auth/verify"]` and fails the plan otherwise.
+A second exemption would open an endpoint with nothing in front of it, so a Terraform `check` asserts the exempt list is exactly `["POST /v1/auth/verify"]`.
+
+**That assertion is weaker than it looks, and this record originally overstated it.** It said the check *"fails the plan otherwise"*. It does not:
+
+- **A failed `check` is a warning, not an error.** When the condition was wrong during Mission 6.5, `terraform plan` printed `Warning: Check block assertion failed`, then completed, wrote its plan file, and `apply` ran from it. Nothing was blocked.
+- **CI never evaluates it at all.** `check` blocks run during plan and apply. The `Terraform` CI job runs `fmt -check`, `init -backend=false`, `validate` and `tflint` — and no `plan`, because it holds no AWS credentials. Confirmed by the same run: `validate` reported `Success! The configuration is valid.` at the moment `plan` was warning about the failed assertion.
+
+So the exemption is held by **code review plus a warning a human has to notice**, not by CI. That is materially less than "machine-checked", and the difference matters because the property being guarded is which routes are allowed to bypass authentication.
+
+Closing it means running `terraform plan` in CI, which means giving CI AWS credentials — the same decision A-161 defers for migrations, and not one to take as a side effect. Recorded as gap 16 in `docs/development/mission-6-gap-register.md`.
 
 ### Deny, not allow-with-a-flag
 
@@ -78,7 +87,8 @@ Caching a policy caches an authorization decision. A user removed from an org, o
 | REQUEST authorizer | Required | ✅ `vump-dev-caller`, identity source `Authorization` |
 | Served by `auth-verify` | Required | ✅ one function, discriminated by event shape |
 | 14 routes behind it | Required | ✅ **verified against live AWS**, per-method |
-| Exactly one exempt | Required | ✅ `POST /v1/auth/verify`, and a `check` enforces it |
+| Exactly one exempt | Required | ✅ `POST /v1/auth/verify` — verified live, per-method |
+| The exemption enforced by CI | Intended | ❌ **No.** A `check` warns during `plan`; CI runs no `plan`. Gap 16 |
 | Zero new secrets | Required | ✅ 8 before, 8 after |
 | `org_id` no longer a claim | Supersedes A-159 | ✅ read from `users` |
 | Deny is explicit | Required | ✅ 403 with an explicit-deny body |
