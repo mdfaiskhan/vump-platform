@@ -6551,3 +6551,70 @@ Probe 5 is the one worth keeping. F6's `users` grant is column-level, and until 
 A-173 blocks gap 8 because the BR-08/11/21/22 proofs seed rows and **no role can delete them**. Probes 4 and 5 assert that an operation is *refused*, so nothing is written and there is nothing to clean up — and probes 1–3 are reads.
 
 **This does not close gap 8**, whose proofs are behavioural and do write. It does mean a useful class of check — every "role X cannot do Y" assertion in `0007` and `0010` — is available in CI today, ahead of whatever resolves the teardown question.
+
+---
+
+### A-188 — Nothing can complete a session, and every session will sit at `in_progress` forever
+
+| | |
+|---|---|
+| **Volume** | 4, Ch. 4.4 §5 — `sessions.status` is *"'in_progress' \| 'complete' — FR-SES-02; transition gated by stored procedure (Chapter 4.2)"* |
+| **Says** | A stored procedure gates the transition |
+| **Is** | **There is no such procedure, and no route calls one.** `0006` defines `complete_chunk(uuid)` and nothing else; Chapter 4.6's catalogue has no endpoint that completes a session |
+| **Class** | Unreachable state — a specified lifecycle with no mechanism |
+| **Status** | **Open.** Carried into Batch 2b as its fourth fork |
+| **Date** | 2026-08-19, Mission 7.3 Batch 2a |
+
+Found while tracing `POST /v1/tasks/{taskId}/sessions`, not by reading the schema for its own sake.
+
+Chapter 4.2 §3 describes exactly one such gate and it is about chunks: *"chunks.status can only transition to 'complete' via a stored procedure that first checks a matching, non-null chunk_metadata row exists."* Migration `0006` implements that as `complete_chunk()`, with a `BEFORE UPDATE` trigger making it the only path. **Sessions got the sentence and not the procedure.**
+
+The consequence is concrete rather than theoretical:
+
+- `sessions_status_check` permits `'complete'`, `sessions.status` defaults to `'in_progress'`, and **nothing anywhere issues an UPDATE**;
+- `vump_sessions` holds `SELECT, INSERT` and deliberately **no UPDATE**, so even a handler that wanted to would be refused with `42501`;
+- so A-07's *"Live status across all Collectors"* will show every session as in progress indefinitely, including sessions whose chunks are all `complete`.
+
+### Why this is not fixed in Batch 2a
+
+The interesting question is not how to write the procedure, it is **what completion means**. The plausible definition — a session is complete when all of its chunks are — is only knowable at the moment the last chunk completes, which is `PATCH /v1/chunks/{chunkId}/status`'s business and lives in Batch 2b. Building a session-completion path in 2a would either be a route nobody calls, or a guess at a rule 2b is about to need anyway.
+
+`complete_chunk()` is the shape to follow if that reading holds: `SECURITY DEFINER`, granted `EXECUTE` to exactly the role that needs it, with a `BEFORE UPDATE` trigger making it the only path — which is also how the transition gets made without granting `vump_sessions` an UPDATE it should not otherwise hold.
+
+**FR-SES-02 is the requirement to check it against**, and it should be read before the rule is chosen rather than after.
+
+---
+
+### A-189 — Batch 2a's grants were proved live, and the negative probe is the one that mattered
+
+| | |
+|---|---|
+| **Record** | Migration `0010`; `backend/functions/sessions`; A-187's pattern |
+| **Class** | Verification, positive and negative |
+| **Status** | **Closed for Batch 2a's two routes**, with one path stated as mock-only |
+| **Date** | 2026-08-19, Mission 7.3 Batch 2a |
+
+`vump_sessions` had never been exercised — Batch 1's probes covered `vump_projects` and `vump_tasks` only. Run as `vump-dev-operator`, authenticating with the `sessions` function's own credential:
+
+| # | Probe | Result |
+|---|---|---|
+| 1 | The GET's `sessions ⋈ tasks ⋈ projects` join | Succeeded, `[]` |
+| 2 | The chunk-status aggregate, `GROUP BY session_id, status` | Succeeded, `[]` |
+| 3 | **`UPDATE sessions SET status='complete'`** | **Refused — 42501** |
+| 4 | **`INSERT INTO audit_log`** | **Refused — 42501** |
+
+### Probe 3 converted a design correction into a proof
+
+Part 17's trace found that `vump_sessions` holds `SELECT, INSERT` on `sessions` and no `UPDATE`, and that PostgreSQL requires **both** for `ON CONFLICT … DO UPDATE`. The Part 16 sketch had proposed exactly that form, copied from A-181's `task_assignments` shape — which would have failed at runtime with `42501`, **the same defect class migration `0010` exists to fix, reintroduced one batch after fixing it.**
+
+The registration is `ON CONFLICT DO NOTHING` plus a re-read instead — `provisionCaller`'s pattern, needing no migration and no widening. Probe 3 is the live half of that: PostgreSQL refusing the alternative is what makes the choice evidence rather than a reading of a grant file.
+
+Probe 4 confirms the other absence. Chapter 4.2 §2 scopes `audit_log` to *"Admin actions on Projects/Tasks/Assignments"*, and a Collector starting a session is none of those — so unlike all five of Batch 1's writes, `POST /v1/tasks/{taskId}/sessions` needs no transaction, because there is no second row that must commit with the first. The chapter and the grant agree independently, and now both are demonstrated.
+
+### What is NOT proved, stated so the coverage is not read as complete
+
+**The `ON CONFLICT` resurrection path is mock-only.** Proving it live means inserting a session and re-registering it, and A-173 means no role can delete the row afterwards.
+
+This is worse than the `task_assignments` case A-187 sidestepped, and the difference is worth naming: **`chunks.session_id` references `sessions`**, so a stray session is not inert — it becomes permanent fixture data in a shared development database, and one that later chunk work could attach rows to. The idempotency, the 200-versus-201 distinction and the `SESSION_ALREADY_REGISTERED` refusal are covered by mocked tests and by nothing else.
+
+The caveat is in `functions/sessions/src/index.test.ts`'s own header, not only here, so a reader of the suite meets it before the assertions rather than after.
