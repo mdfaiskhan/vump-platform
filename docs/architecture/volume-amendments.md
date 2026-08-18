@@ -5877,3 +5877,63 @@ This is the same shape as A-153 and A-161: a property asserted in one layer and 
 ### What makes the fix load-bearing rather than cosmetic
 
 The per-function map is threaded into the module and each function is given `var.db_credential_secret_arns[each.key]`. Naming any other secret now produces an `AccessDenied` on the first query rather than a privilege escalation — the IAM policy is what makes a wrong environment variable safe, and the environment variable is what makes the IAM policy reachable. Neither is sufficient alone, which is the point A-160 was making and could not yet demonstrate.
+
+---
+
+### A-168 — The AWS endpoint check is narrowed to S3, which is what it always meant
+
+| | |
+|---|---|
+| **Record** | `.github/workflows/ci.yml`, `AWS credential isolation`; ADR-007; open item 47; A-075 |
+| **Was** | `grep -rn 'amazonaws\.com' lib` — any AWS hostname in the shipped source failed the build. |
+| **Is** | `grep -rnE 's3[.-][a-z0-9-]*\.amazonaws\.com' lib` — S3 hostnames only. |
+| **Authority** | Project owner's decision, Mission 6.5.7 |
+| **Class** | Check narrowed to its stated intent |
+| **Status** | **Closed** |
+| **Date** | 2026-08-18, Mission 6.5 |
+
+The check states the rule it protects, in its own comment:
+
+> *"This one looks for a hardcoded **endpoint**, which is a design defect rather than a disclosure: shipping code that names an **S3 host** has stopped waiting for the backend to presign a URL."*
+
+The rule is about S3. The pattern was about `amazonaws.com`, and the two were the same set for as long as every AWS hostname the mobile app could name was an S3 bucket.
+
+**Mission 6.3.2 ended that.** API Gateway's invoke URL is `{restApiId}.execute-api.{region}.amazonaws.com`, so the backend's own address is now under the same domain as the thing the rule forbids. Mission 6.5 put the real one in `NetworkConfig` and the check failed:
+
+```
+lib/core/network/network_config.dart:87:
+  'https://32mar2hwsk.execute-api.ap-south-1.amazonaws.com/dev',
+```
+
+### Why this is a narrowing rather than an erosion
+
+Three reasons, and the third is the one that settles it.
+
+**The rule's own words exclude it.** Naming the backend's base URL is not *"stopping waiting for the backend to presign a URL"* — it is how the app reaches the endpoint that issues presigned URLs. The value that failed is the opposite of the thing the rule prohibits.
+
+**ADR-007 already permits it, explicitly.** *"Base URLs"* sit in that record's **Permitted in source code** table, next to timeouts and retry counts, and `core/network/` is where ADR-007 assigns them. A CI check that fails an accepted ADR's named example is the check disagreeing with the architecture, and `docs/architecture/README.md` decides that case: where code and an accepted ADR disagree, the ADR is correct.
+
+**This exact fault is already on file, twice.** Open item 47 records this check failing on four Mission 4.2 test fixtures whose assertions — `isNot(contains('X-Amz-Signature'))` — exist to *prove* credentials are stripped. A-075 records the confinement rule matching a comment that said a package was deliberately not imported. The check's own comment draws the conclusion: *"A check that fires on its own proof is the same fault A-075 recorded."* This is the third instance, and the first where the false positive is a value an ADR names as permitted.
+
+### What was deliberately not touched
+
+**The three credential-material checks are unchanged and still run over `lib test`** — the `AKIA|ASIA` pattern, the `aws_secret_access_key` family, and the repository-wide `git grep` for key material. The check's comment already explains why they are wider than this one:
+
+> *"They look for credential **material** … and a real one of those committed under `test/` is every bit as disclosed as one under `lib/`. Narrowing them would trade a real guarantee for a green tick."*
+
+That reasoning is untouched, because it is about disclosure and this one is about design. **Only the design rule moved, and only to the boundary it already declared.**
+
+### Proven non-vacuous rather than assumed
+
+The new pattern was run against a planted S3 URL and against the real configuration:
+
+```
+s3 host   lib/_probe.dart:1: 'https://vump-platform-dev.s3.ap-south-1.amazonaws.com/x'   → MATCHED
+api gw    lib/core/network/network_config.dart:87 (execute-api…amazonaws.com)            → not matched
+```
+
+So it still fails on the thing it exists to catch, and no longer fails on the thing ADR-007 permits. The probe file was deleted after the check.
+
+### The honest residue
+
+`execute-api` hostnames are now invisible to this job. If someone hardcodes a *different* environment's API Gateway URL into `lib/`, nothing here objects — `NetworkConfig` is trusted to be the only place base URLs live, and that trust is not machine-checked. It is the same class of gap A-153 and A-161 record: a rule stated in one place and executed in another, or not at all. A custom domain would remove the ambiguity entirely by moving the backend off `amazonaws.com`, and is deferred for want of a registered domain.
