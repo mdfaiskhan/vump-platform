@@ -6649,3 +6649,33 @@ This is `SESSION_ALREADY_REGISTERED`'s pattern one level down, and the symmetry 
 The mobile side is unaffected either way: Mission 4.2's test asserts only that `VumpApi` surfaces the code, and its own comment records that *"the envelope is the contract, not the status code."*
 
 **Recorded separately rather than inside Batch 2b's report** because it corrects a reading this mission itself published in Part 1, and a correction folded into the report of the work it changed is the kind that stops being findable.
+
+---
+
+### A-191 — Chapter 5.10's step order puts the metadata POST after the status PATCH, and BR-21 makes that order impossible
+
+| | |
+|---|---|
+| **Volume** | 5, Ch. 5.10 §1's pipeline steps; Volume 4 Ch. 4.2 §3 (BR-21) and Ch. 4.5 §3 |
+| **Says** | Ch. 5.10 §1: *"3. Confirm — `PATCH /v1/chunks/{id}/status` → 'uploading' → 'complete'. 4. Metadata — `POST /v1/chunks/{id}/metadata`"* |
+| **Should say** | Metadata must be **step 3** and the status PATCH **step 4**. In the order as written, step 3 can never succeed |
+| **Authority** | BR-21, as implemented by `complete_chunk()` in migration `0006` |
+| **Class** | Sequencing defect in a specification, found by tracing the handler against the gate |
+| **Status** | **Open.** No code is written on either order yet |
+| **Date** | 2026-08-19, Mission 7.3 Batch 2b |
+
+Chapter 4.2 §3 requires that *"chunks.status can only transition to 'complete' via a stored procedure that first checks a matching, non-null chunk_metadata row exists"*, and Chapter 4.5 §3 adds the second half — the backend sets `verified_at` *"and allowing chunks.status → 'complete'"*. Migration `0006` implements both: `complete_chunk()` raises `restrict_violation` when `chunk_metadata.verified_at IS NULL`, and a `BEFORE UPDATE` trigger makes the procedure the only path.
+
+So a client following Chapter 5.10 §1 literally would, at step 3, ask for a transition the database is built to refuse — **every time, for every chunk** — and would only POST the metadata that makes it possible at step 4, after the call it needed it for had already failed.
+
+### This is not the divergence A-073 already records
+
+A-073 records the mobile side calling `markComplete` **after** step 4 rather than step 3, and its reasoning is about local deletion: *"BR-08 makes complete the point a chunk becomes eligible for local deletion, and deleting a chunk whose metadata never reached the backend would be unrecoverable."*
+
+That is the **local** status write, and the conclusion happens to agree with this one. What A-073 does not say — because Mission 4.2 had no backend to try it against — is that the *remote* order in the chapter is not merely suboptimal but unsatisfiable. Two different writes, two different reasons, one shared answer.
+
+### What the backend does about it, which is nothing
+
+A handler cannot reorder its caller. `PATCH …/status` → `'complete'` with no metadata row will be refused; the only choice is **how legibly**. It surfaces as `RESOURCE_NOT_FOUND` naming the absent metadata rather than letting `restrict_violation` arrive as `INTERNAL_ERROR`, so a client hitting this reads a sentence that names the cause instead of a 500 — Chapter 4.6 §1's named-cause rule applied to a mistake the specification actively invites.
+
+**Recorded before Mission 7.4 writes the client's call sequence**, because that mission is where the order becomes real, and the chapter it will be written from is the one that is wrong.
