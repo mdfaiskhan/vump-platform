@@ -1177,11 +1177,16 @@ jobs:
     # `environment:` is load-bearing rather than cosmetic. The OIDC `sub` claim
     # is trigger-dependent — `…:ref:refs/heads/develop` on a push,
     # `…:pull_request` on a pull request — and declaring an environment replaces
-    # both with the single stable `repo:OWNER/REPO:environment:ci-plan`. That is
-    # what lets the trust policy be an exact-match StringEquals with no
-    # wildcard, and what stops a PR-triggered run silently failing to
-    # authenticate. Removing this line breaks authentication, it does not merely
-    # relax it.
+    # both with a single stable subject. That is what lets the trust policy be
+    # an exact-match StringEquals with no wildcard, and what stops a
+    # PR-triggered run silently failing to authenticate. Removing this line
+    # breaks authentication, it does not merely relax it.
+    #
+    # The subject is NOT the documented `repo:OWNER/REPO:environment:ci-plan`.
+    # GitHub mints the immutable-identifier form, measured from a real token
+    # (A-171):
+    #
+    #   repo:mdfaiskhan@76160659/vump-platform@1326922888:environment:ci-plan
     environment: ci-plan
 
     # id-token: write is what permits the OIDC token to be minted. contents:
