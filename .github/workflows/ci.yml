@@ -1127,10 +1127,65 @@ jobs:
 
           exit $status
 
+  workflow-trigger-guard:
+    name: Workflow trigger guard
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions: {}
+    defaults:
+      run:
+        working-directory: .
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # ADR-049. `pull_request_target` runs in the BASE repository context with
+      # full permissions and attacker-authored code from the fork. This
+      # repository is public and now holds GitHub OIDC roles, so that trigger
+      # would be a credential-disclosure primitive rather than a convenience:
+      # a fork PR could mint a token for vump-dev-ci-plan-reader.
+      #
+      # The property that keeps the OIDC design safe today is that fork PRs on
+      # `pull_request` cannot be granted `id-token: write` at all. That property
+      # is GitHub's, not ours, and `pull_request_target` is the one way to lose
+      # it from inside this repository. This job is what stops that being a
+      # one-line change nobody notices in review.
+      - name: No pull_request_target in any workflow
+        run: |
+          if grep -rn "pull_request_target" .github/workflows/; then
+            echo "::error::pull_request_target is forbidden (ADR-049). It runs fork code in the base-repo context, where the GitHub OIDC roles are assumable."
+            exit 1
+          fi
+          echo "ok  no pull_request_target in any workflow file"
+
   terraform:
     name: Terraform
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
+
+    # ADR-049, decision D-1. Gap 16 stayed open because this job ran no
+    # `terraform plan` — it had no credentials, so the ADR-048 authorizer
+    # exemption `check` never evaluated.
+    #
+    # The credential is now a GitHub OIDC token exchanged for a one-hour AWS
+    # session. No access key exists in this repository or in GitHub Secrets.
+    #
+    # `environment:` is load-bearing rather than cosmetic. The OIDC `sub` claim
+    # is trigger-dependent — `…:ref:refs/heads/develop` on a push,
+    # `…:pull_request` on a pull request — and declaring an environment replaces
+    # both with the single stable `repo:OWNER/REPO:environment:ci-plan`. That is
+    # what lets the trust policy be an exact-match StringEquals with no
+    # wildcard, and what stops a PR-triggered run silently failing to
+    # authenticate. Removing this line breaks authentication, it does not merely
+    # relax it.
+    environment: ci-plan
+
+    # id-token: write is what permits the OIDC token to be minted. contents:
+    # read is restated because a job-level `permissions` block replaces the
+    # workflow-level one rather than extending it.
+    permissions:
+      contents: read
+      id-token: write
     # Overrides the workflow-level `mobile` default. This job's subject is
     # `infrastructure/terraform/`, and every command below is written relative
     # to it — the same trap open item 49 records for the two jobs above.
@@ -1188,6 +1243,61 @@ jobs:
         run: |
           tflint --init
           tflint --recursive --format=compact
+
+      # The dev root's api-gateway module reads backend/artifacts through an
+      # archive data source, so a plan fails with a missing directory unless the
+      # bundles exist. ADR-043 records the coupling deliberately: Terraform is
+      # not a build tool. The build is repeated here rather than shared with the
+      # Backend job because artifacts do not cross job boundaries without an
+      # upload/download round-trip that costs more than the rebuild.
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.BACKEND_NODE_VERSION }}
+
+      - name: Build backend artifacts for the archive data source
+        working-directory: backend
+        run: |
+          npm ci
+          npm run build
+
+      - name: Assume the plan-reader role
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::929570731524:role/vump-dev-ci-plan-reader
+          aws-region: ap-south-1
+          role-session-name: ci-plan-${{ github.run_id }}
+
+      # `-lock=false` is what keeps this genuinely read-only. Under
+      # `use_lockfile` (ADR-043) a normal plan writes and then deletes a lock
+      # object in the state bucket, and plan-reader holds no s3:PutObject or
+      # s3:DeleteObject at all — so the lock would fail, and granting it would
+      # make "read-only" false. A plan cannot corrupt state by not locking; the
+      # lock protects concurrent APPLIES, and this job never applies.
+      #
+      # `-detailed-exitcode` is deliberately NOT used. Exit 2 means "changes
+      # pending", which is the normal state of a PR that changes
+      # infrastructure — failing on it would make every such PR red.
+      - name: terraform plan (dev)
+        working-directory: infrastructure/terraform/environments/dev
+        run: |
+          terraform init -input=false -no-color
+          terraform plan -lock=false -input=false -no-color 2>&1 | tee plan.txt
+
+      # ADR-048's authorizer exemption is expressed as a Terraform `check`
+      # block, and gap 16 recorded that a failed check is a WARNING rather than
+      # an error even when it does evaluate. Running the plan is therefore
+      # necessary and not sufficient: without this step the check could fail and
+      # the job would still be green, which is the exact shape of the defect
+      # gap 16 describes.
+      - name: Fail on any failed check block
+        working-directory: infrastructure/terraform/environments/dev
+        run: |
+          if grep -q "Check block assertion failed" plan.txt; then
+            echo "::error::a Terraform check block failed — see the plan output above (ADR-048, gap 16)"
+            exit 1
+          fi
+          echo "ok  no check block assertion failed"
 
   backend:
     name: Backend
