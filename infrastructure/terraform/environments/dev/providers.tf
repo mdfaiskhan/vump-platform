@@ -4,6 +4,14 @@ terraform {
       source  = "hashicorp/aws"
       version = "~> 6.0"
     }
+    # Used directly by this root since Mission 7.3's `probe.tf` packages its own
+    # zip. The api-gateway module already constrains it identically; a module's
+    # constraint does not cover a root that uses the provider itself, which
+    # tflint's terraform_required_providers rule is what caught.
+    archive = {
+      source  = "hashicorp/archive"
+      version = "~> 2.7"
+    }
   }
 }
 
