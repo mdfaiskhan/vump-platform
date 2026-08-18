@@ -117,4 +117,4 @@ aws iam create-access-key --user-name faisal-dev
 | **`faisal-dev` access key** | Out of band | ❌ **Not yet created — the user runs this** |
 | **`faisal-admin` key rotated** | Demote to break-glass | ❌ **Not yet. Deliberate: not before the new path is proven end-to-end** |
 | **`db-prover` exercised** | Gap 8 | ❌ No CI job exists to exercise it |
-| **`ref`-shape assumption** | Both trigger shapes | ⚠️ Proven only for `pull_request`. The `ref` form cannot run until this merges to `develop` — see A-175 |
+| `ref`-shape assumption | Both trigger shapes | ✅ Both proven. `pull_request` run 32123773224; `ref` run 32128742979 on `develop` after merge — A-175 |

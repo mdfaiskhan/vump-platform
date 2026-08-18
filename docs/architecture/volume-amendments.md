@@ -6147,7 +6147,7 @@ The real trade is the inverse and is now in ADR-049: because `refs/pull/*/merge`
 | **Verified** | The **claim** is measured on both shapes. The **assumption** succeeded on `pull_request` only |
 | **Authority** | Two live CI runs, 32123773224 and 32124059624 |
 | **Class** | Verification gap, time-bounded |
-| **Status** | **Open** until the Mission 7.1 PR merges to `develop` |
+| **Status** | **Closed 2026-08-18.** Run 32128742979, the first push to `develop` after PR #11 merged, assumed the role and planned successfully |
 | **Date** | 2026-08-18, Mission 7.1 |
 
 `ci.yml` on `develop` has no OIDC job, so a `workflow_dispatch` against `develop` runs the old file and proves nothing. Dispatching against the mission branch instead produced:
@@ -6163,3 +6163,47 @@ The real trade is the inverse and is now in ADR-049: because `refs/pull/*/merge`
 **Both results are the design working.** The subject is byte-identical across two different triggers, which is the central claim of the environment-scoped design and is now measured rather than argued. The denial is a negative control: the dispatch ran from a branch matching neither permitted `job_workflow_ref` value, and was refused — so that condition is not vacuous.
 
 What remains unproven is narrow and should not be rounded up: that a `ref`-form run **from `develop`** assumes successfully. It cannot be tested before the merge that puts the job on `develop`. The first post-merge run on `develop` is that test, and it is the thing to watch rather than assume.
+
+**Closed by the merge, as designed.** PR #11 squash-merged as `6623e69`, and the resulting push to `develop` ran with `job_workflow_ref = …/ci.yml@refs/heads/develop` — the first permitted value — and assumed `vump-dev-ci-plan-reader` successfully. Run **32128742979**: `Assume the plan-reader role`, `terraform plan (dev)` and `Fail on any failed check block` all green.
+
+Both trigger shapes are therefore exercised end-to-end against live AWS: `pull_request` (run 32123773224) and `ref` (run 32128742979), with a byte-identical `sub` and two different `job_workflow_ref` values, both permitted. The denial recorded above from `refs/heads/mission/7.1-…` remains the negative control.
+
+**One thing not to read off this run.** It reports 12 passed and **1 skipped** — `Commit convention` is gated on `pull_request` and does not run on a push. That is the same distinction the Mission 6 report insisted on: a skipped job is not a passed job. The full 13 ran on PR #11's final run, 32124775073.
+
+---
+
+### A-176 — `faisal-dev`'s first access key was exposed, and was killed before it was ever used
+
+| | |
+|---|---|
+| **Record** | ADR-049 D-2; `docs/development/secrets-management.md` §"If a secret is committed" |
+| **Event** | The first access key created for `faisal-dev` (id ending `LXBX`) was disclosed in an unrelated chat transcript shortly after creation |
+| **Response** | Deactivated and **deleted**, and a replacement generated. Both actions by the project owner, directly against AWS |
+| **Authority** | Project owner, Mission 7.1 Part 3 |
+| **Class** | Credential incident, contained |
+| **Status** | **Closed** |
+| **Date** | 2026-08-18, Mission 7.1 |
+
+**The response followed the order this project already wrote down.** `secrets-management.md` says *"Rotate first. Always"*, and ADR-016 says the same at more length: *"The first action is always to rotate the credential, not to rewrite history… A team that reverses that order spends its first hour on the part that does not stop the bleeding."* The key was killed first and the transcript dealt with afterwards, which is the correct order and worth recording as the first time the rule was actually exercised rather than merely stated.
+
+### What was verified, and how
+
+| Claim | Evidence |
+|---|---|
+| The exposed key is **deleted**, not merely deactivated | `aws iam list-access-keys --user-name faisal-dev` returns exactly one key, `AKIA…RNOF` (created 2026-08-18T10:13:08Z, Active). `AKIA…LXBX` does not appear in any state |
+| The exposed key was **never used** | `aws cloudtrail lookup-events --lookup-attributes AttributeKey=AccessKeyId,AttributeValue=<the exposed key id>` returns **0 events** |
+| That zero is not a vacuous zero | The identical query against the replacement key returns **6 `AssumeRole` events** — the MFA verification calls. The query demonstrably detects usage when usage exists |
+
+**The blast radius was structurally small before any of that mattered, and this is the part worth carrying forward.** Under ADR-049's D-2 the key grants *nothing on its own*: `faisal-dev` holds `sts:AssumeRole` and no other permission, and both roles it may assume require `aws:MultiFactorAuthPresent`. A holder of the disclosed key, without the `2_dev_faisal` MFA device, could not read, write or describe anything — the same `AccessDenied` the negative half of the human-path proof produced deliberately.
+
+**A key disclosed under the pre-ADR-049 design would have been a different event.** The credential it replaces, `faisal-admin`'s, carries `AdministratorAccess` directly. This incident is the argument for D-2 arriving as an unplanned live test rather than as a paragraph in the Alternatives Considered.
+
+### Why the key ids are truncated here
+
+CI's secret scan matches `(AKIA|ASIA)[0-9A-Z]{16}`, and the first draft of this amendment failed it — correctly, by the scanner's own terms. An access key **id** is not a secret under ADR-016's capability test; it grants nothing without the secret half. But the scanner cannot make that distinction, and adding an exception so a document could carry the pattern would trade a working control for a nicety. The ids are truncated to their last four characters, which is enough to identify them against `aws iam list-access-keys`, and the full values stay where they belong: in AWS.
+
+Recorded because this is the second time in Mission 7.1 that a check proved non-vacuous by failing on this mission's own work — the `pull_request_target` guard was the first.
+
+### The one caveat, stated rather than smoothed over
+
+**CloudTrail Event history is not a durable audit trail.** A-019 records that no trail is configured, so the 90-day Event history is all there is: not exportable, not retained beyond the window, and not the account-wide trail Volume 8 Chapter 8.4 §4 requires. The finding is sound here only because the key's entire life was roughly one hour on the day of the query, far inside the window. **The same investigation ninety-one days later would return zero events for a key that had been used every day**, and nothing would distinguish the two answers. A-019 is now a gap with a worked example attached.
