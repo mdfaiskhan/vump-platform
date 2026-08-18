@@ -9,6 +9,7 @@ import 'package:mobile/core/onboarding/providers/onboarding_ports.dart';
 import 'package:mobile/features/auth/application/auth_notifier.dart';
 import 'package:mobile/features/auth/application/auth_state.dart';
 import 'package:mobile/features/auth/presentation/admin_invite_codes_screen.dart';
+import 'package:mobile/features/auth/presentation/backend_profile_tile.dart';
 import 'package:mobile/features/auth/presentation/login_screen.dart';
 import 'package:mobile/features/auth/presentation/sign_out_tile.dart';
 import 'package:mobile/features/auth/presentation/signup_screen.dart';
@@ -378,7 +379,10 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((Ref ref) {
                     // the auth control into the settings screen. Neither
                     // feature imports the other.
                     const CollectorSettingsScreen(
-                      accountActions: <Widget>[SignOutTile()],
+                      accountActions: <Widget>[
+                        BackendProfileTile(),
+                        SignOutTile(),
+                      ],
                     ),
               ),
             ],
@@ -473,7 +477,10 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((Ref ref) {
                 path: '/admin/settings',
                 builder: (BuildContext context, GoRouterState state) =>
                     const AdminSettingsScreen(
-                      accountActions: <Widget>[SignOutTile()],
+                      accountActions: <Widget>[
+                        BackendProfileTile(),
+                        SignOutTile(),
+                      ],
                     ),
               ),
             ],
