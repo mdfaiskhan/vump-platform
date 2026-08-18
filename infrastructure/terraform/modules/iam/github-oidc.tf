@@ -32,8 +32,25 @@ locals {
   # AND would silently fail to match pull_request — which is the trigger Gap 16's
   # plan-on-PRs actually runs under. ci.yml's Commit convention job already lives
   # on that trigger today.
-  ci_plan_subject     = "repo:${var.github_repository}:environment:ci-plan"
-  ci_db_proof_subject = "repo:${var.github_repository}:environment:ci-db-proof"
+  # **The subject is NOT repo:OWNER/REPO:... on this repository**, and that is
+  # measured rather than assumed — Mission 7.1's first federated run printed its
+  # own claims and the trust policy was written from the output.
+  #
+  # GitHub mints the immutable-identifier form here:
+  #
+  #   repo:mdfaiskhan@76160659/vump-platform@1326922888:environment:ci-plan
+  #
+  # The numbers are the owner's and the repository's database IDs, confirmed
+  # against the REST API. This is strictly BETTER than the documented
+  # owner/repo form: renaming the user or the repository does not free the old
+  # name for somebody else to claim and inherit this trust. But every published
+  # example uses the plain form, so a policy written from documentation fails
+  # with "Not authorized to perform sts:AssumeRoleWithWebIdentity" and gives no
+  # hint as to which condition missed. A-171 records it.
+  github_subject_prefix = "repo:${var.github_repository_owner}@${var.github_owner_id}/${var.github_repository_name}@${var.github_repository_id}"
+
+  ci_plan_subject     = "${local.github_subject_prefix}:environment:ci-plan"
+  ci_db_proof_subject = "${local.github_subject_prefix}:environment:ci-db-proof"
 
   # Pins the workflow FILE, and the ref namespace it may run from. On a public
   # repo this is what stops a workflow added on some other branch from assuming

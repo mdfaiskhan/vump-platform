@@ -87,3 +87,27 @@ variable "manage_account_identity" {
   type        = bool
   default     = true
 }
+
+variable "github_repository_owner" {
+  description = "GitHub owner login, e.g. mdfaiskhan. The name half of the OIDC subject."
+  type        = string
+}
+
+variable "github_repository_name" {
+  description = "GitHub repository name without the owner, e.g. vump-platform."
+  type        = string
+}
+
+variable "github_owner_id" {
+  description = <<-EOT
+    The owner's immutable numeric GitHub ID. GitHub embeds it in the OIDC
+    subject claim, so the trust policy cannot be written without it. Measured
+    from a real token, not assumed — see github-oidc.tf and A-171.
+  EOT
+  type        = string
+}
+
+variable "github_repository_id" {
+  description = "The repository's immutable numeric GitHub ID. Embedded in the OIDC subject claim alongside the owner's."
+  type        = string
+}

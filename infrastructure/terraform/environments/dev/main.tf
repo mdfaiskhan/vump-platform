@@ -89,6 +89,10 @@ module "iam" {
   # the only environment root that exists. staging and prod must set
   # manage_account_identity = false when they arrive.
   github_repository       = var.github_repository
+  github_repository_owner = var.github_repository_owner
+  github_repository_name  = var.github_repository_name
+  github_owner_id         = var.github_owner_id
+  github_repository_id    = var.github_repository_id
   state_bucket            = var.state_bucket
   chunk_bucket            = var.chunk_bucket
   evidentiary_buckets     = var.evidentiary_buckets

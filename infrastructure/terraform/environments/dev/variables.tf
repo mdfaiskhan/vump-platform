@@ -129,3 +129,33 @@ variable "evidentiary_buckets" {
   type        = list(string)
   default     = ["vump-platform-dev", "vump-platform-staging", "vump-platform-prod"]
 }
+
+variable "github_repository_owner" {
+  description = "GitHub owner login."
+  type        = string
+  default     = "mdfaiskhan"
+}
+
+variable "github_repository_name" {
+  description = "GitHub repository name without the owner."
+  type        = string
+  default     = "vump-platform"
+}
+
+variable "github_owner_id" {
+  description = <<-EOT
+    Immutable numeric GitHub ID for the owner, embedded in the OIDC subject
+    claim. Read from the REST API and confirmed against a real token's claims
+    during Mission 7.1 (A-171). It changes only if the account is deleted and
+    recreated, at which point federation should break rather than silently
+    trust a re-registered name.
+  EOT
+  type        = string
+  default     = "76160659"
+}
+
+variable "github_repository_id" {
+  description = "Immutable numeric GitHub ID for the repository, embedded in the OIDC subject claim."
+  type        = string
+  default     = "1326922888"
+}
