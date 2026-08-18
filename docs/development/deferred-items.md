@@ -20,6 +20,8 @@ Neither Ch. 11.4's register nor Ch. 11.6's tracker exists as a file in this repo
 
 An item leaves this table only when its owning mission closes it. Nothing is deleted for going stale.
 
+**Mission 6's items are also collected in [`mission-6-gap-register.md`](mission-6-gap-register.md)**, together with the "report, don't fix" items that were raised inside a close-out and never became rows here. That file is a hand-off to Mission 6.7's security review; this one remains the live register. Where they disagree, the ADR or amendment each cites is correct.
+
 ## The log
 
 | # | Item | Owner | Evidence |

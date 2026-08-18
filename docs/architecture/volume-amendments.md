@@ -5934,6 +5934,20 @@ api gw    lib/core/network/network_config.dart:87 (execute-api…amazonaws.com) 
 
 So it still fails on the thing it exists to catch, and no longer fails on the thing ADR-007 permits. The probe file was deleted after the check.
 
-### The honest residue
+### The accepted tradeoff, stated rather than implied
+
+**The endpoint check now catches S3-host patterns only.** `execute-api` hostnames — and every other `amazonaws.com` host that is not S3 — are **structurally invisible** to it. That is the cost of the narrowing and it is accepted, not overlooked.
+
+It is acceptable because **this check was never the thing preventing credential leakage.** It bounds a *design* rule: do not hardcode an S3 host, because doing so means bypassing the presigned-URL flow. Disclosure is guarded by three separate checks, and the narrowing does not touch any of them:
+
+| Check | Pattern | Scope | Changed? |
+|---|---|---|---|
+| Access key IDs | `\b(AKIA\|ASIA)[0-9A-Z]{16}\b` | `lib test` | **No** |
+| Secret material | `aws_secret_access_key\|aws_access_key_id\|aws_session_token` | `lib test` | **No** |
+| Repository-wide key scan | `\b(AKIA\|ASIA)[0-9A-Z]{16}\b` | whole repo, `git grep` | **No** |
+
+So a credential committed anywhere still fails the build, exactly as before. What changed is that naming the backend's own base URL — a value ADR-007 lists as permitted — no longer does.
+
+### The residue
 
 `execute-api` hostnames are now invisible to this job. If someone hardcodes a *different* environment's API Gateway URL into `lib/`, nothing here objects — `NetworkConfig` is trusted to be the only place base URLs live, and that trust is not machine-checked. It is the same class of gap A-153 and A-161 record: a rule stated in one place and executed in another, or not at all. A custom domain would remove the ambiguity entirely by moving the backend off `amazonaws.com`, and is deferred for want of a registered domain.
