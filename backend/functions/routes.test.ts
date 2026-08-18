@@ -76,8 +76,16 @@ describe('the route inventory', () => {
           headers: {},
         } as never);
 
-        // 401 (no token) proves the route matched and reached the wrapper.
-        expect(response.statusCode, `${name}: ${route} should be registered`).toBe(401);
+        // Registration is proved by "not 404". Since ADR-048 the *reason* a
+        // bare request is refused differs by route, and that difference is the
+        // architecture: POST /v1/auth/verify verifies its own token and says
+        // AUTH_TOKEN_MISSING; every other route expects an authorizer context
+        // that only API Gateway can supply, so a hand-made event without one
+        // is a configuration error rather than an unauthenticated caller.
+        expect(response.statusCode, `${name}: ${route} should be registered`).not.toBe(404);
+        expect([401, 500], `${name}: ${route} should refuse a bare request`).toContain(
+          response.statusCode,
+        );
       }
 
       const unknown = await handler({
@@ -89,12 +97,28 @@ describe('the route inventory', () => {
     }
   });
 
-  it('rejects an unauthenticated request before reaching any stub', async () => {
+  it('refuses a request with no authorizer context, rather than running the stub', async () => {
     const response = await chunksUpload({
       httpMethod: 'POST',
       resource: '/v1/sessions/{sessionId}/chunks',
       headers: {},
+      requestContext: {},
     } as never);
+
+    // ADR-048: a route behind the authorizer cannot be reached without one.
+    // Failing here rather than falling back to an unauthenticated path is what
+    // stops a detached authorizer from silently opening an endpoint.
+    expect(response.statusCode).toBe(500);
+    expect(JSON.parse(response.body).error.code).toBe('INTERNAL_ERROR');
+  });
+
+  it('still names a missing bearer token on the one route that verifies its own', async () => {
+    const response = await authVerify({
+      httpMethod: 'POST',
+      resource: '/v1/auth/verify',
+      headers: {},
+      requestContext: {},
+    });
 
     expect(JSON.parse(response.body).error.code).toBe('AUTH_TOKEN_MISSING');
   });

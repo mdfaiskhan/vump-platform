@@ -22,6 +22,13 @@ export const ERROR_CODES = [
   'AUTH_TOKEN_INVALID',
   /** The token verified, but no `users` row matches its `firebase_uid`. */
   'AUTH_USER_NOT_FOUND',
+  /**
+   * The token carries an `org_id` claim this application cannot resolve to a
+   * row in `orgs`. Distinct from AUTH_USER_NOT_FOUND: the account may exist,
+   * but the organisation it names does not. See `org.ts` for why an
+   * unrecognised value is refused rather than defaulted.
+   */
+  'AUTH_ORG_UNRECOGNISED',
 
   // --- Authorization (Chapter 4.8) ----------------------------------------
   /** Authenticated, but the role or org scope forbids this operation. */
@@ -82,6 +89,14 @@ export class ApiError extends Error {
 
   static userNotFound(): ApiError {
     return new ApiError('AUTH_USER_NOT_FOUND', 'No account matches this token.', 401);
+  }
+
+  static orgUnrecognised(): ApiError {
+    return new ApiError(
+      'AUTH_ORG_UNRECOGNISED',
+      'This account carries no organisation this application recognises.',
+      401,
+    );
   }
 
   static forbidden(what: string): ApiError {

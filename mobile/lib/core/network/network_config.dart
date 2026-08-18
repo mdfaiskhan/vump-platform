@@ -66,14 +66,25 @@ class NetworkConfig {
 
   /// Base URL for each environment.
   ///
-  /// **These are placeholders.** The `.example` top-level domain is reserved
-  /// by IANA for documentation and never resolves, so a build that reaches the
-  /// network with one of these unmodified fails loudly instead of silently
-  /// contacting the wrong host. Replace all three with the real endpoints
-  /// before any build ships.
+  /// Development is real. **Staging and production are still placeholders**,
+  /// and that is correct rather than unfinished: no API Gateway exists in
+  /// either environment, because `infrastructure/terraform/environments/`
+  /// contains only `dev`. The `.example` top-level domain is reserved by IANA
+  /// and never resolves, so a staging or production build that reaches the
+  /// network fails loudly instead of silently contacting the wrong host —
+  /// which is the property worth keeping until there is something real to
+  /// point at.
+  ///
+  /// The development URL is API Gateway's generated invoke URL:
+  /// `https://{restApiId}.execute-api.{region}.amazonaws.com/{stage}`. The id
+  /// is assigned by AWS, not chosen, so it is an opaque value that changes if
+  /// the REST API is ever destroyed and recreated. A custom domain would fix
+  /// that and is deferred — it needs a registered domain, and `vump.example`
+  /// is reserved and unregisterable.
   static String baseUrlFor(AppEnvironment environment) {
     return switch (environment) {
-      AppEnvironment.development => 'https://api.development.vump.example',
+      AppEnvironment.development =>
+        'https://32mar2hwsk.execute-api.ap-south-1.amazonaws.com/dev',
       AppEnvironment.staging => 'https://api.staging.vump.example',
       AppEnvironment.production => 'https://api.vump.example',
     };

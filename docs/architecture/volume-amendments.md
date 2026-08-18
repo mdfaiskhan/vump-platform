@@ -5770,3 +5770,170 @@ So Chapter 7.7 §3 does not merely over-provision. **It would have silently reso
 Recorded independently of Mission 6.4's outcome: the premise is wrong whether or not three projects exist, and it will mislead the next reader of Chapter 7.7 unless it is contradicted here.
 
 **What is true**: verification needs nothing. Claim-writing needs privilege. Those are different operations on the same SDK, and ADR-036 line 35 already draws the line — Chapter 7.7 §3 draws it in the wrong place.
+
+---
+
+### A-165 — The Workload-Identity-versus-key question is answered by not asking it
+
+| | |
+|---|---|
+| **Record** | ADR-036 (the deferral), Volume 4 Chapter 4.9 §3, ADR-016 |
+| **Said** | ADR-036: the ported endpoint must obtain claim-writing privilege *"without a long-lived key — Workload Identity Federation from AWS to GCP is the shape that avoids one, and it is not free to set up."* |
+| **Decides** | Neither. `redeemInviteCode` is **not ported**, so no credential is needed on either side. |
+| **Authority** | Project owner's decision, Mission 6.5.1 |
+| **Class** | Deferred decision resolved |
+| **Status** | **Closed.** Reopens only if claim-writing moves to AWS |
+| **Date** | 2026-08-18, Mission 6.5 |
+
+Chapter 4.9 §3 defines the boundary between the two clouds and how much may cross it:
+
+> *"The seam: **the only integration point between the two clouds is Chapter 4.7's token verification** — the AWS-side Lambda functions call the Firebase Admin SDK to verify a token, **and nothing else crosses the boundary.** This keeps the seam narrow and easy to reason about."*
+
+Verification needs no credential — A-149 measured it, A-164 records that Chapter 7.7 §3 is wrong to require one. So the seam is credential-free **today**, and the only thing that would change that is moving claim-writing to AWS.
+
+**Porting was the premise, not the goal.** ADR-036 wants `functions/` retired; deferred item 10 tracks it. But retiring it means the claim writer moves to a runtime outside Google, and *that* is what forces a credential to exist — either a WIF trust relationship or a long-lived key. The question ADR-036 deferred only has to be answered if the port happens.
+
+Inside Cloud Functions the runtime authenticates through the metadata server. **No credential exists anywhere**, and A-163 established that this has been working since Mission 2.9. Leaving the writer where it is keeps Chapter 4.9 §3's seam exactly as narrow as the chapter specifies, and costs nothing to run.
+
+### What it costs instead
+
+**Deferred item 10 stays open, and that is now a decision rather than an omission.** ADR-036's *"retired at Mission 6/7"* is not honoured, and this record is why: retiring it would trade a credential-free seam for a credential, in order to delete a small function that works. The trade is available whenever someone wants it; nobody wanted it here.
+
+### The recommendation if it is ever taken
+
+**WIF, not a key.** A key is cheaper on the day it is created and more expensive every day after: ADR-036 calls it *"a silent, total authorization bypass"* if leaked, ADR-016 records that the seven database secrets already rotate manually with nothing scheduling them, and a disclosed key is permanent. WIF's cost is one-time and bounded — a workload identity pool, a provider, a trust policy and an external-account config.
+
+### One provisioning artefact was removed
+
+`vump-dev-auth-verify`'s IAM policy granted `secretsmanager:GetSecretValue` on `vump/{env}/firebase-service-account-*`, added in Mission 6.1 on the assumption that verification needs a key. No secret ever existed behind it, so it conferred nothing — but a permission shaped like the key answer is a quiet vote for it, and the question was still open. Removed in Mission 6.5.
+
+---
+
+### A-166 — Chapter 4.7 contradicts itself, and reading it as one component would have locked everyone out
+
+| | |
+|---|---|
+| **Volume** | 4, Chapter 4.7 §1 step 4 against Chapter 4.7 §4 |
+| **Says** | §1 step 4: the backend *"looks up **(or creates, on first login)** the matching users row"*. §4's pseudocode: `user = db.users.findByFirebaseUid(...)` / **`if user is null: reject(401)`**. |
+| **Should say** | Both, of different components: the authorizer rejects; `POST /v1/auth/verify` creates. |
+| **Authority** | Project owner's decision, Mission 6.5.2 |
+| **Class** | Contradiction resolved |
+| **Status** | **Closed** — ADR-048 |
+| **Date** | 2026-08-18, Mission 6.5 |
+
+Create-on-first-login and reject-on-missing are different behaviours for the same condition, and the chapter states both a page apart. Mission 6.5.1 decided **reject**, on the grounds that §4's pseudocode is the executable form.
+
+**Applied uniformly, that decision would have bricked the platform**, and the trace found it before anything was built:
+
+| | |
+|---|---|
+| Firebase accounts in dev | **4**, all carrying `role` and `org_id` claims |
+| Aurora `users` rows | **0** |
+| Anything that inserts into `users` | **nothing** — verified by grep across `backend/` |
+| `redeemInviteCode` writing an Aurora row | **never** — it only touches Firebase Auth and Firestore |
+
+With an authorizer in front of every route and reject-on-missing inside it, every one of those accounts is refused at every endpoint — **including `POST /v1/auth/verify`, whose stated job in Chapter 4.6 §2 is to exchange a token for session context.** The route that would create the row sits behind the check that requires the row. And it does not heal: a new signup produces a Firebase account with claims and still no Aurora row.
+
+### The resolution is that the chapter is describing two things
+
+§4's pseudocode is **the authorizer**, in front of fourteen routes. §1 step 4's *"or creates"* is **`POST /v1/auth/verify`**, the one exempt route. Neither sentence is wrong; the chapter predates the split and reads as contradictory because it assumes one component does both.
+
+That also gives the exemption a reason beyond convenience: a first-time caller needs exactly one door that is not locked against them, and this is it.
+
+### The exemption is enforced, not asserted
+
+A second exemption would open an endpoint with nothing in front of it. A Terraform `check` asserts the exempt list is exactly `["POST /v1/auth/verify"]` and fails the plan otherwise. It fired on its first run — on a defect in the assertion itself rather than in the configuration: `sort()` returns `list(string)` and a literal `[...]` is a tuple, so HCL collection equality was false even though the contents matched.
+
+Verified against live AWS rather than against the configuration that produced it: **15 routes, 14 `CUSTOM`, one `NONE`**, attached per-method.
+
+---
+
+### A-167 — Mission 6.3's per-function credentials were never in effect at runtime
+
+| | |
+|---|---|
+| **Record** | A-158 (the GRANTs), A-160 (the two-layer isolation claim), ADR-016 |
+| **Was** | Every Lambda's `DATABASE_CREDENTIALS_SECRET_ARN` named the **master** secret, while its IAM policy allowed only its own per-function secret. |
+| **Is** | Each function's environment names its own credential. |
+| **Class** | Defect in prior-mission work, found by the first real request |
+| **Status** | **Closed** |
+| **Date** | 2026-08-18, Mission 6.5 |
+
+Mission 6.3 created seven database credentials, granted seven PostgreSQL roles, and repointed seven IAM policies. It did not repoint the seven Lambda **environments**, which still carried the master secret ARN from Mission 6.1.
+
+The result was a configuration that could not work: IAM allowed exactly one secret, and the runtime was told to read a different one.
+
+```
+assumed-role/vump-dev-auth-verify is not authorized to perform:
+secretsmanager:GetSecretValue on resource: …secret:rds!cluster-…
+```
+
+### Why nothing caught it
+
+**No handler had ever issued a query.** Mission 6.3.2 verified isolation thoroughly and in two places — `simulate-principal-policy` for IAM, `SET ROLE` refusals for PostgreSQL — and both were correct. Neither exercises the value the Lambda actually reads at runtime, because that value is only consulted when a query runs, and the first one ran in Mission 6.5.
+
+This is the same shape as A-153 and A-161: a property asserted in one layer and never executed end to end. A-160 recorded that per-function isolation was *"enforced twice"*, and that was true of IAM and of PostgreSQL — and beside the point, because the function could not authenticate at all. **The isolation was correct and unreachable.**
+
+### What makes the fix load-bearing rather than cosmetic
+
+The per-function map is threaded into the module and each function is given `var.db_credential_secret_arns[each.key]`. Naming any other secret now produces an `AccessDenied` on the first query rather than a privilege escalation — the IAM policy is what makes a wrong environment variable safe, and the environment variable is what makes the IAM policy reachable. Neither is sufficient alone, which is the point A-160 was making and could not yet demonstrate.
+
+---
+
+### A-168 — The AWS endpoint check is narrowed to S3, which is what it always meant
+
+| | |
+|---|---|
+| **Record** | `.github/workflows/ci.yml`, `AWS credential isolation`; ADR-007; open item 47; A-075 |
+| **Was** | `grep -rn 'amazonaws\.com' lib` — any AWS hostname in the shipped source failed the build. |
+| **Is** | `grep -rnE 's3[.-][a-z0-9-]*\.amazonaws\.com' lib` — S3 hostnames only. |
+| **Authority** | Project owner's decision, Mission 6.5.7 |
+| **Class** | Check narrowed to its stated intent |
+| **Status** | **Closed** |
+| **Date** | 2026-08-18, Mission 6.5 |
+
+The check states the rule it protects, in its own comment:
+
+> *"This one looks for a hardcoded **endpoint**, which is a design defect rather than a disclosure: shipping code that names an **S3 host** has stopped waiting for the backend to presign a URL."*
+
+The rule is about S3. The pattern was about `amazonaws.com`, and the two were the same set for as long as every AWS hostname the mobile app could name was an S3 bucket.
+
+**Mission 6.3.2 ended that.** API Gateway's invoke URL is `{restApiId}.execute-api.{region}.amazonaws.com`, so the backend's own address is now under the same domain as the thing the rule forbids. Mission 6.5 put the real one in `NetworkConfig` and the check failed:
+
+```
+lib/core/network/network_config.dart:87:
+  'https://32mar2hwsk.execute-api.ap-south-1.amazonaws.com/dev',
+```
+
+### Why this is a narrowing rather than an erosion
+
+Three reasons, and the third is the one that settles it.
+
+**The rule's own words exclude it.** Naming the backend's base URL is not *"stopping waiting for the backend to presign a URL"* — it is how the app reaches the endpoint that issues presigned URLs. The value that failed is the opposite of the thing the rule prohibits.
+
+**ADR-007 already permits it, explicitly.** *"Base URLs"* sit in that record's **Permitted in source code** table, next to timeouts and retry counts, and `core/network/` is where ADR-007 assigns them. A CI check that fails an accepted ADR's named example is the check disagreeing with the architecture, and `docs/architecture/README.md` decides that case: where code and an accepted ADR disagree, the ADR is correct.
+
+**This exact fault is already on file, twice.** Open item 47 records this check failing on four Mission 4.2 test fixtures whose assertions — `isNot(contains('X-Amz-Signature'))` — exist to *prove* credentials are stripped. A-075 records the confinement rule matching a comment that said a package was deliberately not imported. The check's own comment draws the conclusion: *"A check that fires on its own proof is the same fault A-075 recorded."* This is the third instance, and the first where the false positive is a value an ADR names as permitted.
+
+### What was deliberately not touched
+
+**The three credential-material checks are unchanged and still run over `lib test`** — the `AKIA|ASIA` pattern, the `aws_secret_access_key` family, and the repository-wide `git grep` for key material. The check's comment already explains why they are wider than this one:
+
+> *"They look for credential **material** … and a real one of those committed under `test/` is every bit as disclosed as one under `lib/`. Narrowing them would trade a real guarantee for a green tick."*
+
+That reasoning is untouched, because it is about disclosure and this one is about design. **Only the design rule moved, and only to the boundary it already declared.**
+
+### Proven non-vacuous rather than assumed
+
+The new pattern was run against a planted S3 URL and against the real configuration:
+
+```
+s3 host   lib/_probe.dart:1: 'https://vump-platform-dev.s3.ap-south-1.amazonaws.com/x'   → MATCHED
+api gw    lib/core/network/network_config.dart:87 (execute-api…amazonaws.com)            → not matched
+```
+
+So it still fails on the thing it exists to catch, and no longer fails on the thing ADR-007 permits. The probe file was deleted after the check.
+
+### The honest residue
+
+`execute-api` hostnames are now invisible to this job. If someone hardcodes a *different* environment's API Gateway URL into `lib/`, nothing here objects — `NetworkConfig` is trusted to be the only place base URLs live, and that trust is not machine-checked. It is the same class of gap A-153 and A-161 record: a rule stated in one place and executed in another, or not at all. A custom domain would remove the ambiguity entirely by moving the backend off `amazonaws.com`, and is deferred for want of a registered domain.

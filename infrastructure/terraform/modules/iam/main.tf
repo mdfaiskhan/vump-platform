@@ -33,17 +33,16 @@ data "aws_region" "current" {}
 locals {
   # domain — the ADR-015 resource domain this role serves. Two roles may share one.
   # transactions — a role that only reads needs no transaction control.
-  # firebase_secret — only the token-verification path reads the Firebase key.
   # s3_policy — key into var.chunk_s3_policy_documents, or null for no S3 access
   #   at all. Exactly one role holds each S3 policy; five roles hold none.
   roles = {
-    "auth-verify"   = { domain = "auth-verify", transactions = false, firebase_secret = true, s3_policy = null }
-    "projects"      = { domain = "projects", transactions = true, firebase_secret = false, s3_policy = null }
-    "tasks"         = { domain = "tasks", transactions = true, firebase_secret = false, s3_policy = null }
-    "sessions"      = { domain = "sessions", transactions = true, firebase_secret = false, s3_policy = null }
-    "chunks-upload" = { domain = "chunks", transactions = true, firebase_secret = false, s3_policy = "presign-upload" }
-    "chunks-verify" = { domain = "chunks", transactions = true, firebase_secret = false, s3_policy = "verify-object" }
-    "metadata"      = { domain = "metadata", transactions = true, firebase_secret = false, s3_policy = null }
+    "auth-verify"   = { domain = "auth-verify", transactions = false, s3_policy = null }
+    "projects"      = { domain = "projects", transactions = true, s3_policy = null }
+    "tasks"         = { domain = "tasks", transactions = true, s3_policy = null }
+    "sessions"      = { domain = "sessions", transactions = true, s3_policy = null }
+    "chunks-upload" = { domain = "chunks", transactions = true, s3_policy = "presign-upload" }
+    "chunks-verify" = { domain = "chunks", transactions = true, s3_policy = "verify-object" }
+    "metadata"      = { domain = "metadata", transactions = true, s3_policy = null }
   }
 
   # Roles that carry an S3 policy, keyed by role name. Built by filtering rather
@@ -53,15 +52,18 @@ locals {
     for name, cfg in local.roles : name => cfg.s3_policy if cfg.s3_policy != null
   }
 
-  # Secrets Manager appends a six-character suffix to every secret ARN, so a
-  # secret that does not exist yet can only be named by prefix. The wildcard
-  # covers that suffix and nothing else — not the path, not the environment.
-  firebase_secret_arn_pattern = format(
-    "arn:aws:secretsmanager:%s:%s:secret:vump/%s/firebase-service-account-*",
-    data.aws_region.current.region,
-    data.aws_caller_identity.current.account_id,
-    var.environment_slug,
-  )
+  # There is deliberately no Firebase service-account secret grant here.
+  #
+  # Mission 6.1 gave auth-verify read access to `vump/{env}/firebase-service-account-*`
+  # on the assumption that verifying a token needs a service-account key. It
+  # does not — A-149 measured it and A-164 records that Volume 7 Chapter 7.7 §3
+  # is wrong on this point. The Admin SDK validates against Google's public
+  # certificates with no credential at all.
+  #
+  # The secret never existed, so the grant conferred nothing. It was removed in
+  # Mission 6.5 because a permission that presupposes a key is a quiet vote for
+  # the key half of the answer ADR-036 deferred, and that question is still
+  # open. Whatever resolves it should add the grant it actually needs.
 
   log_group_arn_pattern = format(
     "arn:aws:logs:%s:%s:log-group:/aws/lambda/vump-%s-*",
@@ -184,16 +186,6 @@ data "aws_iam_policy_document" "data_api" {
     ]
   }
 
-  dynamic "statement" {
-    for_each = each.value.firebase_secret ? [1] : []
-
-    content {
-      sid       = "ReadFirebaseServiceAccount"
-      effect    = "Allow"
-      actions   = ["secretsmanager:GetSecretValue"]
-      resources = [local.firebase_secret_arn_pattern]
-    }
-  }
 }
 
 resource "aws_iam_role_policy" "data_api" {

@@ -1102,10 +1102,28 @@ jobs:
           # is being followed. A check that fires on its own proof is the same
           # fault A-075 recorded when the confinement rule matched a comment
           # saying a package was deliberately not imported.
-          hits=$(grep -rn 'amazonaws\.com' lib 2>/dev/null || true)
+          # Narrowed to S3 hosts in Mission 6.5 (A-168), and the narrowing
+          # is TO the rule this check already states rather than away from it.
+          #
+          # It matched any `amazonaws.com` under lib/, which was exact for as
+          # long as every AWS hostname the app could name was S3. Mission
+          # 6.3.2 created an API Gateway, whose host is
+          # `{restApiId}.execute-api.{region}.amazonaws.com` — the backend's
+          # own address, which ADR-007 lists under "Permitted in source
+          # code" and assigns to NetworkConfig. The broad pattern fired on it.
+          #
+          # That is the fault open item 47 and A-075 already record: a check
+          # firing on evidence that the rule it protects is being followed.
+          # Naming the backend's base URL is not skipping the presigned-URL
+          # flow — it is how the app reaches the endpoint that issues them.
+          #
+          # The three credential-material checks above are untouched and stay
+          # wide over `lib test`. This one bounds a DESIGN rule, and bounding
+          # it to the thing the rule is about is what keeps it meaningful.
+          hits=$(grep -rnE 's3[.-][a-z0-9-]*\.amazonaws\.com' lib 2>/dev/null || true)
           [ -n "$hits" ] \
-            && fail "A hardcoded AWS endpoint appears in the mobile app's shipped source. S3 URLs arrive at runtime from the backend, presigned." "$hits" \
-            || echo "ok  no hardcoded AWS endpoint in lib/"
+            && fail "A hardcoded S3 endpoint appears in the mobile app's shipped source. S3 URLs arrive at runtime from the backend, presigned." "$hits" \
+            || echo "ok  no hardcoded S3 endpoint in lib/"
 
           exit $status
 

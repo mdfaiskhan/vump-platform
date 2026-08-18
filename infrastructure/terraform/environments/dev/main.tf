@@ -106,11 +106,21 @@ module "api_gateway" {
   # runtime sets itself, and setting it here is rejected at create time.
   # `loadConfig` reads the runtime's copy.
   lambda_environment = {
-    CHUNK_BUCKET                    = var.chunk_bucket
-    PRESIGN_EXPIRY_SECONDS          = tostring(var.presign_expiry_seconds)
-    DATABASE_CLUSTER_ARN            = module.database.cluster_arn
-    DATABASE_CREDENTIALS_SECRET_ARN = module.database.master_user_secret_arn
-    DATABASE_NAME                   = module.database.database_name
-    FIREBASE_PROJECT_ID             = var.firebase_project_id
+    CHUNK_BUCKET           = var.chunk_bucket
+    PRESIGN_EXPIRY_SECONDS = tostring(var.presign_expiry_seconds)
+    DATABASE_CLUSTER_ARN   = module.database.cluster_arn
+    DATABASE_NAME          = module.database.database_name
+    FIREBASE_PROJECT_ID    = var.firebase_project_id
   }
+
+  # DATABASE_CREDENTIALS_SECRET_ARN is per-function, not shared, so it is
+  # supplied separately and merged inside the module.
+  #
+  # Mission 6.3 created seven credentials and repointed seven IAM policies at
+  # them, and left every function's *environment* naming the master secret.
+  # Nothing failed, because no handler issued a query until Mission 6.5 — the
+  # first real request found it immediately: IAM denied the master secret the
+  # function was configured to use. A-158's per-function isolation was correct
+  # in IAM and in PostgreSQL, and unreachable at runtime.
+  db_credential_secret_arns = module.db_credentials.secret_arns
 }

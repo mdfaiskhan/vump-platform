@@ -48,27 +48,51 @@ export type DomainHandler<T> = (
 ) => Promise<HandlerResult<T>>;
 
 /**
- * Looks up the caller's `users` row. **Stubbed.**
+ * Builds the caller from the authorizer's context — ADR-048.
  *
- * Chapter 4.7 §1 step 4 requires *"looks up (or creates, on first login) the
- * matching `users` row via `firebase_uid` … and attaches role + org_id to the
- * request context"*. That is a database read and a conditional insert, and
- * Mission 6.3 owns both — the `users` table does not exist yet.
+ * ~~Stubbed.~~ **Replaced.** The lookup no longer happens here. A REQUEST
+ * authorizer (`authorizer.ts`) runs in front of fourteen of the fifteen
+ * routes, resolves the `users` row once, and API Gateway attaches the result
+ * to `event.requestContext.authorizer`. Reading it here means a handler needs
+ * neither a query nor a `users` grant — which is what lets Volume 8 Chapter
+ * 8.4 §1's restriction survive Chapter 4.8 §2's requirement that every
+ * endpoint have `user, role, org_id` attached.
  *
- * It returns a `Caller` with the identity populated and the row fields
- * `undefined`, rather than inventing an id. A handler that needs `orgId` must
- * therefore fail rather than silently scope a query to a fabricated org, which
- * is the failure mode a plausible fake would create.
+ * **The one route without an authorizer is `POST /v1/auth/verify`**, which is
+ * exempt so a first-time caller has a door that is not locked against them.
+ * It does its own verification and provisioning and does not use this.
  *
- * **Amendment A-150** records the resolution of the contradiction this sits on:
- * Volume 8, Chapter 8.4 §1 says auth-verify has *"No database write access"*
- * while Chapter 4.7 §1 step 4 has it creating a row. Read as no UPDATE and no
- * DELETE; INSERT for first-login creation is permitted. Enforcement is a
- * PostgreSQL `GRANT SELECT, INSERT` in Mission 6.3, because ADR-044 records
- * that per-table permission is not expressible in IAM under the Data API.
+ * A missing context is a configuration error, not an unauthenticated caller:
+ * API Gateway cannot invoke the function without one unless the authorizer was
+ * detached from the route. It fails rather than falling back to an
+ * unauthenticated path, because a silent fallback would turn a detached
+ * authorizer into an open endpoint.
  */
-async function resolveCaller(identity: TokenIdentity): Promise<Caller> {
-  return Promise.resolve({ identity, userId: undefined, orgId: undefined, role: undefined });
+function callerFromContext(event: APIGatewayProxyEvent): Caller {
+  const context = event.requestContext.authorizer;
+  const userId = typeof context?.userId === 'string' ? context.userId : undefined;
+  const orgId = typeof context?.orgId === 'string' ? context.orgId : undefined;
+  const role = typeof context?.role === 'string' ? context.role : undefined;
+  const firebaseUid = typeof context?.firebaseUid === 'string' ? context.firebaseUid : undefined;
+
+  if (
+    userId === undefined ||
+    orgId === undefined ||
+    role === undefined ||
+    firebaseUid === undefined
+  ) {
+    throw new Error(
+      'No authorizer context on the request. Every route except POST /v1/auth/verify ' +
+        'must sit behind the REQUEST authorizer (ADR-048).',
+    );
+  }
+
+  return {
+    identity: { firebaseUid, roleClaim: role, orgIdClaim: orgId, email: undefined },
+    userId,
+    orgId,
+    role,
+  };
 }
 
 /** Serialises an envelope into an API Gateway response. */
@@ -95,9 +119,7 @@ export function withEnvelope<T>(name: string, handler: DomainHandler<T>) {
   return async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
     const started = Date.now();
     try {
-      const header = event.headers.authorization ?? event.headers.Authorization;
-      const identity = await verifyToken(bearerToken(header));
-      const caller = await resolveCaller(identity);
+      const caller = callerFromContext(event);
 
       const result = await handler(event, caller);
 
@@ -105,7 +127,7 @@ export function withEnvelope<T>(name: string, handler: DomainHandler<T>) {
         route: name,
         status: result.status ?? 200,
         durationMs: Date.now() - started,
-        firebaseUid: identity.firebaseUid,
+        firebaseUid: caller.identity.firebaseUid,
       });
 
       return respond(result.status ?? 200, success(result.data, result.meta));
@@ -122,6 +144,52 @@ export function withEnvelope<T>(name: string, handler: DomainHandler<T>) {
         cause: thrown instanceof Error ? thrown.message : String(thrown),
       });
 
+      return respond(status, failure(code, message));
+    }
+  };
+}
+
+/**
+ * Wraps a handler that must verify the bearer token **itself** — ADR-048.
+ *
+ * Exactly one route uses this: `POST /v1/auth/verify`, the route exempt from
+ * the authorizer. It cannot read an authorizer context because there is none,
+ * and it must work for a caller who has no `users` row yet — that is the whole
+ * reason for the exemption.
+ *
+ * The handler receives the verified [TokenIdentity] rather than a [Caller],
+ * because at this point the row may not exist. Turning the identity into a row
+ * is `provisionCaller`'s job, and this route's purpose.
+ */
+export function withVerifiedToken<T>(
+  name: string,
+  handler: (event: APIGatewayProxyEvent, identity: TokenIdentity) => Promise<HandlerResult<T>>,
+) {
+  return async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+    const started = Date.now();
+    try {
+      const header = event.headers.authorization ?? event.headers.Authorization;
+      const identity = await verifyToken(bearerToken(header));
+
+      const result = await handler(event, identity);
+
+      logger.info('request completed', {
+        route: name,
+        status: result.status ?? 200,
+        durationMs: Date.now() - started,
+        firebaseUid: identity.firebaseUid,
+      });
+
+      return respond(result.status ?? 200, success(result.data, result.meta));
+    } catch (thrown) {
+      const { code, message, status } = toEnvelopeError(thrown);
+      logger.error('request failed', {
+        route: name,
+        code,
+        status,
+        durationMs: Date.now() - started,
+        cause: thrown instanceof Error ? thrown.message : String(thrown),
+      });
       return respond(status, failure(code, message));
     }
   };

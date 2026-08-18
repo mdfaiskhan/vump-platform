@@ -17,12 +17,14 @@ import 'package:mobile/core/errors/app_exception.dart';
 import 'package:mobile/core/firebase/providers/firebase_provider.dart';
 import 'package:mobile/core/logging/app_logger.dart';
 import 'package:mobile/core/logging/providers/logger_provider.dart';
+import 'package:mobile/core/network/providers/dio_provider.dart';
 import 'package:mobile/core/onboarding/providers/onboarding_ports.dart';
 import 'package:mobile/core/queue/providers/queue_ports.dart';
 import 'package:mobile/core/time/providers/clock_provider.dart';
 import 'package:mobile/core/upload/providers/upload_ports.dart';
 import 'package:mobile/features/auth/application/auth_notifier.dart';
 import 'package:mobile/features/auth/application/invite_code_notifier.dart';
+import 'package:mobile/features/auth/data/firebase_auth_token_source.dart';
 import 'package:mobile/features/auth/data/invite_code_repository_impl.dart';
 import 'package:mobile/features/auth/data/repositories/auth_repository_impl.dart';
 import 'package:mobile/features/onboarding/data/shared_preferences_onboarding_seen_store.dart';
@@ -83,6 +85,15 @@ Future<void> main() async {
   final ProviderContainer container = ProviderContainer(
     overrides: <Override>[
       databaseDirectoryProvider.overrideWithValue(documents.path),
+      // ADR-035's token source, which `dioClientProvider` requires and which
+      // throws until it is supplied.
+      //
+      // Needed from startup since Mission 6.5, not from the first authenticated
+      // request: `_restoreSession` resolves the auth repository, and since
+      // ADR-048 that repository holds a `VumpApi` — so the whole HTTP stack is
+      // constructed before any screen appears. Without this the container threw
+      // at startup and the app ran signed out with no way back in.
+      authTokenSourceProvider.overrideWithValue(FirebaseAuthTokenSource()),
       // The composition root is the only place that may name a concrete
       // implementation: `application/` declares `authRepositoryProvider` and
       // may not import `data/` (ADR-022), so the two are introduced here.
@@ -91,7 +102,11 @@ Future<void> main() async {
       // resolution lazy precisely so this line cannot throw during startup
       // that ADR-017 has already decided to tolerate.
       authRepositoryProvider.overrideWith(
-        (Ref ref) => AuthRepositoryImpl(logger: ref.watch(loggerProvider)),
+        (Ref ref) => AuthRepositoryImpl(
+          logger: ref.watch(loggerProvider),
+          // ADR-048: org_id comes from POST /v1/auth/verify, not the claim.
+          backend: ref.watch(vumpApiProvider),
+        ),
       ),
       // TEMPORARY, retired with ADR-036 at Mission 6/7.
       inviteCodeRepositoryProvider.overrideWithValue(

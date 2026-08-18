@@ -16,6 +16,9 @@ export {
   type StatementTarget,
 } from './data-api.js';
 export { isResuming, withResumeRetry, type RetryOptions } from './resume.js';
+export { authorize, isAuthorizerEvent } from './authorizer.js';
+export { lookupCaller, provisionCaller, type ResolvedCaller } from './caller.js';
+export { resolveOrgId, DEFAULT_ORG_ID, LEGACY_DEFAULT_ORG_CLAIM } from './org.js';
 export {
   success,
   failure,
@@ -28,6 +31,7 @@ export {
 export { ApiError, ERROR_CODES, toEnvelopeError, type ErrorCode } from './errors.js';
 export {
   withEnvelope,
+  withVerifiedToken,
   notImplementedRoute,
   type Caller,
   type DomainHandler,

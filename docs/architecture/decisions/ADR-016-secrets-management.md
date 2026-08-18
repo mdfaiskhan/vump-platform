@@ -54,9 +54,13 @@ In AWS, credentials come from the **Lambda execution role**, resolved by the SDK
 
 Per V8.4 §2. Lambda environment variables carry the **ARN**; the function resolves the value at runtime through its execution role.
 
-Two secrets were known when this record was written: the Firebase Admin service account key, rotated manually on an annual cadence or immediately on suspected compromise, and the Aurora credentials, rotated automatically by Secrets Manager's native RDS rotation. Naming convention: `vump/{environment}/{secret-name}`.
+Two secrets were anticipated when this record was written: the Firebase Admin service account key, rotated manually, and the Aurora credentials, rotated automatically by Secrets Manager's native RDS rotation. Naming convention: `vump/{environment}/{secret-name}`.
 
-**Mission 6.3 makes it nine**, and the reason is enforcement rather than convenience. ADR-044 records that `rds-data` actions scope to the *cluster*, so Volume 8 Chapter 8.4 §1's table-level restrictions cannot be expressed in IAM at all. They are PostgreSQL `GRANT`s against seven per-function database roles — and the Data API authenticates as whichever user its secret names, so one shared credential would make every function the master user and every GRANT decoration.
+**Only one of those two turned out to be needed, and this record over-counted for two missions.** The Firebase service-account key has never existed. Verifying a token needs no credential — A-149 measured it, and A-164 records that Volume 7 Chapter 7.7 §3 asks for a key for an operation that does not take one. The key becomes necessary only if claim-*writing* moves to AWS, which Mission 6.5 decided against: it stays in Cloud Functions, where the runtime authenticates through the metadata server and no key exists anywhere.
+
+So the anticipated count was two, the live count is **eight**, and the arithmetic below is one master credential plus seven per-function ones.
+
+**Mission 6.3 makes it eight**, and the reason is enforcement rather than convenience. ADR-044 records that `rds-data` actions scope to the *cluster*, so Volume 8 Chapter 8.4 §1's table-level restrictions cannot be expressed in IAM at all. They are PostgreSQL `GRANT`s against seven per-function database roles — and the Data API authenticates as whichever user its secret names, so one shared credential would make every function the master user and every GRANT decoration.
 
 So each function gets `vump/{environment}/db-{function}`, and its execution role may read exactly that one. A function cannot act as another's database role because it cannot read another's credential: **enforced by IAM rather than by handler discipline**, which is the distinction A-143 was raised to protect.
 
@@ -106,11 +110,11 @@ A committed secret is disclosed permanently. Deleting it in a later commit does 
 | `mobile/.env.example` | `APP_ENV` only | ✅ Created |
 | `--dart-define-from-file` | Mechanism adopted | ✅ Implemented in Mission 0.17.17 |
 | Backend uses IAM roles | Required | ✅ Seven Lambda execution roles live; each reads exactly one credential, proven by `iam simulate-principal-policy` (A-160) |
-| Secrets Manager for values | Required | ✅ **8 secrets live** — the RDS-managed master plus seven per-function database credentials, populated by `npm run db:bootstrap` |
+| Secrets Manager for values | Required | ✅ **8 secrets live**, counted against the account — the RDS-managed master plus seven per-function credentials from `npm run db:bootstrap`. No Firebase key exists, and Mission 6.5 decided none is needed |
 | `backend/.env.example` | Contract documented | ✅ Created |
 | `.gitignore` blocks secrets | Required | ✅ Verified against 9 patterns |
 | CI secret scanning | Required | ✅ Implemented |
 
-The `--dart-define` mechanism this ADR depends on was implemented in Mission 0.17.17. The backend-side items closed in Mission 6.3.2: the seven per-function database credentials are live, generated outside both git and Terraform state, and each Lambda role can read only its own (A-160).
+The `--dart-define` mechanism this ADR depends on was implemented in Mission 0.17.17 and superseded as the environment selector by ADR-047. The backend-side items closed in Mission 6.3.2: the seven per-function database credentials are live, generated outside both git and Terraform state, and each Lambda role can read only its own (A-160).
 
 **One property is still manual.** Volume 8 Chapter 8.4 §2's automatic rotation covers the RDS-managed master secret only. The seven per-function secrets rotate by re-running `npm run db:bootstrap`, which is a person deciding to, not a schedule.

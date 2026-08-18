@@ -64,6 +64,16 @@ export interface TokenIdentity {
   readonly firebaseUid: string;
   /** The `role` custom claim, if the token carries one (Chapter 4.7 §2). */
   readonly roleClaim: string | undefined;
+  /**
+   * The `org_id` custom claim, if present.
+   *
+   * Read but **not trusted as an `orgs.id`**. ADR-048 retires A-159's design
+   * in which this claim was to be the authoritative org for every function;
+   * the `users` table is authoritative, as Chapter 4.7 §2 already says
+   * ("falling back to the users table as the authoritative source"). This is
+   * used at first-login provisioning only, through `resolveOrgId`.
+   */
+  readonly orgIdClaim: unknown;
   readonly email: string | undefined;
 }
 
@@ -112,6 +122,7 @@ export async function verifyToken(token: string): Promise<TokenIdentity> {
   return {
     firebaseUid: decoded.uid,
     roleClaim: typeof role === 'string' ? role : undefined,
+    orgIdClaim: decoded.org_id,
     email: decoded.email,
   };
 }
