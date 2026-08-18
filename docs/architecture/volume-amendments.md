@@ -6177,7 +6177,7 @@ Both trigger shapes are therefore exercised end-to-end against live AWS: `pull_r
 | | |
 |---|---|
 | **Record** | ADR-049 D-2; `docs/development/secrets-management.md` §"If a secret is committed" |
-| **Event** | The first access key created for `faisal-dev`, `AKIA5Q3V3WYCHPS7LXBX`, was disclosed in an unrelated chat transcript shortly after creation |
+| **Event** | The first access key created for `faisal-dev` (id ending `LXBX`) was disclosed in an unrelated chat transcript shortly after creation |
 | **Response** | Deactivated and **deleted**, and a replacement generated. Both actions by the project owner, directly against AWS |
 | **Authority** | Project owner, Mission 7.1 Part 3 |
 | **Class** | Credential incident, contained |
@@ -6190,13 +6190,19 @@ Both trigger shapes are therefore exercised end-to-end against live AWS: `pull_r
 
 | Claim | Evidence |
 |---|---|
-| The exposed key is **deleted**, not merely deactivated | `aws iam list-access-keys --user-name faisal-dev` returns exactly one key, `AKIA5Q3V3WYCNHR6RNOF` (created 2026-08-18T10:13:08Z, Active). `AKIA5Q3V3WYCHPS7LXBX` does not appear in any state |
-| The exposed key was **never used** | `aws cloudtrail lookup-events --lookup-attributes AttributeKey=AccessKeyId,AttributeValue=AKIA5Q3V3WYCHPS7LXBX` returns **0 events** |
+| The exposed key is **deleted**, not merely deactivated | `aws iam list-access-keys --user-name faisal-dev` returns exactly one key, `AKIA…RNOF` (created 2026-08-18T10:13:08Z, Active). `AKIA…LXBX` does not appear in any state |
+| The exposed key was **never used** | `aws cloudtrail lookup-events --lookup-attributes AttributeKey=AccessKeyId,AttributeValue=<the exposed key id>` returns **0 events** |
 | That zero is not a vacuous zero | The identical query against the replacement key returns **6 `AssumeRole` events** — the MFA verification calls. The query demonstrably detects usage when usage exists |
 
 **The blast radius was structurally small before any of that mattered, and this is the part worth carrying forward.** Under ADR-049's D-2 the key grants *nothing on its own*: `faisal-dev` holds `sts:AssumeRole` and no other permission, and both roles it may assume require `aws:MultiFactorAuthPresent`. A holder of the disclosed key, without the `2_dev_faisal` MFA device, could not read, write or describe anything — the same `AccessDenied` the negative half of the human-path proof produced deliberately.
 
 **A key disclosed under the pre-ADR-049 design would have been a different event.** The credential it replaces, `faisal-admin`'s, carries `AdministratorAccess` directly. This incident is the argument for D-2 arriving as an unplanned live test rather than as a paragraph in the Alternatives Considered.
+
+### Why the key ids are truncated here
+
+CI's secret scan matches `(AKIA|ASIA)[0-9A-Z]{16}`, and the first draft of this amendment failed it — correctly, by the scanner's own terms. An access key **id** is not a secret under ADR-016's capability test; it grants nothing without the secret half. But the scanner cannot make that distinction, and adding an exception so a document could carry the pattern would trade a working control for a nicety. The ids are truncated to their last four characters, which is enough to identify them against `aws iam list-access-keys`, and the full values stay where they belong: in AWS.
+
+Recorded because this is the second time in Mission 7.1 that a check proved non-vacuous by failing on this mission's own work — the `pull_request_target` guard was the first.
 
 ### The one caveat, stated rather than smoothed over
 
