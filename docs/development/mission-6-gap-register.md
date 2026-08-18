@@ -16,14 +16,14 @@ Ordered by what a security review would want first, not by discovery.
 
 | # | Gap | Class | Source |
 |---|---|---|---|
-| 1 | **Every AWS resource, schema change and database password was created by `faisal-admin`**, an unscoped administrative principal. 67 managed resources, 9 migrations, 7 credentials | Blast radius | A-144, item 8 |
+| 1 | **Every AWS resource, schema change and database password was created by `faisal-admin`**, an unscoped administrative principal. 67 managed resources, 9 migrations, 7 credentials. **Closed forward-looking only (ADR-049):** `faisal-dev` now exists and `faisal-admin` is break-glass. What it already created is unchanged | Blast radius | A-144, item 8, **ADR-049** |
 | 2 | **Nothing applies a merged migration.** A schema change can be written, reviewed, merged and released without reaching a database; neither CI nor the runner notices. Closing it means giving CI credentials that can `DROP` | Enforcement + credential decision | A-161, item 11 |
 | 3 | **The seven per-function database secrets rotate manually.** V8.4 §2's automatic RDS rotation covers the master credential only; nothing schedules the rest | Credential lifecycle | ADR-016 |
 | 4 | **Nothing issues the `admin` claim.** `firestore.rules` requires it to write `org_invite_codes`, and `redeemInviteCode` sets `role: "collector"` from a literal on every path — so that collection is writable by nobody, and admin is an undocumented manual bootstrap | Unreachable capability | A-158, ADR-036 |
 | 5 | **Four live accounts carry `org_id: "vump-default"`**, a literal that no longer matches anything. It is mapped to the `Unassigned` org at read time by `resolveOrgId` and never rewritten, so the stale value persists in every token | Data shape | A-163, item 12 |
 | 6 | **Every self-signup account lands in one shared organisation.** BR-20's tenant isolation therefore separates nobody among them. Acceptable only while ADR-036's "informal APK sharing among a trusted group" holds — **revisit before public distribution** | Tenant isolation, time-bounded | Migration `0009`, A-166 |
 | 7 | **`functions/` is not retired** and claim-writing stays in Cloud Functions. Deliberate: porting it moves the writer outside Google, which is the only thing that forces the credential ADR-036 defers | Deliberate, with a trigger | A-165, item 10 |
-| 8 | **The BR-08/11/21/22 behavioural proofs exist only as an uncommitted scratchpad script.** They need live AWS, so CI cannot run them — the strongest evidence Mission 6 produced is the least repeatable | Test coverage | 6.3.1 close-out |
+| 8 | **The BR-08/11/21/22 behavioural proofs exist only as an uncommitted scratchpad script.** **Still open after ADR-049, and the reason has moved rather than gone:** the credential exists (`vump-dev-ci-db-prover`) and no CI job runs the proofs. Migration `0007` grants `DELETE` to nobody, so they cannot tear down. **This row said a read-only principal would close it; that was wrong — the proofs write** | Test coverage | 6.3.1 close-out, **A-172**, **A-173** |
 | 9 | **Aurora runs at `MinCapacity 0` and auto-pauses.** The first request after idle can exceed the Lambda's 15-second timeout while the resume ladder runs to ~30 seconds | Availability | A-156, ADR-043 |
 | 10 | **`GET /v1/users/me` and every route behind the authorizer add a Data API round-trip per request**, with `authorizerResultTtlInSeconds = 0`. Correctness was chosen over caching, unmeasured | Performance | ADR-048 |
 | 11 | **`POST /v1/auth/verify` fires twice per app launch.** `_toUser` runs on two paths — `_restoreSession` and the `sessionChanges` stream — and each performs the exchange. Harmless (idempotent, `ON CONFLICT DO NOTHING`) but doubled | Efficiency | 6.5.6 close-out |
@@ -31,8 +31,8 @@ Ordered by what a security review would want first, not by discovery.
 | 13 | **iOS is registered, unwired and unverifiable.** Bundle IDs exist in all three Firebase projects and the plists are committed, but `project.pbxproj` still carries `com.example.mobile` and nothing selects a plist. No Mac, no Apple Developer account | Platform | item 2, ADR-047 |
 | 14 | **Staging and production have no Auth, no billing and no API Gateway.** Deliberate under ADR-014 until a release branch is cut | Deliberate | item 13, A-162 |
 | 15 | **The backend has no coverage gate.** ADR-045 recorded it as "deliberately absent — revisit at 6.3"; 6.3 passed without revisiting | Overdue commitment | ADR-045 |
-| 16 | **The authorizer exemption is asserted, not enforced.** The Terraform `check` only evaluates during `plan`/`apply`, CI runs no `plan` (no credentials), and a failed `check` is a **warning** rather than an error even then. The guarantee is held by code review | Enforcement | ADR-048, 6.6 |
-| 17 | **No scoped principal exists for either a human or CI.** Gap 1 wants a per-developer IAM user (Volume 7 Ch 7.8 §1); gaps 8 and 16 want a read-only CI principal. Both reduce to the same question — **a long-lived key, or federated short-lived access** — and it is A-165's question asked of two new seams. Queued for its own trace/decide | Credential mechanism | A-165, item 8, gaps 1/8/16 |
+| 16 | **The authorizer exemption is asserted, not enforced.** ~~The Terraform `check` only evaluates during `plan`/`apply`, CI runs no `plan`~~ — **CLOSED by ADR-049.** CI assumes `vump-dev-ci-plan-reader` via OIDC and runs `terraform plan -lock=false`, and a separate step fails the job on a failed `check`, since a failed check is only a warning. Both halves were needed | Enforcement | ADR-048, 6.6, **ADR-049** |
+| 17 | **CLOSED by ADR-049.** ~~No scoped principal exists for either a human or CI.~~ Gap 1 wants a per-developer IAM user (Volume 7 Ch 7.8 §1); gaps 8 and 16 want a read-only CI principal. Both reduce to the same question — **a long-lived key, or federated short-lived access** — and it is A-165's question asked of two new seams. Queued for its own trace/decide | Credential mechanism | A-165, item 8, gaps 1/8/16 |
 
 ---
 
@@ -64,3 +64,19 @@ Mission 6.7 was authorised to build both a scoped human principal and a read-onl
 **A-165 answered exactly this shape for the AWS↔Firebase seam**, four days ago, by declining to create a long-lived key and recording Workload Identity Federation as the answer if the seam ever has to be crossed. Deciding the CI seam inside a cleanup pass would settle the same question a second time, quietly, as a side effect of a chore — which is the failure A-164 records for Volume 7 Chapter 7.7 §3.
 
 **Recommendation, not a decision: OIDC for CI, and Terraform-owned user with an out-of-band key for the human.** Both belong in one trace/decide with one ADR, because the answer to "long-lived or federated" should be the same for both seams or the difference should be argued.
+
+
+---
+
+## What Mission 7.1 changed (2026-08-18)
+
+Gap 17 is closed by **ADR-049**: GitHub OIDC for CI, a Terraform-owned `faisal-dev` with an out-of-band key for the human, and a permissions boundary that stops `terraform-apply` escalating to administrator.
+
+The knock-on, stated without rounding up:
+
+- **16 closes.** Fully. `terraform plan` runs in CI and a failed `check` now fails the job.
+- **1 closes forward-looking only.** The 67 resources `faisal-admin` created remain as they are.
+- **8 stays open.** It has its credential and lacks a runnable proof suite — A-173. Logging this as closed would be the second time this row was rounded up.
+- **2 is untouched**, deliberately. It needs a DDL-capable principal.
+
+Two corrections to this file's own earlier text are recorded rather than silently applied: **A-172** (a read-only principal does not close gap 8) and **A-170** (the account held 67 resources, not ADR-043's 66; it now holds 79).
