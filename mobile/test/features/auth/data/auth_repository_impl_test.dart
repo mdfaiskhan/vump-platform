@@ -102,10 +102,9 @@ void main() {
     // token omits — these two assert the same refusal at its new source.
     test('an org the backend does not return is refused', () async {
       await expectLater(
-        repositoryFor(
-          <String, dynamic>{'role': 'collector'},
-          backend: FakeVumpApi(orgId: ''),
-        ).restoreSession(),
+        repositoryFor(<String, dynamic>{
+          'role': 'collector',
+        }, backend: FakeVumpApi(orgId: '')).restoreSession(),
         throwsA(isA<AuthenticationException>()),
       );
     });
@@ -114,10 +113,10 @@ void main() {
       // Present but useless. A blank organisation would scope every query to
       // nothing, or to everything, depending on who reads it.
       await expectLater(
-        repositoryFor(
-          <String, dynamic>{'role': 'collector', 'org_id': 'ignored'},
-          backend: FakeVumpApi(orgId: ''),
-        ).restoreSession(),
+        repositoryFor(<String, dynamic>{
+          'role': 'collector',
+          'org_id': 'ignored',
+        }, backend: FakeVumpApi(orgId: '')).restoreSession(),
         throwsA(isA<AuthenticationException>()),
       );
     });
@@ -127,17 +126,13 @@ void main() {
       // win over the table — Chapter 4.7 §2 names the table authoritative
       // "if the claim and the table ever disagree", and A-177 removed the
       // path where the claim could still be read.
-      final Session session = await repositoryFor(
-        <String, dynamic>{'role': 'collector', 'org_id': 'stale-org'},
-        backend: FakeVumpApi(orgId: 'org-from-table'),
-      ).restoreSession();
+      final Session session = await repositoryFor(<String, dynamic>{
+        'role': 'collector',
+        'org_id': 'stale-org',
+      }, backend: FakeVumpApi(orgId: 'org-from-table')).restoreSession();
 
-      expect(
-        (session as SessionAuthenticated).user.orgId,
-        'org-from-table',
-      );
+      expect((session as SessionAuthenticated).user.orgId, 'org-from-table');
     });
-
   });
 
   group('sign-in maps or converts, and never leaks', () {
@@ -325,7 +320,6 @@ void main() {
       expect(backend.verifyCallCount, 2);
     });
   });
-
 }
 
 /// Enough of `FirebaseAuth` to answer `currentUser`.

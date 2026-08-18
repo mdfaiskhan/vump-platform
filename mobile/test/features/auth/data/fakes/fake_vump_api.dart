@@ -61,14 +61,9 @@ class FakeVumpApi implements VumpApi {
     Map<String, dynamic>? queryParameters,
   }) async {
     fetchedPaths.add(path);
-    return <String, Object?>{
-      'userId': 'user-1',
-      'orgId': orgId,
-      'role': role,
-    };
+    return <String, Object?>{'userId': 'user-1', 'orgId': orgId, 'role': role};
   }
 
   @override
-  dynamic noSuchMethod(Invocation invocation) =>
-      super.noSuchMethod(invocation);
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }

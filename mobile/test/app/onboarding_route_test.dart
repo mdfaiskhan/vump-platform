@@ -165,6 +165,7 @@ class _SignedInRepository implements AuthRepository {
   _SignedInRepository(this._restored);
 
   final Session _restored;
+
   /// Seeded on subscription, mirroring the real repository.
   ///
   /// A-177: `AuthNotifier.build` resolves the first session from this stream

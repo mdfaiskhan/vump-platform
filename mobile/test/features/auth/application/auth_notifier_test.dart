@@ -324,7 +324,6 @@ void main() {
       expect(repository.signOutCalls, 1);
     });
   });
-
 }
 
 /// A scripted `AuthRepository`. No Firebase, no platform channels.
@@ -337,6 +336,7 @@ class _FakeAuthRepository implements AuthRepository {
   });
 
   final Session restored;
+
   /// An error the stream raises before any session resolves.
   ///
   /// Replaces `restoreThrows` for the startup case: since A-177 `build` never
