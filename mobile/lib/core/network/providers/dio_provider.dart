@@ -7,6 +7,7 @@ import 'package:mobile/core/network/dio_client.dart';
 import 'package:mobile/core/network/interfaces/auth_token_source.dart';
 import 'package:mobile/core/network/network_config.dart';
 import 'package:mobile/core/network/s3_transfer_client.dart';
+import 'package:mobile/core/network/vump_api.dart';
 
 /// Network configuration for the environment this build targets.
 ///
@@ -90,3 +91,12 @@ final Provider<S3TransferClient> s3TransferClientProvider =
     Provider<S3TransferClient>(
       (Ref ref) => S3TransferClient(logger: ref.watch(loggerProvider)),
     );
+
+/// The Vump backend API, over [dioClientProvider].
+///
+/// Published here rather than constructed at each call site so that a test can
+/// override one provider instead of threading a client through constructors —
+/// the same reason `dioClientProvider` exists.
+final Provider<VumpApi> vumpApiProvider = Provider<VumpApi>(
+  (Ref ref) => VumpApi(client: ref.watch(dioClientProvider)),
+);

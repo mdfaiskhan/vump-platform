@@ -6,6 +6,7 @@ import 'package:mobile/core/errors/app_exception.dart';
 import 'package:mobile/core/errors/error_codes.dart';
 import 'package:mobile/core/errors/exceptions/authentication_exception.dart';
 import 'package:mobile/core/logging/app_logger.dart';
+import 'package:mobile/core/network/vump_api.dart';
 import 'package:mobile/features/auth/data/firebase_auth_error_mapper.dart';
 import 'package:mobile/features/auth/data/firebase_functions_error_mapper.dart';
 import 'package:mobile/features/auth/domain/entities/role.dart';
@@ -61,12 +62,28 @@ class AuthRepositoryImpl implements AuthRepository {
     fb.FirebaseAuth? firebaseAuth,
     GoogleSignIn? googleSignIn,
     FirebaseFunctions? functions,
+    this.backend,
   }) : _injectedAuth = firebaseAuth,
        _googleSignIn = googleSignIn ?? GoogleSignIn.instance,
        _injectedFunctions = functions;
 
   /// Destination for the one diagnostic this class writes — see `_discard`.
   final AppLogger logger;
+
+  /// The Vump backend, for Chapter 4.7 §1 step 2's token exchange.
+  ///
+  /// **Nullable, and the null case is the test path.** Every construction in
+  /// `main.dart` supplies one; the widget and unit tests do not, because they
+  /// have no HTTP stack and are not testing the exchange. When it is absent
+  /// the org falls back to the Firebase claim — the pre-ADR-048 behaviour —
+  /// which keeps those tests meaningful without giving them a network.
+  ///
+  /// That fallback is a seam, not a design: a build that reaches a device
+  /// always has a backend, so the claim path is unreachable in the app. It is
+  /// called out here because a silent fallback that *could* run in production
+  /// would be the exact defect ADR-048 removes.
+  final VumpApi? backend;
+
   final fb.FirebaseAuth? _injectedAuth;
   final GoogleSignIn _googleSignIn;
   final FirebaseFunctions? _injectedFunctions;
@@ -393,15 +410,7 @@ class AuthRepositoryImpl implements AuthRepository {
       ),
     };
 
-    final Object? orgId = claims[_orgIdClaim];
-    if (orgId is! String || orgId.isEmpty) {
-      throw const AuthenticationException(
-        errorCode: ErrorCode.authUnauthenticated,
-        message:
-            'The signed-in account carries no "$_orgIdClaim" claim, so it '
-            'belongs to no organisation.',
-      );
-    }
+    final String orgId = await _resolveOrgId(claims);
 
     return User(
       uid: user.uid,
@@ -411,6 +420,54 @@ class AuthRepositoryImpl implements AuthRepository {
       emailVerified: user.emailVerified,
       displayName: user.displayName,
     );
+  }
+
+  /// The organisation this account belongs to, from the backend — ADR-048.
+  ///
+  /// Chapter 4.7 §1 step 2 has the app attach its Firebase ID token to a
+  /// backend call; `POST /v1/auth/verify` exchanges it for the session context
+  /// and, on a first login, creates the `users` row that every other route's
+  /// authorizer requires. The token is attached by `AuthInterceptor`, so this
+  /// passes no credential itself.
+  ///
+  /// **`org_id` comes from the response, not from the claim.** ADR-048 retires
+  /// A-159's design in which the claim was authoritative: Chapter 4.7 §2 says
+  /// the `users` table is the source *"if the claim and the table ever
+  /// disagree"*, and a claim written once goes stale the moment an account
+  /// moves organisation. `role` is unaffected and still comes from the claim,
+  /// which Chapter 4.7 §2 specifies.
+  ///
+  /// Without a backend — tests only — the claim is used, which is what this
+  /// method did before.
+  Future<String> _resolveOrgId(Map<String, dynamic> claims) async {
+    final VumpApi? api = backend;
+    if (api != null) {
+      final Map<String, Object?> data = await api.post(
+        '/auth/verify',
+        what: 'Establishing your session',
+      );
+      final Object? orgId = data['orgId'];
+      if (orgId is String && orgId.isNotEmpty) {
+        return orgId;
+      }
+      throw const AuthenticationException(
+        errorCode: ErrorCode.authUnauthenticated,
+        message:
+            'The backend did not return an organisation for this account, so '
+            'it has not been provisioned for this application.',
+      );
+    }
+
+    final Object? claimed = claims[_orgIdClaim];
+    if (claimed is! String || claimed.isEmpty) {
+      throw const AuthenticationException(
+        errorCode: ErrorCode.authUnauthenticated,
+        message:
+            'The signed-in account carries no "$_orgIdClaim" claim, so it '
+            'belongs to no organisation.',
+      );
+    }
+    return claimed;
   }
 
   /// Unwraps the `User` from a credential, which the SDK types as nullable.
