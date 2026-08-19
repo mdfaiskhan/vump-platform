@@ -7,7 +7,7 @@ import 'package:mobile/core/identity/interfaces/task_context.dart';
 import 'package:mobile/features/recording/data/chunk_metadata_assembler.dart';
 import 'package:mobile/features/recording/data/codec_wire_name.dart';
 import 'package:mobile/features/recording/data/platform_device_context.dart';
-import 'package:mobile/features/recording/data/unsourced_task_context.dart';
+import 'package:mobile/features/recording/data/platform_task_context.dart';
 import 'package:mobile/features/recording/domain/entities/camera_specification.dart';
 import 'package:mobile/features/recording/domain/entities/chunk_integrity.dart';
 import 'package:mobile/features/recording/domain/entities/chunk_metadata.dart';
@@ -209,7 +209,7 @@ void main() {
             batteryPercent: 82,
             networkType: 'wifi',
           ),
-          taskContext: const UnsourcedTaskContext(),
+          taskContext: const PlatformTaskContext.unsourced(),
           deviceContext: const PlatformDeviceContext.unsourced(
             appVersion: '1.0.0+1',
           ),
@@ -233,7 +233,7 @@ void main() {
       // with an unattributable chunk.
       final ChunkMetadata sourced = await assemble();
       final ChunkMetadata unsourced = await assemble(
-        taskContext: const UnsourcedTaskContext(),
+        taskContext: const PlatformTaskContext.unsourced(),
         deviceContext: const PlatformDeviceContext.unsourced(
           appVersion: '1.0.0+1',
         ),

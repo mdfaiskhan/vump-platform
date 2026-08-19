@@ -86,11 +86,11 @@ class LocalProcessingScreen extends ConsumerWidget {
                       //
                       // The Task List half needs a projectId, and this screen
                       // does not have one. The recording path carries a
-                      // sessionId; the session's taskId is never wired through
-                      // to anything (open item 79), and TaskContext is still
-                      // UnsourcedTaskContext, so there is no Project to return
-                      // to. Guessing one would send a Collector to somebody
-                      // else's work.
+                      // sessionId, and since Mission 7.4 step 5 the session
+                      // row carries taskId and projectId — but reading them
+                      // means a database read for a navigation target, and
+                      // this widget builds synchronously. Guessing one would
+                      // send a Collector to somebody else's work.
                       //
                       // Until Mission 5.1.3 this went to the Record tab
                       // instead, because C-05 did not exist. It does now, so

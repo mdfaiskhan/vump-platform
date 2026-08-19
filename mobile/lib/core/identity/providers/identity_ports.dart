@@ -26,35 +26,72 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:mobile/core/identity/interfaces/device_context.dart';
 import 'package:mobile/core/identity/interfaces/task_context.dart';
+import 'package:mobile/core/identity/selected_task.dart';
+
+/// The Task a Collector chose, from the moment they tap Start Recording until
+/// the session row is written — Mission 7.4, F38.
+///
+/// **Not overridden anywhere.** Unlike every other provider in this file, this
+/// one holds state rather than binding an implementation, so it has a real
+/// default: null, meaning nothing is selected. `features/projects_tasks/`
+/// writes it; `features/recording/` reads it; neither imports the other.
+///
+/// Its lifetime is one navigation. `SelectedTask` carries the full argument for
+/// why it is not persisted — in short, the `LocalSession` row it produces is
+/// the durability boundary, and there is no mid-recording resume for a
+/// persisted selection to restore into.
+final NotifierProvider<SelectedTaskNotifier, SelectedTask?>
+selectedTaskProvider = NotifierProvider<SelectedTaskNotifier, SelectedTask?>(
+  SelectedTaskNotifier.new,
+);
+
+/// Holds the current selection.
+class SelectedTaskNotifier extends Notifier<SelectedTask?> {
+  @override
+  SelectedTask? build() => null;
+
+  /// Records the Task a session is about to record against.
+  ///
+  /// A method rather than a setter, against `use_setters_to_change_properties`,
+  /// because [clear] is its pair and `selection = null` would read as an
+  /// assignment of no consequence. Selecting and forgetting are both events
+  /// with a reason, and naming them keeps the reason at the call site.
+  // ignore: use_setters_to_change_properties
+  void select(SelectedTask task) => state = task;
+
+  /// Forgets the selection.
+  ///
+  /// Called when a session ends. Leaving it set would let a later recording
+  /// started by some path that forgot to select inherit the previous Task —
+  /// which is worse than an unsourced chunk, because it is attributed and
+  /// wrong rather than refused.
+  void clear() => state = null;
+}
 
 /// Where the Project and Task a session records against come from.
 ///
-/// Bound in `main.dart` to `UnsourcedTaskContext` as of Mission 7.4 step 1,
-/// which still returns `MetadataIdentity.unsourced` for both. **The plumbing
-/// moved before the values did, deliberately** — this step changes no
-/// behaviour, so a green suite after it means the move was clean rather than
-/// that two changes cancelled out. The real binding lands in step 4, when
-/// `features/projects_tasks/` reads a Task from the live backend.
+/// Bound in `main.dart` to a `PlatformTaskContext` reading
+/// [selectedTaskProvider], since Mission 7.4 step 5. It returns
+/// `MetadataIdentity.unsourced` for both when nothing is selected, which
+/// A-068's Guard 1 then refuses — so a recording started without a Task is
+/// stopped rather than uploaded unattributed.
 final Provider<TaskContext> taskContextProvider = Provider<TaskContext>(
   (Ref ref) => throw UnimplementedError(
     'taskContextProvider must be overridden before a chunk is finalized. '
-    'features/recording/data/UnsourcedTaskContext binds it today; a real '
-    'implementation sourced from features/projects_tasks/ lands in Mission '
-    '7.4. See ADR-040 and open item 37.',
+    'features/recording/data/PlatformTaskContext binds it, reading '
+    'selectedTaskProvider. See ADR-040.',
   ),
 );
 
 /// Where the Collector, device and build identifiers come from.
 ///
-/// Bound to `PlatformDeviceContext`, which supplies `appVersion` and
-/// `deviceModel` and still returns `MetadataIdentity.unsourced` for
-/// `collectorId` and `deviceId`. Those two are Mission 7.4 steps 3 and 4:
-/// `collectorId` is wired from the signed-in session at this composition root,
-/// and `deviceId` becomes F19's install-scoped UUID.
+/// Bound to `PlatformDeviceContext`, whose four values the composition root
+/// resolves: `appVersion` from `app/config/`, `deviceId` and `deviceModel` at
+/// startup (steps 3's F19 and F22), and `collectorId` reactively from the
+/// signed-in session — `User.backendUserId`, not the Firebase uid (A-206).
 final Provider<DeviceContext> deviceContextProvider = Provider<DeviceContext>(
   (Ref ref) => throw UnimplementedError(
     'deviceContextProvider must be overridden before a chunk is finalized. '
-    'features/recording/data/PlatformDeviceContext binds it; collectorId and '
-    'deviceId are still unsourced. See ADR-040 and open item 37.',
+    'features/recording/data/PlatformDeviceContext binds it. See ADR-040.',
   ),
 );

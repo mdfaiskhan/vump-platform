@@ -12,7 +12,8 @@ part of 'failed_chunk.dart';
 T _$identity<T>(T value) => value;
 
 final _privateConstructorUsedError = UnsupportedError(
-    'It seems like you constructed your class using `MyClass._()`. This constructor is only meant to be used by freezed and you are not supposed to need it nor use it.\nPlease check the documentation here for more information: https://github.com/rrousselGit/freezed#adding-getters-and-methods-to-our-models');
+  'It seems like you constructed your class using `MyClass._()`. This constructor is only meant to be used by freezed and you are not supposed to need it nor use it.\nPlease check the documentation here for more information: https://github.com/rrousselGit/freezed#adding-getters-and-methods-to-our-models',
+);
 
 /// @nodoc
 mixin _$FailedChunk {
@@ -33,8 +34,9 @@ mixin _$FailedChunk {
 /// @nodoc
 abstract class $FailedChunkCopyWith<$Res> {
   factory $FailedChunkCopyWith(
-          FailedChunk value, $Res Function(FailedChunk) then) =
-      _$FailedChunkCopyWithImpl<$Res, FailedChunk>;
+    FailedChunk value,
+    $Res Function(FailedChunk) then,
+  ) = _$FailedChunkCopyWithImpl<$Res, FailedChunk>;
   @useResult
   $Res call({String chunkId, int sequenceIndex, ErrorCode cause});
 }
@@ -56,20 +58,23 @@ class _$FailedChunkCopyWithImpl<$Res, $Val extends FailedChunk>
     Object? sequenceIndex = null,
     Object? cause = null,
   }) {
-    return _then(_value.copyWith(
-      chunkId: null == chunkId
-          ? _value.chunkId
-          : chunkId // ignore: cast_nullable_to_non_nullable
-              as String,
-      sequenceIndex: null == sequenceIndex
-          ? _value.sequenceIndex
-          : sequenceIndex // ignore: cast_nullable_to_non_nullable
-              as int,
-      cause: null == cause
-          ? _value.cause
-          : cause // ignore: cast_nullable_to_non_nullable
-              as ErrorCode,
-    ) as $Val);
+    return _then(
+      _value.copyWith(
+            chunkId: null == chunkId
+                ? _value.chunkId
+                : chunkId // ignore: cast_nullable_to_non_nullable
+                      as String,
+            sequenceIndex: null == sequenceIndex
+                ? _value.sequenceIndex
+                : sequenceIndex // ignore: cast_nullable_to_non_nullable
+                      as int,
+            cause: null == cause
+                ? _value.cause
+                : cause // ignore: cast_nullable_to_non_nullable
+                      as ErrorCode,
+          )
+          as $Val,
+    );
   }
 }
 
@@ -77,8 +82,9 @@ class _$FailedChunkCopyWithImpl<$Res, $Val extends FailedChunk>
 abstract class _$$FailedChunkImplCopyWith<$Res>
     implements $FailedChunkCopyWith<$Res> {
   factory _$$FailedChunkImplCopyWith(
-          _$FailedChunkImpl value, $Res Function(_$FailedChunkImpl) then) =
-      __$$FailedChunkImplCopyWithImpl<$Res>;
+    _$FailedChunkImpl value,
+    $Res Function(_$FailedChunkImpl) then,
+  ) = __$$FailedChunkImplCopyWithImpl<$Res>;
   @override
   @useResult
   $Res call({String chunkId, int sequenceIndex, ErrorCode cause});
@@ -89,8 +95,9 @@ class __$$FailedChunkImplCopyWithImpl<$Res>
     extends _$FailedChunkCopyWithImpl<$Res, _$FailedChunkImpl>
     implements _$$FailedChunkImplCopyWith<$Res> {
   __$$FailedChunkImplCopyWithImpl(
-      _$FailedChunkImpl _value, $Res Function(_$FailedChunkImpl) _then)
-      : super(_value, _then);
+    _$FailedChunkImpl _value,
+    $Res Function(_$FailedChunkImpl) _then,
+  ) : super(_value, _then);
 
   @pragma('vm:prefer-inline')
   @override
@@ -99,30 +106,33 @@ class __$$FailedChunkImplCopyWithImpl<$Res>
     Object? sequenceIndex = null,
     Object? cause = null,
   }) {
-    return _then(_$FailedChunkImpl(
-      chunkId: null == chunkId
-          ? _value.chunkId
-          : chunkId // ignore: cast_nullable_to_non_nullable
-              as String,
-      sequenceIndex: null == sequenceIndex
-          ? _value.sequenceIndex
-          : sequenceIndex // ignore: cast_nullable_to_non_nullable
-              as int,
-      cause: null == cause
-          ? _value.cause
-          : cause // ignore: cast_nullable_to_non_nullable
-              as ErrorCode,
-    ));
+    return _then(
+      _$FailedChunkImpl(
+        chunkId: null == chunkId
+            ? _value.chunkId
+            : chunkId // ignore: cast_nullable_to_non_nullable
+                  as String,
+        sequenceIndex: null == sequenceIndex
+            ? _value.sequenceIndex
+            : sequenceIndex // ignore: cast_nullable_to_non_nullable
+                  as int,
+        cause: null == cause
+            ? _value.cause
+            : cause // ignore: cast_nullable_to_non_nullable
+                  as ErrorCode,
+      ),
+    );
   }
 }
 
 /// @nodoc
 
 class _$FailedChunkImpl implements _FailedChunk {
-  const _$FailedChunkImpl(
-      {required this.chunkId,
-      required this.sequenceIndex,
-      required this.cause});
+  const _$FailedChunkImpl({
+    required this.chunkId,
+    required this.sequenceIndex,
+    required this.cause,
+  });
 
   /// The chunk's stable id, unchanged by the failure (Ch. 5.13 §4).
   @override
@@ -163,21 +173,19 @@ class _$FailedChunkImpl implements _FailedChunk {
 }
 
 abstract class _FailedChunk implements FailedChunk {
-  const factory _FailedChunk(
-      {required final String chunkId,
-      required final int sequenceIndex,
-      required final ErrorCode cause}) = _$FailedChunkImpl;
+  const factory _FailedChunk({
+    required final String chunkId,
+    required final int sequenceIndex,
+    required final ErrorCode cause,
+  }) = _$FailedChunkImpl;
 
   @override
-
   /// The chunk's stable id, unchanged by the failure (Ch. 5.13 §4).
   String get chunkId;
   @override
-
   /// Its position within the session.
   int get sequenceIndex;
   @override
-
   /// The named cause Chapter 2.9's copy rules require.
   ErrorCode get cause;
   @override

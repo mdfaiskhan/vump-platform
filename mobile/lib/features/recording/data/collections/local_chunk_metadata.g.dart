@@ -30,11 +30,7 @@ const LocalChunkMetadataSchema = CollectionSchema(
       type: IsarType.object,
       target: r'EmbeddedCaptureConditions',
     ),
-    r'chunkId': PropertySchema(
-      id: 2,
-      name: r'chunkId',
-      type: IsarType.string,
-    ),
+    r'chunkId': PropertySchema(id: 2, name: r'chunkId', type: IsarType.string),
     r'collectorAuthored': PropertySchema(
       id: 3,
       name: r'collectorAuthored',
@@ -64,7 +60,7 @@ const LocalChunkMetadataSchema = CollectionSchema(
       name: r'timing',
       type: IsarType.object,
       target: r'EmbeddedTiming',
-    )
+    ),
   },
   estimateSize: _localChunkMetadataEstimateSize,
   serialize: _localChunkMetadataSerialize,
@@ -82,9 +78,9 @@ const LocalChunkMetadataSchema = CollectionSchema(
           name: r'chunkId',
           type: IndexType.hash,
           caseSensitive: true,
-        )
+        ),
       ],
-    )
+    ),
   },
   links: {},
   embeddedSchemas: {
@@ -95,7 +91,7 @@ const LocalChunkMetadataSchema = CollectionSchema(
     r'EmbeddedCaptureConditions': EmbeddedCaptureConditionsSchema,
     r'EmbeddedGpsFix': EmbeddedGpsFixSchema,
     r'EmbeddedIntegrity': EmbeddedIntegritySchema,
-    r'EmbeddedCollectorAuthored': EmbeddedCollectorAuthoredSchema
+    r'EmbeddedCollectorAuthored': EmbeddedCollectorAuthoredSchema,
   },
   getId: _localChunkMetadataGetId,
   getLinks: _localChunkMetadataGetLinks,
@@ -112,58 +108,86 @@ int _localChunkMetadataEstimateSize(
   {
     final value = object.capture;
     if (value != null) {
-      bytesCount += 3 +
+      bytesCount +=
+          3 +
           EmbeddedCaptureSchema.estimateSize(
-              value, allOffsets[EmbeddedCapture]!, allOffsets);
+            value,
+            allOffsets[EmbeddedCapture]!,
+            allOffsets,
+          );
     }
   }
   {
     final value = object.captureConditions;
     if (value != null) {
-      bytesCount += 3 +
+      bytesCount +=
+          3 +
           EmbeddedCaptureConditionsSchema.estimateSize(
-              value, allOffsets[EmbeddedCaptureConditions]!, allOffsets);
+            value,
+            allOffsets[EmbeddedCaptureConditions]!,
+            allOffsets,
+          );
     }
   }
   bytesCount += 3 + object.chunkId.length * 3;
   {
     final value = object.collectorAuthored;
     if (value != null) {
-      bytesCount += 3 +
+      bytesCount +=
+          3 +
           EmbeddedCollectorAuthoredSchema.estimateSize(
-              value, allOffsets[EmbeddedCollectorAuthored]!, allOffsets);
+            value,
+            allOffsets[EmbeddedCollectorAuthored]!,
+            allOffsets,
+          );
     }
   }
   {
     final value = object.deviceContext;
     if (value != null) {
-      bytesCount += 3 +
+      bytesCount +=
+          3 +
           EmbeddedDeviceContextSchema.estimateSize(
-              value, allOffsets[EmbeddedDeviceContext]!, allOffsets);
+            value,
+            allOffsets[EmbeddedDeviceContext]!,
+            allOffsets,
+          );
     }
   }
   {
     final value = object.identity;
     if (value != null) {
-      bytesCount += 3 +
+      bytesCount +=
+          3 +
           EmbeddedIdentitySchema.estimateSize(
-              value, allOffsets[EmbeddedIdentity]!, allOffsets);
+            value,
+            allOffsets[EmbeddedIdentity]!,
+            allOffsets,
+          );
     }
   }
   {
     final value = object.integrity;
     if (value != null) {
-      bytesCount += 3 +
+      bytesCount +=
+          3 +
           EmbeddedIntegritySchema.estimateSize(
-              value, allOffsets[EmbeddedIntegrity]!, allOffsets);
+            value,
+            allOffsets[EmbeddedIntegrity]!,
+            allOffsets,
+          );
     }
   }
   {
     final value = object.timing;
     if (value != null) {
-      bytesCount += 3 +
+      bytesCount +=
+          3 +
           EmbeddedTimingSchema.estimateSize(
-              value, allOffsets[EmbeddedTiming]!, allOffsets);
+            value,
+            allOffsets[EmbeddedTiming]!,
+            allOffsets,
+          );
     }
   }
   return bytesCount;
@@ -276,48 +300,55 @@ P _localChunkMetadataDeserializeProp<P>(
   switch (propertyId) {
     case 0:
       return (reader.readObjectOrNull<EmbeddedCapture>(
-        offset,
-        EmbeddedCaptureSchema.deserialize,
-        allOffsets,
-      )) as P;
+            offset,
+            EmbeddedCaptureSchema.deserialize,
+            allOffsets,
+          ))
+          as P;
     case 1:
       return (reader.readObjectOrNull<EmbeddedCaptureConditions>(
-        offset,
-        EmbeddedCaptureConditionsSchema.deserialize,
-        allOffsets,
-      )) as P;
+            offset,
+            EmbeddedCaptureConditionsSchema.deserialize,
+            allOffsets,
+          ))
+          as P;
     case 2:
       return (reader.readString(offset)) as P;
     case 3:
       return (reader.readObjectOrNull<EmbeddedCollectorAuthored>(
-        offset,
-        EmbeddedCollectorAuthoredSchema.deserialize,
-        allOffsets,
-      )) as P;
+            offset,
+            EmbeddedCollectorAuthoredSchema.deserialize,
+            allOffsets,
+          ))
+          as P;
     case 4:
       return (reader.readObjectOrNull<EmbeddedDeviceContext>(
-        offset,
-        EmbeddedDeviceContextSchema.deserialize,
-        allOffsets,
-      )) as P;
+            offset,
+            EmbeddedDeviceContextSchema.deserialize,
+            allOffsets,
+          ))
+          as P;
     case 5:
       return (reader.readObjectOrNull<EmbeddedIdentity>(
-        offset,
-        EmbeddedIdentitySchema.deserialize,
-        allOffsets,
-      )) as P;
+            offset,
+            EmbeddedIdentitySchema.deserialize,
+            allOffsets,
+          ))
+          as P;
     case 6:
       return (reader.readObjectOrNull<EmbeddedIntegrity>(
-        offset,
-        EmbeddedIntegritySchema.deserialize,
-        allOffsets,
-      )) as P;
+            offset,
+            EmbeddedIntegritySchema.deserialize,
+            allOffsets,
+          ))
+          as P;
     case 7:
       return (reader.readObjectOrNull<EmbeddedTiming>(
-        offset,
-        EmbeddedTimingSchema.deserialize,
-        allOffsets,
-      )) as P;
+            offset,
+            EmbeddedTimingSchema.deserialize,
+            allOffsets,
+          ))
+          as P;
     default:
       throw IsarError('Unknown property with id $propertyId');
   }
@@ -328,12 +359,16 @@ Id _localChunkMetadataGetId(LocalChunkMetadata object) {
 }
 
 List<IsarLinkBase<dynamic>> _localChunkMetadataGetLinks(
-    LocalChunkMetadata object) {
+  LocalChunkMetadata object,
+) {
   return [];
 }
 
 void _localChunkMetadataAttach(
-    IsarCollection<dynamic> col, Id id, LocalChunkMetadata object) {
+  IsarCollection<dynamic> col,
+  Id id,
+  LocalChunkMetadata object,
+) {
   object.id = id;
 }
 
@@ -355,7 +390,8 @@ extension LocalChunkMetadataByIndex on IsarCollection<LocalChunkMetadata> {
   }
 
   Future<List<LocalChunkMetadata?>> getAllByChunkId(
-      List<String> chunkIdValues) {
+    List<String> chunkIdValues,
+  ) {
     final values = chunkIdValues.map((e) => [e]).toList();
     return getAllByIndex(r'chunkId', values);
   }
@@ -387,8 +423,10 @@ extension LocalChunkMetadataByIndex on IsarCollection<LocalChunkMetadata> {
     return putAllByIndex(r'chunkId', objects);
   }
 
-  List<Id> putAllByChunkIdSync(List<LocalChunkMetadata> objects,
-      {bool saveLinks = true}) {
+  List<Id> putAllByChunkIdSync(
+    List<LocalChunkMetadata> objects, {
+    bool saveLinks = true,
+  }) {
     return putAllByIndexSync(r'chunkId', objects, saveLinks: saveLinks);
   }
 }
@@ -405,17 +443,14 @@ extension LocalChunkMetadataQueryWhereSort
 extension LocalChunkMetadataQueryWhere
     on QueryBuilder<LocalChunkMetadata, LocalChunkMetadata, QWhereClause> {
   QueryBuilder<LocalChunkMetadata, LocalChunkMetadata, QAfterWhereClause>
-      idEqualTo(Id id) {
+  idEqualTo(Id id) {
     return QueryBuilder.apply(this, (query) {
-      return query.addWhereClause(IdWhereClause.between(
-        lower: id,
-        upper: id,
-      ));
+      return query.addWhereClause(IdWhereClause.between(lower: id, upper: id));
     });
   }
 
   QueryBuilder<LocalChunkMetadata, LocalChunkMetadata, QAfterWhereClause>
-      idNotEqualTo(Id id) {
+  idNotEqualTo(Id id) {
     return QueryBuilder.apply(this, (query) {
       if (query.whereSort == Sort.asc) {
         return query
@@ -438,7 +473,7 @@ extension LocalChunkMetadataQueryWhere
   }
 
   QueryBuilder<LocalChunkMetadata, LocalChunkMetadata, QAfterWhereClause>
-      idGreaterThan(Id id, {bool include = false}) {
+  idGreaterThan(Id id, {bool include = false}) {
     return QueryBuilder.apply(this, (query) {
       return query.addWhereClause(
         IdWhereClause.greaterThan(lower: id, includeLower: include),
@@ -447,7 +482,7 @@ extension LocalChunkMetadataQueryWhere
   }
 
   QueryBuilder<LocalChunkMetadata, LocalChunkMetadata, QAfterWhereClause>
-      idLessThan(Id id, {bool include = false}) {
+  idLessThan(Id id, {bool include = false}) {
     return QueryBuilder.apply(this, (query) {
       return query.addWhereClause(
         IdWhereClause.lessThan(upper: id, includeUpper: include),
@@ -456,63 +491,72 @@ extension LocalChunkMetadataQueryWhere
   }
 
   QueryBuilder<LocalChunkMetadata, LocalChunkMetadata, QAfterWhereClause>
-      idBetween(
+  idBetween(
     Id lowerId,
     Id upperId, {
     bool includeLower = true,
     bool includeUpper = true,
   }) {
     return QueryBuilder.apply(this, (query) {
-      return query.addWhereClause(IdWhereClause.between(
-        lower: lowerId,
-        includeLower: includeLower,
-        upper: upperId,
-        includeUpper: includeUpper,
-      ));
+      return query.addWhereClause(
+        IdWhereClause.between(
+          lower: lowerId,
+          includeLower: includeLower,
+          upper: upperId,
+          includeUpper: includeUpper,
+        ),
+      );
     });
   }
 
   QueryBuilder<LocalChunkMetadata, LocalChunkMetadata, QAfterWhereClause>
-      chunkIdEqualTo(String chunkId) {
+  chunkIdEqualTo(String chunkId) {
     return QueryBuilder.apply(this, (query) {
-      return query.addWhereClause(IndexWhereClause.equalTo(
-        indexName: r'chunkId',
-        value: [chunkId],
-      ));
+      return query.addWhereClause(
+        IndexWhereClause.equalTo(indexName: r'chunkId', value: [chunkId]),
+      );
     });
   }
 
   QueryBuilder<LocalChunkMetadata, LocalChunkMetadata, QAfterWhereClause>
-      chunkIdNotEqualTo(String chunkId) {
+  chunkIdNotEqualTo(String chunkId) {
     return QueryBuilder.apply(this, (query) {
       if (query.whereSort == Sort.asc) {
         return query
-            .addWhereClause(IndexWhereClause.between(
-              indexName: r'chunkId',
-              lower: [],
-              upper: [chunkId],
-              includeUpper: false,
-            ))
-            .addWhereClause(IndexWhereClause.between(
-              indexName: r'chunkId',
-              lower: [chunkId],
-              includeLower: false,
-              upper: [],
-            ));
+            .addWhereClause(
+              IndexWhereClause.between(
+                indexName: r'chunkId',
+                lower: [],
+                upper: [chunkId],
+                includeUpper: false,
+              ),
+            )
+            .addWhereClause(
+              IndexWhereClause.between(
+                indexName: r'chunkId',
+                lower: [chunkId],
+                includeLower: false,
+                upper: [],
+              ),
+            );
       } else {
         return query
-            .addWhereClause(IndexWhereClause.between(
-              indexName: r'chunkId',
-              lower: [chunkId],
-              includeLower: false,
-              upper: [],
-            ))
-            .addWhereClause(IndexWhereClause.between(
-              indexName: r'chunkId',
-              lower: [],
-              upper: [chunkId],
-              includeUpper: false,
-            ));
+            .addWhereClause(
+              IndexWhereClause.between(
+                indexName: r'chunkId',
+                lower: [chunkId],
+                includeLower: false,
+                upper: [],
+              ),
+            )
+            .addWhereClause(
+              IndexWhereClause.between(
+                indexName: r'chunkId',
+                lower: [],
+                upper: [chunkId],
+                includeUpper: false,
+              ),
+            );
       }
     });
   }
@@ -521,89 +565,92 @@ extension LocalChunkMetadataQueryWhere
 extension LocalChunkMetadataQueryFilter
     on QueryBuilder<LocalChunkMetadata, LocalChunkMetadata, QFilterCondition> {
   QueryBuilder<LocalChunkMetadata, LocalChunkMetadata, QAfterFilterCondition>
-      captureIsNull() {
+  captureIsNull() {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(const FilterCondition.isNull(
-        property: r'capture',
-      ));
+      return query.addFilterCondition(
+        const FilterCondition.isNull(property: r'capture'),
+      );
     });
   }
 
   QueryBuilder<LocalChunkMetadata, LocalChunkMetadata, QAfterFilterCondition>
-      captureIsNotNull() {
+  captureIsNotNull() {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(const FilterCondition.isNotNull(
-        property: r'capture',
-      ));
+      return query.addFilterCondition(
+        const FilterCondition.isNotNull(property: r'capture'),
+      );
     });
   }
 
   QueryBuilder<LocalChunkMetadata, LocalChunkMetadata, QAfterFilterCondition>
-      captureConditionsIsNull() {
+  captureConditionsIsNull() {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(const FilterCondition.isNull(
-        property: r'captureConditions',
-      ));
+      return query.addFilterCondition(
+        const FilterCondition.isNull(property: r'captureConditions'),
+      );
     });
   }
 
   QueryBuilder<LocalChunkMetadata, LocalChunkMetadata, QAfterFilterCondition>
-      captureConditionsIsNotNull() {
+  captureConditionsIsNotNull() {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(const FilterCondition.isNotNull(
-        property: r'captureConditions',
-      ));
+      return query.addFilterCondition(
+        const FilterCondition.isNotNull(property: r'captureConditions'),
+      );
     });
   }
 
   QueryBuilder<LocalChunkMetadata, LocalChunkMetadata, QAfterFilterCondition>
-      chunkIdEqualTo(
-    String value, {
-    bool caseSensitive = true,
-  }) {
+  chunkIdEqualTo(String value, {bool caseSensitive = true}) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.equalTo(
-        property: r'chunkId',
-        value: value,
-        caseSensitive: caseSensitive,
-      ));
+      return query.addFilterCondition(
+        FilterCondition.equalTo(
+          property: r'chunkId',
+          value: value,
+          caseSensitive: caseSensitive,
+        ),
+      );
     });
   }
 
   QueryBuilder<LocalChunkMetadata, LocalChunkMetadata, QAfterFilterCondition>
-      chunkIdGreaterThan(
-    String value, {
-    bool include = false,
-    bool caseSensitive = true,
-  }) {
-    return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.greaterThan(
-        include: include,
-        property: r'chunkId',
-        value: value,
-        caseSensitive: caseSensitive,
-      ));
-    });
-  }
-
-  QueryBuilder<LocalChunkMetadata, LocalChunkMetadata, QAfterFilterCondition>
-      chunkIdLessThan(
+  chunkIdGreaterThan(
     String value, {
     bool include = false,
     bool caseSensitive = true,
   }) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.lessThan(
-        include: include,
-        property: r'chunkId',
-        value: value,
-        caseSensitive: caseSensitive,
-      ));
+      return query.addFilterCondition(
+        FilterCondition.greaterThan(
+          include: include,
+          property: r'chunkId',
+          value: value,
+          caseSensitive: caseSensitive,
+        ),
+      );
     });
   }
 
   QueryBuilder<LocalChunkMetadata, LocalChunkMetadata, QAfterFilterCondition>
-      chunkIdBetween(
+  chunkIdLessThan(
+    String value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(
+        FilterCondition.lessThan(
+          include: include,
+          property: r'chunkId',
+          value: value,
+          caseSensitive: caseSensitive,
+        ),
+      );
+    });
+  }
+
+  QueryBuilder<LocalChunkMetadata, LocalChunkMetadata, QAfterFilterCondition>
+  chunkIdBetween(
     String lower,
     String upper, {
     bool includeLower = true,
@@ -611,230 +658,231 @@ extension LocalChunkMetadataQueryFilter
     bool caseSensitive = true,
   }) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.between(
-        property: r'chunkId',
-        lower: lower,
-        includeLower: includeLower,
-        upper: upper,
-        includeUpper: includeUpper,
-        caseSensitive: caseSensitive,
-      ));
+      return query.addFilterCondition(
+        FilterCondition.between(
+          property: r'chunkId',
+          lower: lower,
+          includeLower: includeLower,
+          upper: upper,
+          includeUpper: includeUpper,
+          caseSensitive: caseSensitive,
+        ),
+      );
     });
   }
 
   QueryBuilder<LocalChunkMetadata, LocalChunkMetadata, QAfterFilterCondition>
-      chunkIdStartsWith(
-    String value, {
-    bool caseSensitive = true,
-  }) {
+  chunkIdStartsWith(String value, {bool caseSensitive = true}) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.startsWith(
-        property: r'chunkId',
-        value: value,
-        caseSensitive: caseSensitive,
-      ));
+      return query.addFilterCondition(
+        FilterCondition.startsWith(
+          property: r'chunkId',
+          value: value,
+          caseSensitive: caseSensitive,
+        ),
+      );
     });
   }
 
   QueryBuilder<LocalChunkMetadata, LocalChunkMetadata, QAfterFilterCondition>
-      chunkIdEndsWith(
-    String value, {
-    bool caseSensitive = true,
-  }) {
+  chunkIdEndsWith(String value, {bool caseSensitive = true}) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.endsWith(
-        property: r'chunkId',
-        value: value,
-        caseSensitive: caseSensitive,
-      ));
+      return query.addFilterCondition(
+        FilterCondition.endsWith(
+          property: r'chunkId',
+          value: value,
+          caseSensitive: caseSensitive,
+        ),
+      );
     });
   }
 
   QueryBuilder<LocalChunkMetadata, LocalChunkMetadata, QAfterFilterCondition>
-      chunkIdContains(String value, {bool caseSensitive = true}) {
+  chunkIdContains(String value, {bool caseSensitive = true}) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.contains(
-        property: r'chunkId',
-        value: value,
-        caseSensitive: caseSensitive,
-      ));
+      return query.addFilterCondition(
+        FilterCondition.contains(
+          property: r'chunkId',
+          value: value,
+          caseSensitive: caseSensitive,
+        ),
+      );
     });
   }
 
   QueryBuilder<LocalChunkMetadata, LocalChunkMetadata, QAfterFilterCondition>
-      chunkIdMatches(String pattern, {bool caseSensitive = true}) {
+  chunkIdMatches(String pattern, {bool caseSensitive = true}) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.matches(
-        property: r'chunkId',
-        wildcard: pattern,
-        caseSensitive: caseSensitive,
-      ));
+      return query.addFilterCondition(
+        FilterCondition.matches(
+          property: r'chunkId',
+          wildcard: pattern,
+          caseSensitive: caseSensitive,
+        ),
+      );
     });
   }
 
   QueryBuilder<LocalChunkMetadata, LocalChunkMetadata, QAfterFilterCondition>
-      chunkIdIsEmpty() {
+  chunkIdIsEmpty() {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.equalTo(
-        property: r'chunkId',
-        value: '',
-      ));
+      return query.addFilterCondition(
+        FilterCondition.equalTo(property: r'chunkId', value: ''),
+      );
     });
   }
 
   QueryBuilder<LocalChunkMetadata, LocalChunkMetadata, QAfterFilterCondition>
-      chunkIdIsNotEmpty() {
+  chunkIdIsNotEmpty() {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.greaterThan(
-        property: r'chunkId',
-        value: '',
-      ));
+      return query.addFilterCondition(
+        FilterCondition.greaterThan(property: r'chunkId', value: ''),
+      );
     });
   }
 
   QueryBuilder<LocalChunkMetadata, LocalChunkMetadata, QAfterFilterCondition>
-      collectorAuthoredIsNull() {
+  collectorAuthoredIsNull() {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(const FilterCondition.isNull(
-        property: r'collectorAuthored',
-      ));
+      return query.addFilterCondition(
+        const FilterCondition.isNull(property: r'collectorAuthored'),
+      );
     });
   }
 
   QueryBuilder<LocalChunkMetadata, LocalChunkMetadata, QAfterFilterCondition>
-      collectorAuthoredIsNotNull() {
+  collectorAuthoredIsNotNull() {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(const FilterCondition.isNotNull(
-        property: r'collectorAuthored',
-      ));
+      return query.addFilterCondition(
+        const FilterCondition.isNotNull(property: r'collectorAuthored'),
+      );
     });
   }
 
   QueryBuilder<LocalChunkMetadata, LocalChunkMetadata, QAfterFilterCondition>
-      deviceContextIsNull() {
+  deviceContextIsNull() {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(const FilterCondition.isNull(
-        property: r'deviceContext',
-      ));
+      return query.addFilterCondition(
+        const FilterCondition.isNull(property: r'deviceContext'),
+      );
     });
   }
 
   QueryBuilder<LocalChunkMetadata, LocalChunkMetadata, QAfterFilterCondition>
-      deviceContextIsNotNull() {
+  deviceContextIsNotNull() {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(const FilterCondition.isNotNull(
-        property: r'deviceContext',
-      ));
+      return query.addFilterCondition(
+        const FilterCondition.isNotNull(property: r'deviceContext'),
+      );
     });
   }
 
   QueryBuilder<LocalChunkMetadata, LocalChunkMetadata, QAfterFilterCondition>
-      idEqualTo(Id value) {
+  idEqualTo(Id value) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.equalTo(
-        property: r'id',
-        value: value,
-      ));
+      return query.addFilterCondition(
+        FilterCondition.equalTo(property: r'id', value: value),
+      );
     });
   }
 
   QueryBuilder<LocalChunkMetadata, LocalChunkMetadata, QAfterFilterCondition>
-      idGreaterThan(
-    Id value, {
-    bool include = false,
-  }) {
+  idGreaterThan(Id value, {bool include = false}) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.greaterThan(
-        include: include,
-        property: r'id',
-        value: value,
-      ));
+      return query.addFilterCondition(
+        FilterCondition.greaterThan(
+          include: include,
+          property: r'id',
+          value: value,
+        ),
+      );
     });
   }
 
   QueryBuilder<LocalChunkMetadata, LocalChunkMetadata, QAfterFilterCondition>
-      idLessThan(
-    Id value, {
-    bool include = false,
-  }) {
+  idLessThan(Id value, {bool include = false}) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.lessThan(
-        include: include,
-        property: r'id',
-        value: value,
-      ));
+      return query.addFilterCondition(
+        FilterCondition.lessThan(
+          include: include,
+          property: r'id',
+          value: value,
+        ),
+      );
     });
   }
 
   QueryBuilder<LocalChunkMetadata, LocalChunkMetadata, QAfterFilterCondition>
-      idBetween(
+  idBetween(
     Id lower,
     Id upper, {
     bool includeLower = true,
     bool includeUpper = true,
   }) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.between(
-        property: r'id',
-        lower: lower,
-        includeLower: includeLower,
-        upper: upper,
-        includeUpper: includeUpper,
-      ));
+      return query.addFilterCondition(
+        FilterCondition.between(
+          property: r'id',
+          lower: lower,
+          includeLower: includeLower,
+          upper: upper,
+          includeUpper: includeUpper,
+        ),
+      );
     });
   }
 
   QueryBuilder<LocalChunkMetadata, LocalChunkMetadata, QAfterFilterCondition>
-      identityIsNull() {
+  identityIsNull() {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(const FilterCondition.isNull(
-        property: r'identity',
-      ));
+      return query.addFilterCondition(
+        const FilterCondition.isNull(property: r'identity'),
+      );
     });
   }
 
   QueryBuilder<LocalChunkMetadata, LocalChunkMetadata, QAfterFilterCondition>
-      identityIsNotNull() {
+  identityIsNotNull() {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(const FilterCondition.isNotNull(
-        property: r'identity',
-      ));
+      return query.addFilterCondition(
+        const FilterCondition.isNotNull(property: r'identity'),
+      );
     });
   }
 
   QueryBuilder<LocalChunkMetadata, LocalChunkMetadata, QAfterFilterCondition>
-      integrityIsNull() {
+  integrityIsNull() {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(const FilterCondition.isNull(
-        property: r'integrity',
-      ));
+      return query.addFilterCondition(
+        const FilterCondition.isNull(property: r'integrity'),
+      );
     });
   }
 
   QueryBuilder<LocalChunkMetadata, LocalChunkMetadata, QAfterFilterCondition>
-      integrityIsNotNull() {
+  integrityIsNotNull() {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(const FilterCondition.isNotNull(
-        property: r'integrity',
-      ));
+      return query.addFilterCondition(
+        const FilterCondition.isNotNull(property: r'integrity'),
+      );
     });
   }
 
   QueryBuilder<LocalChunkMetadata, LocalChunkMetadata, QAfterFilterCondition>
-      timingIsNull() {
+  timingIsNull() {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(const FilterCondition.isNull(
-        property: r'timing',
-      ));
+      return query.addFilterCondition(
+        const FilterCondition.isNull(property: r'timing'),
+      );
     });
   }
 
   QueryBuilder<LocalChunkMetadata, LocalChunkMetadata, QAfterFilterCondition>
-      timingIsNotNull() {
+  timingIsNotNull() {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(const FilterCondition.isNotNull(
-        property: r'timing',
-      ));
+      return query.addFilterCondition(
+        const FilterCondition.isNotNull(property: r'timing'),
+      );
     });
   }
 }
@@ -842,49 +890,49 @@ extension LocalChunkMetadataQueryFilter
 extension LocalChunkMetadataQueryObject
     on QueryBuilder<LocalChunkMetadata, LocalChunkMetadata, QFilterCondition> {
   QueryBuilder<LocalChunkMetadata, LocalChunkMetadata, QAfterFilterCondition>
-      capture(FilterQuery<EmbeddedCapture> q) {
+  capture(FilterQuery<EmbeddedCapture> q) {
     return QueryBuilder.apply(this, (query) {
       return query.object(q, r'capture');
     });
   }
 
   QueryBuilder<LocalChunkMetadata, LocalChunkMetadata, QAfterFilterCondition>
-      captureConditions(FilterQuery<EmbeddedCaptureConditions> q) {
+  captureConditions(FilterQuery<EmbeddedCaptureConditions> q) {
     return QueryBuilder.apply(this, (query) {
       return query.object(q, r'captureConditions');
     });
   }
 
   QueryBuilder<LocalChunkMetadata, LocalChunkMetadata, QAfterFilterCondition>
-      collectorAuthored(FilterQuery<EmbeddedCollectorAuthored> q) {
+  collectorAuthored(FilterQuery<EmbeddedCollectorAuthored> q) {
     return QueryBuilder.apply(this, (query) {
       return query.object(q, r'collectorAuthored');
     });
   }
 
   QueryBuilder<LocalChunkMetadata, LocalChunkMetadata, QAfterFilterCondition>
-      deviceContext(FilterQuery<EmbeddedDeviceContext> q) {
+  deviceContext(FilterQuery<EmbeddedDeviceContext> q) {
     return QueryBuilder.apply(this, (query) {
       return query.object(q, r'deviceContext');
     });
   }
 
   QueryBuilder<LocalChunkMetadata, LocalChunkMetadata, QAfterFilterCondition>
-      identity(FilterQuery<EmbeddedIdentity> q) {
+  identity(FilterQuery<EmbeddedIdentity> q) {
     return QueryBuilder.apply(this, (query) {
       return query.object(q, r'identity');
     });
   }
 
   QueryBuilder<LocalChunkMetadata, LocalChunkMetadata, QAfterFilterCondition>
-      integrity(FilterQuery<EmbeddedIntegrity> q) {
+  integrity(FilterQuery<EmbeddedIntegrity> q) {
     return QueryBuilder.apply(this, (query) {
       return query.object(q, r'integrity');
     });
   }
 
   QueryBuilder<LocalChunkMetadata, LocalChunkMetadata, QAfterFilterCondition>
-      timing(FilterQuery<EmbeddedTiming> q) {
+  timing(FilterQuery<EmbeddedTiming> q) {
     return QueryBuilder.apply(this, (query) {
       return query.object(q, r'timing');
     });
@@ -897,14 +945,14 @@ extension LocalChunkMetadataQueryLinks
 extension LocalChunkMetadataQuerySortBy
     on QueryBuilder<LocalChunkMetadata, LocalChunkMetadata, QSortBy> {
   QueryBuilder<LocalChunkMetadata, LocalChunkMetadata, QAfterSortBy>
-      sortByChunkId() {
+  sortByChunkId() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'chunkId', Sort.asc);
     });
   }
 
   QueryBuilder<LocalChunkMetadata, LocalChunkMetadata, QAfterSortBy>
-      sortByChunkIdDesc() {
+  sortByChunkIdDesc() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'chunkId', Sort.desc);
     });
@@ -914,28 +962,28 @@ extension LocalChunkMetadataQuerySortBy
 extension LocalChunkMetadataQuerySortThenBy
     on QueryBuilder<LocalChunkMetadata, LocalChunkMetadata, QSortThenBy> {
   QueryBuilder<LocalChunkMetadata, LocalChunkMetadata, QAfterSortBy>
-      thenByChunkId() {
+  thenByChunkId() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'chunkId', Sort.asc);
     });
   }
 
   QueryBuilder<LocalChunkMetadata, LocalChunkMetadata, QAfterSortBy>
-      thenByChunkIdDesc() {
+  thenByChunkIdDesc() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'chunkId', Sort.desc);
     });
   }
 
   QueryBuilder<LocalChunkMetadata, LocalChunkMetadata, QAfterSortBy>
-      thenById() {
+  thenById() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'id', Sort.asc);
     });
   }
 
   QueryBuilder<LocalChunkMetadata, LocalChunkMetadata, QAfterSortBy>
-      thenByIdDesc() {
+  thenByIdDesc() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'id', Sort.desc);
     });
@@ -945,7 +993,7 @@ extension LocalChunkMetadataQuerySortThenBy
 extension LocalChunkMetadataQueryWhereDistinct
     on QueryBuilder<LocalChunkMetadata, LocalChunkMetadata, QDistinct> {
   QueryBuilder<LocalChunkMetadata, LocalChunkMetadata, QDistinct>
-      distinctByChunkId({bool caseSensitive = true}) {
+  distinctByChunkId({bool caseSensitive = true}) {
     return QueryBuilder.apply(this, (query) {
       return query.addDistinctBy(r'chunkId', caseSensitive: caseSensitive);
     });
@@ -961,14 +1009,14 @@ extension LocalChunkMetadataQueryProperty
   }
 
   QueryBuilder<LocalChunkMetadata, EmbeddedCapture?, QQueryOperations>
-      captureProperty() {
+  captureProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'capture');
     });
   }
 
   QueryBuilder<LocalChunkMetadata, EmbeddedCaptureConditions?, QQueryOperations>
-      captureConditionsProperty() {
+  captureConditionsProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'captureConditions');
     });
@@ -981,35 +1029,35 @@ extension LocalChunkMetadataQueryProperty
   }
 
   QueryBuilder<LocalChunkMetadata, EmbeddedCollectorAuthored?, QQueryOperations>
-      collectorAuthoredProperty() {
+  collectorAuthoredProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'collectorAuthored');
     });
   }
 
   QueryBuilder<LocalChunkMetadata, EmbeddedDeviceContext?, QQueryOperations>
-      deviceContextProperty() {
+  deviceContextProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'deviceContext');
     });
   }
 
   QueryBuilder<LocalChunkMetadata, EmbeddedIdentity?, QQueryOperations>
-      identityProperty() {
+  identityProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'identity');
     });
   }
 
   QueryBuilder<LocalChunkMetadata, EmbeddedIntegrity?, QQueryOperations>
-      integrityProperty() {
+  integrityProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'integrity');
     });
   }
 
   QueryBuilder<LocalChunkMetadata, EmbeddedTiming?, QQueryOperations>
-      timingProperty() {
+  timingProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'timing');
     });

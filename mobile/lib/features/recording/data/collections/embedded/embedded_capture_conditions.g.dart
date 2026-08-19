@@ -28,7 +28,7 @@ const EmbeddedCaptureConditionsSchema = Schema(
       id: 2,
       name: r'networkType',
       type: IsarType.string,
-    )
+    ),
   },
   estimateSize: _embeddedCaptureConditionsEstimateSize,
   serialize: _embeddedCaptureConditionsSerialize,
@@ -45,9 +45,13 @@ int _embeddedCaptureConditionsEstimateSize(
   {
     final value = object.gps;
     if (value != null) {
-      bytesCount += 3 +
+      bytesCount +=
+          3 +
           EmbeddedGpsFixSchema.estimateSize(
-              value, allOffsets[EmbeddedGpsFix]!, allOffsets);
+            value,
+            allOffsets[EmbeddedGpsFix]!,
+            allOffsets,
+          );
     }
   }
   {
@@ -103,10 +107,11 @@ P _embeddedCaptureConditionsDeserializeProp<P>(
       return (reader.readLongOrNull(offset)) as P;
     case 1:
       return (reader.readObjectOrNull<EmbeddedGpsFix>(
-        offset,
-        EmbeddedGpsFixSchema.deserialize,
-        allOffsets,
-      )) as P;
+            offset,
+            EmbeddedGpsFixSchema.deserialize,
+            allOffsets,
+          ))
+          as P;
     case 2:
       return (reader.readStringOrNull(offset)) as P;
     default:
@@ -114,166 +119,229 @@ P _embeddedCaptureConditionsDeserializeProp<P>(
   }
 }
 
-extension EmbeddedCaptureConditionsQueryFilter on QueryBuilder<
-    EmbeddedCaptureConditions, EmbeddedCaptureConditions, QFilterCondition> {
-  QueryBuilder<EmbeddedCaptureConditions, EmbeddedCaptureConditions,
-      QAfterFilterCondition> batteryPercentIsNull() {
+extension EmbeddedCaptureConditionsQueryFilter
+    on
+        QueryBuilder<
+          EmbeddedCaptureConditions,
+          EmbeddedCaptureConditions,
+          QFilterCondition
+        > {
+  QueryBuilder<
+    EmbeddedCaptureConditions,
+    EmbeddedCaptureConditions,
+    QAfterFilterCondition
+  >
+  batteryPercentIsNull() {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(const FilterCondition.isNull(
-        property: r'batteryPercent',
-      ));
+      return query.addFilterCondition(
+        const FilterCondition.isNull(property: r'batteryPercent'),
+      );
     });
   }
 
-  QueryBuilder<EmbeddedCaptureConditions, EmbeddedCaptureConditions,
-      QAfterFilterCondition> batteryPercentIsNotNull() {
+  QueryBuilder<
+    EmbeddedCaptureConditions,
+    EmbeddedCaptureConditions,
+    QAfterFilterCondition
+  >
+  batteryPercentIsNotNull() {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(const FilterCondition.isNotNull(
-        property: r'batteryPercent',
-      ));
+      return query.addFilterCondition(
+        const FilterCondition.isNotNull(property: r'batteryPercent'),
+      );
     });
   }
 
-  QueryBuilder<EmbeddedCaptureConditions, EmbeddedCaptureConditions,
-      QAfterFilterCondition> batteryPercentEqualTo(int? value) {
+  QueryBuilder<
+    EmbeddedCaptureConditions,
+    EmbeddedCaptureConditions,
+    QAfterFilterCondition
+  >
+  batteryPercentEqualTo(int? value) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.equalTo(
-        property: r'batteryPercent',
-        value: value,
-      ));
+      return query.addFilterCondition(
+        FilterCondition.equalTo(property: r'batteryPercent', value: value),
+      );
     });
   }
 
-  QueryBuilder<EmbeddedCaptureConditions, EmbeddedCaptureConditions,
-      QAfterFilterCondition> batteryPercentGreaterThan(
-    int? value, {
-    bool include = false,
-  }) {
+  QueryBuilder<
+    EmbeddedCaptureConditions,
+    EmbeddedCaptureConditions,
+    QAfterFilterCondition
+  >
+  batteryPercentGreaterThan(int? value, {bool include = false}) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.greaterThan(
-        include: include,
-        property: r'batteryPercent',
-        value: value,
-      ));
+      return query.addFilterCondition(
+        FilterCondition.greaterThan(
+          include: include,
+          property: r'batteryPercent',
+          value: value,
+        ),
+      );
     });
   }
 
-  QueryBuilder<EmbeddedCaptureConditions, EmbeddedCaptureConditions,
-      QAfterFilterCondition> batteryPercentLessThan(
-    int? value, {
-    bool include = false,
-  }) {
+  QueryBuilder<
+    EmbeddedCaptureConditions,
+    EmbeddedCaptureConditions,
+    QAfterFilterCondition
+  >
+  batteryPercentLessThan(int? value, {bool include = false}) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.lessThan(
-        include: include,
-        property: r'batteryPercent',
-        value: value,
-      ));
+      return query.addFilterCondition(
+        FilterCondition.lessThan(
+          include: include,
+          property: r'batteryPercent',
+          value: value,
+        ),
+      );
     });
   }
 
-  QueryBuilder<EmbeddedCaptureConditions, EmbeddedCaptureConditions,
-      QAfterFilterCondition> batteryPercentBetween(
+  QueryBuilder<
+    EmbeddedCaptureConditions,
+    EmbeddedCaptureConditions,
+    QAfterFilterCondition
+  >
+  batteryPercentBetween(
     int? lower,
     int? upper, {
     bool includeLower = true,
     bool includeUpper = true,
   }) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.between(
-        property: r'batteryPercent',
-        lower: lower,
-        includeLower: includeLower,
-        upper: upper,
-        includeUpper: includeUpper,
-      ));
+      return query.addFilterCondition(
+        FilterCondition.between(
+          property: r'batteryPercent',
+          lower: lower,
+          includeLower: includeLower,
+          upper: upper,
+          includeUpper: includeUpper,
+        ),
+      );
     });
   }
 
-  QueryBuilder<EmbeddedCaptureConditions, EmbeddedCaptureConditions,
-      QAfterFilterCondition> gpsIsNull() {
+  QueryBuilder<
+    EmbeddedCaptureConditions,
+    EmbeddedCaptureConditions,
+    QAfterFilterCondition
+  >
+  gpsIsNull() {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(const FilterCondition.isNull(
-        property: r'gps',
-      ));
+      return query.addFilterCondition(
+        const FilterCondition.isNull(property: r'gps'),
+      );
     });
   }
 
-  QueryBuilder<EmbeddedCaptureConditions, EmbeddedCaptureConditions,
-      QAfterFilterCondition> gpsIsNotNull() {
+  QueryBuilder<
+    EmbeddedCaptureConditions,
+    EmbeddedCaptureConditions,
+    QAfterFilterCondition
+  >
+  gpsIsNotNull() {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(const FilterCondition.isNotNull(
-        property: r'gps',
-      ));
+      return query.addFilterCondition(
+        const FilterCondition.isNotNull(property: r'gps'),
+      );
     });
   }
 
-  QueryBuilder<EmbeddedCaptureConditions, EmbeddedCaptureConditions,
-      QAfterFilterCondition> networkTypeIsNull() {
+  QueryBuilder<
+    EmbeddedCaptureConditions,
+    EmbeddedCaptureConditions,
+    QAfterFilterCondition
+  >
+  networkTypeIsNull() {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(const FilterCondition.isNull(
-        property: r'networkType',
-      ));
+      return query.addFilterCondition(
+        const FilterCondition.isNull(property: r'networkType'),
+      );
     });
   }
 
-  QueryBuilder<EmbeddedCaptureConditions, EmbeddedCaptureConditions,
-      QAfterFilterCondition> networkTypeIsNotNull() {
+  QueryBuilder<
+    EmbeddedCaptureConditions,
+    EmbeddedCaptureConditions,
+    QAfterFilterCondition
+  >
+  networkTypeIsNotNull() {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(const FilterCondition.isNotNull(
-        property: r'networkType',
-      ));
+      return query.addFilterCondition(
+        const FilterCondition.isNotNull(property: r'networkType'),
+      );
     });
   }
 
-  QueryBuilder<EmbeddedCaptureConditions, EmbeddedCaptureConditions,
-      QAfterFilterCondition> networkTypeEqualTo(
-    String? value, {
-    bool caseSensitive = true,
-  }) {
+  QueryBuilder<
+    EmbeddedCaptureConditions,
+    EmbeddedCaptureConditions,
+    QAfterFilterCondition
+  >
+  networkTypeEqualTo(String? value, {bool caseSensitive = true}) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.equalTo(
-        property: r'networkType',
-        value: value,
-        caseSensitive: caseSensitive,
-      ));
+      return query.addFilterCondition(
+        FilterCondition.equalTo(
+          property: r'networkType',
+          value: value,
+          caseSensitive: caseSensitive,
+        ),
+      );
     });
   }
 
-  QueryBuilder<EmbeddedCaptureConditions, EmbeddedCaptureConditions,
-      QAfterFilterCondition> networkTypeGreaterThan(
+  QueryBuilder<
+    EmbeddedCaptureConditions,
+    EmbeddedCaptureConditions,
+    QAfterFilterCondition
+  >
+  networkTypeGreaterThan(
     String? value, {
     bool include = false,
     bool caseSensitive = true,
   }) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.greaterThan(
-        include: include,
-        property: r'networkType',
-        value: value,
-        caseSensitive: caseSensitive,
-      ));
+      return query.addFilterCondition(
+        FilterCondition.greaterThan(
+          include: include,
+          property: r'networkType',
+          value: value,
+          caseSensitive: caseSensitive,
+        ),
+      );
     });
   }
 
-  QueryBuilder<EmbeddedCaptureConditions, EmbeddedCaptureConditions,
-      QAfterFilterCondition> networkTypeLessThan(
+  QueryBuilder<
+    EmbeddedCaptureConditions,
+    EmbeddedCaptureConditions,
+    QAfterFilterCondition
+  >
+  networkTypeLessThan(
     String? value, {
     bool include = false,
     bool caseSensitive = true,
   }) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.lessThan(
-        include: include,
-        property: r'networkType',
-        value: value,
-        caseSensitive: caseSensitive,
-      ));
+      return query.addFilterCondition(
+        FilterCondition.lessThan(
+          include: include,
+          property: r'networkType',
+          value: value,
+          caseSensitive: caseSensitive,
+        ),
+      );
     });
   }
 
-  QueryBuilder<EmbeddedCaptureConditions, EmbeddedCaptureConditions,
-      QAfterFilterCondition> networkTypeBetween(
+  QueryBuilder<
+    EmbeddedCaptureConditions,
+    EmbeddedCaptureConditions,
+    QAfterFilterCondition
+  >
+  networkTypeBetween(
     String? lower,
     String? upper, {
     bool includeLower = true,
@@ -281,94 +349,127 @@ extension EmbeddedCaptureConditionsQueryFilter on QueryBuilder<
     bool caseSensitive = true,
   }) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.between(
-        property: r'networkType',
-        lower: lower,
-        includeLower: includeLower,
-        upper: upper,
-        includeUpper: includeUpper,
-        caseSensitive: caseSensitive,
-      ));
+      return query.addFilterCondition(
+        FilterCondition.between(
+          property: r'networkType',
+          lower: lower,
+          includeLower: includeLower,
+          upper: upper,
+          includeUpper: includeUpper,
+          caseSensitive: caseSensitive,
+        ),
+      );
     });
   }
 
-  QueryBuilder<EmbeddedCaptureConditions, EmbeddedCaptureConditions,
-      QAfterFilterCondition> networkTypeStartsWith(
-    String value, {
-    bool caseSensitive = true,
-  }) {
+  QueryBuilder<
+    EmbeddedCaptureConditions,
+    EmbeddedCaptureConditions,
+    QAfterFilterCondition
+  >
+  networkTypeStartsWith(String value, {bool caseSensitive = true}) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.startsWith(
-        property: r'networkType',
-        value: value,
-        caseSensitive: caseSensitive,
-      ));
+      return query.addFilterCondition(
+        FilterCondition.startsWith(
+          property: r'networkType',
+          value: value,
+          caseSensitive: caseSensitive,
+        ),
+      );
     });
   }
 
-  QueryBuilder<EmbeddedCaptureConditions, EmbeddedCaptureConditions,
-      QAfterFilterCondition> networkTypeEndsWith(
-    String value, {
-    bool caseSensitive = true,
-  }) {
+  QueryBuilder<
+    EmbeddedCaptureConditions,
+    EmbeddedCaptureConditions,
+    QAfterFilterCondition
+  >
+  networkTypeEndsWith(String value, {bool caseSensitive = true}) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.endsWith(
-        property: r'networkType',
-        value: value,
-        caseSensitive: caseSensitive,
-      ));
+      return query.addFilterCondition(
+        FilterCondition.endsWith(
+          property: r'networkType',
+          value: value,
+          caseSensitive: caseSensitive,
+        ),
+      );
     });
   }
 
-  QueryBuilder<EmbeddedCaptureConditions, EmbeddedCaptureConditions,
-          QAfterFilterCondition>
-      networkTypeContains(String value, {bool caseSensitive = true}) {
+  QueryBuilder<
+    EmbeddedCaptureConditions,
+    EmbeddedCaptureConditions,
+    QAfterFilterCondition
+  >
+  networkTypeContains(String value, {bool caseSensitive = true}) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.contains(
-        property: r'networkType',
-        value: value,
-        caseSensitive: caseSensitive,
-      ));
+      return query.addFilterCondition(
+        FilterCondition.contains(
+          property: r'networkType',
+          value: value,
+          caseSensitive: caseSensitive,
+        ),
+      );
     });
   }
 
-  QueryBuilder<EmbeddedCaptureConditions, EmbeddedCaptureConditions,
-          QAfterFilterCondition>
-      networkTypeMatches(String pattern, {bool caseSensitive = true}) {
+  QueryBuilder<
+    EmbeddedCaptureConditions,
+    EmbeddedCaptureConditions,
+    QAfterFilterCondition
+  >
+  networkTypeMatches(String pattern, {bool caseSensitive = true}) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.matches(
-        property: r'networkType',
-        wildcard: pattern,
-        caseSensitive: caseSensitive,
-      ));
+      return query.addFilterCondition(
+        FilterCondition.matches(
+          property: r'networkType',
+          wildcard: pattern,
+          caseSensitive: caseSensitive,
+        ),
+      );
     });
   }
 
-  QueryBuilder<EmbeddedCaptureConditions, EmbeddedCaptureConditions,
-      QAfterFilterCondition> networkTypeIsEmpty() {
+  QueryBuilder<
+    EmbeddedCaptureConditions,
+    EmbeddedCaptureConditions,
+    QAfterFilterCondition
+  >
+  networkTypeIsEmpty() {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.equalTo(
-        property: r'networkType',
-        value: '',
-      ));
+      return query.addFilterCondition(
+        FilterCondition.equalTo(property: r'networkType', value: ''),
+      );
     });
   }
 
-  QueryBuilder<EmbeddedCaptureConditions, EmbeddedCaptureConditions,
-      QAfterFilterCondition> networkTypeIsNotEmpty() {
+  QueryBuilder<
+    EmbeddedCaptureConditions,
+    EmbeddedCaptureConditions,
+    QAfterFilterCondition
+  >
+  networkTypeIsNotEmpty() {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.greaterThan(
-        property: r'networkType',
-        value: '',
-      ));
+      return query.addFilterCondition(
+        FilterCondition.greaterThan(property: r'networkType', value: ''),
+      );
     });
   }
 }
 
-extension EmbeddedCaptureConditionsQueryObject on QueryBuilder<
-    EmbeddedCaptureConditions, EmbeddedCaptureConditions, QFilterCondition> {
-  QueryBuilder<EmbeddedCaptureConditions, EmbeddedCaptureConditions,
-      QAfterFilterCondition> gps(FilterQuery<EmbeddedGpsFix> q) {
+extension EmbeddedCaptureConditionsQueryObject
+    on
+        QueryBuilder<
+          EmbeddedCaptureConditions,
+          EmbeddedCaptureConditions,
+          QFilterCondition
+        > {
+  QueryBuilder<
+    EmbeddedCaptureConditions,
+    EmbeddedCaptureConditions,
+    QAfterFilterCondition
+  >
+  gps(FilterQuery<EmbeddedGpsFix> q) {
     return QueryBuilder.apply(this, (query) {
       return query.object(q, r'gps');
     });

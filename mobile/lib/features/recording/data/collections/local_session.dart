@@ -47,13 +47,36 @@ class LocalSession {
 
   /// From Volume 4's `sessions.task_id`.
   ///
-  /// Null until `TaskContext` is implemented — `features/projects_tasks/` is
-  /// unbuilt, and Mission 3.6's A-062 records the gap. Stored nullable rather
-  /// than omitted so a session written today can be back-filled rather than
-  /// re-created.
+  /// **Written since Mission 7.4 step 5**, from the Task the Collector chose in
+  /// C-06. Null on every row recorded before that, and on any session started
+  /// without a selection — which A-068's Guard 1 then refuses at upload rather
+  /// than attributing to a guess.
+  ///
+  /// This is the **durability boundary for Task context** (F38). The upload
+  /// path reads it here at claim time, hours or days and any number of
+  /// relaunches after the recording ended; the in-memory selection that
+  /// produced it lives for one navigation and is deliberately not persisted.
   String? taskId;
 
-  /// From Volume 4's `sessions.collector_id`. Null for the same reason.
+  /// The Task's owning Project — Chapter 4.5 §2's `project_id`.
+  ///
+  /// Not a column in Volume 4's `sessions` table, which reaches a Project by
+  /// joining through `tasks`. It is stored here anyway because the **metadata
+  /// document is assembled on the device**, possibly offline, and Chapter 4.5
+  /// §2's `identity` group names `project_id` directly — deriving it would need
+  /// the join, and the join is the backend's.
+  ///
+  /// Additive and nullable, so it needs no migration: `migration.dart` records
+  /// that *"Isar migrates additive change silently — a new collection or
+  /// property simply appears"*. Existing rows read null, which is correct —
+  /// they were recorded when no Project was known.
+  String? projectId;
+
+  /// From Volume 4's `sessions.collector_id`.
+  ///
+  /// Still null, and unlike [taskId] that is not a gap: the backend derives the
+  /// collector from the verified token on every route (Chapter 4.8), so nothing
+  /// reads this column. Kept because Chapter 5.8 §1 mirrors the table.
   String? collectorId;
 
   /// When the Collector tapped Start.

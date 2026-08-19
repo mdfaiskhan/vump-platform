@@ -12,7 +12,8 @@ part of 'chunk_processing_job.dart';
 T _$identity<T>(T value) => value;
 
 final _privateConstructorUsedError = UnsupportedError(
-    'It seems like you constructed your class using `MyClass._()`. This constructor is only meant to be used by freezed and you are not supposed to need it nor use it.\nPlease check the documentation here for more information: https://github.com/rrousselGit/freezed#adding-getters-and-methods-to-our-models');
+  'It seems like you constructed your class using `MyClass._()`. This constructor is only meant to be used by freezed and you are not supposed to need it nor use it.\nPlease check the documentation here for more information: https://github.com/rrousselGit/freezed#adding-getters-and-methods-to-our-models',
+);
 
 /// @nodoc
 mixin _$ChunkProcessingJob {
@@ -36,11 +37,16 @@ mixin _$ChunkProcessingJob {
 /// @nodoc
 abstract class $ChunkProcessingJobCopyWith<$Res> {
   factory $ChunkProcessingJobCopyWith(
-          ChunkProcessingJob value, $Res Function(ChunkProcessingJob) then) =
-      _$ChunkProcessingJobCopyWithImpl<$Res, ChunkProcessingJob>;
+    ChunkProcessingJob value,
+    $Res Function(ChunkProcessingJob) then,
+  ) = _$ChunkProcessingJobCopyWithImpl<$Res, ChunkProcessingJob>;
   @useResult
-  $Res call(
-      {String chunkId, int sequenceIndex, String filePath, DateTime startedAt});
+  $Res call({
+    String chunkId,
+    int sequenceIndex,
+    String filePath,
+    DateTime startedAt,
+  });
 }
 
 /// @nodoc
@@ -61,46 +67,55 @@ class _$ChunkProcessingJobCopyWithImpl<$Res, $Val extends ChunkProcessingJob>
     Object? filePath = null,
     Object? startedAt = null,
   }) {
-    return _then(_value.copyWith(
-      chunkId: null == chunkId
-          ? _value.chunkId
-          : chunkId // ignore: cast_nullable_to_non_nullable
-              as String,
-      sequenceIndex: null == sequenceIndex
-          ? _value.sequenceIndex
-          : sequenceIndex // ignore: cast_nullable_to_non_nullable
-              as int,
-      filePath: null == filePath
-          ? _value.filePath
-          : filePath // ignore: cast_nullable_to_non_nullable
-              as String,
-      startedAt: null == startedAt
-          ? _value.startedAt
-          : startedAt // ignore: cast_nullable_to_non_nullable
-              as DateTime,
-    ) as $Val);
+    return _then(
+      _value.copyWith(
+            chunkId: null == chunkId
+                ? _value.chunkId
+                : chunkId // ignore: cast_nullable_to_non_nullable
+                      as String,
+            sequenceIndex: null == sequenceIndex
+                ? _value.sequenceIndex
+                : sequenceIndex // ignore: cast_nullable_to_non_nullable
+                      as int,
+            filePath: null == filePath
+                ? _value.filePath
+                : filePath // ignore: cast_nullable_to_non_nullable
+                      as String,
+            startedAt: null == startedAt
+                ? _value.startedAt
+                : startedAt // ignore: cast_nullable_to_non_nullable
+                      as DateTime,
+          )
+          as $Val,
+    );
   }
 }
 
 /// @nodoc
 abstract class _$$ChunkProcessingJobImplCopyWith<$Res>
     implements $ChunkProcessingJobCopyWith<$Res> {
-  factory _$$ChunkProcessingJobImplCopyWith(_$ChunkProcessingJobImpl value,
-          $Res Function(_$ChunkProcessingJobImpl) then) =
-      __$$ChunkProcessingJobImplCopyWithImpl<$Res>;
+  factory _$$ChunkProcessingJobImplCopyWith(
+    _$ChunkProcessingJobImpl value,
+    $Res Function(_$ChunkProcessingJobImpl) then,
+  ) = __$$ChunkProcessingJobImplCopyWithImpl<$Res>;
   @override
   @useResult
-  $Res call(
-      {String chunkId, int sequenceIndex, String filePath, DateTime startedAt});
+  $Res call({
+    String chunkId,
+    int sequenceIndex,
+    String filePath,
+    DateTime startedAt,
+  });
 }
 
 /// @nodoc
 class __$$ChunkProcessingJobImplCopyWithImpl<$Res>
     extends _$ChunkProcessingJobCopyWithImpl<$Res, _$ChunkProcessingJobImpl>
     implements _$$ChunkProcessingJobImplCopyWith<$Res> {
-  __$$ChunkProcessingJobImplCopyWithImpl(_$ChunkProcessingJobImpl _value,
-      $Res Function(_$ChunkProcessingJobImpl) _then)
-      : super(_value, _then);
+  __$$ChunkProcessingJobImplCopyWithImpl(
+    _$ChunkProcessingJobImpl _value,
+    $Res Function(_$ChunkProcessingJobImpl) _then,
+  ) : super(_value, _then);
 
   @pragma('vm:prefer-inline')
   @override
@@ -110,35 +125,38 @@ class __$$ChunkProcessingJobImplCopyWithImpl<$Res>
     Object? filePath = null,
     Object? startedAt = null,
   }) {
-    return _then(_$ChunkProcessingJobImpl(
-      chunkId: null == chunkId
-          ? _value.chunkId
-          : chunkId // ignore: cast_nullable_to_non_nullable
-              as String,
-      sequenceIndex: null == sequenceIndex
-          ? _value.sequenceIndex
-          : sequenceIndex // ignore: cast_nullable_to_non_nullable
-              as int,
-      filePath: null == filePath
-          ? _value.filePath
-          : filePath // ignore: cast_nullable_to_non_nullable
-              as String,
-      startedAt: null == startedAt
-          ? _value.startedAt
-          : startedAt // ignore: cast_nullable_to_non_nullable
-              as DateTime,
-    ));
+    return _then(
+      _$ChunkProcessingJobImpl(
+        chunkId: null == chunkId
+            ? _value.chunkId
+            : chunkId // ignore: cast_nullable_to_non_nullable
+                  as String,
+        sequenceIndex: null == sequenceIndex
+            ? _value.sequenceIndex
+            : sequenceIndex // ignore: cast_nullable_to_non_nullable
+                  as int,
+        filePath: null == filePath
+            ? _value.filePath
+            : filePath // ignore: cast_nullable_to_non_nullable
+                  as String,
+        startedAt: null == startedAt
+            ? _value.startedAt
+            : startedAt // ignore: cast_nullable_to_non_nullable
+                  as DateTime,
+      ),
+    );
   }
 }
 
 /// @nodoc
 
 class _$ChunkProcessingJobImpl implements _ChunkProcessingJob {
-  const _$ChunkProcessingJobImpl(
-      {required this.chunkId,
-      required this.sequenceIndex,
-      required this.filePath,
-      required this.startedAt});
+  const _$ChunkProcessingJobImpl({
+    required this.chunkId,
+    required this.sequenceIndex,
+    required this.filePath,
+    required this.startedAt,
+  });
 
   /// The UUID identifying this chunk for its whole life (Ch. 5.14 §3).
   @override
@@ -184,30 +202,29 @@ class _$ChunkProcessingJobImpl implements _ChunkProcessingJob {
   @pragma('vm:prefer-inline')
   _$$ChunkProcessingJobImplCopyWith<_$ChunkProcessingJobImpl> get copyWith =>
       __$$ChunkProcessingJobImplCopyWithImpl<_$ChunkProcessingJobImpl>(
-          this, _$identity);
+        this,
+        _$identity,
+      );
 }
 
 abstract class _ChunkProcessingJob implements ChunkProcessingJob {
-  const factory _ChunkProcessingJob(
-      {required final String chunkId,
-      required final int sequenceIndex,
-      required final String filePath,
-      required final DateTime startedAt}) = _$ChunkProcessingJobImpl;
+  const factory _ChunkProcessingJob({
+    required final String chunkId,
+    required final int sequenceIndex,
+    required final String filePath,
+    required final DateTime startedAt,
+  }) = _$ChunkProcessingJobImpl;
 
   @override
-
   /// The UUID identifying this chunk for its whole life (Ch. 5.14 §3).
   String get chunkId;
   @override
-
   /// Its position within the session (Ch. 5.6 §2), fixed at capture-stop.
   int get sequenceIndex;
   @override
-
   /// The closed `.mp4` the platform wrote.
   String get filePath;
   @override
-
   /// When capture stopped and processing became possible.
   DateTime get startedAt;
   @override

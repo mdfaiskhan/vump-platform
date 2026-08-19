@@ -12,7 +12,8 @@ part of 'gps_fix.dart';
 T _$identity<T>(T value) => value;
 
 final _privateConstructorUsedError = UnsupportedError(
-    'It seems like you constructed your class using `MyClass._()`. This constructor is only meant to be used by freezed and you are not supposed to need it nor use it.\nPlease check the documentation here for more information: https://github.com/rrousselGit/freezed#adding-getters-and-methods-to-our-models');
+  'It seems like you constructed your class using `MyClass._()`. This constructor is only meant to be used by freezed and you are not supposed to need it nor use it.\nPlease check the documentation here for more information: https://github.com/rrousselGit/freezed#adding-getters-and-methods-to-our-models',
+);
 
 /// @nodoc
 mixin _$GpsFix {
@@ -43,28 +44,29 @@ class _$GpsFixCopyWithImpl<$Res, $Val extends GpsFix>
 
   @pragma('vm:prefer-inline')
   @override
-  $Res call({
-    Object? latitude = null,
-    Object? longitude = null,
-  }) {
-    return _then(_value.copyWith(
-      latitude: null == latitude
-          ? _value.latitude
-          : latitude // ignore: cast_nullable_to_non_nullable
-              as double,
-      longitude: null == longitude
-          ? _value.longitude
-          : longitude // ignore: cast_nullable_to_non_nullable
-              as double,
-    ) as $Val);
+  $Res call({Object? latitude = null, Object? longitude = null}) {
+    return _then(
+      _value.copyWith(
+            latitude: null == latitude
+                ? _value.latitude
+                : latitude // ignore: cast_nullable_to_non_nullable
+                      as double,
+            longitude: null == longitude
+                ? _value.longitude
+                : longitude // ignore: cast_nullable_to_non_nullable
+                      as double,
+          )
+          as $Val,
+    );
   }
 }
 
 /// @nodoc
 abstract class _$$GpsFixImplCopyWith<$Res> implements $GpsFixCopyWith<$Res> {
   factory _$$GpsFixImplCopyWith(
-          _$GpsFixImpl value, $Res Function(_$GpsFixImpl) then) =
-      __$$GpsFixImplCopyWithImpl<$Res>;
+    _$GpsFixImpl value,
+    $Res Function(_$GpsFixImpl) then,
+  ) = __$$GpsFixImplCopyWithImpl<$Res>;
   @override
   @useResult
   $Res call({double latitude, double longitude});
@@ -75,25 +77,25 @@ class __$$GpsFixImplCopyWithImpl<$Res>
     extends _$GpsFixCopyWithImpl<$Res, _$GpsFixImpl>
     implements _$$GpsFixImplCopyWith<$Res> {
   __$$GpsFixImplCopyWithImpl(
-      _$GpsFixImpl _value, $Res Function(_$GpsFixImpl) _then)
-      : super(_value, _then);
+    _$GpsFixImpl _value,
+    $Res Function(_$GpsFixImpl) _then,
+  ) : super(_value, _then);
 
   @pragma('vm:prefer-inline')
   @override
-  $Res call({
-    Object? latitude = null,
-    Object? longitude = null,
-  }) {
-    return _then(_$GpsFixImpl(
-      latitude: null == latitude
-          ? _value.latitude
-          : latitude // ignore: cast_nullable_to_non_nullable
-              as double,
-      longitude: null == longitude
-          ? _value.longitude
-          : longitude // ignore: cast_nullable_to_non_nullable
-              as double,
-    ));
+  $Res call({Object? latitude = null, Object? longitude = null}) {
+    return _then(
+      _$GpsFixImpl(
+        latitude: null == latitude
+            ? _value.latitude
+            : latitude // ignore: cast_nullable_to_non_nullable
+                  as double,
+        longitude: null == longitude
+            ? _value.longitude
+            : longitude // ignore: cast_nullable_to_non_nullable
+                  as double,
+      ),
+    );
   }
 }
 
@@ -134,9 +136,10 @@ class _$GpsFixImpl implements _GpsFix {
 }
 
 abstract class _GpsFix implements GpsFix {
-  const factory _GpsFix(
-      {required final double latitude,
-      required final double longitude}) = _$GpsFixImpl;
+  const factory _GpsFix({
+    required final double latitude,
+    required final double longitude,
+  }) = _$GpsFixImpl;
 
   @override
   double get latitude;

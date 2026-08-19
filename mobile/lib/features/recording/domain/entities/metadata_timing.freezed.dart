@@ -12,7 +12,8 @@ part of 'metadata_timing.dart';
 T _$identity<T>(T value) => value;
 
 final _privateConstructorUsedError = UnsupportedError(
-    'It seems like you constructed your class using `MyClass._()`. This constructor is only meant to be used by freezed and you are not supposed to need it nor use it.\nPlease check the documentation here for more information: https://github.com/rrousselGit/freezed#adding-getters-and-methods-to-our-models');
+  'It seems like you constructed your class using `MyClass._()`. This constructor is only meant to be used by freezed and you are not supposed to need it nor use it.\nPlease check the documentation here for more information: https://github.com/rrousselGit/freezed#adding-getters-and-methods-to-our-models',
+);
 
 /// @nodoc
 mixin _$MetadataTiming {
@@ -33,8 +34,9 @@ mixin _$MetadataTiming {
 /// @nodoc
 abstract class $MetadataTimingCopyWith<$Res> {
   factory $MetadataTimingCopyWith(
-          MetadataTiming value, $Res Function(MetadataTiming) then) =
-      _$MetadataTimingCopyWithImpl<$Res, MetadataTiming>;
+    MetadataTiming value,
+    $Res Function(MetadataTiming) then,
+  ) = _$MetadataTimingCopyWithImpl<$Res, MetadataTiming>;
   @useResult
   $Res call({int sequenceIndex, DateTime startedAt, DateTime endedAt});
 }
@@ -56,29 +58,33 @@ class _$MetadataTimingCopyWithImpl<$Res, $Val extends MetadataTiming>
     Object? startedAt = null,
     Object? endedAt = null,
   }) {
-    return _then(_value.copyWith(
-      sequenceIndex: null == sequenceIndex
-          ? _value.sequenceIndex
-          : sequenceIndex // ignore: cast_nullable_to_non_nullable
-              as int,
-      startedAt: null == startedAt
-          ? _value.startedAt
-          : startedAt // ignore: cast_nullable_to_non_nullable
-              as DateTime,
-      endedAt: null == endedAt
-          ? _value.endedAt
-          : endedAt // ignore: cast_nullable_to_non_nullable
-              as DateTime,
-    ) as $Val);
+    return _then(
+      _value.copyWith(
+            sequenceIndex: null == sequenceIndex
+                ? _value.sequenceIndex
+                : sequenceIndex // ignore: cast_nullable_to_non_nullable
+                      as int,
+            startedAt: null == startedAt
+                ? _value.startedAt
+                : startedAt // ignore: cast_nullable_to_non_nullable
+                      as DateTime,
+            endedAt: null == endedAt
+                ? _value.endedAt
+                : endedAt // ignore: cast_nullable_to_non_nullable
+                      as DateTime,
+          )
+          as $Val,
+    );
   }
 }
 
 /// @nodoc
 abstract class _$$MetadataTimingImplCopyWith<$Res>
     implements $MetadataTimingCopyWith<$Res> {
-  factory _$$MetadataTimingImplCopyWith(_$MetadataTimingImpl value,
-          $Res Function(_$MetadataTimingImpl) then) =
-      __$$MetadataTimingImplCopyWithImpl<$Res>;
+  factory _$$MetadataTimingImplCopyWith(
+    _$MetadataTimingImpl value,
+    $Res Function(_$MetadataTimingImpl) then,
+  ) = __$$MetadataTimingImplCopyWithImpl<$Res>;
   @override
   @useResult
   $Res call({int sequenceIndex, DateTime startedAt, DateTime endedAt});
@@ -89,8 +95,9 @@ class __$$MetadataTimingImplCopyWithImpl<$Res>
     extends _$MetadataTimingCopyWithImpl<$Res, _$MetadataTimingImpl>
     implements _$$MetadataTimingImplCopyWith<$Res> {
   __$$MetadataTimingImplCopyWithImpl(
-      _$MetadataTimingImpl _value, $Res Function(_$MetadataTimingImpl) _then)
-      : super(_value, _then);
+    _$MetadataTimingImpl _value,
+    $Res Function(_$MetadataTimingImpl) _then,
+  ) : super(_value, _then);
 
   @pragma('vm:prefer-inline')
   @override
@@ -99,31 +106,33 @@ class __$$MetadataTimingImplCopyWithImpl<$Res>
     Object? startedAt = null,
     Object? endedAt = null,
   }) {
-    return _then(_$MetadataTimingImpl(
-      sequenceIndex: null == sequenceIndex
-          ? _value.sequenceIndex
-          : sequenceIndex // ignore: cast_nullable_to_non_nullable
-              as int,
-      startedAt: null == startedAt
-          ? _value.startedAt
-          : startedAt // ignore: cast_nullable_to_non_nullable
-              as DateTime,
-      endedAt: null == endedAt
-          ? _value.endedAt
-          : endedAt // ignore: cast_nullable_to_non_nullable
-              as DateTime,
-    ));
+    return _then(
+      _$MetadataTimingImpl(
+        sequenceIndex: null == sequenceIndex
+            ? _value.sequenceIndex
+            : sequenceIndex // ignore: cast_nullable_to_non_nullable
+                  as int,
+        startedAt: null == startedAt
+            ? _value.startedAt
+            : startedAt // ignore: cast_nullable_to_non_nullable
+                  as DateTime,
+        endedAt: null == endedAt
+            ? _value.endedAt
+            : endedAt // ignore: cast_nullable_to_non_nullable
+                  as DateTime,
+      ),
+    );
   }
 }
 
 /// @nodoc
 
 class _$MetadataTimingImpl extends _MetadataTiming {
-  const _$MetadataTimingImpl(
-      {required this.sequenceIndex,
-      required this.startedAt,
-      required this.endedAt})
-      : super._();
+  const _$MetadataTimingImpl({
+    required this.sequenceIndex,
+    required this.startedAt,
+    required this.endedAt,
+  }) : super._();
 
   /// From `ChunkProcessingJob.sequenceIndex` (Mission 3.4.5).
   @override
@@ -163,26 +172,26 @@ class _$MetadataTimingImpl extends _MetadataTiming {
   @pragma('vm:prefer-inline')
   _$$MetadataTimingImplCopyWith<_$MetadataTimingImpl> get copyWith =>
       __$$MetadataTimingImplCopyWithImpl<_$MetadataTimingImpl>(
-          this, _$identity);
+        this,
+        _$identity,
+      );
 }
 
 abstract class _MetadataTiming extends MetadataTiming {
-  const factory _MetadataTiming(
-      {required final int sequenceIndex,
-      required final DateTime startedAt,
-      required final DateTime endedAt}) = _$MetadataTimingImpl;
+  const factory _MetadataTiming({
+    required final int sequenceIndex,
+    required final DateTime startedAt,
+    required final DateTime endedAt,
+  }) = _$MetadataTimingImpl;
   const _MetadataTiming._() : super._();
 
   @override
-
   /// From `ChunkProcessingJob.sequenceIndex` (Mission 3.4.5).
   int get sequenceIndex;
   @override
-
   /// From `RecordingStateRecording.chunkStartedAt` (Mission 3.4.5).
   DateTime get startedAt;
   @override
-
   /// From `ChunkProcessingJob.startedAt` — the instant capture stopped.
   DateTime get endedAt;
   @override

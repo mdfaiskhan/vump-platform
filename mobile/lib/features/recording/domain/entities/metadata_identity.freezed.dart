@@ -12,7 +12,8 @@ part of 'metadata_identity.dart';
 T _$identity<T>(T value) => value;
 
 final _privateConstructorUsedError = UnsupportedError(
-    'It seems like you constructed your class using `MyClass._()`. This constructor is only meant to be used by freezed and you are not supposed to need it nor use it.\nPlease check the documentation here for more information: https://github.com/rrousselGit/freezed#adding-getters-and-methods-to-our-models');
+  'It seems like you constructed your class using `MyClass._()`. This constructor is only meant to be used by freezed and you are not supposed to need it nor use it.\nPlease check the documentation here for more information: https://github.com/rrousselGit/freezed#adding-getters-and-methods-to-our-models',
+);
 
 /// @nodoc
 mixin _$MetadataIdentity {
@@ -40,15 +41,17 @@ mixin _$MetadataIdentity {
 /// @nodoc
 abstract class $MetadataIdentityCopyWith<$Res> {
   factory $MetadataIdentityCopyWith(
-          MetadataIdentity value, $Res Function(MetadataIdentity) then) =
-      _$MetadataIdentityCopyWithImpl<$Res, MetadataIdentity>;
+    MetadataIdentity value,
+    $Res Function(MetadataIdentity) then,
+  ) = _$MetadataIdentityCopyWithImpl<$Res, MetadataIdentity>;
   @useResult
-  $Res call(
-      {String sessionId,
-      String projectId,
-      String taskId,
-      String collectorId,
-      String deviceId});
+  $Res call({
+    String sessionId,
+    String projectId,
+    String taskId,
+    String collectorId,
+    String deviceId,
+  });
 }
 
 /// @nodoc
@@ -70,54 +73,60 @@ class _$MetadataIdentityCopyWithImpl<$Res, $Val extends MetadataIdentity>
     Object? collectorId = null,
     Object? deviceId = null,
   }) {
-    return _then(_value.copyWith(
-      sessionId: null == sessionId
-          ? _value.sessionId
-          : sessionId // ignore: cast_nullable_to_non_nullable
-              as String,
-      projectId: null == projectId
-          ? _value.projectId
-          : projectId // ignore: cast_nullable_to_non_nullable
-              as String,
-      taskId: null == taskId
-          ? _value.taskId
-          : taskId // ignore: cast_nullable_to_non_nullable
-              as String,
-      collectorId: null == collectorId
-          ? _value.collectorId
-          : collectorId // ignore: cast_nullable_to_non_nullable
-              as String,
-      deviceId: null == deviceId
-          ? _value.deviceId
-          : deviceId // ignore: cast_nullable_to_non_nullable
-              as String,
-    ) as $Val);
+    return _then(
+      _value.copyWith(
+            sessionId: null == sessionId
+                ? _value.sessionId
+                : sessionId // ignore: cast_nullable_to_non_nullable
+                      as String,
+            projectId: null == projectId
+                ? _value.projectId
+                : projectId // ignore: cast_nullable_to_non_nullable
+                      as String,
+            taskId: null == taskId
+                ? _value.taskId
+                : taskId // ignore: cast_nullable_to_non_nullable
+                      as String,
+            collectorId: null == collectorId
+                ? _value.collectorId
+                : collectorId // ignore: cast_nullable_to_non_nullable
+                      as String,
+            deviceId: null == deviceId
+                ? _value.deviceId
+                : deviceId // ignore: cast_nullable_to_non_nullable
+                      as String,
+          )
+          as $Val,
+    );
   }
 }
 
 /// @nodoc
 abstract class _$$MetadataIdentityImplCopyWith<$Res>
     implements $MetadataIdentityCopyWith<$Res> {
-  factory _$$MetadataIdentityImplCopyWith(_$MetadataIdentityImpl value,
-          $Res Function(_$MetadataIdentityImpl) then) =
-      __$$MetadataIdentityImplCopyWithImpl<$Res>;
+  factory _$$MetadataIdentityImplCopyWith(
+    _$MetadataIdentityImpl value,
+    $Res Function(_$MetadataIdentityImpl) then,
+  ) = __$$MetadataIdentityImplCopyWithImpl<$Res>;
   @override
   @useResult
-  $Res call(
-      {String sessionId,
-      String projectId,
-      String taskId,
-      String collectorId,
-      String deviceId});
+  $Res call({
+    String sessionId,
+    String projectId,
+    String taskId,
+    String collectorId,
+    String deviceId,
+  });
 }
 
 /// @nodoc
 class __$$MetadataIdentityImplCopyWithImpl<$Res>
     extends _$MetadataIdentityCopyWithImpl<$Res, _$MetadataIdentityImpl>
     implements _$$MetadataIdentityImplCopyWith<$Res> {
-  __$$MetadataIdentityImplCopyWithImpl(_$MetadataIdentityImpl _value,
-      $Res Function(_$MetadataIdentityImpl) _then)
-      : super(_value, _then);
+  __$$MetadataIdentityImplCopyWithImpl(
+    _$MetadataIdentityImpl _value,
+    $Res Function(_$MetadataIdentityImpl) _then,
+  ) : super(_value, _then);
 
   @pragma('vm:prefer-inline')
   @override
@@ -128,41 +137,43 @@ class __$$MetadataIdentityImplCopyWithImpl<$Res>
     Object? collectorId = null,
     Object? deviceId = null,
   }) {
-    return _then(_$MetadataIdentityImpl(
-      sessionId: null == sessionId
-          ? _value.sessionId
-          : sessionId // ignore: cast_nullable_to_non_nullable
-              as String,
-      projectId: null == projectId
-          ? _value.projectId
-          : projectId // ignore: cast_nullable_to_non_nullable
-              as String,
-      taskId: null == taskId
-          ? _value.taskId
-          : taskId // ignore: cast_nullable_to_non_nullable
-              as String,
-      collectorId: null == collectorId
-          ? _value.collectorId
-          : collectorId // ignore: cast_nullable_to_non_nullable
-              as String,
-      deviceId: null == deviceId
-          ? _value.deviceId
-          : deviceId // ignore: cast_nullable_to_non_nullable
-              as String,
-    ));
+    return _then(
+      _$MetadataIdentityImpl(
+        sessionId: null == sessionId
+            ? _value.sessionId
+            : sessionId // ignore: cast_nullable_to_non_nullable
+                  as String,
+        projectId: null == projectId
+            ? _value.projectId
+            : projectId // ignore: cast_nullable_to_non_nullable
+                  as String,
+        taskId: null == taskId
+            ? _value.taskId
+            : taskId // ignore: cast_nullable_to_non_nullable
+                  as String,
+        collectorId: null == collectorId
+            ? _value.collectorId
+            : collectorId // ignore: cast_nullable_to_non_nullable
+                  as String,
+        deviceId: null == deviceId
+            ? _value.deviceId
+            : deviceId // ignore: cast_nullable_to_non_nullable
+                  as String,
+      ),
+    );
   }
 }
 
 /// @nodoc
 
 class _$MetadataIdentityImpl extends _MetadataIdentity {
-  const _$MetadataIdentityImpl(
-      {required this.sessionId,
-      required this.projectId,
-      required this.taskId,
-      required this.collectorId,
-      required this.deviceId})
-      : super._();
+  const _$MetadataIdentityImpl({
+    required this.sessionId,
+    required this.projectId,
+    required this.taskId,
+    required this.collectorId,
+    required this.deviceId,
+  }) : super._();
 
   /// From `RecordingSession.sessionId` (Mission 3.2).
   @override
@@ -208,43 +219,47 @@ class _$MetadataIdentityImpl extends _MetadataIdentity {
 
   @override
   int get hashCode => Object.hash(
-      runtimeType, sessionId, projectId, taskId, collectorId, deviceId);
+    runtimeType,
+    sessionId,
+    projectId,
+    taskId,
+    collectorId,
+    deviceId,
+  );
 
   @JsonKey(ignore: true)
   @override
   @pragma('vm:prefer-inline')
   _$$MetadataIdentityImplCopyWith<_$MetadataIdentityImpl> get copyWith =>
       __$$MetadataIdentityImplCopyWithImpl<_$MetadataIdentityImpl>(
-          this, _$identity);
+        this,
+        _$identity,
+      );
 }
 
 abstract class _MetadataIdentity extends MetadataIdentity {
-  const factory _MetadataIdentity(
-      {required final String sessionId,
-      required final String projectId,
-      required final String taskId,
-      required final String collectorId,
-      required final String deviceId}) = _$MetadataIdentityImpl;
+  const factory _MetadataIdentity({
+    required final String sessionId,
+    required final String projectId,
+    required final String taskId,
+    required final String collectorId,
+    required final String deviceId,
+  }) = _$MetadataIdentityImpl;
   const _MetadataIdentity._() : super._();
 
   @override
-
   /// From `RecordingSession.sessionId` (Mission 3.2).
   String get sessionId;
   @override
-
   /// From `TaskContext` — no source in this feature.
   String get projectId;
   @override
-
   /// From `TaskContext` — no source in this feature.
   String get taskId;
   @override
-
   /// From `DeviceContext` — `features/auth/`'s `User.uid`, inverted.
   String get collectorId;
   @override
-
   /// From `DeviceContext` — a "cached, stable device identifier"
   /// (Ch. 5.7 §2). Nothing in the project produces one yet.
   String get deviceId;

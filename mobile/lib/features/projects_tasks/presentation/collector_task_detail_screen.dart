@@ -4,6 +4,8 @@ import 'package:go_router/go_router.dart';
 
 import 'package:mobile/app/theme/app_sizes.dart';
 import 'package:mobile/app/theme/app_spacing.dart';
+import 'package:mobile/core/identity/providers/identity_ports.dart';
+import 'package:mobile/core/identity/selected_task.dart';
 import 'package:mobile/features/projects_tasks/application/read_failure.dart';
 import 'package:mobile/features/projects_tasks/application/tasks_notifier.dart';
 import 'package:mobile/features/projects_tasks/domain/entities/task.dart';
@@ -49,7 +51,7 @@ import 'package:mobile/features/projects_tasks/domain/entities/task.dart';
 /// `PreRecordingChecklistScreen` declares the parameter and reads it nowhere,
 /// and neither does `ChecklistNotifier`, `RecordingNotifier` or
 /// `RecordingGuard`. A recording started here is still attributed to nothing,
-/// because `TaskContext` is bound to `UnsourcedTaskContext` — open items 1 and
+/// because `TaskContext` had no source — open items 1 and
 /// 79. **This screen being a real Task picker does not change that**, and the
 /// doc says so because the proximity invites exactly the opposite assumption.
 class CollectorTaskDetailScreen extends ConsumerWidget {
@@ -118,7 +120,26 @@ class CollectorTaskDetailScreen extends ConsumerWidget {
                   width: double.infinity,
                   height: AppSizes.buttonHeightLg,
                   child: FilledButton(
-                    onPressed: () => context.go('/checklist/$taskId'),
+                    // The selection is recorded BEFORE navigating, and this
+                    // is the only place in the app that records one — F38.
+                    // `features/recording/` reads it out of `core/` when the
+                    // Checklist passes and stamps both ids onto the session
+                    // row, which is where Task context becomes durable.
+                    //
+                    // Both ids come from the `Task` already on screen, so
+                    // `projectId` costs nothing: deriving it later would mean
+                    // a network call to learn something this widget holds.
+                    onPressed: () {
+                      ref
+                          .read(selectedTaskProvider.notifier)
+                          .select(
+                            SelectedTask(
+                              projectId: task.projectId,
+                              taskId: task.id,
+                            ),
+                          );
+                      context.go('/checklist/$taskId');
+                    },
                     child: const Text('Start Recording'),
                   ),
                 ),

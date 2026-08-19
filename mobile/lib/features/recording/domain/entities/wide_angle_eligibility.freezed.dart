@@ -12,7 +12,8 @@ part of 'wide_angle_eligibility.dart';
 T _$identity<T>(T value) => value;
 
 final _privateConstructorUsedError = UnsupportedError(
-    'It seems like you constructed your class using `MyClass._()`. This constructor is only meant to be used by freezed and you are not supposed to need it nor use it.\nPlease check the documentation here for more information: https://github.com/rrousselGit/freezed#adding-getters-and-methods-to-our-models');
+  'It seems like you constructed your class using `MyClass._()`. This constructor is only meant to be used by freezed and you are not supposed to need it nor use it.\nPlease check the documentation here for more information: https://github.com/rrousselGit/freezed#adding-getters-and-methods-to-our-models',
+);
 
 /// @nodoc
 mixin _$WideAngleEligibility {
@@ -21,57 +22,54 @@ mixin _$WideAngleEligibility {
     required TResult Function(double zoomFactor) optical,
     required TResult Function(double zoomFactor) hybrid,
     required TResult Function(WideAngleIneligibleReason reason) ineligible,
-  }) =>
-      throw _privateConstructorUsedError;
+  }) => throw _privateConstructorUsedError;
   @optionalTypeArgs
   TResult? whenOrNull<TResult extends Object?>({
     TResult? Function(double zoomFactor)? optical,
     TResult? Function(double zoomFactor)? hybrid,
     TResult? Function(WideAngleIneligibleReason reason)? ineligible,
-  }) =>
-      throw _privateConstructorUsedError;
+  }) => throw _privateConstructorUsedError;
   @optionalTypeArgs
   TResult maybeWhen<TResult extends Object?>({
     TResult Function(double zoomFactor)? optical,
     TResult Function(double zoomFactor)? hybrid,
     TResult Function(WideAngleIneligibleReason reason)? ineligible,
     required TResult orElse(),
-  }) =>
-      throw _privateConstructorUsedError;
+  }) => throw _privateConstructorUsedError;
   @optionalTypeArgs
   TResult map<TResult extends Object?>({
     required TResult Function(WideAngleEligibilityOptical value) optical,
     required TResult Function(WideAngleEligibilityHybrid value) hybrid,
     required TResult Function(WideAngleEligibilityIneligible value) ineligible,
-  }) =>
-      throw _privateConstructorUsedError;
+  }) => throw _privateConstructorUsedError;
   @optionalTypeArgs
   TResult? mapOrNull<TResult extends Object?>({
     TResult? Function(WideAngleEligibilityOptical value)? optical,
     TResult? Function(WideAngleEligibilityHybrid value)? hybrid,
     TResult? Function(WideAngleEligibilityIneligible value)? ineligible,
-  }) =>
-      throw _privateConstructorUsedError;
+  }) => throw _privateConstructorUsedError;
   @optionalTypeArgs
   TResult maybeMap<TResult extends Object?>({
     TResult Function(WideAngleEligibilityOptical value)? optical,
     TResult Function(WideAngleEligibilityHybrid value)? hybrid,
     TResult Function(WideAngleEligibilityIneligible value)? ineligible,
     required TResult orElse(),
-  }) =>
-      throw _privateConstructorUsedError;
+  }) => throw _privateConstructorUsedError;
 }
 
 /// @nodoc
 abstract class $WideAngleEligibilityCopyWith<$Res> {
-  factory $WideAngleEligibilityCopyWith(WideAngleEligibility value,
-          $Res Function(WideAngleEligibility) then) =
-      _$WideAngleEligibilityCopyWithImpl<$Res, WideAngleEligibility>;
+  factory $WideAngleEligibilityCopyWith(
+    WideAngleEligibility value,
+    $Res Function(WideAngleEligibility) then,
+  ) = _$WideAngleEligibilityCopyWithImpl<$Res, WideAngleEligibility>;
 }
 
 /// @nodoc
-class _$WideAngleEligibilityCopyWithImpl<$Res,
-        $Val extends WideAngleEligibility>
+class _$WideAngleEligibilityCopyWithImpl<
+  $Res,
+  $Val extends WideAngleEligibility
+>
     implements $WideAngleEligibilityCopyWith<$Res> {
   _$WideAngleEligibilityCopyWithImpl(this._value, this._then);
 
@@ -84,34 +82,37 @@ class _$WideAngleEligibilityCopyWithImpl<$Res,
 /// @nodoc
 abstract class _$$WideAngleEligibilityOpticalImplCopyWith<$Res> {
   factory _$$WideAngleEligibilityOpticalImplCopyWith(
-          _$WideAngleEligibilityOpticalImpl value,
-          $Res Function(_$WideAngleEligibilityOpticalImpl) then) =
-      __$$WideAngleEligibilityOpticalImplCopyWithImpl<$Res>;
+    _$WideAngleEligibilityOpticalImpl value,
+    $Res Function(_$WideAngleEligibilityOpticalImpl) then,
+  ) = __$$WideAngleEligibilityOpticalImplCopyWithImpl<$Res>;
   @useResult
   $Res call({double zoomFactor});
 }
 
 /// @nodoc
 class __$$WideAngleEligibilityOpticalImplCopyWithImpl<$Res>
-    extends _$WideAngleEligibilityCopyWithImpl<$Res,
-        _$WideAngleEligibilityOpticalImpl>
+    extends
+        _$WideAngleEligibilityCopyWithImpl<
+          $Res,
+          _$WideAngleEligibilityOpticalImpl
+        >
     implements _$$WideAngleEligibilityOpticalImplCopyWith<$Res> {
   __$$WideAngleEligibilityOpticalImplCopyWithImpl(
-      _$WideAngleEligibilityOpticalImpl _value,
-      $Res Function(_$WideAngleEligibilityOpticalImpl) _then)
-      : super(_value, _then);
+    _$WideAngleEligibilityOpticalImpl _value,
+    $Res Function(_$WideAngleEligibilityOpticalImpl) _then,
+  ) : super(_value, _then);
 
   @pragma('vm:prefer-inline')
   @override
-  $Res call({
-    Object? zoomFactor = null,
-  }) {
-    return _then(_$WideAngleEligibilityOpticalImpl(
-      zoomFactor: null == zoomFactor
-          ? _value.zoomFactor
-          : zoomFactor // ignore: cast_nullable_to_non_nullable
-              as double,
-    ));
+  $Res call({Object? zoomFactor = null}) {
+    return _then(
+      _$WideAngleEligibilityOpticalImpl(
+        zoomFactor: null == zoomFactor
+            ? _value.zoomFactor
+            : zoomFactor // ignore: cast_nullable_to_non_nullable
+                  as double,
+      ),
+    );
   }
 }
 
@@ -119,7 +120,7 @@ class __$$WideAngleEligibilityOpticalImplCopyWithImpl<$Res>
 
 class _$WideAngleEligibilityOpticalImpl extends WideAngleEligibilityOptical {
   const _$WideAngleEligibilityOpticalImpl({required this.zoomFactor})
-      : super._();
+    : super._();
 
   @override
   final double zoomFactor;
@@ -145,8 +146,10 @@ class _$WideAngleEligibilityOpticalImpl extends WideAngleEligibilityOptical {
   @override
   @pragma('vm:prefer-inline')
   _$$WideAngleEligibilityOpticalImplCopyWith<_$WideAngleEligibilityOpticalImpl>
-      get copyWith => __$$WideAngleEligibilityOpticalImplCopyWithImpl<
-          _$WideAngleEligibilityOpticalImpl>(this, _$identity);
+  get copyWith =>
+      __$$WideAngleEligibilityOpticalImplCopyWithImpl<
+        _$WideAngleEligibilityOpticalImpl
+      >(this, _$identity);
 
   @override
   @optionalTypeArgs
@@ -218,47 +221,51 @@ class _$WideAngleEligibilityOpticalImpl extends WideAngleEligibilityOptical {
 }
 
 abstract class WideAngleEligibilityOptical extends WideAngleEligibility {
-  const factory WideAngleEligibilityOptical(
-      {required final double zoomFactor}) = _$WideAngleEligibilityOpticalImpl;
+  const factory WideAngleEligibilityOptical({
+    required final double zoomFactor,
+  }) = _$WideAngleEligibilityOpticalImpl;
   const WideAngleEligibilityOptical._() : super._();
 
   double get zoomFactor;
   @JsonKey(ignore: true)
   _$$WideAngleEligibilityOpticalImplCopyWith<_$WideAngleEligibilityOpticalImpl>
-      get copyWith => throw _privateConstructorUsedError;
+  get copyWith => throw _privateConstructorUsedError;
 }
 
 /// @nodoc
 abstract class _$$WideAngleEligibilityHybridImplCopyWith<$Res> {
   factory _$$WideAngleEligibilityHybridImplCopyWith(
-          _$WideAngleEligibilityHybridImpl value,
-          $Res Function(_$WideAngleEligibilityHybridImpl) then) =
-      __$$WideAngleEligibilityHybridImplCopyWithImpl<$Res>;
+    _$WideAngleEligibilityHybridImpl value,
+    $Res Function(_$WideAngleEligibilityHybridImpl) then,
+  ) = __$$WideAngleEligibilityHybridImplCopyWithImpl<$Res>;
   @useResult
   $Res call({double zoomFactor});
 }
 
 /// @nodoc
 class __$$WideAngleEligibilityHybridImplCopyWithImpl<$Res>
-    extends _$WideAngleEligibilityCopyWithImpl<$Res,
-        _$WideAngleEligibilityHybridImpl>
+    extends
+        _$WideAngleEligibilityCopyWithImpl<
+          $Res,
+          _$WideAngleEligibilityHybridImpl
+        >
     implements _$$WideAngleEligibilityHybridImplCopyWith<$Res> {
   __$$WideAngleEligibilityHybridImplCopyWithImpl(
-      _$WideAngleEligibilityHybridImpl _value,
-      $Res Function(_$WideAngleEligibilityHybridImpl) _then)
-      : super(_value, _then);
+    _$WideAngleEligibilityHybridImpl _value,
+    $Res Function(_$WideAngleEligibilityHybridImpl) _then,
+  ) : super(_value, _then);
 
   @pragma('vm:prefer-inline')
   @override
-  $Res call({
-    Object? zoomFactor = null,
-  }) {
-    return _then(_$WideAngleEligibilityHybridImpl(
-      zoomFactor: null == zoomFactor
-          ? _value.zoomFactor
-          : zoomFactor // ignore: cast_nullable_to_non_nullable
-              as double,
-    ));
+  $Res call({Object? zoomFactor = null}) {
+    return _then(
+      _$WideAngleEligibilityHybridImpl(
+        zoomFactor: null == zoomFactor
+            ? _value.zoomFactor
+            : zoomFactor // ignore: cast_nullable_to_non_nullable
+                  as double,
+      ),
+    );
   }
 }
 
@@ -266,7 +273,7 @@ class __$$WideAngleEligibilityHybridImplCopyWithImpl<$Res>
 
 class _$WideAngleEligibilityHybridImpl extends WideAngleEligibilityHybrid {
   const _$WideAngleEligibilityHybridImpl({required this.zoomFactor})
-      : super._();
+    : super._();
 
   @override
   final double zoomFactor;
@@ -292,8 +299,10 @@ class _$WideAngleEligibilityHybridImpl extends WideAngleEligibilityHybrid {
   @override
   @pragma('vm:prefer-inline')
   _$$WideAngleEligibilityHybridImplCopyWith<_$WideAngleEligibilityHybridImpl>
-      get copyWith => __$$WideAngleEligibilityHybridImplCopyWithImpl<
-          _$WideAngleEligibilityHybridImpl>(this, _$identity);
+  get copyWith =>
+      __$$WideAngleEligibilityHybridImplCopyWithImpl<
+        _$WideAngleEligibilityHybridImpl
+      >(this, _$identity);
 
   @override
   @optionalTypeArgs
@@ -372,40 +381,43 @@ abstract class WideAngleEligibilityHybrid extends WideAngleEligibility {
   double get zoomFactor;
   @JsonKey(ignore: true)
   _$$WideAngleEligibilityHybridImplCopyWith<_$WideAngleEligibilityHybridImpl>
-      get copyWith => throw _privateConstructorUsedError;
+  get copyWith => throw _privateConstructorUsedError;
 }
 
 /// @nodoc
 abstract class _$$WideAngleEligibilityIneligibleImplCopyWith<$Res> {
   factory _$$WideAngleEligibilityIneligibleImplCopyWith(
-          _$WideAngleEligibilityIneligibleImpl value,
-          $Res Function(_$WideAngleEligibilityIneligibleImpl) then) =
-      __$$WideAngleEligibilityIneligibleImplCopyWithImpl<$Res>;
+    _$WideAngleEligibilityIneligibleImpl value,
+    $Res Function(_$WideAngleEligibilityIneligibleImpl) then,
+  ) = __$$WideAngleEligibilityIneligibleImplCopyWithImpl<$Res>;
   @useResult
   $Res call({WideAngleIneligibleReason reason});
 }
 
 /// @nodoc
 class __$$WideAngleEligibilityIneligibleImplCopyWithImpl<$Res>
-    extends _$WideAngleEligibilityCopyWithImpl<$Res,
-        _$WideAngleEligibilityIneligibleImpl>
+    extends
+        _$WideAngleEligibilityCopyWithImpl<
+          $Res,
+          _$WideAngleEligibilityIneligibleImpl
+        >
     implements _$$WideAngleEligibilityIneligibleImplCopyWith<$Res> {
   __$$WideAngleEligibilityIneligibleImplCopyWithImpl(
-      _$WideAngleEligibilityIneligibleImpl _value,
-      $Res Function(_$WideAngleEligibilityIneligibleImpl) _then)
-      : super(_value, _then);
+    _$WideAngleEligibilityIneligibleImpl _value,
+    $Res Function(_$WideAngleEligibilityIneligibleImpl) _then,
+  ) : super(_value, _then);
 
   @pragma('vm:prefer-inline')
   @override
-  $Res call({
-    Object? reason = null,
-  }) {
-    return _then(_$WideAngleEligibilityIneligibleImpl(
-      reason: null == reason
-          ? _value.reason
-          : reason // ignore: cast_nullable_to_non_nullable
-              as WideAngleIneligibleReason,
-    ));
+  $Res call({Object? reason = null}) {
+    return _then(
+      _$WideAngleEligibilityIneligibleImpl(
+        reason: null == reason
+            ? _value.reason
+            : reason // ignore: cast_nullable_to_non_nullable
+                  as WideAngleIneligibleReason,
+      ),
+    );
   }
 }
 
@@ -414,7 +426,7 @@ class __$$WideAngleEligibilityIneligibleImplCopyWithImpl<$Res>
 class _$WideAngleEligibilityIneligibleImpl
     extends WideAngleEligibilityIneligible {
   const _$WideAngleEligibilityIneligibleImpl({required this.reason})
-      : super._();
+    : super._();
 
   @override
   final WideAngleIneligibleReason reason;
@@ -439,9 +451,12 @@ class _$WideAngleEligibilityIneligibleImpl
   @override
   @pragma('vm:prefer-inline')
   _$$WideAngleEligibilityIneligibleImplCopyWith<
-          _$WideAngleEligibilityIneligibleImpl>
-      get copyWith => __$$WideAngleEligibilityIneligibleImplCopyWithImpl<
-          _$WideAngleEligibilityIneligibleImpl>(this, _$identity);
+    _$WideAngleEligibilityIneligibleImpl
+  >
+  get copyWith =>
+      __$$WideAngleEligibilityIneligibleImplCopyWithImpl<
+        _$WideAngleEligibilityIneligibleImpl
+      >(this, _$identity);
 
   @override
   @optionalTypeArgs
@@ -513,14 +528,15 @@ class _$WideAngleEligibilityIneligibleImpl
 }
 
 abstract class WideAngleEligibilityIneligible extends WideAngleEligibility {
-  const factory WideAngleEligibilityIneligible(
-          {required final WideAngleIneligibleReason reason}) =
-      _$WideAngleEligibilityIneligibleImpl;
+  const factory WideAngleEligibilityIneligible({
+    required final WideAngleIneligibleReason reason,
+  }) = _$WideAngleEligibilityIneligibleImpl;
   const WideAngleEligibilityIneligible._() : super._();
 
   WideAngleIneligibleReason get reason;
   @JsonKey(ignore: true)
   _$$WideAngleEligibilityIneligibleImplCopyWith<
-          _$WideAngleEligibilityIneligibleImpl>
-      get copyWith => throw _privateConstructorUsedError;
+    _$WideAngleEligibilityIneligibleImpl
+  >
+  get copyWith => throw _privateConstructorUsedError;
 }

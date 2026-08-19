@@ -12,7 +12,8 @@ part of 'metadata_device_context.dart';
 T _$identity<T>(T value) => value;
 
 final _privateConstructorUsedError = UnsupportedError(
-    'It seems like you constructed your class using `MyClass._()`. This constructor is only meant to be used by freezed and you are not supposed to need it nor use it.\nPlease check the documentation here for more information: https://github.com/rrousselGit/freezed#adding-getters-and-methods-to-our-models');
+  'It seems like you constructed your class using `MyClass._()`. This constructor is only meant to be used by freezed and you are not supposed to need it nor use it.\nPlease check the documentation here for more information: https://github.com/rrousselGit/freezed#adding-getters-and-methods-to-our-models',
+);
 
 /// @nodoc
 mixin _$MetadataDeviceContext {
@@ -32,16 +33,19 @@ mixin _$MetadataDeviceContext {
 
 /// @nodoc
 abstract class $MetadataDeviceContextCopyWith<$Res> {
-  factory $MetadataDeviceContextCopyWith(MetadataDeviceContext value,
-          $Res Function(MetadataDeviceContext) then) =
-      _$MetadataDeviceContextCopyWithImpl<$Res, MetadataDeviceContext>;
+  factory $MetadataDeviceContextCopyWith(
+    MetadataDeviceContext value,
+    $Res Function(MetadataDeviceContext) then,
+  ) = _$MetadataDeviceContextCopyWithImpl<$Res, MetadataDeviceContext>;
   @useResult
   $Res call({String deviceModel, String osVersion, String appVersion});
 }
 
 /// @nodoc
-class _$MetadataDeviceContextCopyWithImpl<$Res,
-        $Val extends MetadataDeviceContext>
+class _$MetadataDeviceContextCopyWithImpl<
+  $Res,
+  $Val extends MetadataDeviceContext
+>
     implements $MetadataDeviceContextCopyWith<$Res> {
   _$MetadataDeviceContextCopyWithImpl(this._value, this._then);
 
@@ -57,20 +61,23 @@ class _$MetadataDeviceContextCopyWithImpl<$Res,
     Object? osVersion = null,
     Object? appVersion = null,
   }) {
-    return _then(_value.copyWith(
-      deviceModel: null == deviceModel
-          ? _value.deviceModel
-          : deviceModel // ignore: cast_nullable_to_non_nullable
-              as String,
-      osVersion: null == osVersion
-          ? _value.osVersion
-          : osVersion // ignore: cast_nullable_to_non_nullable
-              as String,
-      appVersion: null == appVersion
-          ? _value.appVersion
-          : appVersion // ignore: cast_nullable_to_non_nullable
-              as String,
-    ) as $Val);
+    return _then(
+      _value.copyWith(
+            deviceModel: null == deviceModel
+                ? _value.deviceModel
+                : deviceModel // ignore: cast_nullable_to_non_nullable
+                      as String,
+            osVersion: null == osVersion
+                ? _value.osVersion
+                : osVersion // ignore: cast_nullable_to_non_nullable
+                      as String,
+            appVersion: null == appVersion
+                ? _value.appVersion
+                : appVersion // ignore: cast_nullable_to_non_nullable
+                      as String,
+          )
+          as $Val,
+    );
   }
 }
 
@@ -78,9 +85,9 @@ class _$MetadataDeviceContextCopyWithImpl<$Res,
 abstract class _$$MetadataDeviceContextImplCopyWith<$Res>
     implements $MetadataDeviceContextCopyWith<$Res> {
   factory _$$MetadataDeviceContextImplCopyWith(
-          _$MetadataDeviceContextImpl value,
-          $Res Function(_$MetadataDeviceContextImpl) then) =
-      __$$MetadataDeviceContextImplCopyWithImpl<$Res>;
+    _$MetadataDeviceContextImpl value,
+    $Res Function(_$MetadataDeviceContextImpl) then,
+  ) = __$$MetadataDeviceContextImplCopyWithImpl<$Res>;
   @override
   @useResult
   $Res call({String deviceModel, String osVersion, String appVersion});
@@ -88,12 +95,13 @@ abstract class _$$MetadataDeviceContextImplCopyWith<$Res>
 
 /// @nodoc
 class __$$MetadataDeviceContextImplCopyWithImpl<$Res>
-    extends _$MetadataDeviceContextCopyWithImpl<$Res,
-        _$MetadataDeviceContextImpl>
+    extends
+        _$MetadataDeviceContextCopyWithImpl<$Res, _$MetadataDeviceContextImpl>
     implements _$$MetadataDeviceContextImplCopyWith<$Res> {
-  __$$MetadataDeviceContextImplCopyWithImpl(_$MetadataDeviceContextImpl _value,
-      $Res Function(_$MetadataDeviceContextImpl) _then)
-      : super(_value, _then);
+  __$$MetadataDeviceContextImplCopyWithImpl(
+    _$MetadataDeviceContextImpl _value,
+    $Res Function(_$MetadataDeviceContextImpl) _then,
+  ) : super(_value, _then);
 
   @pragma('vm:prefer-inline')
   @override
@@ -102,30 +110,33 @@ class __$$MetadataDeviceContextImplCopyWithImpl<$Res>
     Object? osVersion = null,
     Object? appVersion = null,
   }) {
-    return _then(_$MetadataDeviceContextImpl(
-      deviceModel: null == deviceModel
-          ? _value.deviceModel
-          : deviceModel // ignore: cast_nullable_to_non_nullable
-              as String,
-      osVersion: null == osVersion
-          ? _value.osVersion
-          : osVersion // ignore: cast_nullable_to_non_nullable
-              as String,
-      appVersion: null == appVersion
-          ? _value.appVersion
-          : appVersion // ignore: cast_nullable_to_non_nullable
-              as String,
-    ));
+    return _then(
+      _$MetadataDeviceContextImpl(
+        deviceModel: null == deviceModel
+            ? _value.deviceModel
+            : deviceModel // ignore: cast_nullable_to_non_nullable
+                  as String,
+        osVersion: null == osVersion
+            ? _value.osVersion
+            : osVersion // ignore: cast_nullable_to_non_nullable
+                  as String,
+        appVersion: null == appVersion
+            ? _value.appVersion
+            : appVersion // ignore: cast_nullable_to_non_nullable
+                  as String,
+      ),
+    );
   }
 }
 
 /// @nodoc
 
 class _$MetadataDeviceContextImpl implements _MetadataDeviceContext {
-  const _$MetadataDeviceContextImpl(
-      {required this.deviceModel,
-      required this.osVersion,
-      required this.appVersion});
+  const _$MetadataDeviceContextImpl({
+    required this.deviceModel,
+    required this.osVersion,
+    required this.appVersion,
+  });
 
   /// From `DeviceContext` — no source in this project yet.
   @override
@@ -165,30 +176,31 @@ class _$MetadataDeviceContextImpl implements _MetadataDeviceContext {
   @override
   @pragma('vm:prefer-inline')
   _$$MetadataDeviceContextImplCopyWith<_$MetadataDeviceContextImpl>
-      get copyWith => __$$MetadataDeviceContextImplCopyWithImpl<
-          _$MetadataDeviceContextImpl>(this, _$identity);
+  get copyWith =>
+      __$$MetadataDeviceContextImplCopyWithImpl<_$MetadataDeviceContextImpl>(
+        this,
+        _$identity,
+      );
 }
 
 abstract class _MetadataDeviceContext implements MetadataDeviceContext {
-  const factory _MetadataDeviceContext(
-      {required final String deviceModel,
-      required final String osVersion,
-      required final String appVersion}) = _$MetadataDeviceContextImpl;
+  const factory _MetadataDeviceContext({
+    required final String deviceModel,
+    required final String osVersion,
+    required final String appVersion,
+  }) = _$MetadataDeviceContextImpl;
 
   @override
-
   /// From `DeviceContext` — no source in this project yet.
   String get deviceModel;
   @override
-
   /// From `Platform.operatingSystemVersion`.
   String get osVersion;
   @override
-
   /// From `AppInfo.fullVersion`, supplied rather than imported.
   String get appVersion;
   @override
   @JsonKey(ignore: true)
   _$$MetadataDeviceContextImplCopyWith<_$MetadataDeviceContextImpl>
-      get copyWith => throw _privateConstructorUsedError;
+  get copyWith => throw _privateConstructorUsedError;
 }
