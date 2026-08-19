@@ -98,6 +98,29 @@ class ChunkMetadataDocument {
   /// Key order follows the chapter. It carries no meaning to a JSON parser and
   /// is preserved so a reader can diff this against the specification line by
   /// line.
+  /// This document addressed to the backend's session rather than the local
+  /// one — A-207.
+  ///
+  /// The pipeline calls it between step 1 and step 4, which is the one place
+  /// holding both ids: the local one it claimed the chunk with, and the remote
+  /// one `SessionRegistrar` just returned. `MetadataIdentityDocument.
+  /// withRemoteSessionId` carries the full argument.
+  ///
+  /// **Nothing is persisted.** The stored row keeps the local id, which is what
+  /// every device-side lookup joins on and what a retry re-reads.
+  ChunkMetadataDocument withRemoteSessionId(String remoteSessionId) {
+    return ChunkMetadataDocument(
+      chunkId: chunkId,
+      identity: identity.withRemoteSessionId(remoteSessionId),
+      timing: timing,
+      capture: capture,
+      deviceContext: deviceContext,
+      captureConditions: captureConditions,
+      integrity: integrity,
+      collectorAuthored: collectorAuthored,
+    );
+  }
+
   Map<String, Object?> toJson() => <String, Object?>{
     'chunk_id': chunkId,
     'identity': identity.toJson(),

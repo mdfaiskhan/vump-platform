@@ -40,6 +40,10 @@ Mission 4.8's security review found it, by reading `git log` against this file r
 
 ### Added
 
+- **2026-08-20** — **The upload pipeline is wired end to end for the first time.** `SessionRegistrarImpl` registers a recording session against Chapter 4.6 §4's `POST /v1/tasks/{id}/sessions`, closing the seam that has thrown since Mission 4.2 and that is the reason **no chunk has ever reached `uploading` on a device**. The Task now travels from C-06 through the session row to the upload queue, so `project_id` and `task_id` carry real values for the first time and A-068's Guard 1 stops refusing every chunk. ADR-051, A-209. Mission 7.4 step 5.
+
+  **Nothing here has run against the deployed backend.** Every request shape is proven against a scripted adapter, which is a claim about a payload and not about a round trip. The device checkpoint is what turns it into one.
+
 - **2026-08-19** — **The mobile app reads and writes the real backend for Projects and Tasks.** `ProjectTaskRepositoryImpl` and `ProjectTaskAdminRepositoryImpl` call Volume 4 Chapter 4.6 §3's seven routes, and `main.dart` binds them in place of the two fakes it has bound since Mission 5.1.1. **Volume 11 Chapter 11.1's M8 gate — *"no fake/mock repository remains wired into a release build"* — is met.** The fake classes survive as test doubles only; seven test files drive screens through them, and their removal conditions are rewritten to say what actually happened rather than being left to read later as unmet. A-204. Mission 7.4 step 4.
 
 - **2026-08-19** — **Cursor pagination reaches the client, closing A-184.** `GET /v1/projects` and `GET /v1/projects/{id}/tasks` have returned at most one page plus a `meta.nextCursor` since Mission 7.3, and the client discarded `meta` entirely — an org with 51 Projects rendered 50, with nothing on either side reporting the truncation. Four screens now offer the next page, and the repositories return a `PagedResult` that can say *"and there is more"*. ADR-051, A-199.
@@ -349,6 +353,16 @@ Mission 4.8's security review found it, by reading `git log` against this file r
 - **2026-08-15** — Per-device wide-angle eligibility is cached in `shared_preferences` — a tier name and two version strings. No secret, no credential, and no identifier of any person or device; ADR-008 governs secrets and this holds none. Mission 3.1, A-057. (`4c7f3d1`)
 
 ### Fixed
+
+- **2026-08-20** — **Every metadata POST would have been refused, for two independent reasons.** `functions/metadata/` resolves a chunk's true identity from a database join and rejects a document that disagrees with it. The client disagreed twice.
+
+  `identity.collector_id` was the **Firebase uid**; the backend joins `sessions.collector_id`, which is `users.id`. `POST /v1/auth/verify` has always returned both and the client read `orgId` and discarded `userId`. A-206.
+
+  `identity.session_id` was the **local** session UUID; the backend joins its own `sessions.id`. That one is not a slip — the document is assembled at chunk finalization, possibly offline, when no backend session exists — so the pipeline now rewrites that one field at the POST, where both ids are in hand, and the stored row keeps the local id every device-side lookup joins on. A-207.
+
+  Both were found by reading the backend's join rather than by running anything, and **neither was visible to any test on either side**: each half was internally consistent, and the metadata POST had no reachable caller because the session registrar threw. One pipeline test had been asserting the document was *"posted unchanged"* — encoding the second defect as intended behaviour, and it would have kept passing all the way to the device.
+
+- **2026-08-20** — **A syntax `flutter analyze` accepts and the code generator cannot parse.** Null-aware collection elements (`{'k': ?value}`) entered `lib/` in Mission 7.4 step 4 and passed a full green verification — analyzer, 1123 tests, five boundary checks — because none of that runs a code generator. `build_runner` bundles its own, older analyzer; meeting one it reports the file as broken and **every** generator refuses to run, against files unrelated to the syntax. The lint that asks for it is now silenced project-wide, the two uses are rewritten, and the rule is invariant **I49** — the only one in the register imposed by a tool rather than a decision, and the only one whose violation is silent until an unrelated action. A-208.
 
 - **2026-08-19** — **The app could have told a Collector they lack access to their own assigned Task.** C-06 Task Detail selects its Task out of the Project's list, because Chapter 4.6 §3 has no `GET /v1/tasks/{id}`, and renders *"This Task isn't available to you"* when it is absent — copy written to mean BR-19. Pagination at the backend's default page size of 50 would have produced that message for the 51st Task in a Project: **a false statement about authorization, not a truncated list.** Fixed by requesting the backend's `MAX_LIMIT` of 200. The residual gap above 200 is A-201, with a revisit trigger rather than a date. Mission 7.4 step 4.
 
