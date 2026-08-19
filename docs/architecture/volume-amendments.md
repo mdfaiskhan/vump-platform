@@ -7032,3 +7032,68 @@ This is A-195's shape in the build medium. There the IAM boundary was reviewed c
 ### The rule this leaves
 
 **A build check must start from an absent artefact.** Otherwise its green is a claim about the filesystem rather than about the build. The same question is worth asking of every check whose evidence is a file rather than an exit code — and the corrected invocation is now stated in the step reports and carried into Mission 7.4's device checkpoint, where the APK actually has to install.
+
+---
+
+### A-206 — Step 3 wired `collector_id` to the Firebase uid, and the backend checks it against `users.id`
+
+| | |
+|---|---|
+| **Record** | Mission 7.4 step 3; `main.dart`'s `deviceContextProvider` override |
+| **Does** | `collectorId: ref.watch(authNotifierProvider).valueOrNull?.user?.uid` |
+| **`User.uid` is** | The **Firebase** uid — `_toUser` builds it from `fb.User.uid` |
+| **The backend checks it against** | `sessions.collector_id`, which is `users.id`, a database uuid |
+| **Consequence** | **Every metadata POST would be refused**, for every chunk, forever |
+| **Class** | Implementation defect — a value of the right shape from the wrong namespace |
+| **Status** | **Open.** Fixed in step 5 |
+| **Date** | 2026-08-19, Mission 7.4 step 5 trace |
+
+`functions/metadata/src/index.ts` resolves a chunk's *true* identity from a join and refuses a document that disagrees: `check('identity.collector_id', document.identity.collector_id, truth.collectorId)`, where `truth.collectorId` is `s.collector_id`. That column holds `users.id`. The client was sending a Firebase uid.
+
+Both are opaque strings, so nothing in the type system, the analyzer or any unit test could tell them apart — the step 3 tests assert that the composition root *passes through* whatever the auth notifier holds, which it does, correctly.
+
+### The right value was already available, in a class that says so
+
+`backendProfileProvider` has existed since Mission 6.5 and its `BackendProfile.userId` is documented, verbatim, as *"`users.id` — the backend's own identifier, not the Firebase uid."* `POST /v1/auth/verify` returns `{ userId, orgId, role }` and `AuthRepositoryImpl._fetchOrgId` **reads `orgId` and discards `userId`**.
+
+So this was not a missing capability. The distinction was known, written down, and available at the exact moment the wrong field was chosen.
+
+### Why the step 3 trace did not catch it
+
+The trace asked *"where does `collectorId` come from"* and answered *"`features/auth/`, via the auth state"*, which is right. It did not ask **which of that feature's two identifiers the backend compares against**, because at the time nothing compared anything — the metadata POST had no consumer, `TaskContext` was unsourced, and Guard 1 refused every chunk before a request was built.
+
+That is the recurring shape rather than a one-off: **a field is wired correctly with respect to its source and never checked against its destination**, and the destination is unreachable so nothing complains. A-195 is the same defect in the security medium — *"a capability's real extent is the intersection of what IAM permits and what the invoked code does with it"* — and here it is the intersection of what the client sends and what the server joins on.
+
+### What it says about the other four identity fields
+
+Checked, since one was wrong: `project_id` and `task_id` now come from real `Project` and `Task` rows fetched from the backend (step 4), so they are backend uuids and match. `device_id` is **stored, not checked**, so its namespace is the client's to choose and A-196's install-scoped UUID is correct. `session_id` is checked — and is also wrong, for a different reason, recorded as A-207.
+
+---
+
+### A-207 — `identity.session_id` is the local session id, and the backend joins on its own
+
+| | |
+|---|---|
+| **Record** | `ChunkMetadataAssembler` — `sessionId: session.sessionId` |
+| **Sends** | `LocalSession.sessionId`, the UUID Chapter 5.3 mints on the device at session start |
+| **Backend checks it against** | `s.id` — the `sessions` row's own primary key, generated server-side |
+| **Consequence** | **Every metadata POST would be refused**, independently of A-206 |
+| **Class** | Design gap, not a slip: the value is right for where it is written and wrong for where it is sent |
+| **Status** | **Open.** Resolved in step 5 |
+| **Date** | 2026-08-19, Mission 7.4 step 5 trace |
+
+F5 made these two ids deliberately distinct. `sessions.client_session_id` is the device's UUID, `sessions.id` is the backend's, and the pair plus `UNIQUE (collector_id, client_session_id)` is what makes `POST /v1/tasks/{id}/sessions` idempotent. `SessionRegistrar` exists precisely because *"that `{id}` is **not** the local session UUID this app mints at session start"*.
+
+The metadata document was assembled before any of that existed and carries the only session id the device had.
+
+### Why it cannot be fixed at the assembler
+
+The document is written at **chunk finalization**, which happens while recording and may happen with no network at all. The backend session id does not exist yet and may not exist for hours — Chapter 5.13's deferred-upload case is exactly that. An assembler that waited for one would block finalization on connectivity, which is the opposite of what the local-first queue is for.
+
+The two ids are therefore both correct and both necessary: the local one is what the device stores and retries against, and the backend one is what the wire needs. **The translation belongs at the boundary that already performs it** — the pipeline, which holds the remote id from step 1 and posts the document at step 4.
+
+### Why this is worth an entry rather than a quiet fix
+
+`SessionRegistrar`'s doc has said since Mission 4.2 that the local and backend session ids are different things, and the metadata document was still built with one and validated against the other. The knowledge existed in one file and the defect in another, with no path between them that any test could traverse — the metadata POST had no reachable caller, because `sessionRegistrarProvider` threw.
+
+This is A-206's shape a second time in one trace: **a field correct with respect to its source, never checked against its destination, and the destination unreachable so nothing complained.** Two instances in the same identity group, found by reading the backend's join rather than by running anything, is the argument for tracing a payload against its validator before the first end-to-end attempt rather than after it.
