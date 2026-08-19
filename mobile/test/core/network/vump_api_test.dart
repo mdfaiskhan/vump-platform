@@ -233,6 +233,192 @@ void main() {
       );
     });
   });
+
+  group('getList — Chapter 4.6 §1 pagination, F24', () {
+    test('reads the data array and meta.nextCursor', () async {
+      adapter.body = <String, Object?>{
+        'data': <Object?>[
+          <String, Object?>{'id': 'a'},
+          <String, Object?>{'id': 'b'},
+        ],
+        'error': null,
+        'meta': <String, Object?>{'nextCursor': 'eyJhIjoxfQ'},
+      };
+
+      final ApiPage page = await api.getList('/projects', what: 'projects');
+
+      expect(page.rows, hasLength(2));
+      expect(page.rows.first['id'], 'a');
+      expect(page.nextCursor, 'eyJhIjoxfQ');
+      expect(page.hasMore, isTrue);
+    });
+
+    test('a null nextCursor is the last page', () async {
+      adapter.body = <String, Object?>{
+        'data': <Object?>[
+          <String, Object?>{'id': 'a'},
+        ],
+        'error': null,
+        'meta': <String, Object?>{'nextCursor': null},
+      };
+
+      final ApiPage page = await api.getList('/projects', what: 'projects');
+
+      expect(page.nextCursor, isNull);
+      expect(page.hasMore, isFalse);
+    });
+
+    test('an absent meta is the last page too', () async {
+      // Chapter 4.6 §1 makes `meta` absent entirely on non-list endpoints, and
+      // absent and null carry the same fact.
+      adapter.body = <String, Object?>{'data': <Object?>[], 'error': null};
+
+      final ApiPage page = await api.getList('/projects', what: 'projects');
+
+      expect(page.rows, isEmpty);
+      expect(page.hasMore, isFalse);
+    });
+
+    test('cursor and limit reach the query string', () async {
+      adapter.body = <String, Object?>{'data': <Object?>[], 'error': null};
+
+      await api.getList(
+        '/projects',
+        what: 'projects',
+        cursor: 'abc',
+        limit: 200,
+      );
+
+      expect(adapter.lastQuery, <String, String>{
+        'cursor': 'abc',
+        'limit': '200',
+      });
+    });
+
+    test('a first page sends neither', () async {
+      // Null-aware elements: an absent cursor or limit drops out entirely
+      // rather than going out empty, so the backend applies DEFAULT_LIMIT.
+      adapter.body = <String, Object?>{'data': <Object?>[], 'error': null};
+
+      await api.getList('/projects', what: 'projects');
+
+      expect(adapter.lastQuery, isEmpty);
+    });
+
+    test('an empty data array is an empty page, not a failure', () async {
+      // "No assigned work" is a real answer and a different one from "the read
+      // failed". Raising here would erase a distinction C-04 renders.
+      adapter.body = <String, Object?>{'data': <Object?>[], 'error': null};
+
+      expect((await api.getList('/p', what: 'projects')).rows, isEmpty);
+    });
+
+    test('a data OBJECT is malformed — that is what get is for', () async {
+      adapter.body = <String, Object?>{
+        'data': <String, Object?>{'id': 'a'},
+        'error': null,
+      };
+
+      await expectLater(
+        api.getList('/p', what: 'projects'),
+        throwsA(
+          isA<NetworkException>().having(
+            (NetworkException e) => e.errorCode,
+            'errorCode',
+            ErrorCode.networkSerialization,
+          ),
+        ),
+      );
+    });
+
+    test('an envelope error is raised even on a 200', () async {
+      adapter.body = <String, Object?>{
+        'data': null,
+        'error': <String, Object?>{
+          'code': 'REQUEST_INVALID_CURSOR',
+          'message': 'This cursor was not issued by this API.',
+        },
+      };
+
+      await expectLater(
+        api.getList('/p', what: 'projects'),
+        throwsA(
+          isA<NetworkException>().having(
+            (NetworkException e) => e.backendCode,
+            'backendCode',
+            'REQUEST_INVALID_CURSOR',
+          ),
+        ),
+      );
+    });
+  });
+
+  group('delete', () {
+    test('goes to /v1 and reads a 204 as an empty success', () async {
+      adapter.status = 204;
+      adapter.body = <String, Object?>{'data': null, 'error': null};
+
+      final Map<String, Object?> data = await api.delete(
+        '/tasks/t1/assignments/u1',
+        what: 'the unassignment',
+      );
+
+      expect(data, isEmpty);
+      expect(adapter.paths.single, '/v1/tasks/t1/assignments/u1');
+    });
+  });
+
+  group('backendCode — F29', () {
+    test('a non-2xx envelope code arrives structurally, not only in prose', () {
+      adapter.status = 404;
+      adapter.body = <String, Object?>{
+        'data': null,
+        'error': <String, Object?>{
+          'code': 'RESOURCE_NOT_FOUND',
+          'message': 'That project was not found.',
+        },
+      };
+
+      return expectLater(
+        api.getList('/projects/x/tasks', what: 'tasks'),
+        throwsA(
+          isA<NetworkException>()
+              .having(
+                (NetworkException e) => e.backendCode,
+                'backendCode',
+                'RESOURCE_NOT_FOUND',
+              )
+              // The status-derived classification is unchanged: F29 is
+              // additive, and nothing that branched on errorCode before
+              // behaves differently now.
+              .having(
+                (NetworkException e) => e.errorCode,
+                'errorCode',
+                ErrorCode.networkNotFound,
+              ),
+        ),
+      );
+    });
+
+    test('a transport failure carries no backendCode', () async {
+      // No envelope was ever received, so there is no code to carry and
+      // inventing one would be worse than null.
+      adapter.status = 500;
+      adapter.raw = 'not json at all';
+      adapter.contentType = Headers.textPlainContentType;
+
+      await expectLater(
+        api.get('/thing', what: 'a thing'),
+        throwsA(
+          isA<NetworkException>().having(
+            (NetworkException e) => e.backendCode,
+            'backendCode',
+            isNull,
+          ),
+        ),
+      );
+    });
+  });
 }
 
 /// Returns one scripted response to everything.
