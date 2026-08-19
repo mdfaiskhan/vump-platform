@@ -15,6 +15,7 @@ import 'package:mobile/core/database/providers/database_provider.dart';
 import 'package:mobile/core/environment/environment_profile.dart';
 import 'package:mobile/core/errors/app_exception.dart';
 import 'package:mobile/core/firebase/providers/firebase_provider.dart';
+import 'package:mobile/core/identity/providers/identity_ports.dart';
 import 'package:mobile/core/logging/app_logger.dart';
 import 'package:mobile/core/logging/providers/logger_provider.dart';
 import 'package:mobile/core/network/providers/dio_provider.dart';
@@ -299,19 +300,36 @@ List<Override> recordingOverrides(
       (Ref ref) => ref.watch(_chunkStoreProvider),
     ),
 
+    // Volume 4 Chapter 4.5 §2's identity group — Mission 7.4 step 1.
+    //
+    // Both contracts now live in `core/identity/`, so the implementations bind
+    // here rather than being constructed inside the finalizer override. The
+    // values are unchanged: `project_id`, `task_id`, `collector_id` and
+    // `device_id` are still `MetadataIdentity.unsourced`, and A-068's Guard 1
+    // still refuses every chunk. Steps 3 and 4 make them real.
+    taskContextProvider.overrideWith((Ref ref) => const UnsourcedTaskContext()),
+    deviceContextProvider.overrideWith(
+      // `app/config/` is granted to `core/` and `shared/` by ADR-022 and not
+      // to a feature's `data/`, so the version is read here and passed in
+      // rather than imported there.
+      (Ref ref) => const PlatformDeviceContext(appVersion: AppInfo.fullVersion),
+    ),
+
     // Volume 3 Ch. 3.9 §4's FinalizeChunkUseCase — Chapters 5.5, 5.7 and 5.8
     // joined. Mission 3.8 wrote it; until then this provider had no
     // implementation at all and the first chunk boundary would have thrown.
     chunkFinalizerProvider.overrideWith(
       (Ref ref) => FinalizeChunkUseCase(
         videoProcessor: const IsolateVideoProcessor(),
-        metadataGenerator: const ChunkMetadataAssembler(
-          taskContext: UnsourcedTaskContext(),
-          // `app/config/` is granted to `core/` and `shared/` by ADR-022 and
-          // not to a feature's `data/`, so the version is read here and passed
-          // in rather than imported there.
-          deviceContext: PlatformDeviceContext(appVersion: AppInfo.fullVersion),
-          conditionsReader: UnavailableCaptureConditionsReader(),
+        metadataGenerator: ChunkMetadataAssembler(
+          // Read through the ports rather than constructed inline, since
+          // Mission 7.4 step 1 moved both contracts to `core/identity/`.
+          // The bindings below still supply the unsourced implementations —
+          // the plumbing moved before the values, so this step changes no
+          // behaviour and a green suite means the move was clean.
+          taskContext: ref.watch(taskContextProvider),
+          deviceContext: ref.watch(deviceContextProvider),
+          conditionsReader: const UnavailableCaptureConditionsReader(),
         ),
         chunkStore: ref.watch(chunkStoreProvider),
       ),
