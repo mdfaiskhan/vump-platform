@@ -23,6 +23,7 @@
  * `projects`; before it, `GET` could not return the shape Chapter 4.5 §5 says
  * it returns.
  */
+import type { SqlParameter } from '@aws-sdk/client-rds-data';
 import * as v from 'valibot';
 import {
   ApiError,
@@ -327,15 +328,31 @@ function numberOf(row: Row, index: number): number | null {
   return field.stringValue === undefined ? null : Number(field.stringValue);
 }
 
-/** `numeric` columns are bound as strings so no precision is lost in transit. */
-function numericParam(name: string, value: number) {
-  return textParam(name, String(value));
+/**
+ * A `numeric` column, bound as a string so no precision is lost in transit.
+ *
+ * **`typeHint: 'DECIMAL'` is load-bearing, not decoration.** Without it the
+ * Data API sends a bare `stringValue`, Postgres infers `text`, and the insert
+ * fails with `column "zoom_factor" is of type numeric but expression is of type
+ * text` (SQLState 42804). That is the house pattern every other non-text
+ * parameter already follows — `uuidParam` carries `'UUID'`, `jsonParam` carries
+ * `'JSON'` — and these two omitted it.
+ *
+ * **No test in this project could have caught it.** Every backend test uses
+ * `aws-sdk-client-mock`, so the statement is asserted to be *sent* and never to
+ * be *accepted*: no INSERT here has ever reached a real Postgres. The device
+ * found it, twice in one deploy cycle — `gps_lat`/`gps_lng` were masked by
+ * binding typed nulls, which Postgres accepts for any column, so widening the
+ * GPS schema is what exposed `zoom_factor` rather than what broke it. A-212.
+ */
+function numericParam(name: string, value: number): SqlParameter {
+  return { name, value: { stringValue: String(value) }, typeHint: 'DECIMAL' };
 }
 
-function nullableNumeric(name: string, value: number | null | undefined) {
+function nullableNumeric(name: string, value: number | null | undefined): SqlParameter {
   return value === null || value === undefined
     ? { name, value: { isNull: true } }
-    : textParam(name, String(value));
+    : numericParam(name, value);
 }
 
 function nullableLong(name: string, value: number | null | undefined) {
