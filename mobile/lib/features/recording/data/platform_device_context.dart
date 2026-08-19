@@ -1,5 +1,5 @@
+import 'package:mobile/core/identity/interfaces/device_context.dart';
 import 'package:mobile/features/recording/domain/entities/metadata_identity.dart';
-import 'package:mobile/features/recording/domain/repositories/device_context.dart';
 
 /// Supplies what the platform can answer, and [MetadataIdentity.unsourced] for
 /// what it cannot.
