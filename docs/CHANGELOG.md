@@ -40,6 +40,12 @@ Mission 4.8's security review found it, by reading `git log` against this file r
 
 ### Added
 
+- **2026-08-20** — **A chunk was recorded, uploaded and verified end to end for the first time.** CPH2707 → S3 → Aurora: session registered, chunk registered, three parts transferred, metadata accepted, status completed. Confirmed in the database rather than in a log — `sessions.status = complete`, `chunks.status = complete`, and `chunk_metadata.verified_at` populated, which means `chunks-verify` recomputed the hash, matched it, and both `complete_chunk()` and `complete_session()` ran. **Before tonight no chunk had ever reached `uploading` on a device, and no metadata POST had ever succeeded by any client in any environment.** A-213.
+
+  **The 38-part case is not proven.** Tonight's chunk was short — three parts. Part count, presigned-URL expiry across a long transfer, the foreground service with the screen off, and `chunks-verify` hashing a 633 MB object inside its timeout are all still untouched.
+
+  Three checklist items were deferred by decision once the core proof was in hand: `deviceId` persistence across relaunch and reinstall, a second page via a small `?limit=`, and a real 404. So **`nextCursor` has still never been produced and consumed by anything real** — A-199 is code-complete and device-unconfirmed.
+
 - **2026-08-20** — **The upload pipeline is wired end to end for the first time.** `SessionRegistrarImpl` registers a recording session against Chapter 4.6 §4's `POST /v1/tasks/{id}/sessions`, closing the seam that has thrown since Mission 4.2 and that is the reason **no chunk has ever reached `uploading` on a device**. The Task now travels from C-06 through the session row to the upload queue, so `project_id` and `task_id` carry real values for the first time and A-068's Guard 1 stops refusing every chunk. ADR-051, A-209. Mission 7.4 step 5.
 
   **Nothing here has run against the deployed backend.** Every request shape is proven against a scripted adapter, which is a claim about a payload and not about a round trip. The device checkpoint is what turns it into one.
