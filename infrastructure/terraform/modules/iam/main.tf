@@ -71,6 +71,30 @@ locals {
     data.aws_caller_identity.current.account_id,
     var.environment_slug,
   )
+
+  # `logs:DescribeLogGroups` cannot be scoped to a log group, and the pattern
+  # above therefore never authorises it.
+  #
+  # It is a **list** call. IAM evaluates it against an ARN with an empty log
+  # group name, which the denial Mission 7.3 hit states verbatim:
+  #
+  #   arn:aws:logs:ap-south-1:929570731524:log-group::log-stream
+  #
+  # Nothing ending in `/aws/lambda/vump-dev-*` can match that, so every
+  # principal that was given `DescribeLogGroups` against
+  # `log_group_arn_pattern` was given an action it could never actually use.
+  #
+  # This pattern is the narrowest form that does match. It keeps the region and
+  # the account — both present in the denial above, which is what proves they
+  # are part of the evaluated ARN — and wildcards only the portion IAM leaves
+  # empty. `*` on its own would work and would also permit listing log groups
+  # in any region of any account, which is a real widening and an unnecessary
+  # one.
+  log_group_list_arn_pattern = format(
+    "arn:aws:logs:%s:%s:log-group:*",
+    data.aws_region.current.region,
+    data.aws_caller_identity.current.account_id,
+  )
 }
 
 data "aws_iam_policy_document" "assume_role" {
@@ -216,6 +240,43 @@ resource "aws_iam_role_policy" "data_api" {
 # the roles rather than by the handlers: a presigned URL carries the signer's
 # permissions, so the upload role *cannot* produce a URL that reads footage,
 # however the code that calls it is written. A-143.
+# The Fork 1 seam — Mission 7.3 Batch 2b.
+#
+# `CompleteMultipartUpload` requires `s3:PutObject`, and A-143 makes the
+# separation structural rather than conventional: the role that downloads
+# evidentiary footage to hash it must not be able to overwrite it. So
+# `chunks-verify` does not gain PutObject — it gains the ability to ask
+# `chunks-upload`, which already holds it, to finalise one specific upload.
+#
+# **This is materially narrower than PutObject**, but the reason is the invoked
+# function's validation and not the IAM boundary alone — and that validation was
+# missing when this comment was first written. A-195 records it: `finalizeUpload`
+# now reads the chunk row and refuses unless the supplied key AND upload id are
+# the ones that chunk owns, so the capability is "finalise this specific
+# registered upload" rather than "finalise anything in the bucket".
+#
+# With that check in place: this cannot create an object at an arbitrary key,
+# cannot overwrite completed footage, and cannot presign anything. A-143's stated
+# property — "chunks-verify holds s3:GetObject and cannot write" — remains
+# literally true, and is now true for the reason this comment gives.
+#
+# Chapter 4.10 §2 step 3 anticipated the two-function shape in its own wording:
+# "a Lambda (triggered either by that call or an S3 event notification)".
+resource "aws_iam_role_policy" "chunks_verify_invoke_upload" {
+  name = "invoke-chunks-upload"
+  role = aws_iam_role.lambda["chunks-verify"].id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Sid      = "FinalizeMultipartUploadViaChunksUpload"
+      Effect   = "Allow"
+      Action   = "lambda:InvokeFunction"
+      Resource = "arn:aws:lambda:${data.aws_region.current.region}:${data.aws_caller_identity.current.account_id}:function:vump-${var.environment_slug}-chunks-upload"
+    }]
+  })
+}
+
 resource "aws_iam_role_policy" "chunks_s3" {
   for_each = local.roles_with_s3
 

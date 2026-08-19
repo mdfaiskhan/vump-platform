@@ -103,7 +103,7 @@ describe('the route inventory', () => {
       resource: '/v1/sessions/{sessionId}/chunks',
       headers: {},
       requestContext: {},
-    } as never);
+    });
 
     // ADR-048: a route behind the authorizer cannot be reached without one.
     // Failing here rather than falling back to an unauthenticated path is what

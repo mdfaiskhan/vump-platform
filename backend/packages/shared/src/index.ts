@@ -33,10 +33,33 @@ export {
   withEnvelope,
   withVerifiedToken,
   notImplementedRoute,
+  requireRole,
   type Caller,
+  type CallerRole,
   type DomainHandler,
   type HandlerResult,
 } from './handler.js';
+export { encodeCursor, decodeCursor, pageMeta, type Cursor } from './cursor.js';
+export { withTransaction, type TransactionalExecute } from './transaction.js';
+export {
+  parseBody,
+  requiredString,
+  optionalString,
+  optionalStringArray,
+  optionalPastInstant,
+  pathUuid,
+} from './request.js';
+export {
+  readString,
+  readOptionalString,
+  readStringArray,
+  textParam,
+  optionalTextParam,
+  uuidParam,
+  jsonParam,
+  longParam,
+  type Row,
+} from './row.js';
 export { logger, type LogLevel } from './logger.js';
 export { parsePageRequest, DEFAULT_LIMIT, MAX_LIMIT, type PageRequest } from './pagination.js';
 export { createRouter, routeKey, type RouteTable, type WrappedHandler } from './router.js';

@@ -261,6 +261,25 @@ data "aws_iam_policy_document" "human_terraform_apply" {
     ]
   }
 
+  # The list call that the statement above cannot express — see
+  # `log_group_list_arn_pattern` in main.tf for why.
+  #
+  # Its own statement rather than a widened resource list on
+  # `ProvisionFunctionsAndLogs`, because the resource here is deliberately
+  # broader than everything else that role holds and merging the two would
+  # silently broaden `lambda:*` and every write action alongside it.
+  #
+  # One action. `aws_cloudwatch_log_group`'s read is exactly
+  # `DescribeLogGroups` (to find the group and read `retention_in_days`) plus
+  # `ListTagsForResource` (to read `tags`), and the second is already granted,
+  # scoped, above — so this is the whole of what was missing.
+  statement {
+    sid       = "DescribeLogGroupsIsAListCall"
+    effect    = "Allow"
+    actions   = ["logs:DescribeLogGroups"]
+    resources = [local.log_group_list_arn_pattern]
+  }
+
   statement {
     sid    = "ProvisionSecretContainers"
     effect = "Allow"

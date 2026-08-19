@@ -62,7 +62,7 @@ class AuthRepositoryImpl implements AuthRepository {
     fb.FirebaseAuth? firebaseAuth,
     GoogleSignIn? googleSignIn,
     FirebaseFunctions? functions,
-    this.backend,
+    required this.backend,
   }) : _injectedAuth = firebaseAuth,
        _googleSignIn = googleSignIn ?? GoogleSignIn.instance,
        _injectedFunctions = functions;
@@ -72,17 +72,22 @@ class AuthRepositoryImpl implements AuthRepository {
 
   /// The Vump backend, for Chapter 4.7 §1 step 2's token exchange.
   ///
-  /// **Nullable, and the null case is the test path.** Every construction in
-  /// `main.dart` supplies one; the widget and unit tests do not, because they
-  /// have no HTTP stack and are not testing the exchange. When it is absent
-  /// the org falls back to the Firebase claim — the pre-ADR-048 behaviour —
-  /// which keeps those tests meaningful without giving them a network.
+  /// **Required.** It was nullable until Mission 7.2, with the null case
+  /// documented as "the test path": when absent, `org_id` fell back to the
+  /// Firebase claim — the pre-ADR-048 behaviour that ADR-048 retired, because
+  /// *"a claim written once goes stale the moment an account moves
+  /// organisation"*.
   ///
-  /// That fallback is a seam, not a design: a build that reaches a device
-  /// always has a backend, so the claim path is unreachable in the app. It is
-  /// called out here because a silent fallback that *could* run in production
-  /// would be the exact defect ADR-048 removes.
-  final VumpApi? backend;
+  /// The old comment argued the fallback was unreachable on a device because
+  /// `main.dart` always supplies a backend. That was true, and it was a
+  /// convention rather than a guarantee — the same shape as Mission 6.5's
+  /// `authTokenSourceProvider` defect, which was also correct in isolation and
+  /// wrong at the composition root. A type is a guarantee; a convention is a
+  /// thing to be got right again every time somebody adds a call site.
+  ///
+  /// Tests pass a fake `VumpApi` instead of omitting it, which also makes the
+  /// exchange observable — see `_FakeVumpApi` in the auth tests, and A-179.
+  final VumpApi backend;
 
   final fb.FirebaseAuth? _injectedAuth;
   final GoogleSignIn _googleSignIn;
@@ -122,12 +127,6 @@ class AuthRepositoryImpl implements AuthRepository {
   static const String _roleClaim = 'role';
 
   /// The claim carrying the user's organisation.
-  ///
-  /// Volume 4 Chapter 4.7 §2 names only `role` as a custom claim and sources
-  /// `org_id` from the backend's `users` table. Carrying it in the token is a
-  /// decision taken by this mission and recorded in ADR-034 and amendment
-  /// A-052. The snake_case spelling matches Volume 4's own naming.
-  static const String _orgIdClaim = 'org_id';
 
   @override
   Stream<Session> get sessionChanges async* {
@@ -410,7 +409,7 @@ class AuthRepositoryImpl implements AuthRepository {
       ),
     };
 
-    final String orgId = await _resolveOrgId(claims);
+    final String orgId = await _resolveOrgId();
 
     return User(
       uid: user.uid,
@@ -437,37 +436,58 @@ class AuthRepositoryImpl implements AuthRepository {
   /// moves organisation. `role` is unaffected and still comes from the claim,
   /// which Chapter 4.7 §2 specifies.
   ///
-  /// Without a backend — tests only — the claim is used, which is what this
-  /// method did before.
-  Future<String> _resolveOrgId(Map<String, dynamic> claims) async {
-    final VumpApi? api = backend;
-    if (api != null) {
-      final Map<String, Object?> data = await api.post(
-        '/auth/verify',
-        what: 'Establishing your session',
-      );
-      final Object? orgId = data['orgId'];
-      if (orgId is String && orgId.isNotEmpty) {
-        return orgId;
-      }
-      throw const AuthenticationException(
-        errorCode: ErrorCode.authUnauthenticated,
-        message:
-            'The backend did not return an organisation for this account, so '
-            'it has not been provisioned for this application.',
-      );
-    }
+  /// There is no claim fallback. It existed while [backend] was nullable and
+  /// was removed in Mission 7.2 — see the field's documentation.
+  /// Coalesces overlapping resolutions onto ONE request — F6, A-180.
+  ///
+  /// A sign-in performs the exchange twice, ~4ms apart, and both succeed:
+  ///
+  ///     20:49:48.523  → POST /auth/verify
+  ///     20:49:48.527  → POST /auth/verify
+  ///
+  /// `signInWithEmailPassword` calls [_toUser] to satisfy its `Future<User>`
+  /// return type, and Firebase then emits that user on `authStateChanges`,
+  /// so `sessionChanges` calls [_toUser] again. Same redundant exchange as
+  /// gap 11, different cause: that was two paths inside `AuthNotifier.build`
+  /// (A-177); this is the sign-in method and the stream reacting to it.
+  ///
+  /// **Deleting the sign-in call would have been smaller and wrong.** The
+  /// returned `User` is genuinely unused — `AuthNotifier._attempt` takes a
+  /// `Future<void> Function()` and discards it — but [_toUser] also VALIDATES,
+  /// and on the sign-in path a `Failure` is what puts "this account is not
+  /// provisioned" on the login form. Move that validation to the stream and it
+  /// arrives as an `authUnauthenticated` error, which A-178 correctly treats as
+  /// an unusable session and signs out — silently, with no message. Coalescing
+  /// keeps every semantic and removes only the duplicate request.
+  ///
+  /// This shares the in-flight future only, never a completed result, so there
+  /// is no cache to go stale: once the request settles the field is cleared and
+  /// the next resolution is a fresh call. The window is the overlap itself. It
+  /// is the same single-flight `AuthInterceptor._refreshInFlight` already uses
+  /// for concurrent 401s.
+  Future<String>? _orgIdInFlight;
 
-    final Object? claimed = claims[_orgIdClaim];
-    if (claimed is! String || claimed.isEmpty) {
-      throw const AuthenticationException(
-        errorCode: ErrorCode.authUnauthenticated,
-        message:
-            'The signed-in account carries no "$_orgIdClaim" claim, so it '
-            'belongs to no organisation.',
-      );
+  Future<String> _resolveOrgId() {
+    return _orgIdInFlight ??= _fetchOrgId().whenComplete(() {
+      _orgIdInFlight = null;
+    });
+  }
+
+  Future<String> _fetchOrgId() async {
+    final Map<String, Object?> data = await backend.post(
+      '/auth/verify',
+      what: 'Establishing your session',
+    );
+    final Object? orgId = data['orgId'];
+    if (orgId is String && orgId.isNotEmpty) {
+      return orgId;
     }
-    return claimed;
+    throw const AuthenticationException(
+      errorCode: ErrorCode.authUnauthenticated,
+      message:
+          'The backend did not return an organisation for this account, so '
+          'it has not been provisioned for this application.',
+    );
   }
 
   /// Unwraps the `User` from a credential, which the SDK types as nullable.

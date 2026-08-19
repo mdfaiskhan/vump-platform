@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:mobile/core/errors/app_exception.dart';
+import 'package:mobile/core/errors/error_codes.dart';
 import 'package:mobile/core/errors/failure.dart';
 import 'package:mobile/features/auth/application/auth_state.dart';
 import 'package:mobile/features/auth/domain/entities/session.dart';
@@ -78,21 +79,74 @@ class AuthNotifier extends AsyncNotifier<AuthState> {
     // The stream is the source of truth, not the restore call: Firebase emits
     // on sign-in, sign-out and token revocation, so listening keeps state
     // correct without this notifier polling or being told.
+    // ONE subscription, and it is the only thing that resolves a session.
+    //
+    // This used to be a subscription PLUS a `restoreSession()` call, and both
+    // reached `AuthRepositoryImpl._toUser` — so every cold start for an
+    // already-signed-in Collector performed `POST /v1/auth/verify` twice,
+    // concurrently. Gap 11 in the Mission 6 register; A-177 records the fix.
+    //
+    // The second call bought nothing. The comment that used to sit here said
+    // awaiting the stream "would stall build()" — but the restore stalls it by
+    // exactly as much, because both wait on the same token exchange, and the
+    // stream already yields `Session.unknown()` first so the UI has its
+    // AsyncLoading either way.
+    //
+    // Resolving the first session through THIS subscription rather than a
+    // second `sessionChanges` read matters: the getter is a stream that
+    // subscribes to Firebase and maps each event through `_toUser`, so reading
+    // it twice would reintroduce the duplicate exchange in a new place.
+    final Completer<AuthState> first = Completer<AuthState>();
+
     final StreamSubscription<Session> subscription = _repository.sessionChanges
         .listen(
-          _onSession,
+          (Session session) {
+            _onSession(session);
+            // `Session.unknown` carries no AuthState — it is "not yet
+            // determined" and must not complete the first-session future.
+            final AuthState? resolved = AuthState.fromSession(session);
+            if (resolved != null && !first.isCompleted) {
+              first.complete(_stateOrUnauthenticated());
+            }
+          },
           onError: (Object error, StackTrace stackTrace) {
-            state = AsyncError<AuthState>(error, stackTrace);
-            _discardUnusableSession();
+            // Order matters, and it is the original order restored. The
+            // discard signs out, the fake and the real repository both emit on
+            // sign-out, and that emission runs `_onSession` — so discarding
+            // BEFORE writing the state lets the sign-out overwrite the error
+            // that caused it, and the notifier ends up reporting a tidy
+            // `unauthenticated` for a session it could not read at all.
+            //
+            // Before the first session resolves there is no state to
+            // overwrite: the launch simply has nobody signed in, which is what
+            // `_restore` decided on the same condition and why an error here
+            // is not surfaced as one. A first-run user who has never signed in
+            // must not meet an error banner.
+            if (first.isCompleted) {
+              state = AsyncError<AuthState>(error, stackTrace);
+            } else {
+              first.complete(const AuthState.unauthenticated());
+            }
+
+            // F5, A-178. Only a session that is genuinely unusable is
+            // discarded. A 502 from `POST /v1/auth/verify` used to sign the
+            // Collector out — reproduced on CPH2707, where Aurora's resume from
+            // MinCapacity 0 outran the Lambda's 15s timeout (gap 9) and the
+            // resulting NetworkException travelled this path.
+            if (_isUnusableSession(error)) {
+              _discardUnusableSession();
+            }
           },
         );
     ref.onDispose(subscription.cancel);
 
-    // Session.unknown carries no AuthState, so the first emission leaves the
-    // notifier in AsyncLoading until the platform reports something real.
-    // Awaiting the first non-unknown value here would stall build() for as
-    // long as the restore takes; the stream sets state instead.
-    return _restore();
+    return first.future;
+  }
+
+  /// The state `_onSession` has just written, which has already been through
+  /// [_classify] — so the expiry bookkeeping is applied exactly once.
+  AuthState _stateOrUnauthenticated() {
+    return state.valueOrNull ?? const AuthState.unauthenticated();
   }
 
   /// Applies a session emitted by the repository.
@@ -130,24 +184,38 @@ class AuthNotifier extends AsyncNotifier<AuthState> {
     return lapsed ? const AuthState.expired() : next;
   }
 
-  Future<AuthState> _restore() async {
-    try {
-      final Session session = await _repository.restoreSession();
-      final AuthState restored =
-          AuthState.fromSession(session) ?? const AuthState.unauthenticated();
-      // A restored session is the first thing that makes a later loss legible
-      // as an expiry, so the transition is recorded here too and not only on
-      // the stream.
-      _wasAuthenticated = restored is AuthStateAuthenticated;
-      return restored;
-    } on AppException {
-      // A restore that fails is not an error state to show: it means nobody is
-      // signed in as far as this launch is concerned. Mission 2.5 owns
-      // distinguishing a lapsed session, which is what AuthState.expired is
-      // for.
-      _discardUnusableSession();
-      return const AuthState.unauthenticated();
-    }
+  /// Whether [error] means the persisted session can never work, as opposed to
+  /// not working right now.
+  ///
+  /// **The distinction is real rather than a reluctance to sign people out**,
+  /// and it rests on something the platform already guarantees: a revoked
+  /// refresh token or a deleted account does NOT arrive here at all. Firebase
+  /// emits a null user for those, exactly as it does for a deliberate sign-out,
+  /// which `_classify` turns into `unauthenticated` or `expired`. Nothing that
+  /// reaches this method is a revocation, so narrowing it masks no real
+  /// invalidity.
+  ///
+  /// What does reach it:
+  ///
+  /// - `AuthenticationException(authUnauthenticated)` — the account signs in
+  ///   but carries no usable `role` claim, or the backend has no organisation
+  ///   for it. Permanent until somebody provisions it, and it comes back on
+  ///   every cold start, so the session must be cleared or the person can never
+  ///   reach Login to sign in as somebody else. This is the case the discard
+  ///   was written for.
+  /// - `AuthenticationException(authAccountDisabled)` — likewise permanent.
+  /// - `NetworkException(*)` — a 502, a timeout, no connectivity. **Transient,
+  ///   and signing out is the one response that makes it worse**: the
+  ///   credential is destroyed, so recovery needs the person's password rather
+  ///   than a working backend.
+  /// - `AuthenticationException(unknown)` — Firebase failed to initialise
+  ///   (ADR-017). A local fault, and `signOut` could not succeed either.
+  static bool _isUnusableSession(Object error) {
+    return error is AppException &&
+        const <ErrorCode>{
+          ErrorCode.authUnauthenticated,
+          ErrorCode.authAccountDisabled,
+        }.contains(error.errorCode);
   }
 
   /// Signs out a persisted session the application cannot use.

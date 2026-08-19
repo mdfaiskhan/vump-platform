@@ -1,0 +1,46 @@
+# Line-ending policy.
+#
+# ## Why this file exists — a migration that could never be re-run
+#
+# ADR-046 gives the migration runner a checksum guard: "An applied migration
+# whose file has changed is a hard error, not a re-run." It computes
+# `sha256(readFile(path, 'utf8'))` — the **bytes on disk**, line endings
+# included.
+#
+# `core.autocrlf=true` is set on the Windows development machine, so git stores
+# LF in the object database and materialises CRLF in the working tree. Mission
+# 6.3 applied migrations 0001-0009 from files that were on disk with **LF**,
+# because the tooling had written them directly and they had never been through
+# a checkout. The ledger therefore holds LF hashes.
+#
+# The first checkout after that — clone, reset, branch switch — rewrote all nine
+# with CRLF. Every stored checksum was invalidated at once, by a transformation
+# that changed no character of SQL. Mission 7.3 hit it trying to apply 0010:
+#
+#   applied checksum: a816f3b897a204a4ebf9206c199d4b45bfb8ff8b1340c32b52c84a417537c4a6
+#   file checksum   : 5281c56b3340d5a86f87f5fdd05dd13a277392c0019de09bdba368022458d87e
+#
+# The first value is the file with LF and is byte-identical to the committed
+# blob; the second is the same file with CRLF. Nine migrations, nine mismatches,
+# and the runner aborts on the first — so 0002-0009 were latent behind 0001.
+#
+# ## Why `git diff` could never have shown it
+#
+# git compares *normalised* content, so `git diff HEAD` on those files is clean
+# and `git log` shows exactly one commit each. The divergence exists only
+# between the working tree and the hash recorded in the database, and nothing in
+# git's model looks there. Same shape as the `prettier --check` false positive
+# on this machine, and the same root cause.
+#
+# ## The rule
+#
+# Files whose bytes are load-bearing get `eol=lf`, so the working tree matches
+# the object database on every platform and a checksum survives a checkout.
+#
+# Deliberately narrow. A repository-wide `* text=auto eol=lf` would also fix the
+# 63-file `prettier --check` divergence, and would renormalise every Dart, HCL
+# and YAML file in one commit — a large diff and a separate decision, not a side
+# effect of fixing the migration runner.
+
+# The checksummed ones. This is the whole reason for the file.
+*.sql text eol=lf

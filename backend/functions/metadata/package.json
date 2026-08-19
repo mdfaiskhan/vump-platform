@@ -4,7 +4,8 @@
   "type": "module",
   "main": "./src/index.ts",
   "dependencies": {
-    "@vump/shared": "0.1.0"
+    "@vump/shared": "0.1.0",
+    "valibot": "^1.4.2"
   },
   "name": "@vump/metadata",
   "description": "Chunk metadata. ADR-015 domain: metadata. Holds no S3 permission at all."

@@ -78,6 +78,11 @@ target/
 # Saved plans are binary and hold the full resolved configuration.
 *.tfplan
 
+# `archive_file` packages this next to the configuration that declares it, so
+# unlike the Lambda bundles it lands inside the Terraform tree rather than in
+# `backend/artifacts/`. Generated on every plan from committed sources.
+infrastructure/terraform/environments/*/probe.zip
+
 # Variable files may carry environment-specific values. `variables.tf` defaults
 # are the committed form; a .tfvars file is a local override.
 *.tfvars

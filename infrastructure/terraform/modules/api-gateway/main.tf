@@ -138,12 +138,14 @@ resource "aws_lambda_function" "this" {
   filename         = data.archive_file.bundle[each.key].output_path
   source_code_hash = data.archive_file.bundle[each.key].output_base64sha256
 
-  # Generous on time, modest on memory: every request makes an outbound HTTPS
-  # call to fetch Google's signing certificates on a cold start (see
-  # backend/packages/shared/src/auth.ts), and Chapter 4.6's endpoints are all
-  # small reads and writes.
-  timeout     = 15
-  memory_size = 512
+  # Sizing is per-function now, not one literal for all seven — see
+  # `lambda_overrides`. The defaults still carry Mission 6.2's reasoning for
+  # memory (Chapter 4.6's endpoints are small reads and writes), and no longer
+  # carry its reasoning for time: 15 seconds was chosen as "generous" against a
+  # cold-start certificate fetch, and Gap 9 then measured Aurora's resume
+  # exceeding it. `lambda_timeout_seconds` derives the replacement.
+  timeout     = local.lambda_sizing[each.key].timeout_seconds
+  memory_size = local.lambda_sizing[each.key].memory_mb
 
   environment {
     variables = merge(var.lambda_environment, {
@@ -168,6 +170,27 @@ resource "aws_lambda_function" "this" {
 }
 
 locals {
+  # Resolved timeout and memory per function: an override wins, the module
+  # default fills in, and every function appears in the map whether it is
+  # overridden or not.
+  #
+  # Resolved here rather than inline in the resource so that the fallback is
+  # stated once. Two `coalesce(try(...))` expressions repeated inside a
+  # `for_each` is where a per-function default quietly stops applying to one
+  # function.
+  lambda_sizing = {
+    for name in local.function_names : name => {
+      timeout_seconds = coalesce(
+        try(var.lambda_overrides[name].timeout_seconds, null),
+        var.lambda_timeout_seconds,
+      )
+      memory_mb = coalesce(
+        try(var.lambda_overrides[name].memory_mb, null),
+        var.lambda_memory_mb,
+      )
+    }
+  }
+
   # The APP_ENV key, not the AWS slug. naming-conventions.md §7.1 names using
   # one where the other belongs as the common mistake, so the mapping is
   # explicit rather than derived by string surgery.

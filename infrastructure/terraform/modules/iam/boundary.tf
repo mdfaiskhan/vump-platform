@@ -38,7 +38,6 @@ data "aws_iam_policy_document" "boundary" {
       "logs:CreateLogGroup",
       "logs:CreateLogStream",
       "logs:PutLogEvents",
-      "logs:DescribeLogGroups",
       "logs:DescribeLogStreams",
       "logs:FilterLogEvents",
       "logs:GetLogEvents",
@@ -49,6 +48,27 @@ data "aws_iam_policy_document" "boundary" {
       local.log_group_arn_pattern,
       "${local.log_group_arn_pattern}:*",
     ]
+  }
+
+  # `logs:DescribeLogGroups`, moved out of the statement above because the
+  # resource pattern there can never authorise it — see
+  # `log_group_list_arn_pattern` in main.tf.
+  #
+  # **A boundary is a cap, and this one capped the fix.** plan-reader carries
+  # this boundary, so correcting its identity policy alone would have changed
+  # nothing: effective permission is the intersection, and the intersection was
+  # empty. terraform-apply is unaffected only because ADR-049 D-3 deliberately
+  # leaves it unbounded.
+  #
+  # **This grants nothing on its own.** The seven Lambda execution roles also
+  # carry this boundary, and none of their identity policies asks for
+  # `DescribeLogGroups` — main.tf scopes each to its own group. Raising the cap
+  # cannot raise them through it.
+  statement {
+    sid       = "DescribeLogGroupsIsAListCall"
+    effect    = "Allow"
+    actions   = ["logs:DescribeLogGroups"]
+    resources = [local.log_group_list_arn_pattern]
   }
 
   # The Data API, scoped to this environment's cluster. Every caller that

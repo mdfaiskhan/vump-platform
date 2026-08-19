@@ -34,7 +34,8 @@ abstract final class AuthGuard {
   /// Resolves a redirect, or null to allow [location].
   ///
   /// [auth] is null while the session is still resolving — `AsyncLoading`,
-  /// which at cold start is the window before `restoreSession` answers.
+  /// which at cold start is the window before the first session emission
+  /// answers.
   static String? redirect({
     required AuthState? auth,
     required String location,

@@ -53,6 +53,24 @@ export const ERROR_CODES = [
    */
   'CHUNK_ALREADY_REGISTERED',
 
+  /**
+   * A `client_session_id` was re-presented under a **different** Task.
+   *
+   * Not a generic invalid request: re-registering a session is normal and
+   * succeeds — `SessionRegistrar` is idempotent by contract and a chunk
+   * pipeline asks for the same session's id many times. What this refuses is
+   * the same local session claiming two different Tasks, which cannot be
+   * honoured either way round. Returning the original session would put every
+   * subsequent chunk under a Task the caller did not ask for; honouring the new
+   * one would move a recording between Tasks mid-flight.
+   *
+   * Named rather than folded into `REQUEST_INVALID` for the same reason
+   * `CHUNK_ALREADY_REGISTERED` is: a caller that can distinguish "your request
+   * was malformed" from "this identifier is already spoken for" can act on the
+   * second and cannot act on the first. Additive, so it is not a `/v2` change.
+   */
+  'SESSION_ALREADY_REGISTERED',
+
   // --- Server -------------------------------------------------------------
   /** An unhandled fault. Carries no detail: see `toEnvelopeError`. */
   'INTERNAL_ERROR',
@@ -109,6 +127,31 @@ export class ApiError extends Error {
 
   static notFound(what: string): ApiError {
     return new ApiError('RESOURCE_NOT_FOUND', `${what} was not found.`, 404);
+  }
+
+  /**
+   * 409. **A plain retry does not reach this** — A-190.
+   *
+   * Chapter 5.10 §3 makes a repeated registration *"safe to repeat"*, so the
+   * same `chunk_id` with the same session, sequence index and checksum succeeds
+   * and returns fresh presigned URLs. This is for the same id claiming
+   * different facts, which cannot be honoured either way round.
+   */
+  static chunkAlreadyRegistered(): ApiError {
+    return new ApiError(
+      'CHUNK_ALREADY_REGISTERED',
+      'This chunk_id is already registered with a different session, sequence index or checksum.',
+      409,
+    );
+  }
+
+  /** 409, because the request is well-formed and the state is what refuses it. */
+  static sessionAlreadyRegistered(): ApiError {
+    return new ApiError(
+      'SESSION_ALREADY_REGISTERED',
+      'This client_session_id is already registered under a different task.',
+      409,
+    );
   }
 
   /**

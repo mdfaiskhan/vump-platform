@@ -6207,3 +6207,633 @@ Recorded because this is the second time in Mission 7.1 that a check proved non-
 ### The one caveat, stated rather than smoothed over
 
 **CloudTrail Event history is not a durable audit trail.** A-019 records that no trail is configured, so the 90-day Event history is all there is: not exportable, not retained beyond the window, and not the account-wide trail Volume 8 Chapter 8.4 §4 requires. The finding is sound here only because the key's entire life was roughly one hour on the day of the query, far inside the window. **The same investigation ninety-one days later would return zero events for a key that had been used every day**, and nothing would distinguish the two answers. A-019 is now a gap with a worked example attached.
+
+---
+
+### A-177 — Gap 11 is fixed: one cold start, one token exchange
+
+| | |
+|---|---|
+| **Record** | `docs/development/mission-6-gap-register.md` item 11; ADR-048 |
+| **Said** | *"`POST /v1/auth/verify` fires twice per app launch… Harmless (idempotent, `ON CONFLICT DO NOTHING`) but doubled"* |
+| **Now** | Once. `AuthNotifier.build` resolves the first session from its single `sessionChanges` subscription and no longer calls `restoreSession` |
+| **Authority** | Project owner, Mission 7.2 |
+| **Class** | Defect fixed |
+| **Status** | **Closed**, proven on device |
+| **Date** | 2026-08-18, Mission 7.2 |
+
+`build` did two things that both reached `AuthRepositoryImpl._toUser`: it subscribed to `sessionChanges`, and it called `restoreSession()`. Each performed the Chapter 4.7 §1 step 2 exchange, concurrently.
+
+**The second call bought nothing.** The comment that justified it claimed awaiting the stream *"would stall `build()` for as long as the restore takes"* — but both wait on the same exchange, and the stream already yields `Session.unknown()` first, so the UI has its `AsyncLoading` either way. The restore was a duplicate of work already in flight.
+
+The first session is now resolved through the existing subscription rather than a second read of `sessionChanges`. That distinction is load-bearing: the getter is a stream that subscribes to Firebase and maps every event through `_toUser`, so reading it twice would have reintroduced the duplicate in a new place.
+
+### Measured, before and after, on CPH2707
+
+Pre-fix build, one cold start:
+
+```
+20:07:47.818  ✗ 502 POST …/v1/auth/verify (15876ms)
+20:07:47.819  ✗ 502 POST …/v1/auth/verify (15889ms)
+```
+
+Post-fix build, four cold starts:
+
+| Run | `am start -W` TotalTime | `/auth/verify` calls | Exchange |
+|---|---|---|---|
+| 0 | 2516ms | **1** | 513ms |
+| 1 | 2007ms | **1** | 346ms |
+| 2 | 1988ms | **1** | 325ms |
+| 3 | 2699ms | **1** | 669ms |
+
+### The splash is not slower, and the reason is in the old timestamps
+
+The two pre-fix calls were **one millisecond apart** — concurrent, never serialised. Removing one therefore returns duplicated server work and a duplicated `users` upsert, **not wall-clock time**. Cold start measures 1988–2699ms post-fix, and the OS splash covers it.
+
+**Stated as a limitation rather than smoothed over: there is no clean pre-fix `TotalTime` baseline.** The only pre-fix launch captured hit the 502 path and took 15.9 seconds, which is not comparable. Building a pre-fix APK purely for an A/B was considered and declined by the project owner: the concurrency argument stands on the timestamps above, and the post-fix numbers are measured. So "no slower" is *reasoned from evidence*, not *measured against a baseline*, and a future reader should not cite it as the latter.
+
+### What made it survivable for three missions
+
+Nothing could see it. `grep -rn "auth/verify" test/` returned **nothing** before this mission — every test asserted what the session *was* and none asserted what it *cost*. It shipped in 6.5, passed 6.6's audit and 6.7's security review. `test/features/auth/application/auth_cold_start_exchange_test.dart` now counts, and was proven non-vacuous by reinstating the defect (`Expected: <0> Actual: <1>`) before reverting.
+
+**Eight test fakes had to be migrated**, and the shape of that work is worth recording. Each had a silent `sessionChanges`, which under the new contract leaves `build` awaiting forever — so they **timed out rather than failed**, surfacing one full-suite run at a time. A fake that models a stream nothing emits on is not a cheap fake; it is a fake of a repository that does not exist.
+
+---
+
+### A-178 — A transient backend failure no longer destroys the session, and gap 9 has a confirmed consequence
+
+| | |
+|---|---|
+| **Record** | ADR-035; gap register item 9; `AuthNotifier._discardUnusableSession` |
+| **Was** | Any error on the session stream signed the user out |
+| **Is** | Only a genuinely unusable identity does |
+| **Authority** | Project owner, Mission 7.2 |
+| **Class** | Defect fixed — pre-existing, not introduced by A-177 |
+| **Status** | **Closed** |
+| **Date** | 2026-08-18, Mission 7.2 |
+
+Observed on CPH2707 before any of this mission's changes: two 502s from `POST /v1/auth/verify` at ~15.9s each, after which the app was sitting on the Sign in screen. `_toUser` threw a `NetworkException`, that reached the stream's `onError`, and `_discardUnusableSession()` called `signOut()`.
+
+**A working credential was destroyed because a server was briefly unavailable.** Recovery then required the person's password rather than a working backend — the one response that makes a transient failure worse.
+
+### The distinction is real, and rests on something the platform guarantees
+
+`_discardUnusableSession` now fires only for `AuthenticationException` carrying `authUnauthenticated` or `authAccountDisabled`.
+
+The obvious worry is that this masks a genuinely dead session — a revoked refresh token, a deleted account. **It cannot, because those never reach this path.** Firebase emits a *null user* for a revocation, identically to a deliberate sign-out; `AuthRepositoryImpl` says so in its own comment, and `_classify` turns it into `unauthenticated` or `expired`. Nothing arriving as a stream *error* is a revocation.
+
+What did arrive there:
+
+| Error | Meaning | Discard? |
+|---|---|---|
+| `AuthenticationException(authUnauthenticated)` | Signs in, no usable `role` claim, or no org. Returns every cold start | **Yes** — the case the discard was written for |
+| `AuthenticationException(authAccountDisabled)` | Permanent | **Yes** |
+| `NetworkException(*)` | 502, timeout, no connectivity | **No** |
+| `AuthenticationException(unknown)` | Firebase failed to initialise (ADR-017) | **No** — a local fault; `signOut` could not succeed either |
+
+Proven in both directions, because a fix that never signs anyone out would be no fix: *"a 502 during startup does not sign the user out"* and *"an unprovisioned account IS still signed out"*.
+
+**The state a transient error produces is deliberately unchanged.** `AuthGuard.redirect` treats a null `AuthState` as "not yet known" and returns no redirect, so surfacing `AsyncError` at cold start would leave the person on `/`, which renders nothing. Not signing out is the half that matters: the Firebase credential survives, so the next launch signs them straight back in.
+
+### Gap 9 is no longer hypothetical
+
+Item 9 reads *"the first request after idle **can** exceed the Lambda's 15-second timeout while the resume ladder runs to ~30 seconds"* — a possibility, filed under availability.
+
+It happened, ~~twice~~ **three times** (see the correction below), in one launch: **15876ms and 15889ms against a 15000ms timeout**, because Aurora was resuming from `MinCapacity 0`. And until this amendment its consequence was not slowness but **an ended session**.
+
+Fixing the resume is out of this sub-mission's scope. What changes here is the record: gap 9 is **confirmed, with a reproduced user-facing consequence**, not a risk awaiting evidence. Its severity is 7.x's to reassess.
+
+### Correction — a third observation existed and was not written down
+
+*(Added 2026-08-18, Mission 7.3 Part 4, on the project owner's report.)*
+
+A third occurrence was observed during Mission 7.2's F5 self-heal verification and **never entered any record**:
+
+| Time | Duration | Context |
+|---|---|---|
+| 20:07:47.818 | 15876ms | Pre-fix cold start, 502 |
+| 20:07:47.819 | 15889ms | Pre-fix cold start, 502 — concurrent with the above |
+| **21:02:37** | **15428ms** | **F5 self-heal. Observed at 7.2, recorded nowhere until now** |
+
+**It changes no conclusion and that is exactly why it went missing.** 15428ms is *below* both figures already recorded, so the worst case stays 15889ms, and Mission 7.3's timeout derivation — which is driven by AWS's own documented resume figures rather than by ours — is unaffected either way. A number that moves nothing is the easiest kind to not bother writing down.
+
+**What it is evidence of is not what the other two are evidence of.** The first two were pre-fix and ended the session; this one is post-fix and *did not* — the app self-healed, which is this amendment's own fix working on an occurrence nobody logged. So the record was missing a data point for gap 9 **and** a demonstration of A-178.
+
+**Three occurrences, not two, also changes how the frequency reads.** Two in one launch one millisecond apart is a single event observed twice. A third, 55 minutes later in a separate launch, makes it recurrent rather than a one-off — which is the shape gap 9's severity reassessment turns on.
+
+Filed as a correction rather than an edit to the paragraph above, per this register's rule that history is appended to. The strikethrough marks where the count changed; the original figures are untouched.
+
+---
+
+### A-179 — `VumpApi` is required, and the stale-claim fallback is gone
+
+| | |
+|---|---|
+| **Record** | ADR-048; ADR-016; `AuthRepositoryImpl.backend` |
+| **Was** | `final VumpApi? backend` — when null, `org_id` came from the Firebase claim |
+| **Is** | `final VumpApi backend`, required. No claim fallback exists |
+| **Authority** | Project owner, Mission 7.2 |
+| **Class** | Latent divergence removed |
+| **Status** | **Closed** |
+| **Date** | 2026-08-18, Mission 7.2 |
+
+ADR-048 made `POST /v1/auth/verify` authoritative for `org_id`, retiring the claim because *"a claim written once goes stale the moment an account moves organisation"*. The retired path stayed in the code as the null branch, documented as "the test path".
+
+**It was unreachable by convention, not by construction** — every `main.dart` construction supplied a backend. That is the same shape as Mission 6.5's `authTokenSourceProvider` defect: correct in isolation, wrong at the composition root, and invisible until something reaches it. A type is a guarantee; a convention has to be got right again by every future call site.
+
+Tests now pass `FakeVumpApi` rather than omitting the dependency, which also makes the exchange **observable** — that fake is what A-177's regression guard counts. The three tests that asserted rejection of a missing/empty/non-string `org_id` **claim** were rewritten to assert rejection of an org the **backend** does not return, because that is where the decision now lives, and one was added asserting a valid-looking claim is ignored when the table disagrees.
+
+`_orgIdClaim` and the `claims` parameter of `_resolveOrgId` were deleted rather than left unused.
+
+---
+
+### A-180 — A sign-in performs one token exchange, not two
+
+| | |
+|---|---|
+| **Record** | A-177; gap register item 11 |
+| **Says** | Item 11 describes the duplicate as *"twice per app launch"* |
+| **Should say** | Cold start was one instance. **Sign-in was a second, with a different cause**, and item 11's wording does not cover it |
+| **Authority** | Measurement on CPH2707, Mission 7.2 |
+| **Class** | Defect fixed |
+| **Status** | **Closed** |
+| **Date** | 2026-08-18, Mission 7.2 |
+
+Captured on the **A-177-fixed** build, during a real sign-in:
+
+```
+20:49:48.523  → POST /auth/verify
+20:49:48.527  → POST /auth/verify
+20:49:48.893  ← 200 (366ms)
+20:49:49.408  ← 200 (884ms)
+```
+
+Cold start was down to one, and sign-in was still two. Different cause: `signInWithEmailPassword` calls `_toUser` to satisfy its `Future<User>` return type, then Firebase emits that same user on `authStateChanges` and `sessionChanges` calls `_toUser` again.
+
+### The smaller fix was the wrong one
+
+The returned `User` is genuinely unused — `AuthNotifier._attempt` takes a `Future<void> Function()` and discards it — so deleting the sign-in call looks like the minimal answer.
+
+**It would have moved a user-visible error off the screen.** `_toUser` also *validates*, and on the sign-in path a thrown `AuthenticationException` becomes a `Failure` that puts *"this account is not provisioned"* on the login form. Move that to the stream and it arrives as `authUnauthenticated`, which **A-178 correctly treats as an unusable session and signs out — silently, with no message**. The two fixes interact, and the interaction only appears if both are held in view at once.
+
+So the exchange is **coalesced** instead: overlapping resolutions share one in-flight request, the same single-flight `AuthInterceptor._refreshInFlight` already uses for concurrent 401s. Every semantic is preserved and only the duplicate request is removed.
+
+**It shares the in-flight future and never a completed result**, so there is no cache to go stale — once the request settles the field clears and the next resolution is a fresh call. A test asserts exactly that (*"a later resolution is a fresh call, not a cached one"*), because a single-flight that quietly became a cache would hide an org change forever. Non-vacuity was proven by removing the coalescing and watching the guard fail: `Expected: <1> Actual: <2>`.
+
+---
+
+### A-181 — A re-assignment is a resurrection, because the composite primary key leaves no other option
+
+| | |
+|---|---|
+| **Record** | `mobile/lib/features/projects_tasks/domain/repositories/project_task_admin_repository.dart`, `unassignCollector`'s doc comment; migration `0003_projects_tasks.sql` |
+| **Says** | *"a later re-assignment is a new row rather than a resurrection, and neither call needs to know which"* |
+| **Should say** | A second row is impossible. `task_assignments` is `PRIMARY KEY (task_id, user_id)`, so a re-assignment can only be an `UPDATE` that clears `removed_at` |
+| **Authority** | Observation — the schema, read against the comment |
+| **Class** | Documentation correction. **Backend-visible only** |
+| **Status** | **Open** — the comment stands until a mission is editing that file for another reason |
+| **Date** | 2026-08-18, Mission 7.3 Part 1, recorded Part 4 |
+
+Found while tracing `POST /v1/tasks/{taskId}/assignments` for Mission 7.3, not by reading the mobile code for its own sake.
+
+The comment's premise is Chapter 4.4 §4's soft removal, and that half is right: FR-ADM-04 keeps the row *"for audit rather than hard-deleted"*, `removed_at` exists, and `0007` grants `UPDATE` on `task_assignments` for exactly that. The inference from it is wrong. Migration `0003` closes with:
+
+```sql
+PRIMARY KEY (task_id, user_id)
+```
+
+One row per (task, collector) pair, forever. Assigning a Collector who was previously removed cannot insert a second row — it collides — so the only implementation available to the handler is
+
+```sql
+INSERT INTO task_assignments (task_id, user_id, assigned_by)
+VALUES (...)
+ON CONFLICT (task_id, user_id) DO UPDATE
+   SET removed_at = NULL, assigned_by = EXCLUDED.assigned_by, assigned_at = now()
+```
+
+which is a resurrection in the precise sense the comment rules out.
+
+**Nothing on the device is wrong, which is why this is filed as backend-visible only.** The comment's *conclusion* — that `assignCollector` and `unassignCollector` are both idempotent and *"neither call needs to know which"* — holds exactly as written, and is what A-116 and Chapter 2.7's A-06 depend on. The client cannot observe the difference between a new row and a revived one, because Chapter 4.6 §3 has no route that reads an assignment back (A-117, open item 89). Only the handler can see it, and the handler is the thing being written.
+
+**The audit consequence is the part worth having written down.** A resurrection *overwrites* `assigned_by` and `assigned_at`, so the record of who first assigned this Collector and when is gone the moment they are re-assigned. FR-ADM-04's *"kept for audit"* survives for the removal and not for the assignment history. Whether that matters is a product question about what the audit trail is for; `audit_log` is the obvious place to answer it, since `0007` already grants `tasks` an `INSERT` there and Chapter 4.2 §2 scopes it to *"Admin actions on Projects/Tasks/Assignments"* — this being one.
+
+**Not fixed in place.** The file is `mobile/lib/`, Mission 7.3 is backend-only by its own scope, and a one-line doc edit is not worth crossing that boundary on its own. Recorded here so the next mission touching that file corrects the comment rather than propagating it, and so the handler's `ON CONFLICT` is read as forced by the schema rather than as a liberty taken.
+
+---
+
+### A-182 — `Caller`'s optional fields described a state ADR-048 had already made unreachable
+
+| | |
+|---|---|
+| **Record** | `backend/packages/shared/src/handler.ts`'s `Caller` interface |
+| **Said** | `userId`, `orgId` and `role` are `string \| undefined` |
+| **Says now** | All three are `string` |
+| **Authority** | ADR-048 — the authorizer resolves the row, and `callerFromContext` throws when any is missing |
+| **Class** | Type correction |
+| **Status** | **Closed** |
+| **Date** | 2026-08-19, Mission 7.3 Batch 1 |
+
+The optionality is a fossil of Mission 6.2, when `resolveCaller` was a stub that genuinely could not produce those values. ADR-048 replaced the stub and made `callerFromContext` **fail closed** — *"a detached authorizer must not silently become an open endpoint"* — so a `Caller` with an absent field can no longer reach a handler at all.
+
+**A type that lies in the safe direction is not free.** ADR-045 adopts `strictTypeChecked`, which forbids `no-non-null-assertion`, so each of the fourteen authorized routes would have had to re-narrow three fields the wrapper already guarantees. Seven of those routes exist as of this batch; the other seven are coming. Every one of those guards would be dead code asserting something proven one frame up, and **a reader cannot tell a ceremonial guard from a real one** — which is how a genuine check eventually gets deleted as noise.
+
+Nothing outside `handler.ts` consumed the optionality, so the change was confined to the type and its own tests.
+
+---
+
+### A-183 — Cursor pagination had a validating half and no producing half, and choosing a sort order fell out of fixing it
+
+| | |
+|---|---|
+| **Volume** | 4, Ch. 4.6 §1 — *"Pagination: cursor-based (`?cursor=…&limit=…`) on every list endpoint"* |
+| **Was** | `parsePageRequest` validated an incoming cursor; `EnvelopeMeta.nextCursor` was in the envelope; `REQUEST_INVALID_CURSOR` was a published code. **Nothing produced or decoded a cursor** |
+| **Is** | `cursor.ts` — opaque base64url keyset on `(created_at, id)` |
+| **Class** | Unbuilt half of a shipped contract |
+| **Status** | **Closed** for the two list routes in Batch 1 |
+| **Date** | 2026-08-19, Mission 7.3 Batch 1 |
+
+Three missions shipped the reading half of this contract without the writing half, and nothing detected it because every list endpoint was a `NOT_IMPLEMENTED` stub — the code with no producer had no consumer either.
+
+**Keyset rather than `OFFSET`, and the reason is correctness before performance.** An offset re-reads and discards every row it skips, and a row inserted between two requests shifts every later page by one, so the reader silently sees a duplicate or misses a row. ADR-044's 1 MiB response ceiling makes pagination mandatory here rather than optional, so the pages have to be trustworthy as well as cheap.
+
+### The sort order is a decision this forced, and no chapter makes it
+
+A cursor needs a **total** order or pages overlap. No volume specifies one, and the mobile `ProjectTaskRepository` says so outright: *"Returns them in the order the backend supplied. No chapter specifies a sort, so none is imposed."*
+
+`created_at DESC` is not a total order — two rows created in one transaction share a timestamp — so the key is `(created_at DESC, id DESC)`, with `id` breaking the tie. Recorded here rather than as its own entry because it is not an independent finding: building a keyset cursor is what forced it.
+
+**The cursor is opaque so this stays changeable.** Callers are told nothing about the contents, which means the sort key can change later without it being the breaking change Ch. 4.6 §1 would send to `/v2`.
+
+---
+
+### A-184 — The mobile client cannot read past the first page, and will not notice
+
+| | |
+|---|---|
+| **Record** | `mobile/lib/features/projects_tasks/domain/repositories/project_task_repository.dart` |
+| **Says** | `Future<List<Project>> fetchProjects()` and `Future<List<Task>> fetchTasks(String projectId)` |
+| **Problem** | Neither takes a cursor, returns one, or reads `meta` — so the client sees **page one and stops** |
+| **Class** | Unexercised mechanism — the contract is now one-sided |
+| **Status** | **Open.** Owed to Mission 7.4 |
+| **Date** | 2026-08-19, Mission 7.3 Batch 1 |
+
+With A-183 built, `GET /v1/projects` and `GET /v1/projects/{id}/tasks` return at most `DEFAULT_LIMIT` — 50 — rows and a `meta.nextCursor` saying there are more. **The client discards `meta` entirely**, because `VumpApi` returns `data` and nothing else to its callers, which `envelope.ts` records as a deliberate choice made when no cursor existed.
+
+So an org with 51 Projects renders 50, with no error, no empty state and nothing on either side reporting a truncation. `pagination.ts` predicted exactly this in Mission 6.2 — *"The client does not consume cursors yet… so this side defines the contract and the client inherits it"* — and inheriting it is the part that has not happened.
+
+**Not fixable from the backend.** Widening the page size only moves the number at which it silently truncates. It needs the repository signatures to carry a cursor, which is `mobile/lib` and out of this sub-mission's scope by its own terms.
+
+---
+
+### A-185 — Archived Projects are excluded by default, and no chapter said either way
+
+| | |
+|---|---|
+| **Volume** | 4, Ch. 4.2 §1 (soft-delete) and Ch. 4.6 §3's `GET /v1/projects` row |
+| **Says** | Nothing about whether an archived Project appears in either role's list |
+| **Does now** | `WHERE p.archived_at IS NULL`, in both the Admin and Collector branches |
+| **Class** | Stated default filling a specification silence |
+| **Status** | **Open as a product question**, closed as an implementation default |
+| **Date** | 2026-08-19, Mission 7.3 Batch 1 |
+
+Ch. 4.2 §1 makes soft-delete a timestamp deliberately, *"so that archived data stays queryable"* — which settles that the row survives and settles nothing about who sees it. The mobile `Project` entity carries `archivedAt` and is explicit that it *"records the fact and decides nothing about it"*.
+
+Excluding matches what archiving is for, and it is the reversible direction: the timestamp is still on every row, so a later `?include_archived=` widens this **without** the `/v2` bump Ch. 4.6 §1 requires for a breaking change. Defaulting the other way and later narrowing would be the breaking one.
+
+**There is no such parameter today**, and FR-ADM-01 defines no archive route either — `archived_at` is written by nothing, so the filter currently excludes an empty set. That is worth knowing before anyone reads the clause as tested.
+
+---
+
+### A-186 — A resource outside the caller's org is reported absent, not forbidden
+
+| | |
+|---|---|
+| **Volume** | 4, Ch. 4.8 §3 — *"an Admin can never read or write another org's data, regardless of guessed IDs"* |
+| **Says** | That the access is refused. Not with which status |
+| **Does now** | `404 RESOURCE_NOT_FOUND`, uniformly, for cross-org projects, tasks and collector ids |
+| **Class** | Security-shaped decision, applied across every scoped route |
+| **Status** | **Closed** |
+| **Date** | 2026-08-19, Mission 7.3 Batch 1 |
+
+`403` and `404` both refuse. They leak different amounts: **403 confirms the id exists**, which is precisely what a guessed id is asking. Ch. 4.8 §3's *"regardless of guessed IDs"* is about guessing, so answering the guess would satisfy the letter of the rule and defeat its purpose.
+
+The sharpest case is `POST /v1/tasks/{taskId}/assignments`. Its assignee check has three failure modes — no such user, wrong role, wrong org — and **two of the three answer 404**. A wrong role is a 400, because the caller already knows that user exists inside their own org, so nothing is disclosed by saying why.
+
+The cost is honest and worth stating: an Admin who fat-fingers a real id inside their own org gets the same 404 as one probing another tenant, and the log is the only place the difference is visible.
+
+---
+
+### A-187 — Batch 1's grants were proved against live Aurora, including two negative probes
+
+| | |
+|---|---|
+| **Record** | Migration `0010`; gap register items 8 and 15; A-173 |
+| **Class** | Verification, positive and negative |
+| **Status** | **Closed for Batch 1's seven routes.** Gap 8 itself is untouched |
+| **Date** | 2026-08-19, Mission 7.3 Batch 1 |
+
+The mocked suite — 128 tests, two defects reinstated and caught — proves the SQL, the scope branch, the validation and the envelope, and is **structurally incapable of seeing a missing GRANT**: a scripted client returns what the test says regardless of what PostgreSQL would do. Migration `0010` exists because of exactly that blind spot, so the batch was also run against the real cluster as `vump-dev-operator`, authenticating as each function's own role.
+
+| # | Probe | Role | Result |
+|---|---|---|---|
+| 1 | BR-19's three-table join | `vump_projects` | Succeeded, `[]` |
+| 2 | `SELECT id, org_id, role FROM users` | `vump_tasks` | Succeeded, real row |
+| 3 | `projects` org check | `vump_tasks` | Succeeded, `[]` |
+| 4 | `INSERT INTO tasks` | `vump_projects` | **Refused — 42501** |
+| 5 | `SELECT *` on `users` | `vump_tasks` | **Refused — 42501** |
+
+Probe 1 is the one A-119 said was *"real and untestable until Mission 7"*: an empty result with **no permission error** is the proof, because the failure being ruled out is `42501`, not an empty set.
+
+Probe 5 is the one worth keeping. F6's `users` grant is column-level, and until this ran, *"column-level"* was a claim in a migration comment. A refused `SELECT *` alongside a successful three-column read is the difference between a documented restriction and an enforced one — the same distinction `0008` had to learn the hard way when `ALTER DEFAULT PRIVILEGES` recorded nothing and PUBLIC kept `EXECUTE` on `complete_chunk()`.
+
+### Negative permission probes need no teardown, which sidesteps A-173
+
+A-173 blocks gap 8 because the BR-08/11/21/22 proofs seed rows and **no role can delete them**. Probes 4 and 5 assert that an operation is *refused*, so nothing is written and there is nothing to clean up — and probes 1–3 are reads.
+
+**This does not close gap 8**, whose proofs are behavioural and do write. It does mean a useful class of check — every "role X cannot do Y" assertion in `0007` and `0010` — is available in CI today, ahead of whatever resolves the teardown question.
+
+---
+
+### A-188 — Nothing can complete a session, and every session will sit at `in_progress` forever
+
+| | |
+|---|---|
+| **Volume** | 4, Ch. 4.4 §5 — `sessions.status` is *"'in_progress' \| 'complete' — FR-SES-02; transition gated by stored procedure (Chapter 4.2)"* |
+| **Says** | A stored procedure gates the transition |
+| **Is** | **There is no such procedure, and no route calls one.** `0006` defines `complete_chunk(uuid)` and nothing else; Chapter 4.6's catalogue has no endpoint that completes a session |
+| **Class** | Unreachable state — a specified lifecycle with no mechanism |
+| **Status** | **Open.** Carried into Batch 2b as its fourth fork |
+| **Date** | 2026-08-19, Mission 7.3 Batch 2a |
+
+Found while tracing `POST /v1/tasks/{taskId}/sessions`, not by reading the schema for its own sake.
+
+Chapter 4.2 §3 describes exactly one such gate and it is about chunks: *"chunks.status can only transition to 'complete' via a stored procedure that first checks a matching, non-null chunk_metadata row exists."* Migration `0006` implements that as `complete_chunk()`, with a `BEFORE UPDATE` trigger making it the only path. **Sessions got the sentence and not the procedure.**
+
+The consequence is concrete rather than theoretical:
+
+- `sessions_status_check` permits `'complete'`, `sessions.status` defaults to `'in_progress'`, and **nothing anywhere issues an UPDATE**;
+- `vump_sessions` holds `SELECT, INSERT` and deliberately **no UPDATE**, so even a handler that wanted to would be refused with `42501`;
+- so A-07's *"Live status across all Collectors"* will show every session as in progress indefinitely, including sessions whose chunks are all `complete`.
+
+### Why this is not fixed in Batch 2a
+
+The interesting question is not how to write the procedure, it is **what completion means**. The plausible definition — a session is complete when all of its chunks are — is only knowable at the moment the last chunk completes, which is `PATCH /v1/chunks/{chunkId}/status`'s business and lives in Batch 2b. Building a session-completion path in 2a would either be a route nobody calls, or a guess at a rule 2b is about to need anyway.
+
+`complete_chunk()` is the shape to follow if that reading holds: `SECURITY DEFINER`, granted `EXECUTE` to exactly the role that needs it, with a `BEFORE UPDATE` trigger making it the only path — which is also how the transition gets made without granting `vump_sessions` an UPDATE it should not otherwise hold.
+
+**FR-SES-02 is the requirement to check it against**, and it should be read before the rule is chosen rather than after.
+
+---
+
+### A-189 — Batch 2a's grants were proved live, and the negative probe is the one that mattered
+
+| | |
+|---|---|
+| **Record** | Migration `0010`; `backend/functions/sessions`; A-187's pattern |
+| **Class** | Verification, positive and negative |
+| **Status** | **Closed for Batch 2a's two routes**, with one path stated as mock-only |
+| **Date** | 2026-08-19, Mission 7.3 Batch 2a |
+
+`vump_sessions` had never been exercised — Batch 1's probes covered `vump_projects` and `vump_tasks` only. Run as `vump-dev-operator`, authenticating with the `sessions` function's own credential:
+
+| # | Probe | Result |
+|---|---|---|
+| 1 | The GET's `sessions ⋈ tasks ⋈ projects` join | Succeeded, `[]` |
+| 2 | The chunk-status aggregate, `GROUP BY session_id, status` | Succeeded, `[]` |
+| 3 | **`UPDATE sessions SET status='complete'`** | **Refused — 42501** |
+| 4 | **`INSERT INTO audit_log`** | **Refused — 42501** |
+
+### Probe 3 converted a design correction into a proof
+
+Part 17's trace found that `vump_sessions` holds `SELECT, INSERT` on `sessions` and no `UPDATE`, and that PostgreSQL requires **both** for `ON CONFLICT … DO UPDATE`. The Part 16 sketch had proposed exactly that form, copied from A-181's `task_assignments` shape — which would have failed at runtime with `42501`, **the same defect class migration `0010` exists to fix, reintroduced one batch after fixing it.**
+
+The registration is `ON CONFLICT DO NOTHING` plus a re-read instead — `provisionCaller`'s pattern, needing no migration and no widening. Probe 3 is the live half of that: PostgreSQL refusing the alternative is what makes the choice evidence rather than a reading of a grant file.
+
+Probe 4 confirms the other absence. Chapter 4.2 §2 scopes `audit_log` to *"Admin actions on Projects/Tasks/Assignments"*, and a Collector starting a session is none of those — so unlike all five of Batch 1's writes, `POST /v1/tasks/{taskId}/sessions` needs no transaction, because there is no second row that must commit with the first. The chapter and the grant agree independently, and now both are demonstrated.
+
+### What is NOT proved, stated so the coverage is not read as complete
+
+**The `ON CONFLICT` resurrection path is mock-only.** Proving it live means inserting a session and re-registering it, and A-173 means no role can delete the row afterwards.
+
+This is worse than the `task_assignments` case A-187 sidestepped, and the difference is worth naming: **`chunks.session_id` references `sessions`**, so a stray session is not inert — it becomes permanent fixture data in a shared development database, and one that later chunk work could attach rows to. The idempotency, the 200-versus-201 distinction and the `SESSION_ALREADY_REGISTERED` refusal are covered by mocked tests and by nothing else.
+
+The caveat is in `functions/sessions/src/index.test.ts`'s own header, not only here, so a reader of the suite meets it before the assertions rather than after.
+
+---
+
+### A-190 — A retried chunk registration must succeed; `CHUNK_ALREADY_REGISTERED` is for a mismatch, not a repeat
+
+| | |
+|---|---|
+| **Volume** | 5, Ch. 5.10 §3; Volume 4 Ch. 4.6 §5; `backend/packages/shared/src/errors.ts` |
+| **Says** | Ch. 5.10 §3: *"Step 1's registration always returns the same deterministic S3 key for a given chunk_id — **a retried registration call is safe to repeat**"* |
+| **Was read as** | Mission 7.3 Part 1 traced `CHUNK_ALREADY_REGISTERED` as the answer to a second registration of the same `chunk_id` |
+| **Should say** | A repeat **succeeds** and returns the same key with fresh presigned URLs. The named refusal is for a *genuine mismatch* — the same `chunk_id` presented with a different session, sequence index or checksum |
+| **Class** | Correction to this mission's own earlier reading |
+| **Status** | **Corrected before implementation.** No code was written on the wrong premise |
+| **Date** | 2026-08-19, Mission 7.3 Batch 2b |
+
+The error code's own comment says *"The chunk is already registered"*, which reads as though registration is a once-only operation. Chapter 5.10 §3 says the opposite in the same breath as explaining why: the key is deterministic precisely **so that** a retry is safe.
+
+Refusing a repeat would break the thing the chapter is describing. Chapter 5.13 §2 grants a chunk six automatic attempts; a device that uploads some parts, loses connectivity and returns needs new presigned URLs against the **same** multipart upload — which is exactly Chapter 5.13 §4's *"the same in-progress multipart upload ID where possible"*. A registration that refused the second call would make NFR-REL-02's resumability unreachable by construction.
+
+### The shape, which 2a already built once
+
+This is `SESSION_ALREADY_REGISTERED`'s pattern one level down, and the symmetry is worth stating because it means the rule is now consistent across both identity-bearing routes:
+
+| | Repeat with matching fields | Repeat with a conflicting field |
+|---|---|---|
+| `POST /v1/tasks/{taskId}/sessions` | 200, the existing session | 409 `SESSION_ALREADY_REGISTERED` |
+| `POST /v1/sessions/{sessionId}/chunks` | 200, same key, **fresh URLs** | 409 `CHUNK_ALREADY_REGISTERED` |
+
+The mobile side is unaffected either way: Mission 4.2's test asserts only that `VumpApi` surfaces the code, and its own comment records that *"the envelope is the contract, not the status code."*
+
+**Recorded separately rather than inside Batch 2b's report** because it corrects a reading this mission itself published in Part 1, and a correction folded into the report of the work it changed is the kind that stops being findable.
+
+---
+
+### A-191 — Chapter 5.10's step order puts the metadata POST after the status PATCH, and BR-21 makes that order impossible
+
+| | |
+|---|---|
+| **Volume** | 5, Ch. 5.10 §1's pipeline steps; Volume 4 Ch. 4.2 §3 (BR-21) and Ch. 4.5 §3 |
+| **Says** | Ch. 5.10 §1: *"3. Confirm — `PATCH /v1/chunks/{id}/status` → 'uploading' → 'complete'. 4. Metadata — `POST /v1/chunks/{id}/metadata`"* |
+| **Should say** | Metadata must be **step 3** and the status PATCH **step 4**. In the order as written, step 3 can never succeed |
+| **Authority** | BR-21, as implemented by `complete_chunk()` in migration `0006` |
+| **Class** | Sequencing defect in a specification, found by tracing the handler against the gate |
+| **Status** | **Open.** No code is written on either order yet |
+| **Date** | 2026-08-19, Mission 7.3 Batch 2b |
+
+Chapter 4.2 §3 requires that *"chunks.status can only transition to 'complete' via a stored procedure that first checks a matching, non-null chunk_metadata row exists"*, and Chapter 4.5 §3 adds the second half — the backend sets `verified_at` *"and allowing chunks.status → 'complete'"*. Migration `0006` implements both: `complete_chunk()` raises `restrict_violation` when `chunk_metadata.verified_at IS NULL`, and a `BEFORE UPDATE` trigger makes the procedure the only path.
+
+So a client following Chapter 5.10 §1 literally would, at step 3, ask for a transition the database is built to refuse — **every time, for every chunk** — and would only POST the metadata that makes it possible at step 4, after the call it needed it for had already failed.
+
+### This is not the divergence A-073 already records
+
+A-073 records the mobile side calling `markComplete` **after** step 4 rather than step 3, and its reasoning is about local deletion: *"BR-08 makes complete the point a chunk becomes eligible for local deletion, and deleting a chunk whose metadata never reached the backend would be unrecoverable."*
+
+That is the **local** status write, and the conclusion happens to agree with this one. What A-073 does not say — because Mission 4.2 had no backend to try it against — is that the *remote* order in the chapter is not merely suboptimal but unsatisfiable. Two different writes, two different reasons, one shared answer.
+
+### What the backend does about it, which is nothing
+
+A handler cannot reorder its caller. `PATCH …/status` → `'complete'` with no metadata row will be refused; the only choice is **how legibly**. It surfaces as `RESOURCE_NOT_FOUND` naming the absent metadata rather than letting `restrict_violation` arrive as `INTERNAL_ERROR`, so a client hitting this reads a sentence that names the cause instead of a 500 — Chapter 4.6 §1's named-cause rule applied to a mistake the specification actively invites.
+
+**Recorded before Mission 7.4 writes the client's call sequence**, because that mission is where the order becomes real, and the chapter it will be written from is the one that is wrong.
+
+---
+
+### A-192 — Batch 2b's grants and both completion gates were proved live
+
+| | |
+|---|---|
+| **Record** | Migrations `0010` and `0011`; `functions/chunks-upload`, `chunks-verify`, `metadata`; A-187 and A-189's pattern |
+| **Class** | Verification, positive and negative |
+| **Status** | **Closed for Batch 2b's four routes**, with the upload round trip stated as mock-only |
+| **Date** | 2026-08-19, Mission 7.3 Batch 2b |
+
+Three roles that had never been exercised end to end — `vump_chunks_upload`, `vump_chunks_verify`, `vump_metadata` — plus the two `SECURITY DEFINER` gates the schema has carried since Mission 6.3 without either ever being fired.
+
+| # | Probe | Role | Result |
+|---|---|---|---|
+| 1 | The Chapter 5.14 §1 key-composition join | `vump_chunks_upload` | Succeeded |
+| 2 | The `chunks ⋈ sessions` ownership join, reading `upload_id` | `vump_chunks_verify` | Succeeded |
+| 3 | The Chapter 4.5 §2 identity join | `vump_metadata` | Succeeded |
+| 4 | `UPDATE chunks SET checksum_sha256` | `vump_chunks_verify` | **Refused — 42501** |
+| 5 | `UPDATE sessions SET status='complete'` directly | master | **`restrict_violation` — FR-SES-02** |
+| 6 | `SELECT complete_session(…)` | `vump_metadata` | **Refused — 42501** |
+| 7 | `UPDATE chunks SET status='complete'` directly | master | **`restrict_violation` — BR-21** |
+
+**Probe 1 is the one that closes open item 36's root cause.** Volume 4 Chapter 4.10 §2 step 1 makes `chunks-upload` compute the deterministic key, and until `0010` that role could read `sessions` and nothing above it — three of the key's five components were unreachable. The single most load-bearing value in the upload path was not computable by the role assigned to compute it, and now is.
+
+**Probes 5 and 7 are the first time either completion gate has ever fired.** `chunks_completion_guard_trg` has existed since Mission 6.3 and BR-21's claim that `complete_chunk()` is *"the only path"* had never been tested against a live database — the strongest evidence Mission 6 produced for it was an uncommitted scratchpad. `sessions_completion_guard_trg` is new in `0011` and was exercised the day it landed.
+
+### Why probes 5 and 7 ran as master, and why that is correct here
+
+A-172 is emphatic that a proof run as master *"would pass while proving nothing"* — the master bypasses every `GRANT` in `0007`. That objection is exactly right for probes 4 and 6, which are privilege checks and were run as the constrained roles.
+
+**It does not apply to a trigger.** A `BEFORE UPDATE` trigger fires for every principal including the master, so master is a valid witness. It is also the *only* possible one: no role holds `UPDATE` on `sessions` at all — Batch 2a's probe 3 proved that with a `42501` — so any function credential would be stopped one layer earlier, at the grant, and never reach the trigger being tested.
+
+The distinction is worth keeping: **a grant proof must run as the constrained role; a trigger proof cannot.**
+
+### Not proved, stated so the coverage is not read as complete
+
+The full upload round trip — register, upload 38 parts, finalise, hash, complete — is **mock-only**. It needs a real 633 MB object and a real chunk row, `chunk_metadata`'s foreign key is `ON DELETE RESTRICT`, and A-173 means nothing can remove any of it. The seam, the ordering, the checksum comparison and both refusal paths are covered by 50 mocked tests and by nothing else.
+
+---
+
+### A-193 — Seed inside a transaction and roll back: a teardown-free proof, and a candidate for Gap 8
+
+| | |
+|---|---|
+| **Record** | Gap register item 8; A-173; ADR-049's `db-prover` |
+| **Class** | Technique, demonstrated |
+| **Status** | **Open as a proposal.** Gap 8 is unchanged until someone builds the job |
+| **Date** | 2026-08-19, Mission 7.3 Batch 2b |
+
+A-173 states the blocker precisely: migration `0007` grants `DELETE` to no role, so the BR-08/11/21/22 behavioural proofs *"can seed and assert, and cannot clean up"*, and ADR-049 denies `db-prover` the master credential on correctness grounds. Three shapes were listed — a `vump_ci_proof` role with `DELETE`, rollback-only proofs, a disposable database per run — and rollback-only was set aside as *"complicated by each per-function secret being a separate Data API session, so one transaction cannot span the roles a cross-role proof needs."*
+
+**That objection is real and narrower than it reads.** Mission 7.3 needed rows to fire two triggers, and used the Data API's own transaction control:
+
+```
+BeginTransaction → INSERT the whole FK chain in one CTE statement
+                 → UPDATE, observe the trigger raise
+                 → RollbackTransaction
+```
+
+Both trigger proofs ran this way and **nothing persisted**. There was no teardown because there was nothing to tear down.
+
+### What it does and does not unblock
+
+It works for any proof whose assertions live **inside one session**: a trigger, a constraint, a `SECURITY DEFINER` function's own logic. That covers BR-21 and BR-22 directly, which are two of the four proofs Gap 8 is waiting on.
+
+A-173's objection still stands for the rest. A proof of the form *"role X cannot do Y to a row role Z created"* needs two credentials and therefore two sessions, and a transaction cannot span them. **BR-08 and BR-11 are that shape**, so this closes part of Gap 8 rather than all of it.
+
+Worth noting alongside A-187's observation that **negative permission probes need no teardown either**, because they write nothing. Between them, the two techniques cover a useful proportion of what Gap 8 wants without answering the `DELETE` question at all:
+
+| Proof shape | Technique | Teardown needed |
+|---|---|---|
+| "role X may not do Y" | Negative probe (A-187) | None — nothing is written |
+| "the trigger/constraint refuses this" | Seed-and-rollback (here) | None — nothing is committed |
+| "role X cannot touch role Z's row" | Neither | **Still blocked** — A-173 |
+
+Recorded as a proposal rather than a closure. **Gap 8 remains open**, and its status is unchanged: the credential exists, the proofs are not a CI job. What has changed is that two of the three shapes it needs now have a demonstrated method.
+
+---
+
+### A-194 — Two of this mission's self-corrections never reached the register, and one of them was ruled on
+
+| | |
+|---|---|
+| **Record** | Mission 7.3's own reports, Parts 3, 20, 21 and 25 |
+| **Class** | Findability failure — the correction was made, and made only in conversation |
+| **Status** | **Closed by this entry** |
+| **Date** | 2026-08-19, Mission 7.3 closing gate |
+
+Mission 7.3's close-out claimed *"three are corrections to this mission's own earlier readings (A-190, A-191, and Part 21's budget claim)"*. Audited at the Testing & Verification gate, **that count was wrong twice over**: the register holds **two** such corrections, not three, and one of the three named is not a self-correction at all.
+
+| Claimed | Actually |
+|---|---|
+| A-190 | ✅ Self-correction, in the register — corrects Part 1's reading of `CHUNK_ALREADY_REGISTERED` |
+| A-189 | ✅ Self-correction, in the register — **not claimed.** Records that Part 16 proposed `ON CONFLICT DO UPDATE` against a role with no `UPDATE` |
+| A-191 | ❌ Not a self-correction. It is a defect in Volume 5 Chapter 5.10, found by this mission but not made by it |
+| Part 21's budget claim | ❌ **Not in the register at all** |
+
+### The one that matters, because a decision was taken on it
+
+Part 20 recommended Fork 1 option B on two grounds: it preserves A-143, and *"the completion moves to a different invocation and the budget separates cleanly again"*. The second was wrong — a different **invocation** is not a different **request budget**, because one client `PATCH` waits for MPU assembly and the hash however many Lambdas are involved.
+
+**The project owner's Part 21 ruling cited that reasoning back verbatim** when re-affirming B. Part 21 opened by correcting it, the ruling was re-affirmed on the corrected premise, and the measurement that followed made the point moot — `completeMs` came in at 99ms against a 21-second margin.
+
+So the outcome is unaffected and the record was still incomplete: **a reader of the register would find no trace that a fork was first recommended on a premise that did not hold.** The correction lives in one doc comment inside `probe/index.mjs` and in a conversation.
+
+A smaller instance, recorded for completeness rather than because it changed anything: Part 3 stated *"no new Secrets Manager entries — eight before, eight after"*, and corrected it in the same report once F7's `vump_ci_proof` role turned out to need a ninth. That one never reached the register either.
+
+### Why this is worth an entry rather than a shrug
+
+This register exists because *"an architectural decision that is not recorded here does not exist"*, and the same standard has to apply to a decision's **rejected premises**. A-172 makes exactly this argument about a Mission 6 hand-off that compressed "a CI credential" into "a read-only CI credential": the compression was carried forward into a later trace before it was caught, and the correction was worth its own record.
+
+The pattern to keep: **a correction made in a report is not recorded.** Reports are dated artefacts and are not searched; the register is. Both of the corrections above were made promptly and visibly at the time — what failed was the step after.
+
+---
+
+### A-195 — The Fork 1 seam validated nothing, and three records said it did
+
+| | |
+|---|---|
+| **Record** | `functions/chunks-upload/src/index.ts`'s `finalizeUpload`; `modules/iam/main.tf`'s `chunks_verify_invoke_upload` comment; Mission 7.3 Parts 20 and 22 |
+| **Said** | *"The invoked function validates the chunk before acting, so this cannot create an object at an arbitrary key"* |
+| **Was** | `finalizeUpload` passed `request.key` and `request.uploadId` **straight from the invoke payload to S3**. `chunkId` appeared only in an error message. No database read, no ownership check, nothing |
+| **Class** | Security defect — a claimed control that did not exist |
+| **Status** | **Closed.** Validation added, three tests, two proved non-vacuous |
+| **Date** | 2026-08-19, Mission 7.3 security review |
+
+Found by the closing gate's security review, reading the function instead of the IAM policy.
+
+### What a compromised `chunks-verify` could actually do
+
+The seam gives that role `lambda:InvokeFunction` on one ARN, and `isFinalizeRequest` routes any payload carrying `action: 'finalize-upload'` to the finaliser. With no validation, the reachable capability was:
+
+**Finalise any in-progress multipart upload in the bucket, at any key, for any upload id it could name.** And it could name plenty: `chunks-verify` holds `SELECT` on `chunks`, which is **not org-scoped at the grant level**, so it could read the `s3_object_key` and `upload_id` of every registered chunk in the system.
+
+The concrete harm is truncation. `CompleteMultipartUpload` assembles whatever parts have arrived so far, so finalising an upload still in flight produces a **short object that S3 then treats as complete** — and the multipart upload is consumed, so the remaining parts have nowhere to go. Against footage that is mid-upload, that is silent evidence loss.
+
+### What it still could not do, which is why the choice was right
+
+Even unvalidated, the capability was narrower than `s3:PutObject` on `bucket/*` in ways that matter:
+
+- **It cannot create an object where no upload exists.** `CompleteMultipartUpload` requires a live `UploadId`, and only `chunks-upload` can call `CreateMultipartUpload`.
+- **It cannot overwrite a completed object.** A finished upload has no id left to finalise.
+- **It cannot choose content.** The bytes are whatever the device actually sent; there is no path to injecting attacker-authored footage.
+- **It cannot presign anything**, so it cannot hand a reader URL to a third party — which is the specific harm A-143 exists to prevent, and the reason `chunks-verify` must never hold `PutObject`.
+
+So Fork 1 option B remains the right call and A-143's property held throughout. **The gap was between what the code did and what three records claimed it did**, which is its own category of problem: a reviewer reading the IAM comment would have concluded the control existed and stopped looking.
+
+### The fix
+
+`finalizeUpload` now reads the chunk row and refuses unless the supplied key **and** upload id are the ones that chunk owns. It needs no new grant — `chunks-upload` already holds `SELECT` on `chunks` for registration — so the capability narrows from *"finalise anything"* to *"finalise this specific registered upload"*, which is what the comment always claimed.
+
+Three tests cover it: a foreign key, a foreign upload id, and an unknown chunk id. Two were proved non-vacuous by removing the check and watching them fail. The IAM comment is rewritten to say that the control lives in the function and to name this entry, rather than asserting a property the reader cannot verify from where it is written.
+
+### The lesson, which is not "add validation"
+
+The IAM boundary was reviewed carefully and the handler was not. A capability's real extent is the **intersection** of what IAM permits and what the invoked code does with it, and reviewing one half thoroughly reads as diligence while proving nothing about the other. This is Mission 4.9 §4's pattern again — *"reviewed carefully, read correctly, and committed without once being run where it would actually have to work"* — in the security-review medium.
