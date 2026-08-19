@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mobile/core/errors/error_codes.dart';
+import 'package:mobile/core/errors/exceptions/network_exception.dart';
 import 'package:mobile/features/projects_tasks/application/project_task_providers.dart';
 import 'package:mobile/features/projects_tasks/domain/entities/project.dart';
 import 'package:mobile/features/projects_tasks/domain/entities/task.dart';
@@ -123,6 +125,66 @@ void main() {
         findsOneWidget,
       );
       expect(find.text('This Project has no Tasks yet.'), findsNothing);
+    });
+  });
+
+  group('a 404 is not a connection problem — F28', () {
+    Future<void> pumpFailing(
+      WidgetTester tester, {
+      required NetworkException failure,
+    }) async {
+      final ControllableProjectTaskRepository repo =
+          ControllableProjectTaskRepository(projects: <Project>[project('p1')])
+            ..failure = failure;
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: <Override>[
+            projectTaskRepositoryProvider.overrideWithValue(repo),
+          ],
+          child: const MaterialApp(
+            home: CollectorProjectDetailScreen(projectId: 'p1'),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('RESOURCE_NOT_FOUND says the Project is not available', (
+      WidgetTester tester,
+    ) async {
+      // Against the fake this case arrived as an empty list, so the copy never
+      // had to exist. The real repository raises A-186's uniform 404, and
+      // telling a Collector to check their connection over a stale link points
+      // them at something that is not broken.
+      await pumpFailing(
+        tester,
+        failure: const NetworkException(
+          errorCode: ErrorCode.networkNotFound,
+          message: 'refused',
+          statusCode: 404,
+          backendCode: 'RESOURCE_NOT_FOUND',
+        ),
+      );
+
+      // BR-19 makes "not assigned" and "does not exist" indistinguishable, so
+      // the copy claims neither.
+      expect(find.text("This Project isn't available to you."), findsOneWidget);
+      expect(find.textContaining('Check your'), findsNothing);
+    });
+
+    testWidgets('a transport failure still names the connection', (
+      WidgetTester tester,
+    ) async {
+      await pumpFailing(
+        tester,
+        failure: const NetworkException(
+          errorCode: ErrorCode.networkTimeout,
+          message: 'the network went away',
+        ),
+      );
+
+      expect(find.textContaining('Check your'), findsOneWidget);
+      expect(find.text("This Project isn't available to you."), findsNothing);
     });
   });
 }

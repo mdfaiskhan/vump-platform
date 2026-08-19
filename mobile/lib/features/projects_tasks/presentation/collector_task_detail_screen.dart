@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import 'package:mobile/app/theme/app_sizes.dart';
 import 'package:mobile/app/theme/app_spacing.dart';
+import 'package:mobile/features/projects_tasks/application/read_failure.dart';
 import 'package:mobile/features/projects_tasks/application/tasks_notifier.dart';
 import 'package:mobile/features/projects_tasks/domain/entities/task.dart';
 
@@ -91,11 +92,21 @@ class CollectorTaskDetailScreen extends ConsumerWidget {
           message: "This Task isn't available to you.",
         ),
         AsyncData<List<Task>>() => _TaskBody(task: task!),
-        AsyncError<List<Task>>() => const _TaskMessage(
-          message:
-              "This Task couldn't be loaded. Check your connection and try "
-              'again.',
-        ),
+        // The 404 path, F28. A Project this Collector cannot see answers
+        // RESOURCE_NOT_FOUND (A-186), which reaches here rather than
+        // returning an empty list as the fake did — and it is not a
+        // connection problem.
+        AsyncError<List<Task>>(:final Object error) =>
+          switch (classifyReadFailure(error)) {
+            ProjectTaskReadFailure.notVisible => const _TaskMessage(
+              message: "This Task isn't available to you.",
+            ),
+            ProjectTaskReadFailure.unavailable => const _TaskMessage(
+              message:
+                  "This Task couldn't be loaded. Check your connection and "
+                  'try again.',
+            ),
+          },
         _ => const Center(child: CircularProgressIndicator()),
       },
       bottomNavigationBar: task == null
