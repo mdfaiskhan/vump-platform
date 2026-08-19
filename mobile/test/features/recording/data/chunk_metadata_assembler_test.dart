@@ -210,7 +210,9 @@ void main() {
             networkType: 'wifi',
           ),
           taskContext: const UnsourcedTaskContext(),
-          deviceContext: const PlatformDeviceContext(appVersion: '1.0.0+1'),
+          deviceContext: const PlatformDeviceContext.unsourced(
+            appVersion: '1.0.0+1',
+          ),
         );
 
         expect(
@@ -232,7 +234,9 @@ void main() {
       final ChunkMetadata sourced = await assemble();
       final ChunkMetadata unsourced = await assemble(
         taskContext: const UnsourcedTaskContext(),
-        deviceContext: const PlatformDeviceContext(appVersion: '1.0.0+1'),
+        deviceContext: const PlatformDeviceContext.unsourced(
+          appVersion: '1.0.0+1',
+        ),
       );
 
       expect(sourced.isIdentityComplete, isTrue);
