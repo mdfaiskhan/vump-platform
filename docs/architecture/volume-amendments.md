@@ -7170,3 +7170,43 @@ And `startSession` re-runs `assertAssigned` every time. Chapter 4.8 §3: a remov
 ### What remains unproven
 
 Everything above is proven against a scripted HTTP adapter. `POST /v1/tasks/{id}/sessions` has never been called by this client against the deployed backend, and the 200-on-repeat path — the one the whole no-caching argument rests on — has never been observed outside the backend's own tests. Both are device-checkpoint items.
+
+---
+
+### A-210 — The device checkpoint's fixture was seeded by direct insert, and the API could not have produced it
+
+| | |
+|---|---|
+| **What** | One Project, one Task, one `task_assignments` row, one `audit_log` row, in the dev database |
+| **Ids** | Project `4889ca14-11d6-4142-8ae3-c5e96be62f7f`; Task `208f416c-a707-4df4-a25c-5b45707803b0` |
+| **How** | Four `rds-data execute-statement` calls, committed |
+| **Not** | Through `POST /v1/projects`, `POST /v1/projects/{id}/tasks`, `POST /v1/tasks/{id}/assignments` |
+| **Date** | 2026-08-20, Mission 7.4 device checkpoint |
+
+Recorded because rows that exist in a real database with no request behind them are indistinguishable, later, from rows a route created — and because the reason the routes were not used is a **structural property of the API**, not a convenience.
+
+### The API cannot express "assign this account to a Task" for a single account
+
+`assignCollector` validates the **assignee's** role, not the caller's:
+
+```ts
+if (readString(row, 2, 'users.role') !== 'collector') {
+  throw ApiError.invalidRequest('That user is not a Collector.');
+}
+```
+
+The checkpoint has one account. To call `POST /v1/tasks/{id}/assignments` it must be `admin`; to be the assignee it must be `collector`. **No ordering satisfies both**, and flipping `users.role` between the two calls does not help — the caller's role is re-read by the authorizer on every request (`authorizerResultTtlInSeconds = 0`), so the account is never both at once.
+
+So the options were a second Firebase identity provisioned purely to create three rows, or a direct insert. The second was chosen.
+
+**This is not a defect in the API.** Assigning yourself to your own Task is not a real workflow — FR-ADM-03 is an Admin assigning *Collectors*, plural, from a directory. It is a limitation that only a single-account test rig encounters, and it is recorded here so that a later reader does not mistake it for one.
+
+### What the seed proves, and what it does not
+
+**Proves:** BR-19's Collector-scoped join, live, through the real app — *"Checkpoint Project"* rendered in C-04 from `GET /v1/projects`, which is the first time that join has returned a row to a device rather than to a probe.
+
+**Does not prove:** the three write routes. `createProject`, `createTask` and `assignCollector` have **no caller anywhere in `lib/`** — Mission 7.4 step 4 recorded that when it implemented them, and their correctness still rests on unit tests alone. Seeding by hand leaves that exactly where it was, and it is owed to whichever mission builds Chapter 2.7's A-06 and the Task edit form.
+
+The rows were shaped to match what the routes produce rather than to the minimum the columns allow: `org_id` and `created_by` derived from the `users` row rather than typed in, and the `audit_log` entry written, because Chapter 4.2 §2 makes that table an *"append-only record of Admin actions"* and a Project with no trail is a record of nothing.
+
+**Cleanup is `archived_at = now()`, never a delete.** The sessions and chunks the checkpoint produces reference these rows, and no role in this backend holds SQL `DELETE` — deliberately.
