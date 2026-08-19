@@ -113,6 +113,14 @@ function body(response: { body: string }): Record<string, unknown> {
   return JSON.parse(response.body) as Record<string, unknown>;
 }
 
+/** Every parameter of one statement, by name, with its type hint. */
+function paramsOf(index: number): Record<string, unknown> {
+  const list = rds.commandCalls(ExecuteStatementCommand)[index]?.args[0].input.parameters ?? [];
+  return Object.fromEntries(
+    list.map((p) => [p.name ?? '', { value: p.value, typeHint: p.typeHint }]),
+  );
+}
+
 function statements(): string[] {
   return rds
     .commandCalls(ExecuteStatementCommand)
@@ -187,6 +195,47 @@ describe('POST — valibot validates Chapter 4.5 §2s shape', () => {
     );
 
     expect(response.statusCode).toBe(201);
+  });
+
+  it('binds numeric columns with a DECIMAL type hint — A-212', async () => {
+    // The assertion that would have caught the SECOND real-device failure of
+    // the night. Without the hint the Data API sends a bare stringValue,
+    // Postgres infers `text`, and the insert fails with SQLState 42804:
+    // `column "zoom_factor" is of type numeric but expression is of type text`.
+    //
+    // Every other non-text parameter in this project already carries a hint —
+    // uuidParam sends 'UUID', jsonParam sends 'JSON'. These two omitted it,
+    // and no mocked test noticed, because a mock asserts what was SENT and
+    // never what Postgres would ACCEPT. This asserts the one property of the
+    // send that determines whether it is accepted.
+    rds.on(ExecuteStatementCommand).resolvesOnce(identityRow()).resolves({ records: [] });
+
+    await handler(
+      event('POST', {
+        body: {
+          ...document,
+          capture_conditions: {
+            gps: { lat: 19.07, lng: 72.87 },
+            battery_pct: 51,
+            network_type: 'wifi',
+          },
+        },
+      }),
+    );
+
+    // The INSERT is the second statement; the first resolves the identity.
+    expect(paramsOf(1).zoom).toEqual({
+      value: { stringValue: '0.6' },
+      typeHint: 'DECIMAL',
+    });
+    expect(paramsOf(1).gpsLat).toEqual({
+      value: { stringValue: '19.07' },
+      typeHint: 'DECIMAL',
+    });
+    expect(paramsOf(1).gpsLng).toEqual({
+      value: { stringValue: '72.87' },
+      typeHint: 'DECIMAL',
+    });
   });
 
   it('accepts the shape a real device sends with no fix — A-211', async () => {
