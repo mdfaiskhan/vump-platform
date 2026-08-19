@@ -38,7 +38,7 @@ void main() {
           name: 'Harbour Survey',
         );
 
-        final List<Project> visible = await read.fetchProjects();
+        final List<Project> visible = (await read.fetchProjects()).items;
         expect(visible.map((Project p) => p.id), contains(created.id));
         expect(visible.last.name, 'Harbour Survey');
       },
@@ -77,7 +77,7 @@ void main() {
       // able to tell them apart the moment a Project is created.
       final Project created = await admin.createProject(name: 'Harbour');
 
-      expect(await read.fetchTasks(created.id), isEmpty);
+      expect((await read.fetchTasks(created.id)).items, isEmpty);
       expect(store.tasks.containsKey(created.id), isTrue);
     });
 
@@ -110,7 +110,9 @@ void main() {
         instructions: 'Walk south to north.',
       );
 
-      final List<Task> visible = await read.fetchTasks('prj-riverside-survey');
+      final List<Task> visible = (await read.fetchTasks(
+        'prj-riverside-survey',
+      )).items;
       expect(visible.map((Task t) => t.id), contains(created.id));
     });
 
@@ -121,7 +123,10 @@ void main() {
         instructions: 'Walk south to north.',
       );
 
-      expect(await read.fetchTasks('prj-riverside-survey'), hasLength(3));
+      expect(
+        (await read.fetchTasks('prj-riverside-survey')).items,
+        hasLength(3),
+      );
     });
 
     test('referenceExamples defaults to empty, never null', () async {
@@ -193,7 +198,9 @@ void main() {
         instructions: 'Two passes per span.',
       );
 
-      final List<Task> tasks = await read.fetchTasks('prj-riverside-survey');
+      final List<Task> tasks = (await read.fetchTasks(
+        'prj-riverside-survey',
+      )).items;
       final Task bridge = tasks.firstWhere(
         (Task t) => t.id == 'tsk-riverside-bridge',
       );

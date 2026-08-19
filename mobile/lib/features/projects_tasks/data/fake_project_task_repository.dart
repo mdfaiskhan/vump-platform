@@ -1,13 +1,27 @@
 import 'package:mobile/features/projects_tasks/data/in_memory_project_task_store.dart';
+import 'package:mobile/features/projects_tasks/domain/entities/paged_result.dart';
 import 'package:mobile/features/projects_tasks/domain/entities/project.dart';
 import 'package:mobile/features/projects_tasks/domain/entities/task.dart';
 import 'package:mobile/features/projects_tasks/domain/repositories/project_task_repository.dart';
 
-/// A deterministic in-memory [ProjectTaskRepository], standing in until
-/// Mission 7 wires the real one.
+/// A deterministic in-memory [ProjectTaskRepository], for tests.
 ///
-/// ## Why a fake is allowed to ship right now, and exactly when it stops being
-/// allowed
+/// ## IT IS NO LONGER WIRED INTO A BUILD — Mission 7.4 step 4
+///
+/// `ProjectTaskRepositoryImpl` calls Volume 4 Chapter 4.6 §3's real endpoints,
+/// and `main.dart` binds that. The removal condition below was met and the
+/// binding is gone, which is what Volume 11 Chapter 11.1's M8 gate required:
+/// *"no fake/mock repository remains wired into a release build"*.
+///
+/// **The class survives on purpose, and only as a test double.** Seven test
+/// files drive screens through it — both accessibility sweeps among them — and
+/// a fake that no build depends on is not what M8 forbids. What M8 forbids is a
+/// release path that reaches one, and no release path does: `main.dart` and
+/// `main_cleanup_probe.dart` are the only composition roots, and neither names
+/// this type any more. That is checkable in one `grep`, which is the point of
+/// stating it here rather than trusting it.
+///
+/// ## Why a fake was allowed to ship, and the gate that ended it
 ///
 /// Volume 11 Chapter 11.1's milestone table settles this, and the ordering is
 /// the whole argument:
@@ -24,12 +38,15 @@ import 'package:mobile/features/projects_tasks/domain/repositories/project_task_
 /// for Mission 5 is what the milestone sequence sanctions, not a shortcut past
 /// it.
 ///
-/// **REMOVAL CONDITION, stated so it travels with the code:** this class and
-/// its `main.dart` override are deleted when a real `ProjectTaskRepository`
-/// calls Volume 4 Chapter 4.6 §3's endpoints — Mission 7, M8's gate. It must
-/// not survive into a release build. Nothing else in `lib/` may depend on this
-/// type: every consumer holds the interface, and the composition root is the
-/// only file that names this class.
+/// **REMOVAL CONDITION, as it was written and as it was actually met:** the
+/// condition said *"this class and its `main.dart` override are deleted when a
+/// real `ProjectTaskRepository` calls Chapter 4.6 §3's endpoints"*. The
+/// override is deleted. The class is not, because deleting it would take seven
+/// test files with it for no gain that M8 asks for — the gate is about builds,
+/// not about the existence of a test double.
+///
+/// It is rewritten rather than quietly reinterpreted, because the original
+/// wording is the kind that gets read later as unmet.
 ///
 /// ## The seed lives in `InMemoryProjectTaskStore`, not here
 ///
@@ -57,18 +74,37 @@ class FakeProjectTaskRepository implements ProjectTaskRepository {
   /// The shared store this reads. Written by `FakeProjectTaskAdminRepository`.
   final InMemoryProjectTaskStore store;
 
+  /// Every seeded Project, as a single last page.
+  ///
+  /// **It paginates nothing**, and ignores [cursor] and [limit]. The seed is
+  /// three Projects; slicing it would model the mechanism without exercising
+  /// anything, and a test that needs paging behaviour needs a double that can
+  /// be told what to return — which is what
+  /// `ControllableProjectTaskRepository` is for.
   @override
-  Future<List<Project>> fetchProjects() async =>
-      List<Project>.unmodifiable(store.projects);
+  Future<PagedResult<Project>> fetchProjects({
+    String? cursor,
+    int? limit,
+  }) async =>
+      PagedResult<Project>.last(List<Project>.unmodifiable(store.projects));
 
   @override
-  Future<List<Task>> fetchTasks(String projectId) async {
-    // An unknown Project returns empty rather than throwing. The real
-    // repository's 404 is the backend's answer to a Project this Collector
-    // cannot see (BR-19), and Chapter 4.6 §1's envelope carries that as an
-    // error code — but modelling one specific status here would be inventing
-    // a wire detail the fake has no basis for. Empty is the honest stand-in:
+  Future<PagedResult<Task>> fetchTasks(
+    String projectId, {
+    String? cursor,
+    int? limit,
+  }) async {
+    // An unknown Project returns empty rather than throwing, and that is now
+    // a KNOWN DIVERGENCE rather than a lack of basis. The real repository
+    // raises RESOURCE_NOT_FOUND (A-186), because a Project the Collector
+    // cannot see is reported absent rather than forbidden. This fake keeps the
+    // empty answer so the screen tests that predate the real repository still
+    // describe what they were written to describe; the 404 path is covered
+    // against `ControllableProjectTaskRepository` instead. Divergence named,
+    // not hidden:
     // "no Tasks to show".
-    return List<Task>.unmodifiable(store.tasks[projectId] ?? const <Task>[]);
+    return PagedResult<Task>.last(
+      List<Task>.unmodifiable(store.tasks[projectId] ?? const <Task>[]),
+    );
   }
 }
