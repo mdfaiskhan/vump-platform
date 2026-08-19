@@ -87,6 +87,7 @@ class _CountingAuthRepository implements AuthRepository {
 
   static const User _user = User(
     uid: 'uid-1',
+    backendUserId: 'backend-uid-1',
     email: 'someone@example.com',
     role: Role.collector,
     orgId: 'org-42',

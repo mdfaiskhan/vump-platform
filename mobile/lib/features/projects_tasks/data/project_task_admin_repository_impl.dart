@@ -50,7 +50,10 @@ class ProjectTaskAdminRepositoryImpl implements ProjectTaskAdminRepository {
     final Map<String, Object?> data = await _api.post(
       '/projects',
       what: 'the new Project',
-      body: <String, Object?>{'name': name, 'description': ?description},
+      body: <String, Object?>{
+        'name': name,
+        if (description != null) 'description': description,
+      },
     );
 
     return projectFromJson(data);
@@ -92,9 +95,9 @@ class ProjectTaskAdminRepositoryImpl implements ProjectTaskAdminRepository {
       '/tasks/$taskId',
       what: 'the Task',
       body: <String, Object?>{
-        'title': ?title,
-        'instructions': ?instructions,
-        'reference_examples': ?referenceExamples,
+        if (title != null) 'title': title,
+        if (instructions != null) 'instructions': instructions,
+        if (referenceExamples != null) 'reference_examples': referenceExamples,
       },
     );
 

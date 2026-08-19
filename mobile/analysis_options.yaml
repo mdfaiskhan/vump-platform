@@ -137,6 +137,20 @@ analyzer:
     # `on AppException` clauses the taxonomy is built from.
     only_throw_errors: error
 
+    # --- Syntax the code generator cannot read -------------------------------
+    # `use_null_aware_elements` asks for `{'k': ?value}` in place of
+    # `{if (value != null) 'k': value}`. The analyzer shipped with the Dart SDK
+    # parses it; the one **bundled inside `build_runner`** does not, and reports
+    # the file as having syntax errors. Every generator in this project —
+    # freezed, json_serializable, isar_generator — then refuses to run, on files
+    # that have nothing to do with the one containing the syntax.
+    #
+    # So the rule is not merely unhelpful here, it is unsatisfiable: following
+    # it breaks the build. Silenced rather than ignored per-line, because the
+    # constraint is the toolchain's and applies to every file. Revisit when
+    # `build_runner`'s analyzer catches up. Mission 7.4 step 5.
+    use_null_aware_elements: ignore
+
     # --- Dropped futures ----------------------------------------------------
     # An unawaited future fails silently and out of order. Both rules are
     # promoted because the failure is invisible in test and in production

@@ -162,17 +162,21 @@ class VumpApi {
     int? limit,
   }) async {
     try {
-      final Response<Map<String, dynamic>> response = await _http
-          .get<Map<String, dynamic>>(
-            '$versionPrefix$path',
-            // Null-aware elements: an absent cursor or limit drops out of the
-            // query string entirely rather than being sent empty, so a first
-            // page asks for neither and the backend applies DEFAULT_LIMIT.
-            queryParameters: <String, dynamic>{
-              'cursor': ?cursor,
-              'limit': ?limit,
-            },
-          );
+      final Response<Map<String, dynamic>>
+      response = await _http.get<Map<String, dynamic>>(
+        '$versionPrefix$path',
+        // An absent cursor or limit drops out of the query string entirely
+        // rather than going out empty, so a first page asks for neither
+        // and the backend applies DEFAULT_LIMIT.
+        //
+        // Spelled with `if` rather than a null-aware element: `build_runner`
+        // bundles its own analyzer, and that one cannot parse `?cursor`.
+        // See analysis_options.yaml's `use_null_aware_elements: ignore`.
+        queryParameters: <String, dynamic>{
+          if (cursor != null) 'cursor': cursor,
+          if (limit != null) 'limit': limit,
+        },
+      );
       return _unwrapPage(response, what);
     } on NetworkException catch (error) {
       throw _named(error, what);

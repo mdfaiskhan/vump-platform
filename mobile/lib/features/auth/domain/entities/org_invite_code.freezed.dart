@@ -12,7 +12,8 @@ part of 'org_invite_code.dart';
 T _$identity<T>(T value) => value;
 
 final _privateConstructorUsedError = UnsupportedError(
-    'It seems like you constructed your class using `MyClass._()`. This constructor is only meant to be used by freezed and you are not supposed to need it nor use it.\nPlease check the documentation here for more information: https://github.com/rrousselGit/freezed#adding-getters-and-methods-to-our-models');
+  'It seems like you constructed your class using `MyClass._()`. This constructor is only meant to be used by freezed and you are not supposed to need it nor use it.\nPlease check the documentation here for more information: https://github.com/rrousselGit/freezed#adding-getters-and-methods-to-our-models',
+);
 
 /// @nodoc
 mixin _$OrgInviteCode {
@@ -29,11 +30,16 @@ mixin _$OrgInviteCode {
 /// @nodoc
 abstract class $OrgInviteCodeCopyWith<$Res> {
   factory $OrgInviteCodeCopyWith(
-          OrgInviteCode value, $Res Function(OrgInviteCode) then) =
-      _$OrgInviteCodeCopyWithImpl<$Res, OrgInviteCode>;
+    OrgInviteCode value,
+    $Res Function(OrgInviteCode) then,
+  ) = _$OrgInviteCodeCopyWithImpl<$Res, OrgInviteCode>;
   @useResult
-  $Res call(
-      {String code, String orgId, DateTime expiresAt, int? remainingUses});
+  $Res call({
+    String code,
+    String orgId,
+    DateTime expiresAt,
+    int? remainingUses,
+  });
 }
 
 /// @nodoc
@@ -54,24 +60,27 @@ class _$OrgInviteCodeCopyWithImpl<$Res, $Val extends OrgInviteCode>
     Object? expiresAt = null,
     Object? remainingUses = freezed,
   }) {
-    return _then(_value.copyWith(
-      code: null == code
-          ? _value.code
-          : code // ignore: cast_nullable_to_non_nullable
-              as String,
-      orgId: null == orgId
-          ? _value.orgId
-          : orgId // ignore: cast_nullable_to_non_nullable
-              as String,
-      expiresAt: null == expiresAt
-          ? _value.expiresAt
-          : expiresAt // ignore: cast_nullable_to_non_nullable
-              as DateTime,
-      remainingUses: freezed == remainingUses
-          ? _value.remainingUses
-          : remainingUses // ignore: cast_nullable_to_non_nullable
-              as int?,
-    ) as $Val);
+    return _then(
+      _value.copyWith(
+            code: null == code
+                ? _value.code
+                : code // ignore: cast_nullable_to_non_nullable
+                      as String,
+            orgId: null == orgId
+                ? _value.orgId
+                : orgId // ignore: cast_nullable_to_non_nullable
+                      as String,
+            expiresAt: null == expiresAt
+                ? _value.expiresAt
+                : expiresAt // ignore: cast_nullable_to_non_nullable
+                      as DateTime,
+            remainingUses: freezed == remainingUses
+                ? _value.remainingUses
+                : remainingUses // ignore: cast_nullable_to_non_nullable
+                      as int?,
+          )
+          as $Val,
+    );
   }
 }
 
@@ -79,12 +88,17 @@ class _$OrgInviteCodeCopyWithImpl<$Res, $Val extends OrgInviteCode>
 abstract class _$$OrgInviteCodeImplCopyWith<$Res>
     implements $OrgInviteCodeCopyWith<$Res> {
   factory _$$OrgInviteCodeImplCopyWith(
-          _$OrgInviteCodeImpl value, $Res Function(_$OrgInviteCodeImpl) then) =
-      __$$OrgInviteCodeImplCopyWithImpl<$Res>;
+    _$OrgInviteCodeImpl value,
+    $Res Function(_$OrgInviteCodeImpl) then,
+  ) = __$$OrgInviteCodeImplCopyWithImpl<$Res>;
   @override
   @useResult
-  $Res call(
-      {String code, String orgId, DateTime expiresAt, int? remainingUses});
+  $Res call({
+    String code,
+    String orgId,
+    DateTime expiresAt,
+    int? remainingUses,
+  });
 }
 
 /// @nodoc
@@ -92,8 +106,9 @@ class __$$OrgInviteCodeImplCopyWithImpl<$Res>
     extends _$OrgInviteCodeCopyWithImpl<$Res, _$OrgInviteCodeImpl>
     implements _$$OrgInviteCodeImplCopyWith<$Res> {
   __$$OrgInviteCodeImplCopyWithImpl(
-      _$OrgInviteCodeImpl _value, $Res Function(_$OrgInviteCodeImpl) _then)
-      : super(_value, _then);
+    _$OrgInviteCodeImpl _value,
+    $Res Function(_$OrgInviteCodeImpl) _then,
+  ) : super(_value, _then);
 
   @pragma('vm:prefer-inline')
   @override
@@ -103,35 +118,38 @@ class __$$OrgInviteCodeImplCopyWithImpl<$Res>
     Object? expiresAt = null,
     Object? remainingUses = freezed,
   }) {
-    return _then(_$OrgInviteCodeImpl(
-      code: null == code
-          ? _value.code
-          : code // ignore: cast_nullable_to_non_nullable
-              as String,
-      orgId: null == orgId
-          ? _value.orgId
-          : orgId // ignore: cast_nullable_to_non_nullable
-              as String,
-      expiresAt: null == expiresAt
-          ? _value.expiresAt
-          : expiresAt // ignore: cast_nullable_to_non_nullable
-              as DateTime,
-      remainingUses: freezed == remainingUses
-          ? _value.remainingUses
-          : remainingUses // ignore: cast_nullable_to_non_nullable
-              as int?,
-    ));
+    return _then(
+      _$OrgInviteCodeImpl(
+        code: null == code
+            ? _value.code
+            : code // ignore: cast_nullable_to_non_nullable
+                  as String,
+        orgId: null == orgId
+            ? _value.orgId
+            : orgId // ignore: cast_nullable_to_non_nullable
+                  as String,
+        expiresAt: null == expiresAt
+            ? _value.expiresAt
+            : expiresAt // ignore: cast_nullable_to_non_nullable
+                  as DateTime,
+        remainingUses: freezed == remainingUses
+            ? _value.remainingUses
+            : remainingUses // ignore: cast_nullable_to_non_nullable
+                  as int?,
+      ),
+    );
   }
 }
 
 /// @nodoc
 
 class _$OrgInviteCodeImpl implements _OrgInviteCode {
-  const _$OrgInviteCodeImpl(
-      {required this.code,
-      required this.orgId,
-      required this.expiresAt,
-      this.remainingUses});
+  const _$OrgInviteCodeImpl({
+    required this.code,
+    required this.orgId,
+    required this.expiresAt,
+    this.remainingUses,
+  });
 
   @override
   final String code;
@@ -172,11 +190,12 @@ class _$OrgInviteCodeImpl implements _OrgInviteCode {
 }
 
 abstract class _OrgInviteCode implements OrgInviteCode {
-  const factory _OrgInviteCode(
-      {required final String code,
-      required final String orgId,
-      required final DateTime expiresAt,
-      final int? remainingUses}) = _$OrgInviteCodeImpl;
+  const factory _OrgInviteCode({
+    required final String code,
+    required final String orgId,
+    required final DateTime expiresAt,
+    final int? remainingUses,
+  }) = _$OrgInviteCodeImpl;
 
   @override
   String get code;
