@@ -6679,3 +6679,81 @@ That is the **local** status write, and the conclusion happens to agree with thi
 A handler cannot reorder its caller. `PATCH …/status` → `'complete'` with no metadata row will be refused; the only choice is **how legibly**. It surfaces as `RESOURCE_NOT_FOUND` naming the absent metadata rather than letting `restrict_violation` arrive as `INTERNAL_ERROR`, so a client hitting this reads a sentence that names the cause instead of a 500 — Chapter 4.6 §1's named-cause rule applied to a mistake the specification actively invites.
 
 **Recorded before Mission 7.4 writes the client's call sequence**, because that mission is where the order becomes real, and the chapter it will be written from is the one that is wrong.
+
+---
+
+### A-192 — Batch 2b's grants and both completion gates were proved live
+
+| | |
+|---|---|
+| **Record** | Migrations `0010` and `0011`; `functions/chunks-upload`, `chunks-verify`, `metadata`; A-187 and A-189's pattern |
+| **Class** | Verification, positive and negative |
+| **Status** | **Closed for Batch 2b's four routes**, with the upload round trip stated as mock-only |
+| **Date** | 2026-08-19, Mission 7.3 Batch 2b |
+
+Three roles that had never been exercised end to end — `vump_chunks_upload`, `vump_chunks_verify`, `vump_metadata` — plus the two `SECURITY DEFINER` gates the schema has carried since Mission 6.3 without either ever being fired.
+
+| # | Probe | Role | Result |
+|---|---|---|---|
+| 1 | The Chapter 5.14 §1 key-composition join | `vump_chunks_upload` | Succeeded |
+| 2 | The `chunks ⋈ sessions` ownership join, reading `upload_id` | `vump_chunks_verify` | Succeeded |
+| 3 | The Chapter 4.5 §2 identity join | `vump_metadata` | Succeeded |
+| 4 | `UPDATE chunks SET checksum_sha256` | `vump_chunks_verify` | **Refused — 42501** |
+| 5 | `UPDATE sessions SET status='complete'` directly | master | **`restrict_violation` — FR-SES-02** |
+| 6 | `SELECT complete_session(…)` | `vump_metadata` | **Refused — 42501** |
+| 7 | `UPDATE chunks SET status='complete'` directly | master | **`restrict_violation` — BR-21** |
+
+**Probe 1 is the one that closes open item 36's root cause.** Volume 4 Chapter 4.10 §2 step 1 makes `chunks-upload` compute the deterministic key, and until `0010` that role could read `sessions` and nothing above it — three of the key's five components were unreachable. The single most load-bearing value in the upload path was not computable by the role assigned to compute it, and now is.
+
+**Probes 5 and 7 are the first time either completion gate has ever fired.** `chunks_completion_guard_trg` has existed since Mission 6.3 and BR-21's claim that `complete_chunk()` is *"the only path"* had never been tested against a live database — the strongest evidence Mission 6 produced for it was an uncommitted scratchpad. `sessions_completion_guard_trg` is new in `0011` and was exercised the day it landed.
+
+### Why probes 5 and 7 ran as master, and why that is correct here
+
+A-172 is emphatic that a proof run as master *"would pass while proving nothing"* — the master bypasses every `GRANT` in `0007`. That objection is exactly right for probes 4 and 6, which are privilege checks and were run as the constrained roles.
+
+**It does not apply to a trigger.** A `BEFORE UPDATE` trigger fires for every principal including the master, so master is a valid witness. It is also the *only* possible one: no role holds `UPDATE` on `sessions` at all — Batch 2a's probe 3 proved that with a `42501` — so any function credential would be stopped one layer earlier, at the grant, and never reach the trigger being tested.
+
+The distinction is worth keeping: **a grant proof must run as the constrained role; a trigger proof cannot.**
+
+### Not proved, stated so the coverage is not read as complete
+
+The full upload round trip — register, upload 38 parts, finalise, hash, complete — is **mock-only**. It needs a real 633 MB object and a real chunk row, `chunk_metadata`'s foreign key is `ON DELETE RESTRICT`, and A-173 means nothing can remove any of it. The seam, the ordering, the checksum comparison and both refusal paths are covered by 50 mocked tests and by nothing else.
+
+---
+
+### A-193 — Seed inside a transaction and roll back: a teardown-free proof, and a candidate for Gap 8
+
+| | |
+|---|---|
+| **Record** | Gap register item 8; A-173; ADR-049's `db-prover` |
+| **Class** | Technique, demonstrated |
+| **Status** | **Open as a proposal.** Gap 8 is unchanged until someone builds the job |
+| **Date** | 2026-08-19, Mission 7.3 Batch 2b |
+
+A-173 states the blocker precisely: migration `0007` grants `DELETE` to no role, so the BR-08/11/21/22 behavioural proofs *"can seed and assert, and cannot clean up"*, and ADR-049 denies `db-prover` the master credential on correctness grounds. Three shapes were listed — a `vump_ci_proof` role with `DELETE`, rollback-only proofs, a disposable database per run — and rollback-only was set aside as *"complicated by each per-function secret being a separate Data API session, so one transaction cannot span the roles a cross-role proof needs."*
+
+**That objection is real and narrower than it reads.** Mission 7.3 needed rows to fire two triggers, and used the Data API's own transaction control:
+
+```
+BeginTransaction → INSERT the whole FK chain in one CTE statement
+                 → UPDATE, observe the trigger raise
+                 → RollbackTransaction
+```
+
+Both trigger proofs ran this way and **nothing persisted**. There was no teardown because there was nothing to tear down.
+
+### What it does and does not unblock
+
+It works for any proof whose assertions live **inside one session**: a trigger, a constraint, a `SECURITY DEFINER` function's own logic. That covers BR-21 and BR-22 directly, which are two of the four proofs Gap 8 is waiting on.
+
+A-173's objection still stands for the rest. A proof of the form *"role X cannot do Y to a row role Z created"* needs two credentials and therefore two sessions, and a transaction cannot span them. **BR-08 and BR-11 are that shape**, so this closes part of Gap 8 rather than all of it.
+
+Worth noting alongside A-187's observation that **negative permission probes need no teardown either**, because they write nothing. Between them, the two techniques cover a useful proportion of what Gap 8 wants without answering the `DELETE` question at all:
+
+| Proof shape | Technique | Teardown needed |
+|---|---|---|
+| "role X may not do Y" | Negative probe (A-187) | None — nothing is written |
+| "the trigger/constraint refuses this" | Seed-and-rollback (here) | None — nothing is committed |
+| "role X cannot touch role Z's row" | Neither | **Still blocked** — A-173 |
+
+Recorded as a proposal rather than a closure. **Gap 8 remains open**, and its status is unchanged: the credential exists, the proofs are not a CI job. What has changed is that two of the three shapes it needs now have a demonstrated method.
