@@ -177,4 +177,33 @@ void main() {
       expect(text, isNot(contains('abc')));
     });
   });
+
+  group('taskId — F17 and B3', () {
+    test('defaults to null, because most stored sessions have none', () {
+      // Every session recorded before Mission 7.4 step 5, and any started
+      // without a Task selected. SessionRegistrar turns that null into a
+      // TERMINAL device-side failure rather than retrying it — nothing about
+      // the stored row will change.
+      expect(
+        chunk(id: 'chk_1', session: 's1', seq: 0, startedAt: earlier).taskId,
+        isNull,
+      );
+    });
+
+    test('is carried when the session has one', () {
+      expect(
+        UploadableChunk(
+          chunkId: 'chk_1',
+          sessionId: 's1',
+          taskId: 'tsk-1',
+          sequenceIndex: 0,
+          sessionStartedAt: earlier,
+          localFilePath: '/docs/a.mp4',
+          fileSizeBytes: 1,
+          checksumSha256: 'abc',
+        ).taskId,
+        'tsk-1',
+      );
+    });
+  });
 }
