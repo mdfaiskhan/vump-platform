@@ -6993,3 +6993,42 @@ The fix touched one file and no test — the import that resolves the surviving 
 The reason this is an entry rather than a comment edit is the failure it avoids: a removal condition that is met in substance but not in letter reads, on a later audit, as **unmet**. Mission 7.3's closing gate spent real effort on exactly that shape — a claim in a record that the code did not match. Three doc comments now say what actually happened, and this entry says why they differ from what they used to say.
 
 One divergence is now labelled rather than left implicit: `FakeProjectTaskRepository.fetchTasks` answers an unknown Project with an **empty list**, and the real repository raises A-186's `RESOURCE_NOT_FOUND`. The fake keeps the old answer so the screen tests that predate the real repository still describe what they were written to describe, and the 404 path is covered against the controllable double instead.
+
+---
+
+### A-205 — Two reports called the APK build green, reading a file no build had produced
+
+| | |
+|---|---|
+| **Record** | Mission 7.4 step 3 and step 4 reports; the `flutter build apk --debug` line in both |
+| **Said** | *"Kotlin compiles — `assembleDebug` built the APK"*, and *"`assembleDebug` builds"* |
+| **Was** | The command **fails**. Gradle builds all three flavours and the tool then looks for `app-debug.apk`, which no flavour produces |
+| **Why it looked green** | A stale `app-debug.apk` from before ADR-047 was sitting in `build/app/outputs/flutter-apk/`, and the tool found it |
+| **Class** | Verification defect — a check that could not fail |
+| **Status** | **Closed.** The command is `flutter build apk --debug --flavor dev` |
+| **Date** | 2026-08-19, Mission 7.4 step 4 verification |
+
+ADR-047 made Gradle product flavours the environment selector — *"One flag. It selects four things that must agree, and they cannot be selected separately"* — so there is no unflavoured debug variant. `flutter build apk --debug` therefore runs `assembleDebug`, which produces `app-dev-debug.apk`, `app-prod-debug.apk` and `app-staging-debug.apk`, and then fails to locate the single artefact it expected.
+
+```
+Running Gradle task 'assembleDebug'...                             27.6s
+Gradle build failed to produce an .apk file.
+```
+
+Against the corrected command it succeeds in 11.1 seconds from an emptied output directory, exit code 0.
+
+### What was actually true, and what was not
+
+**The compilation was genuinely succeeding.** Both earlier runs produced real flavour APKs, and the thing those runs were cited for — that the new Kotlin in `DeviceModelChannel.kt` compiles — was true. The Dart and Kotlin compile is shared across flavours, so nothing built on that conclusion is wrong.
+
+**The evidence for it was not.** The line quoted in both reports, `√ Built build\app\outputs\flutter-apk\app-debug.apk`, named a file dated before ADR-047. A stale artefact reported as the product of the run is not weaker evidence than a fresh one; it is evidence of nothing, because it would have appeared identically had the build produced no output at all.
+
+### How it was found, which is the transferable part
+
+By **emptying the output directory before re-running**. Nothing else changed — same command, same tree, same toolchain. The check had been passing for two steps and would have kept passing for as long as that file survived, including through a build that had started failing for an unrelated reason.
+
+This is A-195's shape in the build medium. There the IAM boundary was reviewed carefully and the handler was not, and *"reviewing one half thoroughly reads as diligence while proving nothing about the other"*. Here the command was run carefully and its **output directory** was not — and a verification whose success does not depend on the run is the same defect as a control that does not exist.
+
+### The rule this leaves
+
+**A build check must start from an absent artefact.** Otherwise its green is a claim about the filesystem rather than about the build. The same question is worth asking of every check whose evidence is a file rather than an exit code — and the corrected invocation is now stated in the step reports and carried into Mission 7.4's device checkpoint, where the APK actually has to install.
