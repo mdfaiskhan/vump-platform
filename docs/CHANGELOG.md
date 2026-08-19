@@ -40,6 +40,30 @@ Mission 4.8's security review found it, by reading `git log` against this file r
 
 ### Added
 
+- **2026-08-20** — **A chunk was recorded, uploaded and verified end to end for the first time.** CPH2707 → S3 → Aurora: session registered, chunk registered, three parts transferred, metadata accepted, status completed. Confirmed in the database rather than in a log — `sessions.status = complete`, `chunks.status = complete`, and `chunk_metadata.verified_at` populated, which means `chunks-verify` recomputed the hash, matched it, and both `complete_chunk()` and `complete_session()` ran. **Before tonight no chunk had ever reached `uploading` on a device, and no metadata POST had ever succeeded by any client in any environment.** A-213.
+
+  **The 38-part case is not proven.** Tonight's chunk was short — three parts. Part count, presigned-URL expiry across a long transfer, the foreground service with the screen off, and `chunks-verify` hashing a 633 MB object inside its timeout are all still untouched.
+
+  Three checklist items were deferred by decision once the core proof was in hand: `deviceId` persistence across relaunch and reinstall, a second page via a small `?limit=`, and a real 404. So **`nextCursor` has still never been produced and consumed by anything real** — A-199 is code-complete and device-unconfirmed.
+
+- **2026-08-20** — **The upload pipeline is wired end to end for the first time.** `SessionRegistrarImpl` registers a recording session against Chapter 4.6 §4's `POST /v1/tasks/{id}/sessions`, closing the seam that has thrown since Mission 4.2 and that is the reason **no chunk has ever reached `uploading` on a device**. The Task now travels from C-06 through the session row to the upload queue, so `project_id` and `task_id` carry real values for the first time and A-068's Guard 1 stops refusing every chunk. ADR-051, A-209. Mission 7.4 step 5.
+
+  **Nothing here has run against the deployed backend.** Every request shape is proven against a scripted adapter, which is a claim about a payload and not about a round trip. The device checkpoint is what turns it into one.
+
+- **2026-08-19** — **The mobile app reads and writes the real backend for Projects and Tasks.** `ProjectTaskRepositoryImpl` and `ProjectTaskAdminRepositoryImpl` call Volume 4 Chapter 4.6 §3's seven routes, and `main.dart` binds them in place of the two fakes it has bound since Mission 5.1.1. **Volume 11 Chapter 11.1's M8 gate — *"no fake/mock repository remains wired into a release build"* — is met.** The fake classes survive as test doubles only; seven test files drive screens through them, and their removal conditions are rewritten to say what actually happened rather than being left to read later as unmet. A-204. Mission 7.4 step 4.
+
+- **2026-08-19** — **Cursor pagination reaches the client, closing A-184.** `GET /v1/projects` and `GET /v1/projects/{id}/tasks` have returned at most one page plus a `meta.nextCursor` since Mission 7.3, and the client discarded `meta` entirely — an org with 51 Projects rendered 50, with nothing on either side reporting the truncation. Four screens now offer the next page, and the repositories return a `PagedResult` that can say *"and there is more"*. ADR-051, A-199.
+
+  **`VumpApi` could not have read a list at all**, which A-184 did not know: a list route's `data` is a JSON array and `_unwrap` required an object, so the first call would have been refused rather than truncated. `getList` is new and `get`/`post`/`patch` are untouched, because those three have callers already exercised against the real backend.
+
+  **The cursor stops at the notifier.** Repositories return a page; the notifiers hold `nextCursor` privately and still publish a plain `List`, so none of the seven consumers of `projectsProvider` and `tasksProvider` changed type.
+
+- **2026-08-19** — **"Load more" is an explicit control rather than infinite scroll**, and a failed page becomes a retry on that row rather than an error over the whole list. Appending must not blank a list of 200 while the 201st arrives, and must not discard rows a Collector is reading because *more* of them could not be fetched.
+
+- **2026-08-19** — **Chunks now carry a real Collector, device id and device model.** Three of `ChunkMetadata`'s identity fields have returned `MetadataIdentity.unsourced` since Mission 3.8, because there was no backend to send them to and no decision about what to send. All three are now supplied by the composition root: `collector_id` from the auth notifier (watched, not read — a read would freeze the unauthenticated state that holds while `_restoreSession` runs, and every chunk of the session would carry a blank Collector), `device_id` from a new install-scoped store, `device_model` from a new platform channel. ADR-050. Mission 7.4 step 3.
+
+  **`project_id` and `task_id` are still unsourced**, so A-068's Guard 1 still refuses every chunk and nothing uploads end to end yet. They come from the selected Task, and the repository that supplies one is step 4.
+
 - **2026-08-19** — **All thirteen stubbed API routes are implemented.** Projects, Tasks and assignments; session registration and listing; chunk registration, status, and metadata read/write. Every `NOT_IMPLEMENTED` refusal is gone, so all fifteen of Volume 4 Chapter 4.6's endpoints now have real behaviour. Mission 7.3.
 
   **Migration 0010 is what made eight of them possible.** Migration 0007 was written against Chapter 4.6's *route list* and not Chapter 4.8 §3's *scope filters* — and a scope filter is a join, which needs `SELECT` on every table in it. BR-19's *"Collector: only Projects with an assigned Task"* was not merely unimplemented but unimplementable, and A-119 had recorded the scope difference as *"real and untestable until Mission 7"* without knowing that. Chapter 5.14 §1's deterministic S3 key was in the same state: three of its five components were unreachable by the role Chapter 4.10 §2 assigns to compute it.
@@ -189,6 +213,10 @@ Mission 4.8's security review found it, by reading `git log` against this file r
 
 ### Security
 
+- **2026-08-19** — **The device identifier is install-scoped and self-minted, and `ANDROID_ID` was rejected.** A v4 UUID generated on first launch and persisted, rather than the OS identifier the platform offers. Two grounds: `ANDROID_ID` resets on factory reset, so it does not provide the stability Volume 5 Chapter 5.7 §2 asks for, and it is an OS-scoped identifier that outlives the app, carrying correlation surface this project has no use for. The app needs to answer one question — *"did these chunks come from the same install?"* — and a self-minted UUID answers exactly that and nothing else.
+
+  **It is stored in `shared_preferences`, not the Keychain**, and that is deliberate rather than an oversight. ADR-008 scopes `flutter_secure_storage` to secrets; a device id travels in plaintext metadata to an unencrypted column, so secure storage would imply a confidentiality property the value does not have anywhere else in its life. The stated cost: a reinstall mints a new id. Nothing treats `device_id` as a key. ADR-050, A-196. Mission 7.4 step 3.
+
 - **2026-08-19** — **The Fork 1 seam validated nothing, and three records said it did.** `chunks-verify` gains `lambda:InvokeFunction` on one ARN so it can ask `chunks-upload` to finalise a multipart upload — `CompleteMultipartUpload` needs `s3:PutObject`, and A-143 keeps that away from the role that downloads evidentiary footage. The IAM policy's own comment claimed the invoked function *"validates the chunk before acting"*. **It did not**: the key and upload id went straight from the invoke payload to S3.
 
   A compromised `chunks-verify` could therefore have finalised any in-progress upload in the bucket — and it holds `SELECT` on `chunks`, which is not org-scoped, so it could read every registered key and upload id. Finalising an upload still in flight produces a **short object S3 then treats as complete**, with the upload consumed and the remaining parts nowhere to go: silent evidence loss.
@@ -331,6 +359,24 @@ Mission 4.8's security review found it, by reading `git log` against this file r
 - **2026-08-15** — Per-device wide-angle eligibility is cached in `shared_preferences` — a tier name and two version strings. No secret, no credential, and no identifier of any person or device; ADR-008 governs secrets and this holds none. Mission 3.1, A-057. (`4c7f3d1`)
 
 ### Fixed
+
+- **2026-08-20** — **Every metadata POST would have been refused, for two independent reasons.** `functions/metadata/` resolves a chunk's true identity from a database join and rejects a document that disagrees with it. The client disagreed twice.
+
+  `identity.collector_id` was the **Firebase uid**; the backend joins `sessions.collector_id`, which is `users.id`. `POST /v1/auth/verify` has always returned both and the client read `orgId` and discarded `userId`. A-206.
+
+  `identity.session_id` was the **local** session UUID; the backend joins its own `sessions.id`. That one is not a slip — the document is assembled at chunk finalization, possibly offline, when no backend session exists — so the pipeline now rewrites that one field at the POST, where both ids are in hand, and the stored row keeps the local id every device-side lookup joins on. A-207.
+
+  Both were found by reading the backend's join rather than by running anything, and **neither was visible to any test on either side**: each half was internally consistent, and the metadata POST had no reachable caller because the session registrar threw. One pipeline test had been asserting the document was *"posted unchanged"* — encoding the second defect as intended behaviour, and it would have kept passing all the way to the device.
+
+- **2026-08-20** — **A syntax `flutter analyze` accepts and the code generator cannot parse.** Null-aware collection elements (`{'k': ?value}`) entered `lib/` in Mission 7.4 step 4 and passed a full green verification — analyzer, 1123 tests, five boundary checks — because none of that runs a code generator. `build_runner` bundles its own, older analyzer; meeting one it reports the file as broken and **every** generator refuses to run, against files unrelated to the syntax. The lint that asks for it is now silenced project-wide, the two uses are rewritten, and the rule is invariant **I49** — the only one in the register imposed by a tool rather than a decision, and the only one whose violation is silent until an unrelated action. A-208.
+
+- **2026-08-19** — **The app could have told a Collector they lack access to their own assigned Task.** C-06 Task Detail selects its Task out of the Project's list, because Chapter 4.6 §3 has no `GET /v1/tasks/{id}`, and renders *"This Task isn't available to you"* when it is absent — copy written to mean BR-19. Pagination at the backend's default page size of 50 would have produced that message for the 51st Task in a Project: **a false statement about authorization, not a truncated list.** Fixed by requesting the backend's `MAX_LIMIT` of 200. The residual gap above 200 is A-201, with a revisit trigger rather than a date. Mission 7.4 step 4.
+
+- **2026-08-19** — **A stale link no longer tells a Collector to check their connection.** `FakeProjectTaskRepository` answered an unknown Project with an empty list, so *"couldn't be loaded — check your connection"* covered everything that could go wrong. The real backend answers A-186's uniform `404 RESOURCE_NOT_FOUND` for a Project outside the caller's reach, which is not a connection problem, and pointing a Collector at a network that is working is Chapter 2.9 §2's named-cause rule failing in the direction hardest to notice. C-05, C-06 and A-05 now distinguish the two. The invisible-Project copy claims neither *"not assigned"* nor *"does not exist"*, since BR-19 makes them deliberately indistinguishable.
+
+- **2026-08-19** — **Two live `vumpApiProvider` declarations, now one.** `core/network/` and `features/upload/application/` each declared one, so which `VumpApi` a file received depended on which it imported. Harmless in effect — the class holds only its client — and that is why it survived two missions with both suites green. Found by needing a third consumer, which under ADR-022 R3 cannot import the `features/upload/` one at all. A-203.
+
+- **2026-08-19** — **C-03's "Active projects" tile is removed.** It counted `projectsProvider`, which after pagination holds the pages loaded rather than every Project, so the number silently became *"active projects on page one"*. There is no total in Chapter 4.6 §1's envelope and walking every page to render one tile is unbounded, so the tile is dropped on the precedent this screen already set for two other FR-PT-01 aggregates: an absent tile beats a false number. **FR-PT-01 is now one-quarter rendered**, which is a product gap recorded as open item 111 rather than made to look smaller. A-200.
 
 - **2026-08-19** — **Nine applied migrations could never be re-run.** The runner hashes the bytes on disk, and `core.autocrlf` had materialised CRLF after 0001–0009 were applied from LF files — invalidating every stored checksum at once, without changing a character of SQL. `git diff` could never show it, because git compares normalised content. A `.gitattributes` entry pins `*.sql` to LF. Mission 7.3.
 

@@ -1,3 +1,4 @@
+import 'package:mobile/features/projects_tasks/domain/entities/paged_result.dart';
 import 'package:mobile/features/projects_tasks/domain/entities/project.dart';
 import 'package:mobile/features/projects_tasks/domain/entities/task.dart';
 
@@ -71,8 +72,25 @@ abstract interface class ProjectTaskRepository {
   /// which is why this feature needs nothing at all from `features/auth/`.
   ///
   /// Returns them in the order the backend supplied. No chapter specifies a
-  /// sort, so none is imposed.
-  Future<List<Project>> fetchProjects();
+  /// sort, so none is imposed — but a cursor needs a **total** order, so the
+  /// backend sorts `(created_at DESC, id DESC)` and A-183 records that the
+  /// cursor forced the choice rather than a preference for it.
+  ///
+  /// ## It returns a `PagedResult`, not a list — A-184's fix
+  ///
+  /// `GET /v1/projects` has answered at most `DEFAULT_LIMIT` rows with a
+  /// `meta.nextCursor` since Mission 7.3, and the client discarded `meta`
+  /// entirely. An org with 51 Projects rendered 50, *"with no error, no empty
+  /// state and nothing on either side reporting a truncation"*. A port that
+  /// cannot say *"and there is more"* cannot fix that, whatever the caller
+  /// does.
+  ///
+  /// [cursor] is the opaque value a previous page carried, or null for the
+  /// first page. [limit] is Chapter 4.6 §1's `?limit=`, bounded by the
+  /// backend's `MAX_LIMIT` of 200 — an out-of-range value is **rejected rather
+  /// than clamped**, so asking for more than 200 is a failed request, not a
+  /// silently smaller page.
+  Future<PagedResult<Project>> fetchProjects({String? cursor, int? limit});
 
   /// The Tasks inside [projectId] — `GET /v1/projects/{id}/tasks`.
   ///
@@ -80,5 +98,19 @@ abstract interface class ProjectTaskRepository {
   /// verbatim"*. Scoped by the same token context as [fetchProjects], so a
   /// Collector asking for an unassigned Project's Tasks is refused by the
   /// backend rather than filtered here.
-  Future<List<Task>> fetchTasks(String projectId);
+  ///
+  /// **That refusal is a 404, and it is thrown.** A-186 makes a Project outside
+  /// the caller's reach *absent* rather than *forbidden* — `RESOURCE_NOT_FOUND`
+  /// uniformly, because a 403 would confirm the id exists and answer the
+  /// question a guessed id is asking. So an invisible Project raises a
+  /// `NetworkException` carrying `RESOURCE_NOT_FOUND`; it does **not** come
+  /// back as an empty list. A Project with no Tasks is the empty list, and the
+  /// two answers must stay distinguishable — C-05 renders them differently.
+  ///
+  /// Paged on the same terms as [fetchProjects].
+  Future<PagedResult<Task>> fetchTasks(
+    String projectId, {
+    String? cursor,
+    int? limit,
+  });
 }

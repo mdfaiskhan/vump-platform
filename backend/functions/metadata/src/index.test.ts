@@ -113,6 +113,14 @@ function body(response: { body: string }): Record<string, unknown> {
   return JSON.parse(response.body) as Record<string, unknown>;
 }
 
+/** Every parameter of one statement, by name, with its type hint. */
+function paramsOf(index: number): Record<string, unknown> {
+  const list = rds.commandCalls(ExecuteStatementCommand)[index]?.args[0].input.parameters ?? [];
+  return Object.fromEntries(
+    list.map((p) => [p.name ?? '', { value: p.value, typeHint: p.typeHint }]),
+  );
+}
+
 function statements(): string[] {
   return rds
     .commandCalls(ExecuteStatementCommand)
@@ -187,6 +195,116 @@ describe('POST — valibot validates Chapter 4.5 §2s shape', () => {
     );
 
     expect(response.statusCode).toBe(201);
+  });
+
+  it('binds numeric columns with a DECIMAL type hint — A-212', async () => {
+    // The assertion that would have caught the SECOND real-device failure of
+    // the night. Without the hint the Data API sends a bare stringValue,
+    // Postgres infers `text`, and the insert fails with SQLState 42804:
+    // `column "zoom_factor" is of type numeric but expression is of type text`.
+    //
+    // Every other non-text parameter in this project already carries a hint —
+    // uuidParam sends 'UUID', jsonParam sends 'JSON'. These two omitted it,
+    // and no mocked test noticed, because a mock asserts what was SENT and
+    // never what Postgres would ACCEPT. This asserts the one property of the
+    // send that determines whether it is accepted.
+    rds.on(ExecuteStatementCommand).resolvesOnce(identityRow()).resolves({ records: [] });
+
+    await handler(
+      event('POST', {
+        body: {
+          ...document,
+          capture_conditions: {
+            gps: { lat: 19.07, lng: 72.87 },
+            battery_pct: 51,
+            network_type: 'wifi',
+          },
+        },
+      }),
+    );
+
+    // The INSERT is the second statement; the first resolves the identity.
+    expect(paramsOf(1).zoom).toEqual({
+      value: { stringValue: '0.6' },
+      typeHint: 'DECIMAL',
+    });
+    expect(paramsOf(1).gpsLat).toEqual({
+      value: { stringValue: '19.07' },
+      typeHint: 'DECIMAL',
+    });
+    expect(paramsOf(1).gpsLng).toEqual({
+      value: { stringValue: '72.87' },
+      typeHint: 'DECIMAL',
+    });
+  });
+
+  it('accepts the shape a real device sends with no fix — A-211', async () => {
+    // The blocker the first real upload found. The client sends the `gps`
+    // object ALWAYS PRESENT with null members, deliberately: omitting it
+    // "would make 'no fix' and 'field not implemented' the same wire value".
+    // This schema required both-or-neither and rejected it, so every metadata
+    // POST from a device without a fix was refused — indoors, or with location
+    // services off, which is an ordinary case rather than an edge one.
+    rds.on(ExecuteStatementCommand).resolvesOnce(identityRow()).resolves({ records: [] });
+
+    const response = await handler(
+      event('POST', {
+        body: {
+          ...document,
+          capture_conditions: {
+            gps: { lat: null, lng: null },
+            battery_pct: 51,
+            network_type: 'wifi',
+          },
+        },
+      }),
+    );
+
+    expect(response.statusCode).toBe(201);
+  });
+
+  it('accepts a half fix, because the two columns are independent', async () => {
+    // `chunk_metadata.gps_lat` and `gps_lng` are two separately nullable
+    // columns. A schema requiring both-or-neither is NARROWER than the table
+    // it writes to — it would reject a row the storage model permits, which is
+    // the shape of the original defect rather than a hypothetical.
+    rds.on(ExecuteStatementCommand).resolvesOnce(identityRow()).resolves({ records: [] });
+
+    const response = await handler(
+      event('POST', {
+        body: {
+          ...document,
+          capture_conditions: {
+            gps: { lat: 19.07, lng: null },
+            battery_pct: null,
+            network_type: null,
+          },
+        },
+      }),
+    );
+
+    expect(response.statusCode).toBe(201);
+  });
+
+  it('still rejects an out-of-range coordinate that IS present', async () => {
+    // Widening nullability must not widen the range check. A latitude of 200
+    // is a defect whether or not the longitude is absent.
+    rds.on(ExecuteStatementCommand).resolvesOnce(identityRow()).resolves({ records: [] });
+
+    const response = await handler(
+      event('POST', {
+        body: {
+          ...document,
+          capture_conditions: {
+            gps: { lat: 200, lng: null },
+            battery_pct: null,
+            network_type: null,
+          },
+        },
+      }),
+    );
+
+    expect(response.statusCode).toBe(400);
   });
 });
 

@@ -27,23 +27,28 @@ const LocalSessionSchema = CollectionSchema(
       name: r'notes',
       type: IsarType.string,
     ),
-    r'sessionId': PropertySchema(
+    r'projectId': PropertySchema(
       id: 2,
+      name: r'projectId',
+      type: IsarType.string,
+    ),
+    r'sessionId': PropertySchema(
+      id: 3,
       name: r'sessionId',
       type: IsarType.string,
     ),
     r'startedAt': PropertySchema(
-      id: 3,
+      id: 4,
       name: r'startedAt',
       type: IsarType.dateTime,
     ),
     r'status': PropertySchema(
-      id: 4,
+      id: 5,
       name: r'status',
       type: IsarType.string,
     ),
     r'taskId': PropertySchema(
-      id: 5,
+      id: 6,
       name: r'taskId',
       type: IsarType.string,
     )
@@ -94,6 +99,12 @@ int _localSessionEstimateSize(
       bytesCount += 3 + value.length * 3;
     }
   }
+  {
+    final value = object.projectId;
+    if (value != null) {
+      bytesCount += 3 + value.length * 3;
+    }
+  }
   bytesCount += 3 + object.sessionId.length * 3;
   bytesCount += 3 + object.status.length * 3;
   {
@@ -113,10 +124,11 @@ void _localSessionSerialize(
 ) {
   writer.writeString(offsets[0], object.collectorId);
   writer.writeString(offsets[1], object.notes);
-  writer.writeString(offsets[2], object.sessionId);
-  writer.writeDateTime(offsets[3], object.startedAt);
-  writer.writeString(offsets[4], object.status);
-  writer.writeString(offsets[5], object.taskId);
+  writer.writeString(offsets[2], object.projectId);
+  writer.writeString(offsets[3], object.sessionId);
+  writer.writeDateTime(offsets[4], object.startedAt);
+  writer.writeString(offsets[5], object.status);
+  writer.writeString(offsets[6], object.taskId);
 }
 
 LocalSession _localSessionDeserialize(
@@ -129,10 +141,11 @@ LocalSession _localSessionDeserialize(
   object.collectorId = reader.readStringOrNull(offsets[0]);
   object.id = id;
   object.notes = reader.readStringOrNull(offsets[1]);
-  object.sessionId = reader.readString(offsets[2]);
-  object.startedAt = reader.readDateTime(offsets[3]);
-  object.status = reader.readString(offsets[4]);
-  object.taskId = reader.readStringOrNull(offsets[5]);
+  object.projectId = reader.readStringOrNull(offsets[2]);
+  object.sessionId = reader.readString(offsets[3]);
+  object.startedAt = reader.readDateTime(offsets[4]);
+  object.status = reader.readString(offsets[5]);
+  object.taskId = reader.readStringOrNull(offsets[6]);
   return object;
 }
 
@@ -148,12 +161,14 @@ P _localSessionDeserializeProp<P>(
     case 1:
       return (reader.readStringOrNull(offset)) as P;
     case 2:
-      return (reader.readString(offset)) as P;
+      return (reader.readStringOrNull(offset)) as P;
     case 3:
-      return (reader.readDateTime(offset)) as P;
-    case 4:
       return (reader.readString(offset)) as P;
+    case 4:
+      return (reader.readDateTime(offset)) as P;
     case 5:
+      return (reader.readString(offset)) as P;
+    case 6:
       return (reader.readStringOrNull(offset)) as P;
     default:
       throw IsarError('Unknown property with id $propertyId');
@@ -714,6 +729,160 @@ extension LocalSessionQueryFilter
   }
 
   QueryBuilder<LocalSession, LocalSession, QAfterFilterCondition>
+      projectIdIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNull(
+        property: r'projectId',
+      ));
+    });
+  }
+
+  QueryBuilder<LocalSession, LocalSession, QAfterFilterCondition>
+      projectIdIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNotNull(
+        property: r'projectId',
+      ));
+    });
+  }
+
+  QueryBuilder<LocalSession, LocalSession, QAfterFilterCondition>
+      projectIdEqualTo(
+    String? value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'projectId',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<LocalSession, LocalSession, QAfterFilterCondition>
+      projectIdGreaterThan(
+    String? value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'projectId',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<LocalSession, LocalSession, QAfterFilterCondition>
+      projectIdLessThan(
+    String? value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'projectId',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<LocalSession, LocalSession, QAfterFilterCondition>
+      projectIdBetween(
+    String? lower,
+    String? upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'projectId',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<LocalSession, LocalSession, QAfterFilterCondition>
+      projectIdStartsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.startsWith(
+        property: r'projectId',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<LocalSession, LocalSession, QAfterFilterCondition>
+      projectIdEndsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.endsWith(
+        property: r'projectId',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<LocalSession, LocalSession, QAfterFilterCondition>
+      projectIdContains(String value, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.contains(
+        property: r'projectId',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<LocalSession, LocalSession, QAfterFilterCondition>
+      projectIdMatches(String pattern, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.matches(
+        property: r'projectId',
+        wildcard: pattern,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<LocalSession, LocalSession, QAfterFilterCondition>
+      projectIdIsEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'projectId',
+        value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<LocalSession, LocalSession, QAfterFilterCondition>
+      projectIdIsNotEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        property: r'projectId',
+        value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<LocalSession, LocalSession, QAfterFilterCondition>
       sessionIdEqualTo(
     String value, {
     bool caseSensitive = true,
@@ -1227,6 +1396,18 @@ extension LocalSessionQuerySortBy
     });
   }
 
+  QueryBuilder<LocalSession, LocalSession, QAfterSortBy> sortByProjectId() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'projectId', Sort.asc);
+    });
+  }
+
+  QueryBuilder<LocalSession, LocalSession, QAfterSortBy> sortByProjectIdDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'projectId', Sort.desc);
+    });
+  }
+
   QueryBuilder<LocalSession, LocalSession, QAfterSortBy> sortBySessionId() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'sessionId', Sort.asc);
@@ -1315,6 +1496,18 @@ extension LocalSessionQuerySortThenBy
     });
   }
 
+  QueryBuilder<LocalSession, LocalSession, QAfterSortBy> thenByProjectId() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'projectId', Sort.asc);
+    });
+  }
+
+  QueryBuilder<LocalSession, LocalSession, QAfterSortBy> thenByProjectIdDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'projectId', Sort.desc);
+    });
+  }
+
   QueryBuilder<LocalSession, LocalSession, QAfterSortBy> thenBySessionId() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'sessionId', Sort.asc);
@@ -1380,6 +1573,13 @@ extension LocalSessionQueryWhereDistinct
     });
   }
 
+  QueryBuilder<LocalSession, LocalSession, QDistinct> distinctByProjectId(
+      {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'projectId', caseSensitive: caseSensitive);
+    });
+  }
+
   QueryBuilder<LocalSession, LocalSession, QDistinct> distinctBySessionId(
       {bool caseSensitive = true}) {
     return QueryBuilder.apply(this, (query) {
@@ -1425,6 +1625,12 @@ extension LocalSessionQueryProperty
   QueryBuilder<LocalSession, String?, QQueryOperations> notesProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'notes');
+    });
+  }
+
+  QueryBuilder<LocalSession, String?, QQueryOperations> projectIdProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'projectId');
     });
   }
 

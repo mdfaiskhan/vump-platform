@@ -36,6 +36,7 @@ class UploadableChunk implements Comparable<UploadableChunk> {
   const UploadableChunk({
     required this.chunkId,
     required this.sessionId,
+    this.taskId,
     required this.sequenceIndex,
     required this.sessionStartedAt,
     required this.localFilePath,
@@ -56,6 +57,31 @@ class UploadableChunk implements Comparable<UploadableChunk> {
   /// **Not the backend's session id.** Chapter 5.10 §1 step 1's URL needs that
   /// one, and `SessionRegistrar` is what turns this into it.
   final String sessionId;
+
+  /// The Task the session records against — Mission 7.4, F17 and B3.
+  ///
+  /// ## Why it rides on the claim as well as on the queue
+  ///
+  /// F17 put `taskId` on `QueuedChunk`, which is the **watch** view C-11
+  /// renders. `ChunkUploadPipeline` consumes this type, from `claimNext`, and
+  /// `SessionRegistrar` needs the Task to call
+  /// `POST /v1/tasks/{taskId}/sessions`. The field was on the view nobody
+  /// uploads from, so the pipe existed and led nowhere.
+  ///
+  /// Both views read it from the same `LocalSession` row, which is where Task
+  /// context is durable (F38) — so this survives every process death between
+  /// the recording and the upload, which may be days.
+  ///
+  /// ## Nullable, and the null is terminal rather than a defect
+  ///
+  /// Null for every session recorded before Mission 7.4 step 5, and for any
+  /// session started without a Task selected. `SessionRegistrar` throws a
+  /// `ValidationException` on it, which Chapter 5.13 §1 classes as **terminal
+  /// and device-side** — surfaced immediately, never retried, because nothing
+  /// about the stored row will change. Substituting a placeholder is the
+  /// mistake `ChunkRecordMapper` refused: an invented Task id would upload
+  /// real footage against somebody else's work.
+  final String? taskId;
 
   /// Zero-based order within the session — Chapter 4.6 §5's `sequence_index`.
   final int sequenceIndex;

@@ -222,6 +222,7 @@ class _FakeAuthRepository implements AuthRepository {
 
   User get _user => User(
     uid: 'u1',
+    backendUserId: 'backend-u1',
     email: 'c@example.com',
     role: role,
     orgId: 'org-1',

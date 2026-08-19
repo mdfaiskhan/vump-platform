@@ -4674,6 +4674,11 @@ Every carried-forward item, in one place. Accurate as of **Mission 4.3**; origin
 | 97 | **A-08 Metadata Detail / Export is deferred, not traced — `features/metadata/` does not exist as a module** | **Explicitly deferred by Mission 5.2.5's brief rather than left implicitly untouched, because A-08's blocker is architectural rather than a screen-level gap.** Volume 3 Chapter 3.5 §2 assigns A-08 to a **`metadata`** module — *"Metadata Detail/Export (A-08); `MetadataRepository`, the full FR-META-01–07 field model (freezed classes)"* — with the justification that metadata *"has independent integrity rules (BR-21/BR-22) that outlive both the recording and upload processes"*. **That module has never been created.** `lib/features/` holds six: `auth`, `onboarding`, `projects_tasks`, `recording`, `settings`, `upload`.<br><br>**Building it is a real architectural step, not a trace outcome.** A seventh feature module takes the `Architecture boundaries` job's cross-feature sweep from **30 ordered pairs to 42** (item 77 records the 20 → 30 move for the same reason), and Volume 3 Ch. 3.5 §4 places `metadata` in the dependency graph with two readers — *"read by recording (to write metadata) and by upload/admin_shared (to display and export it)"* — so its creation is a module-boundary decision with existing consumers, not a screen build.<br><br>A-08's other blockers are already recorded and neither is subtle: no deployed backend (item 36) and no client path to verification state (item 83, which **does** apply here). **Owed to whichever mission builds the metadata module.** No trace was run and none is needed to know that. | Item 36, item 83, item 77, V3 Ch. 3.5 §2/§4, Ch. 2.5 A-08 |
 | 93 | **A-01 Admin Dashboard is in Chapter 2.5's inventory and no functional requirement governs it** | **Third instance of the surface-with-no-backing family, and the first at SCREEN scale.** FR-ADM-01 through 08 cover create, edit, assign, reassign, view-status, view-metadata, prevent-Collector-writes and visibility. **None is a dashboard.** FR-PT-01 — *"The system shall display a Home Dashboard showing active projects, in-progress sessions, total recorded time, and sync status"* — is the Collector's, and Chapter 1.3 gives it no Admin counterpart. A-01's only descriptions are narrative: Chapter 1.1 §7.3's three-tile sketch, Chapter 1.1 §4.2 step 18's **two-tile** sketch (the PRD disagreeing with itself about this screen's content), Chapter 2.5's row transcribing §7.3, and Chapter 2.2 step 2's navigation duty.<br><br>**The family, now three rows and three scales:** item 88 is `archived_at`, a **column** that is live, rendered and read with no requirement behind it; item 91 is *"Project-level settings"*, a **field group** a screen names with no column behind it; this is a **whole screen** the inventory names with no requirement behind it. Kept separate for the reason item 91 was: different owners, different scales, and different decisions will answer them.<br><br>**Not a blocker.** Mission 5.2.4 built A-01 to Chapter 2.2 step 2's navigation duty and the one sourced tile (A-123); this row records that the screen rests on inventory and narrative rather than on a requirement, so a future scope review knows what it is looking at. | A-123, items 88 and 91, Ch. 2.5 A-01, Ch. 1.1 §7.3/§4.2 |
 | 94 | **`tasks` has no status column, so "outstanding" is underivable — and so is any notion of Task progress or completion** | **Recorded independently of A-01, because any future specification touching Task state hits the same wall.** Volume 4 Chapter 4.4 §3's `tasks` table has **six columns — `id`, `project_id`, `title`, `instructions`, `reference_examples`, `created_at` — and no status of any kind.** `sessions` has a status; `chunks` has a status; **Tasks do not.**<br><br>The immediate consequence is that Chapter 1.1 §7.3 and Chapter 2.5's A-01 both ask for *"outstanding Task counts"* and the word **is never defined** — it appears three times in Volumes 1 and 2 (Ch. 1.1 §7.3, Ch. 2.5's A-01 row, and US-05, which is a *Collector* story using it colloquially). **But undefined is the lesser half.** Even once someone defines it, there is no field to compute it from: *"has no sessions yet"* needs sessions per Task (item 36), *"has no assigned Collector"* needs assignments (items 89, 92), and *"not yet complete"* needs a completion concept Tasks do not have at any layer.<br><br>**Why it is not folded into A-01's record:** a Task-progress indicator on A-03, a "done" filter on C-05, an FR-ADM-05 rollup, or any Phase 3 QA workflow would each hit this identically. Closing it means adding a column and deciding its lifecycle — a schema decision in Chapter 4.4, not a screen's problem. | A-123, item 93, Ch. 4.4 §3, Ch. 1.1 §7.3 |
+| 111 | **FR-PT-01's *"active projects"* count is unanswerable once the Projects list is paginated** | **Third of FR-PT-01's four aggregates to go absent, and the first to go absent because of something this project built rather than something a chapter omitted.** `DashboardSummary.activeProjectCount` counted `projectsProvider`'s Projects, which was a total until Mission 7.4's F20 made that provider hold *the pages loaded so far* — one, until a Collector opens C-04 and presses "Load more".<br><br>**Closing it needs a total, and there is nowhere to get one.** Chapter 4.6 §1's envelope carries `data` and `meta.nextCursor` and no count; walking every page to render one tile is an unbounded number of requests; and "200+" would be a third display convention on a screen that already has exactly one rule for an unanswerable aggregate — omit the tile, per A-110. The tile is therefore dropped on that precedent, leaving **one of FR-PT-01's four things rendered**.<br><br>**It is a product/spec question, not an engineering one:** either the dashboard stops promising a count, or Chapter 4.6 §1 gains a total on list envelopes. The second is a change to a route catalog Mission 7.3 closed and should not be made for a tile alone — but it would also close items 75 and 76's shape if a general aggregate endpoint were ever specified. | A-200, ADR-051, Ch. 4.6 §1, FR-PT-01 |
+| 112 | **Chapter 4.6 §6 defers field types to a generated OpenAPI schema that does not exist, and its absence has now cost three defects in one mission** | **The client and the backend both derive their wire shapes by interpreting the same chapters, separately.** A-206, A-207 and A-211 are each a seam where both halves were internally consistent, thoroughly tested, and correct against their own reading — and disagreed. Unit tests on either side are structurally incapable of catching it: a client test asserts the payload the client builds, a backend test asserts the payload the backend expects, and the two are never the same object.<br><br>**What would close it** is a contract artifact both halves derive from rather than both interpret — Chapter 4.6 §6 names one. Generating types for the mobile client from the same source the Lambdas validate against would make a disagreement a compile error rather than a device-checkpoint discovery. That is a mission, not a patch. | A-206, A-207, A-211, Ch. 4.6 §6 |
+| 113 | **`writeMetadata` reports only the first validation issue, so a document with several problems costs one round trip each** | `const [first] = parsed.issues;` — and `v.safeParse` collects all of them. After A-211's refusal there was no way to tell whether GPS was the only blocker or the first of several, which is exactly the question a device checkpoint needs answered before it retries.<br><br>Cheap to fix — render every issue, or at least the count — and deliberately **not** fixed during Mission 7.4's checkpoint, because changing error rendering under a run in flight is its own risk. | A-211, Ch. 2.9 §2 |
+| 114 | **`numericParam` and `nullableNumeric` are private to `functions/metadata/` while every other parameter helper lives in `packages/shared/src/row.ts`** | `uuidParam`, `jsonParam`, `textParam`, `longParam` and `optionalTextParam` are all in `row.ts`; the two numeric ones are not, and they are the two that omitted the type hint A-212 fixed. `row.ts` is where the next person looks and where a fourth numeric column would go wrong again.<br><br>Not moved during Mission 7.4's device checkpoint — relocating a shared helper under a run in flight is its own risk. | A-212 |
+| 115 | **Four CI corrections are queued from Mission 7.3 and were recorded nowhere until now** | **The batch existed only in conversation**, which is the failure this register exists to prevent — and the second instance of the pattern Mission 7.4 was asked to watch for at its start: *work that is supposed to be carried forward automatically, needing reconstruction from memory instead.* Written down here so the batch is a thing a later mission can pick up rather than remember.<br><br>**1. `pipefail`.** A piped step in `ci.yml` can fail silently because the shell reports only the last command's status.<br>**2. Probe cleanup.** Mission 7.3's throwaway measurement Lambda and its `probe.tf` are still in the tree; they were deliberately temporary and outlived their measurement (F4).<br>**3. `bootstrap-describe-log-groups`.** The narrow grant added to bootstrap `terraform-apply` past its own missing `logs:DescribeLogGroups` permission. It did its job and is now dead surface, along with `boundary.tf`'s withdrawn patch.<br>**4. `types: [opened, synchronize, reopened, edited]`** on the `pull_request` trigger — one line. The **Commit convention** job reads `github.event.pull_request.title` from the **event payload** and never checks out the repo, so re-running a job replays the original payload and re-validates the OLD title. `edited` is absent from the default types, so correcting a title in the UI fires nothing at all, and the only ways out are an empty commit or closing and reopening the PR. Mission 7.4 hit this on PR #1 and pushed empty commit `893b2cd` to work around it.<br><br>**5. A formatting exclusion for `*.g.dart` and `*.freezed.dart`.** `dart format lib/` sweeps generated files; CI's format job already excludes them and its drift job diffs the generator's **raw** output, so formatting them breaks the build by construction. **Three occurrences in one session** — twice caught and reverted, once committed (A-214). Discipline has been tried and has failed three times; the fix is tooling that makes the sweep impossible. Options: a `.gitattributes` marker, a repo-local format wrapper that filters the file list the way `ci.yml` already does, or a pre-commit hook. Whichever is chosen, the CI format job's existing `grep -v` list is the specification.<br><br>**Deliberately not fixed during Mission 7.4**: every one is a CI change, and 7.3's branch was under review while 7.4's checkpoint was mid-flight. They belong together, in one pass, on their own branch. | A-205, A-214, ADR-019, `ci.yml` |
 | 92 | **No endpoint anywhere in Chapter 4.6 returns an organisation's Collectors — a catalog-level omission that four separate specifications assume away** | **Recorded as its own row rather than inside A-06's, because it is not one screen's problem.** Chapter 4.6's complete catalog is **15 routes**, and its only user-facing one is `GET /v1/users/me` — *"Current user's profile + role"*, the caller and nobody else. **Four specifications assume a Collector directory exists and none of them can be satisfied:** FR-ADM-03 (*"assign one or more Collectors"* — an Admin must identify them); UC-07's exception flow (*"If the Admin attempts to assign a Collector who does not have an account or is deactivated, the system blocks the assignment and explains why"* — presupposes the Admin picked from something); Chapter 2.2's Admin flow step 6 (*"Collector(s) **selected** and confirmed"* — selected from what?); and Chapter 2.7's A-06, which lists Collector rows.<br><br>**The gap is total, not merely endpoint-level.** Verified at every layer this project has: Firestore holds one collection, `org_invite_codes`, with `allow read: if false` (*"Nobody reads, ever"*); `functions/src/index.ts` states in its own comment that *"no `orgs` collection exists"* and names the users table as *"Volume 4 Ch. 4.4's"*, behind the unbuilt backend; `features/auth/` yields the caller's own session and nothing else; and **no fake in `lib/` or `test/` holds a user list**. So the only user id this application can obtain is the signed-in Admin's own `uid`, which Chapter 4.4 §4's `role='collector'` annotation makes the wrong one.<br><br>**Closing it needs a route added to Chapter 4.6** — something like `GET /v1/users?role=collector`, org-scoped per BR-20 — and that is a backend/spec decision, not an engineering one. **No stand-in was invented**: seeding a roster into a fake would be inventing a domain concept this project has never modelled rather than standing in for one with a known shape, which is the line between a fake and a fabrication (A-122). | A-122, item 89, FR-ADM-03, UC-07, Ch. 2.2 step 6, Ch. 4.6 §2 |
 | 90 | **Chapter 2.9 contradicts itself about editing a Task: §2 principle 4 requires a confirmation, §4.4 forbids one** | **A PRODUCT/SPEC DECISION FOR FAISAL — a genuine authorial contradiction inside one chapter, not something derivable.** Both sentences name the same action explicitly and state opposite rules.<br><br>**§2, principle 4:** *"Admin actions that affect a Collector are never destructive-by-default. Removing a Collector from a Task, or **editing Task instructions after Collectors are already assigned, always confirms the action and states its effect in plain language before it takes effect**."*<br><br>**§4.4:** *"Reversible actions (reassigning a Collector, **editing Task instructions**) **do not require a confirmation dialog** — they save immediately and can be changed again just as easily."*<br><br>**This is unlike G3.** There the sources disagreed in emphasis and one class of them specified a mechanism, so the resolution was derivable by asking which sources were normative (A-116). Here both sentences are behavioural rules in the same chapter, at the same level of authority, naming the same action — and §2 P4 even supplies the reasoning (*"affect a Collector"*) that §4.4's *"reversible"* framing rejects. **There is no reading that satisfies both.** Mission 5.2.2 therefore held A-05's **edit** half back entirely rather than pick one: `updateTask` exists and works, and shipping either behaviour would encode an answer nobody has given into UI a Collector depends on. Settling it needs one sentence struck or amended, not an implementation judgement. | A-121, Ch. 2.9 §2 P4, Ch. 2.9 §4.4, FR-ADM-02 |
 | 91 | **Chapter 2.5's A-04 names "Project-level settings"; the phrase appears exactly once in all of Volume 2 — in that row** | **Third instance of one shape, and kept as a separate row so the family stays visible.** Ch. 2.5's A-04: *"Name, description, and **Project-level settings**."* Nothing defines them: `projects` has seven columns and none is a setting (Ch. 4.4 §2), `POST /v1/projects` carries no such field, no FR mentions one, and no other chapter uses the phrase. So A-04 renders name and description with **no settings section and no empty placeholder implying one is coming** — the treatment C-06 gave `requirements` (A-110), and a test asserts the absence.<br><br>**The family, three rows and three owners:** item 69 is FR-PT-05/A-05's `requirements` — a **Task** field named by a requirement with no column. This is A-04's **Project-level settings** — a **Project** field group named by a screen with no column. Both are *"a surface names something the schema does not have"*, and they are separate items because they have different owners, different chapters and will be answered by different decisions. Folding them would make one product answer look like it closed both. | A-110, item 69, Ch. 2.5 A-04, Ch. 4.4 §2 |
@@ -6837,3 +6842,582 @@ Three tests cover it: a foreign key, a foreign upload id, and an unknown chunk i
 ### The lesson, which is not "add validation"
 
 The IAM boundary was reviewed carefully and the handler was not. A capability's real extent is the **intersection** of what IAM permits and what the invoked code does with it, and reviewing one half thoroughly reads as diligence while proving nothing about the other. This is Mission 4.9 §4's pattern again — *"reviewed carefully, read correctly, and committed without once being run where it would actually have to work"* — in the security-review medium.
+
+---
+
+### A-196 — Chapter 5.7 §2's device identifier, decided at last
+
+| | |
+|---|---|
+| **Record** | Volume 5, Chapter 5.7 §2 |
+| **Says** | The device identifier is *"cached, stable"* |
+| **Left open** | What it **is**. Mission 3 flagged the gap and bound `MetadataIdentity.unsourced` behind it for four missions |
+| **Now** | A v4 UUID, minted on first access, persisted in `shared_preferences`, scoped to the **install** rather than to the device |
+| **Recorded in** | ADR-050 |
+| **Date** | 2026-08-19, Mission 7.4 step 3 |
+
+The full argument is in ADR-050 and is not repeated here. What belongs in the register is the shape of the gap, because it is a recurring one: **a spec adjective with no referent.** *"Cached, stable"* reads like a requirement and is satisfiable by at least two things that behave very differently under a factory reset, and nothing in Volume 5 chooses between them. Mission 3 was right to leave it open and right to make the absence loud — `unsourced` plus A-068's Guard 1 meant four missions of recording could not silently upload unattributed footage while the question sat unanswered.
+
+The honest cost is recorded rather than buried: **a reinstall mints a new device id.** `ANDROID_ID` would not have avoided that — it resets on factory reset — so the choice was between two identifiers that both break, one of which also carries OS-wide correlation surface.
+
+### A-197 — F23's move was half a move, and that was the point
+
+| | |
+|---|---|
+| **Ruling** | *"Move `RandomUuidGenerator` to `core/`, don't duplicate"* — Mission 7.4 Part 6 |
+| **Done** | The **minting** moved to `core/identity/uuid_v4.dart`. The **class** stayed in `features/recording/data/` as an adapter over it |
+| **Why not the whole class** | `RandomUuidGenerator implements SessionIdGenerator, ChunkIdGenerator` — both `features/recording/domain/` contracts. A `core/` class implementing them would be `core/` → `features/` |
+| **Date** | 2026-08-19, Mission 7.4 step 3 |
+
+ADR-022 R3 is usually cited for the sideways import, and invariant I41 forbids `core/` → `features/` separately, but the two are the same rule in practice: **a shared module may not name the thing that consumes it.** Moving the class wholesale would have satisfied the letter of the ruling and broken the constraint the ruling exists to serve.
+
+So the source is shared — one implementation of RFC 4122 §4.4, which is what *"don't duplicate"* asks for — and the ports stay where their callers are. Both `ChunkIdGenerator` and `SessionIdGenerator` still resolve to the same instance at the composition root, so the property the ruling was protecting is intact.
+
+Recorded because the ruling and the implementation do not look identical on inspection, and a reader finding the class still in `features/` should find the reason here rather than concluding the ruling was ignored.
+
+### A-198 — `core/identity/` takes the fifth `shared_preferences` grant
+
+| | |
+|---|---|
+| **Record** | `.github/workflows/ci.yml`, the `Architecture boundaries` job |
+| **Was** | Four owners: `features/recording/data/`, `main.dart`, `main_cleanup_probe.dart`, and one named onboarding file |
+| **Now** | Plus `lib/core/identity/device_id_store.dart` |
+| **Date** | 2026-08-19, Mission 7.4 step 3 |
+
+Granted per-**file**, not per-directory, on the precedent A-067 set and ADR-039 states: *"the file that may import [the package] announces it in its own filename … greppable and self-declaring instead of a directory anyone can drop a file into."* `core/identity/` also holds a platform channel and two contracts, none of which has any business reaching a key-value store, so a directory grant would have handed the permission to three files that must not have it and to every file added there afterwards.
+
+`core/` owning a confined plugin is not itself new — `core/storage/` owns `flutter_secure_storage`, `core/network/` owns `dio`, `core/database/` owns `isar`. What is new is that this package now has an owner **above** the feature layer, which follows from ADR-022 R3: a device id is needed by two features and belongs to neither.
+
+**The rule was verified non-vacuous before this entry was written.** The violation was found by running the check locally *after* the code was written and passing analysis and tests — the import was already in place, the suite was green, and only the boundary job caught it. That is the job doing exactly what Mission 4.3's open item 41 asked of it.
+
+---
+
+### A-199 — A-184 is closed, and the fix reached further than the port
+
+| | |
+|---|---|
+| **Was** | A-184: `fetchProjects()` and `fetchTasks(id)` returned `List`, discarded `meta`, and *"saw page one and stopped"* |
+| **Now** | Both return a `PagedResult` carrying `nextCursor`; the notifiers thread it; four screens offer the next page |
+| **Status** | **Closed** |
+| **Date** | 2026-08-19, Mission 7.4 step 4 |
+
+Recorded because the fix was **not** confined to the two methods A-184 named, and a reader tracing it from that entry alone would miss half of it.
+
+**`VumpApi` could not read a list endpoint at all.** A list route's `data` is a JSON array, `_unwrap` required an object, and it raised `NETWORK_SERIALIZATION` on anything else. That was correct for what `get` promises, and it meant `GET /v1/projects` would have failed on its first call — not truncated, *refused*. So A-184's *"the client discards `meta`"* was the visible half of a client that could not have consumed the rows either.
+
+`getList` is separate from `get` rather than a widening of it, because `get`, `post` and `patch` have three callers between them that have been exercised against the real backend, and giving them a `meta` field none of them has would edit a verified request path for nothing.
+
+**The cursor stops at the notifier.** F25: the repository returns a page, the notifier keeps `nextCursor` privately, and the published state is still `List<Project>`. Seven consumers, no type change. Pagination is a property of the read, not of what a screen renders.
+
+### A-200 — FR-PT-01's third aggregate goes absent, for the reason the other two did
+
+| | |
+|---|---|
+| **Volume** | 1, FR-PT-01 — *"active projects, in-progress sessions, total recorded time, and sync status"* |
+| **Was** | Two of four absent: *in-progress sessions* and *total recorded time* |
+| **Now** | *Active projects* joins them. Only *sync status* survives |
+| **Cause** | F20's pagination, not a new discovery about the data |
+| **Status** | Open item 111 |
+| **Date** | 2026-08-19, Mission 7.4 step 4 |
+
+`DashboardSummary.activeProjectCount` counted `projectsProvider`'s Projects. That was a total while the provider held every Project; after F20 it holds **however many pages have been loaded**, which is one until a Collector scrolls C-04 and presses "Load more". The tile did not become wrong so much as it stopped being about what its label says.
+
+**There is no cheap honest fix, and each rejected option is rejected for its own reason:**
+
+- *Count what is loaded and label it differently.* There is no honest label. "Projects on the pages you have loaded" is not a dashboard statistic.
+- *Walk every page to count them.* An unbounded number of requests to render one tile, on a screen whose other numbers are local.
+- *Render "200+".* This screen already has exactly one rule for an aggregate it cannot answer — omit the tile — and A-110's argument is that an absent tile beats a false one. A third convention would make the two existing absences look like oversights rather than decisions.
+- *Add a total to the envelope.* Chapter 4.6 §1 has no `total`, and adding one is a backend change to a catalog Mission 7.3 closed, for a tile.
+
+So the tile is dropped on the precedent the same screen already set. The honest summary is that **FR-PT-01 is now one-quarter rendered**, and that is a product gap rather than an implementation one — recorded rather than made to look smaller.
+
+### A-201 — Three screens select a row out of a page, and 200 is a bound not a fix
+
+| | |
+|---|---|
+| **Record** | C-06 Task Detail; C-05 and A-05 Project Detail |
+| **Shape** | Each selects one row **out of a list**, because Chapter 4.6 §3 has no `GET /v1/tasks/{id}` and no `GET /v1/projects/{id}` |
+| **Was about to be** | At `DEFAULT_LIMIT` = 50, the 51st Task in a Project renders *"This Task isn't available to you"* |
+| **Now** | Page size raised to `MAX_LIMIT` = 200 |
+| **Residual** | The 201st Task reproduces it exactly |
+| **Status** | **Open**, with a revisit trigger |
+| **Date** | 2026-08-19, Mission 7.4 step 4 |
+
+The failure is worth naming precisely, because it is not a truncated list. That copy was written to mean BR-19 — *"not assigned to you"*, deliberately indistinguishable from *"does not exist"* — so pagination would make the app **state an authorization fact that is false**. A Collector would be told they lack access to their own assigned Task.
+
+200 is the backend's own ceiling: `parsePageRequest` **rejects** an out-of-range `limit` rather than clamping it, so this cannot be raised further without changing `MAX_LIMIT`, and `MAX_LIMIT` was chosen against ADR-044's 1 MiB response ceiling.
+
+**Revisit trigger, stated so it is not a standing invitation:** a real `GET /v1/tasks/{id}` route, *if and when a mission actually approaches one*. Chapter 4.6's catalog was closed by Mission 7.3, and opening it now for a case no real org is near would be scope creep into finished territory. What makes this recordable rather than deferred-and-forgotten is that the trigger is a route, not a date.
+
+### A-202 — `MAX_LIMIT` times a maximal row exceeds ADR-044's ceiling, and already did
+
+| | |
+|---|---|
+| **Record** | `pagination.ts`'s `MAX_LIMIT = 200`, justified as *"a generous row is on the order of a few kilobytes, so 200 leaves roughly an order of magnitude of headroom"* |
+| **Holds for** | `projects` — seven short columns |
+| **Does not hold for** | `tasks` — the backend accepts `instructions` up to **20,000 characters** |
+| **Status** | Open, raised not created by A-201 |
+| **Date** | 2026-08-19, Mission 7.4 step 4 |
+
+200 maximal Task rows is roughly 4 MiB against ADR-044's 1 MiB ceiling. The arithmetic that matters, though, is that **50 maximal rows is already about 1 MiB** — the exposure exists at `DEFAULT_LIMIT` and predates this mission. A-201 makes it four times more reachable; it did not introduce it.
+
+Two things keep it recordable rather than blocking. It **fails loudly** — the Data API terminates the call and the client sees a refused read, not a silently short list. And it needs a Task with instructions near the schema cap, a length no real Task has been observed to approach, because the cap was set as a bound rather than measured.
+
+What would settle it is the measurement `pagination.ts` itself defers — *"the measurement belongs to Mission 6.3, when real rows exist"* — and real rows still do not exist. Recorded so that the first org with long instructions is a known case rather than a mystery.
+
+### A-203 — Two `vumpApiProvider` declarations, and the third consumer is what found it
+
+| | |
+|---|---|
+| **Was** | `core/network/providers/dio_provider.dart` and `features/upload/application/chunk_upload_pipeline.dart` each declared `final Provider<VumpApi> vumpApiProvider` |
+| **Effect** | Two `VumpApi` instances over one shared `DioClient`; which one a file got depended on which it imported |
+| **Status** | **Closed.** The `features/upload/` one is deleted |
+| **Date** | 2026-08-19, Mission 7.4 step 4 |
+
+Harmless in effect — `VumpApi` holds only its client and no state — and that is exactly why it survived two missions. Both providers worked, both suites were green, and nothing distinguished them at a call site.
+
+**It was found by needing a third consumer.** `features/projects_tasks/data/` cannot import the `features/upload/` one at all under ADR-022 R3, so the duplicate would have presented as *"the provider I need is unreachable"* rather than as *"there are two"*. A reader who resolved that by declaring a third in `features/projects_tasks/` would have been following the local precedent exactly.
+
+The fix touched one file and no test — the import that resolves the surviving provider was already present, so deleting the declaration was sufficient, and the upload suite passed unmodified at 184 tests. Recorded because *"the duplicate that does not matter yet"* is a shape worth recognising: the cost is not the second instance, it is that the second declaration is a template.
+
+### A-204 — M8's gate is met, and the fakes outlive the condition that named them
+
+| | |
+|---|---|
+| **Gate** | Volume 11, Ch. 11.1 M8 — *"Every repository reads/writes the real backend — no fake/mock repository remains wired into a release build"* |
+| **Condition as written** | The three fake classes *"and their `main.dart` overrides are deleted together"* |
+| **What happened** | The overrides are deleted. The classes are not |
+| **Status** | Gate **met**; the conditions rewritten in all three files |
+| **Date** | 2026-08-19, Mission 7.4 step 4 |
+
+`FakeProjectTaskRepository`, `FakeProjectTaskAdminRepository` and `InMemoryProjectTaskStore` were bound in `main.dart` from Mission 5.1.1 because M8 comes after M7 and there was no deployed endpoint to read. Mission 7.3 deployed all thirteen routes; `main.dart` now binds the real repositories, and no composition root names a fake.
+
+**The classes stay, and the removal conditions were rewritten rather than reinterpreted.** Seven test files drive screens through them — both accessibility sweeps among them — and M8 is a rule about what a *build* reaches, not about whether a test double exists. Deleting them would take seven test files with it for nothing the gate asks for.
+
+The reason this is an entry rather than a comment edit is the failure it avoids: a removal condition that is met in substance but not in letter reads, on a later audit, as **unmet**. Mission 7.3's closing gate spent real effort on exactly that shape — a claim in a record that the code did not match. Three doc comments now say what actually happened, and this entry says why they differ from what they used to say.
+
+One divergence is now labelled rather than left implicit: `FakeProjectTaskRepository.fetchTasks` answers an unknown Project with an **empty list**, and the real repository raises A-186's `RESOURCE_NOT_FOUND`. The fake keeps the old answer so the screen tests that predate the real repository still describe what they were written to describe, and the 404 path is covered against the controllable double instead.
+
+---
+
+### A-205 — Two reports called the APK build green, reading a file no build had produced
+
+| | |
+|---|---|
+| **Record** | Mission 7.4 step 3 and step 4 reports; the `flutter build apk --debug` line in both |
+| **Said** | *"Kotlin compiles — `assembleDebug` built the APK"*, and *"`assembleDebug` builds"* |
+| **Was** | The command **fails**. Gradle builds all three flavours and the tool then looks for `app-debug.apk`, which no flavour produces |
+| **Why it looked green** | A stale `app-debug.apk` from before ADR-047 was sitting in `build/app/outputs/flutter-apk/`, and the tool found it |
+| **Class** | Verification defect — a check that could not fail |
+| **Status** | **Closed.** The command is `flutter build apk --debug --flavor dev` |
+| **Date** | 2026-08-19, Mission 7.4 step 4 verification |
+
+ADR-047 made Gradle product flavours the environment selector — *"One flag. It selects four things that must agree, and they cannot be selected separately"* — so there is no unflavoured debug variant. `flutter build apk --debug` therefore runs `assembleDebug`, which produces `app-dev-debug.apk`, `app-prod-debug.apk` and `app-staging-debug.apk`, and then fails to locate the single artefact it expected.
+
+```
+Running Gradle task 'assembleDebug'...                             27.6s
+Gradle build failed to produce an .apk file.
+```
+
+Against the corrected command it succeeds in 11.1 seconds from an emptied output directory, exit code 0.
+
+### What was actually true, and what was not
+
+**The compilation was genuinely succeeding.** Both earlier runs produced real flavour APKs, and the thing those runs were cited for — that the new Kotlin in `DeviceModelChannel.kt` compiles — was true. The Dart and Kotlin compile is shared across flavours, so nothing built on that conclusion is wrong.
+
+**The evidence for it was not.** The line quoted in both reports, `√ Built build\app\outputs\flutter-apk\app-debug.apk`, named a file dated before ADR-047. A stale artefact reported as the product of the run is not weaker evidence than a fresh one; it is evidence of nothing, because it would have appeared identically had the build produced no output at all.
+
+### How it was found, which is the transferable part
+
+By **emptying the output directory before re-running**. Nothing else changed — same command, same tree, same toolchain. The check had been passing for two steps and would have kept passing for as long as that file survived, including through a build that had started failing for an unrelated reason.
+
+This is A-195's shape in the build medium. There the IAM boundary was reviewed carefully and the handler was not, and *"reviewing one half thoroughly reads as diligence while proving nothing about the other"*. Here the command was run carefully and its **output directory** was not — and a verification whose success does not depend on the run is the same defect as a control that does not exist.
+
+### The rule this leaves
+
+**A build check must start from an absent artefact.** Otherwise its green is a claim about the filesystem rather than about the build. The same question is worth asking of every check whose evidence is a file rather than an exit code — and the corrected invocation is now stated in the step reports and carried into Mission 7.4's device checkpoint, where the APK actually has to install.
+
+---
+
+### A-206 — Step 3 wired `collector_id` to the Firebase uid, and the backend checks it against `users.id`
+
+| | |
+|---|---|
+| **Record** | Mission 7.4 step 3; `main.dart`'s `deviceContextProvider` override |
+| **Does** | `collectorId: ref.watch(authNotifierProvider).valueOrNull?.user?.uid` |
+| **`User.uid` is** | The **Firebase** uid — `_toUser` builds it from `fb.User.uid` |
+| **The backend checks it against** | `sessions.collector_id`, which is `users.id`, a database uuid |
+| **Consequence** | **Every metadata POST would be refused**, for every chunk, forever |
+| **Class** | Implementation defect — a value of the right shape from the wrong namespace |
+| **Status** | **Closed**, Mission 7.4 step 5 |
+| **Date** | 2026-08-19, Mission 7.4 step 5 trace |
+
+`functions/metadata/src/index.ts` resolves a chunk's *true* identity from a join and refuses a document that disagrees: `check('identity.collector_id', document.identity.collector_id, truth.collectorId)`, where `truth.collectorId` is `s.collector_id`. That column holds `users.id`. The client was sending a Firebase uid.
+
+Both are opaque strings, so nothing in the type system, the analyzer or any unit test could tell them apart — the step 3 tests assert that the composition root *passes through* whatever the auth notifier holds, which it does, correctly.
+
+### The right value was already available, in a class that says so
+
+`backendProfileProvider` has existed since Mission 6.5 and its `BackendProfile.userId` is documented, verbatim, as *"`users.id` — the backend's own identifier, not the Firebase uid."* `POST /v1/auth/verify` returns `{ userId, orgId, role }` and `AuthRepositoryImpl._fetchOrgId` **reads `orgId` and discards `userId`**.
+
+So this was not a missing capability. The distinction was known, written down, and available at the exact moment the wrong field was chosen.
+
+### Why the step 3 trace did not catch it
+
+The trace asked *"where does `collectorId` come from"* and answered *"`features/auth/`, via the auth state"*, which is right. It did not ask **which of that feature's two identifiers the backend compares against**, because at the time nothing compared anything — the metadata POST had no consumer, `TaskContext` was unsourced, and Guard 1 refused every chunk before a request was built.
+
+That is the recurring shape rather than a one-off: **a field is wired correctly with respect to its source and never checked against its destination**, and the destination is unreachable so nothing complains. A-195 is the same defect in the security medium — *"a capability's real extent is the intersection of what IAM permits and what the invoked code does with it"* — and here it is the intersection of what the client sends and what the server joins on.
+
+### What it says about the other four identity fields
+
+Checked, since one was wrong: `project_id` and `task_id` now come from real `Project` and `Task` rows fetched from the backend (step 4), so they are backend uuids and match. `device_id` is **stored, not checked**, so its namespace is the client's to choose and A-196's install-scoped UUID is correct. `session_id` is checked — and is also wrong, for a different reason, recorded as A-207.
+
+---
+
+### A-207 — `identity.session_id` is the local session id, and the backend joins on its own
+
+| | |
+|---|---|
+| **Record** | `ChunkMetadataAssembler` — `sessionId: session.sessionId` |
+| **Sends** | `LocalSession.sessionId`, the UUID Chapter 5.3 mints on the device at session start |
+| **Backend checks it against** | `s.id` — the `sessions` row's own primary key, generated server-side |
+| **Consequence** | **Every metadata POST would be refused**, independently of A-206 |
+| **Class** | Design gap, not a slip: the value is right for where it is written and wrong for where it is sent |
+| **Status** | **Closed**, Mission 7.4 step 5 |
+| **Date** | 2026-08-19, Mission 7.4 step 5 trace |
+
+F5 made these two ids deliberately distinct. `sessions.client_session_id` is the device's UUID, `sessions.id` is the backend's, and the pair plus `UNIQUE (collector_id, client_session_id)` is what makes `POST /v1/tasks/{id}/sessions` idempotent. `SessionRegistrar` exists precisely because *"that `{id}` is **not** the local session UUID this app mints at session start"*.
+
+The metadata document was assembled before any of that existed and carries the only session id the device had.
+
+### Why it cannot be fixed at the assembler
+
+The document is written at **chunk finalization**, which happens while recording and may happen with no network at all. The backend session id does not exist yet and may not exist for hours — Chapter 5.13's deferred-upload case is exactly that. An assembler that waited for one would block finalization on connectivity, which is the opposite of what the local-first queue is for.
+
+The two ids are therefore both correct and both necessary: the local one is what the device stores and retries against, and the backend one is what the wire needs. **The translation belongs at the boundary that already performs it** — the pipeline, which holds the remote id from step 1 and posts the document at step 4.
+
+### Why this is worth an entry rather than a quiet fix
+
+`SessionRegistrar`'s doc has said since Mission 4.2 that the local and backend session ids are different things, and the metadata document was still built with one and validated against the other. The knowledge existed in one file and the defect in another, with no path between them that any test could traverse — the metadata POST had no reachable caller, because `sessionRegistrarProvider` threw.
+
+This is A-206's shape a second time in one trace: **a field correct with respect to its source, never checked against its destination, and the destination unreachable so nothing complained.** Two instances in the same identity group, found by reading the backend's join rather than by running anything, is the argument for tracing a payload against its validator before the first end-to-end attempt rather than after it.
+
+---
+
+### A-208 — A syntax the SDK parses and the code generator does not
+
+| | |
+|---|---|
+| **Record** | `analysis_options.yaml`; invariant I49 |
+| **Syntax** | Null-aware collection elements — `{'cursor': ?cursor}`, `[?value]` |
+| **`flutter analyze`** | Accepts it, and `use_null_aware_elements` actively **asks** for it |
+| **`build_runner`** | Cannot parse it. **Every** generator then refuses to run |
+| **Status** | **Closed.** The lint is silenced; the two uses are rewritten; I49 records the rule |
+| **Date** | 2026-08-20, Mission 7.4 step 5 |
+
+`build_runner` bundles its own analyzer rather than using the SDK's, and that one is older. Meeting a null-aware element it reports the **file** as having syntax errors, and freezed, `json_serializable` and `isar_generator` all decline — against files unrelated to the one containing the syntax:
+
+```
+[SEVERE] freezed on lib/core/network/vump_api.dart (cached):
+This builder requires Dart inputs without syntax errors.
+```
+
+So the rule is not merely unhelpful here. **Following it breaks the build**, which is why the lint is silenced project-wide rather than suppressed per line.
+
+### The part worth recording is the detection delay
+
+The syntax entered `lib/` in **step 4**, in `VumpApi.getList` and the admin repository. Step 4 then ran `flutter analyze` (clean), the full suite (1123 green), the boundary checks (all five), and committed. Everything was true. Nothing in that verification touches a code generator.
+
+It surfaced in **step 5**, on the first line of the first phase, because adding `backendUserId` to a `@freezed` class needed codegen — and the failure named `vump_api.dart` and `project_task_admin_repository_impl.dart`, two files step 5 had not touched.
+
+**A green verification that cannot fail on a defect is the same shape as A-205**, one step earlier: there, a build check read a stale artefact and would have passed through a broken build. Here, a lint-clean suite passes through a syntax that has already broken the generator for whoever runs it next. Both are checks whose success did not depend on the thing they appeared to be checking.
+
+### Why an invariant and not a comment
+
+Because the cost is paid by a **different mission than the one that incurs it**. A comment in `analysis_options.yaml` is read by someone editing `analysis_options.yaml`; the person who needs the rule is writing a map literal three files away, with a linter that has been told to stay quiet. I49 puts it where the other cross-cutting rules are, and states plainly that nothing enforces it.
+
+The revisit trigger is concrete and outside this project's control: **`build_runner`'s bundled analyzer catching up to the SDK's.** When it does, the `errors:` entry and I49 both come out. Until then the rule holds, and it is the only invariant in the register imposed by a tool rather than by a decision.
+
+---
+
+### A-209 — A-100 is closed, and the port it named could never have been implemented
+
+| | |
+|---|---|
+| **Was** | A-100: `SessionRegistrar` *"owed to whichever mission builds `features/projects_tasks/`"* |
+| **Now** | `SessionRegistrarImpl` in `features/upload/data/`, bound at the composition root |
+| **Status** | **Closed** |
+| **Date** | 2026-08-20, Mission 7.4 step 5 |
+
+The port was declared in Mission 4.2 and `sessionRegistrarProvider` threw for three missions. That is the reason **no chunk has ever reached `uploading` on a device**: constructing the pipeline threw, which is why `UploadDispatcher` holds it behind a function rather than a field, so the throw landed on the first claimable chunk instead of on startup.
+
+### The port could not be implemented as declared, by anyone
+
+`remoteSessionId(String localSessionId)` had to produce a Task id from a local session id, and the only source is `LocalSession.taskId` — owned by `features/recording/`. The nominated implementor, `features/projects_tasks/`, could not reach it under ADR-022 R3. **The owner named in the doc was the one owner structurally incapable of satisfying it.**
+
+F17 had already resolved the underlying problem by putting the Task on the chunk, so the caller holds it by the time it reaches step 1. F32 passes it. That is not a widening of the port's responsibility — it is the port asking for what its caller was given.
+
+### And that moved the implementation
+
+With the Task arriving as a `String`, an implementation needs **nothing** from `features/projects_tasks/`: it posts to a URL and reads an id back, which is what `ChunkUploadApiImpl` beside it already does four times over. So it lives in `features/upload/data/` (F33), and the port's doc — which had said the opposite since Mission 4.2 — is rewritten rather than left contradicting the code.
+
+The port stays in `core/upload/`, because `features/upload/application/` declares the need and may not import `data/` (ADR-022 §5.3).
+
+### One design point that reads as an omission and is not
+
+**Nothing is cached** (F34). The pipeline calls this once per chunk — 38 for a full recording, more with retries — and each call is a real `POST`. That is deliberate twice over.
+
+It costs two Lambda invocations and about four Data API calls against an upload moving 633 MB in 38 parts, which is noise on the critical path.
+
+And `startSession` re-runs `assertAssigned` every time. Chapter 4.8 §3: a removed assignment *"immediately excludes that Task from all future queries, even if the mobile app's local cache hasn't refreshed yet."* **Each registration is therefore a live authorization re-check**, and caching the id — in memory or in a column — would let a Collector whose assignment was revoked mid-session upload the remaining thirty chunks. The repetition is the feature.
+
+### What remains unproven
+
+Everything above is proven against a scripted HTTP adapter. `POST /v1/tasks/{id}/sessions` has never been called by this client against the deployed backend, and the 200-on-repeat path — the one the whole no-caching argument rests on — has never been observed outside the backend's own tests. Both are device-checkpoint items.
+
+---
+
+### A-210 — The device checkpoint's fixture was seeded by direct insert, and the API could not have produced it
+
+| | |
+|---|---|
+| **What** | One Project, one Task, one `task_assignments` row, one `audit_log` row, in the dev database |
+| **Ids** | Project `4889ca14-11d6-4142-8ae3-c5e96be62f7f`; Task `208f416c-a707-4df4-a25c-5b45707803b0` |
+| **How** | Four `rds-data execute-statement` calls, committed |
+| **Not** | Through `POST /v1/projects`, `POST /v1/projects/{id}/tasks`, `POST /v1/tasks/{id}/assignments` |
+| **Date** | 2026-08-20, Mission 7.4 device checkpoint |
+
+Recorded because rows that exist in a real database with no request behind them are indistinguishable, later, from rows a route created — and because the reason the routes were not used is a **structural property of the API**, not a convenience.
+
+### The API cannot express "assign this account to a Task" for a single account
+
+`assignCollector` validates the **assignee's** role, not the caller's:
+
+```ts
+if (readString(row, 2, 'users.role') !== 'collector') {
+  throw ApiError.invalidRequest('That user is not a Collector.');
+}
+```
+
+The checkpoint has one account. To call `POST /v1/tasks/{id}/assignments` it must be `admin`; to be the assignee it must be `collector`. **No ordering satisfies both**, and flipping `users.role` between the two calls does not help — the caller's role is re-read by the authorizer on every request (`authorizerResultTtlInSeconds = 0`), so the account is never both at once.
+
+So the options were a second Firebase identity provisioned purely to create three rows, or a direct insert. The second was chosen.
+
+**This is not a defect in the API.** Assigning yourself to your own Task is not a real workflow — FR-ADM-03 is an Admin assigning *Collectors*, plural, from a directory. It is a limitation that only a single-account test rig encounters, and it is recorded here so that a later reader does not mistake it for one.
+
+### What the seed proves, and what it does not
+
+**Proves:** BR-19's Collector-scoped join, live, through the real app — *"Checkpoint Project"* rendered in C-04 from `GET /v1/projects`, which is the first time that join has returned a row to a device rather than to a probe.
+
+**Does not prove:** the three write routes. `createProject`, `createTask` and `assignCollector` have **no caller anywhere in `lib/`** — Mission 7.4 step 4 recorded that when it implemented them, and their correctness still rests on unit tests alone. Seeding by hand leaves that exactly where it was, and it is owed to whichever mission builds Chapter 2.7's A-06 and the Task edit form.
+
+The rows were shaped to match what the routes produce rather than to the minimum the columns allow: `org_id` and `created_by` derived from the `users` row rather than typed in, and the `audit_log` entry written, because Chapter 4.2 §2 makes that table an *"append-only record of Admin actions"* and a Project with no trail is a record of nothing.
+
+**Cleanup is `archived_at = now()`, never a delete.** The sessions and chunks the checkpoint produces reference these rows, and no role in this backend holds SQL `DELETE` — deliberately.
+
+---
+
+### A-211 — Chapter 4.5 §2 never says what "no GPS fix" looks like, and the two halves chose differently
+
+| | |
+|---|---|
+| **Volume** | 4, Ch. 4.5 §2 — nests `lat`/`lng` under `capture_conditions.gps`, and stops there |
+| **Says** | Nothing about how an absent fix is spelled |
+| **Client sends** | `{gps: {lat: null, lng: null}}` — object always present, members null |
+| **Backend accepted** | `gps: null` or the key absent. A present object required **both** members to be numbers |
+| **Result** | `400 REQUEST_INVALID` on **every** metadata POST from a device without a fix |
+| **Fixed by** | Widening `lat` and `lng` to `v.nullish` individually |
+| **Date** | 2026-08-20, Mission 7.4 device checkpoint |
+
+Found by the first real upload this project has ever performed: session registered, chunk registered, three parts in S3, and then the metadata refused.
+
+### Neither half was careless, and both cited the requirement
+
+FR-META-05 makes these fields *"nullable where permission/condition dependent"*, and migration `0004` quotes that line directly above `gps_lat numeric, gps_lng numeric`. Both sides knew GPS was optional.
+
+The client's document type argues its shape in writing: *"The `gps` object is always present, with null members when `hasFix` is false — omitting the key entirely would make 'no fix' and 'field not implemented' the same wire value."* That distinction is real.
+
+The backend's schema wrapped the object in `v.nullish` and left the members strict, which is the natural reading of a chapter that nests them.
+
+**Two defensible readings of a chapter that decides neither.** Each half's tests sent its own shape, so each was green, and nothing compared them until a device did.
+
+### The storage model was the tie-breaker, and it had already decided
+
+`chunk_metadata.gps_lat` and `gps_lng` are **two independently nullable columns**, not a composite. A validator requiring both-or-neither is therefore **narrower than the table it writes to** — it rejects a half-fix the schema permits, which is not a policy choice anybody made. Widening the members restores the validator to the shape of its own storage.
+
+The read path needed no change: `nullableNumeric('gpsLat', gps?.lat)` already treats `null` and `undefined` identically, so all four spellings — absent, null object, null members, real fix — bind correctly. **Checked before the change, not after.**
+
+### The third instance this mission, and the pattern is now worth a name
+
+| | Where | How found |
+|---|---|---|
+| A-206 | `collector_id` — Firebase uid vs `users.id` | Reading the backend's join |
+| A-207 | `session_id` — local vs backend session | Reading the backend's join |
+| A-211 | `gps` — absence spelled two ways | The first real request |
+
+**Each half was internally consistent, thoroughly tested, and correct with respect to its own source. The seam between them had never been exercised.** That is not three coincidences; it is one structural property of how this project is built — a client and a backend developed against the same chapters, by the same reasoning, in separate missions, each verified against its own reading.
+
+Unit tests on either side are **structurally incapable** of catching this class. A client test asserts the payload the client builds; a backend test asserts the payload the backend expects; both pass, and the two payloads are never the same object. The only artifact that compares them is a real request.
+
+A-195 is the same shape in the security medium — *"a capability's real extent is the intersection of what IAM permits and what the invoked code does with it"* — and A-205 and A-208 are the same shape in the toolchain medium, where a check's green did not depend on the thing it appeared to check.
+
+**What would actually close it** is a contract artifact both halves derive from rather than both interpret: Chapter 4.6 §6 defers exactly this to *"a generated OpenAPI schema"* that does not exist, and the absence has now cost three defects in one mission. That is a real proposal for a later mission, not something to retrofit here. Recorded as open item 112.
+
+### One diagnostic weakness noticed while tracing, not fixed here
+
+`writeMetadata` renders **only the first validation issue**: `const [first] = parsed.issues;`. `v.safeParse` collects all of them. So a document with three problems is refused three times, one round trip each — and after tonight's refusal there was no way to tell whether GPS was the only blocker or the first of several. Reporting every issue would have answered that in one request. Left alone because this mission's device checkpoint is mid-flight and changing error rendering under it would be its own risk; recorded as open item 113.
+
+---
+
+### A-212 — Two numeric helpers omitted the type hint every other parameter carries
+
+| | |
+|---|---|
+| **Record** | `functions/metadata/src/index.ts` — `numericParam`, `nullableNumeric` |
+| **Did** | `{ name, value: { stringValue: String(value) } }` — no `typeHint` |
+| **Postgres said** | `column "zoom_factor" is of type numeric but expression is of type text` — SQLState **42804** |
+| **House pattern** | `uuidParam` sends `typeHint: 'UUID'`; `jsonParam` sends `'JSON'` |
+| **Fixed by** | `typeHint: 'DECIMAL'` on both |
+| **Status** | **Closed** |
+| **Date** | 2026-08-20, Mission 7.4 device checkpoint |
+
+Every metadata POST that passed validation then failed with `500 INTERNAL_ERROR`. The client sees Chapter 2.9's generic message by design, so the cause was only visible in the Lambda's own CloudWatch log.
+
+### A-211 did not cause this — it unmasked it
+
+`gps_lat`, `gps_lng` and `zoom_factor` are the **only three `numeric` columns in the entire schema**, and all three are bound by these two helpers. Before A-211, a device with no GPS fix was refused at validation, so the INSERT never ran. After it, the INSERT ran — and `gps_lat`/`gps_lng` bound as **typed nulls** (`isNull: true`), which Postgres accepts for any column, so they passed. `zoom_factor` is `NOT NULL` and always carries a value, so it was the first to hit the untyped path.
+
+The defect predates both. **Any successful metadata POST would have failed on `zoom_factor` at any point since migration `0004`** — there had simply never been one.
+
+### Why no test could have caught it, and what changed
+
+Every backend test uses `aws-sdk-client-mock`. The statement is asserted to be **sent**; it is never **accepted** by a real Postgres. No INSERT in this project had ever reached a database until tonight.
+
+That is not a gap in test coverage so much as a limit on what a mocked test can mean — and it has a partial remedy, now applied: **assert the properties of the send that determine whether it will be accepted.** The new test checks that `zoom`, `gpsLat` and `gpsLng` each carry `typeHint: 'DECIMAL'`, which is checkable under the mock and fails the moment the hint is removed. A type mismatch is not fully preventable this way, but the specific class — *a non-text column bound as a bare string* — now is.
+
+### The sweep, done by reading rather than by a third device failure
+
+Asked whether other columns share the defect, before redeploying:
+
+- **Three `numeric` columns exist in the whole schema**, all in `chunk_metadata`, all bound by these two helpers. No other function touches one.
+- `integer` columns use `longParam` — `{ longValue }`, a typed number, correct.
+- `timestamptz` columns are cast in the SQL (`:startedAt::timestamptz`), correct.
+- `jsonb` uses `jsonParam`'s `'JSON'` hint; `uuid` uses `uuidParam`'s `'UUID'`.
+
+**So the blast radius is exactly these three bindings**, and the fix is at the helper rather than at the call site — a cast in this one INSERT would have left the trap armed for the next numeric column anyone adds.
+
+### One thing deliberately not done
+
+These two helpers are private to `functions/metadata/`, while every other parameter helper lives in `packages/shared/src/row.ts` beside `uuidParam` and `jsonParam`. That is where the next person will look, and where a fourth numeric column would go wrong again. Moving them is the consistent change and it is **not** made here: this is a live device checkpoint, and relocating a shared helper mid-run is its own risk. Open item 114.
+
+### Third and fourth of a pattern
+
+A-206, A-207 and A-211 were each a **seam between two halves** that were individually correct. This one is different in shape and identical in cause: **a claim verified against a stand-in rather than against the real thing.** A-205's build check read a stale artefact; A-208's syntax passed an analyzer that was not the one that mattered; this passed a mock that cannot reject. In every case the green was real and measured the wrong object.
+
+---
+
+### A-213 — The first end-to-end upload in this project's history, and what it cost to get there
+
+| | |
+|---|---|
+| **What** | One chunk recorded on CPH2707, uploaded to S3, verified, and completed in Aurora |
+| **When** | 2026-08-20, Mission 7.4 device checkpoint |
+| **Previously** | **Zero.** No chunk had ever reached `uploading` on a device; no metadata POST had ever succeeded, in any environment, by any client |
+| **Bugs found live** | Two, both real, both fixed and redeployed during the run — A-211, A-212 |
+
+### The chain, as observed
+
+| Stage | Evidence |
+|---|---|
+| Sign-in | `200 POST /v1/auth/verify`, real `userId` (a `users.id` uuid, not the Firebase uid — A-206's fix, live) |
+| BR-19's join | `GET /v1/projects` returned `data: []` before seeding and the seeded Project after — **the empty answer is half the proof**, since it shows the join ran and matched nothing rather than failing open |
+| Session | `201 POST /v1/tasks/{taskId}/sessions`, and a repeat answered **200** — F5's idempotency and F34's no-caching argument, confirmed against the real backend rather than a scripted adapter |
+| Chunk | `201`, `s3_object_key` composed from real org/project/task/session ids |
+| Transfer | 3 presigned `PUT`s to S3, all 200 |
+| Metadata | `201` — **after** A-211 and A-212 |
+| Status | `200 PATCH .../status`, **14,457 ms** |
+| Backend | `sessions.status = complete`, `chunks.status = complete`, `chunk_metadata.verified_at` populated |
+
+Every one of those had been proven in isolation and none of them together. The database state is the part that matters: `verified_at` populated means `chunks-verify` downloaded the object, recomputed the hash, matched it against what the device registered, and then `complete_chunk()` and `complete_session()` both ran — BR-21 and FR-SES-02 satisfied by the machinery rather than by assertion.
+
+### Gap 9's resume, observed rather than inferred
+
+The status `PATCH` took **14,457 ms**. Mission 7.3 Part 3 set the Lambda timeout to 28 seconds from three measured Aurora resume times — 15876, 15889 and 15428 ms — and A-178 recorded them. Tonight's figure is a fourth measurement of the same phenomenon, from a real device on a real network, and it sits inside the same band.
+
+That is worth recording for two reasons. It is the first confirmation that the 28-second decision holds against a **client** request rather than a probe, and it is a reminder that the margin is roughly 13 seconds — comfortable, not generous. A resume plus a cold start plus the chunk hash is the stacked case A-186's timing note put near 40 seconds, and that case has still never been observed.
+
+### The two bugs, and what they have in common
+
+Full traces are in A-211 and A-212. The property worth stating here is the one they share with A-206 and A-207 before them, and with A-205 and A-208 in the toolchain medium:
+
+**Every one was a claim verified against a stand-in rather than against the real thing.**
+
+- A-206, A-207 — each half correct against its own reading; the seam never exercised.
+- A-211 — two defensible readings of a chapter that decides neither.
+- A-212 — a mock asserts what was **sent**, never what Postgres would **accept**. No INSERT in this project had reached a real database, so a defect dating to migration `0004` survived every green suite for four missions.
+
+Six amendments, one shape: the verification was real and measured the wrong object. **The device is the first artifact in this project that could not be substituted for**, which is why one evening of it produced two defects that 203 backend tests and 1150 mobile tests could not.
+
+### What is genuinely proven, and what is not
+
+**Proven end to end, once:** the full Chapter 5.10 pipeline against the deployed backend, with real identity on every field, for a chunk of **3 parts**.
+
+**Not proven, and stated plainly rather than implied by the milestone:**
+
+- **The 38-part case.** Tonight's chunk was short. Part count, presigned-URL expiry across a long transfer, and `chunks-verify`'s hash of a 633 MB object inside its timeout are all untouched. F4 measured 7780 ms for the hash at 1769 MB against a *seeded* object; a cold start plus S3 first-byte latency on top of it remains the unmeasured stacked case.
+- **The foreground service across a long upload** with the screen off and Android's battery optimiser active. Nothing in either suite exercises it.
+- **A failed part, mid-transfer.** The retry ladder and the resume path ran clean tonight because nothing went wrong at step 2.
+- **Three checklist items, deferred by decision rather than forgotten:** `deviceId` persistence across relaunch and reinstall, a second page via a small `?limit=`, and a real 404 firing the new copy. All three are covered by unit tests and each needed either a relaunch cycle or a temporary code change; the project owner deferred them once the core proof was in hand. **`nextCursor` has therefore still never been produced and consumed by anything real** — A-199's closure remains code-complete and device-unconfirmed.
+
+### One process note
+
+Both live-found bugs were fixed at the **root** rather than at the symptom, and the second was swept before redeploying: asked whether other numeric columns shared A-212's defect, the answer came from reading the schema — three numeric columns in total, all in one table, all through the same two helpers — rather than from a third device failure. That is the check that stopped this being three deploy cycles instead of two.
+
+---
+
+### A-214 — `dart format <directory>` swept 27 generated files into a commit, and the check that would have caught it had already run
+
+| | |
+|---|---|
+| **Record** | Commit `d76acea`, Mission 7.4 Phase 2 |
+| **Should have touched** | 2 generated files — `local_session.g.dart`, `recording_session.freezed.dart` |
+| **Actually touched** | **29**, at +6090/−4904 |
+| **Caught by** | CI's *Generated code drift* job, on PR #17 |
+| **Status** | **Closed.** Raw generator output recommitted; committed now equals generated |
+| **Date** | 2026-08-20, Mission 7.4 |
+
+`dart format lib/` formats every Dart file under `lib/`, generated ones included. CI's format job **deliberately excludes** `*.g.dart` and `*.freezed.dart`, with a comment saying why — they would be reformatted by the next `build_runner` run — while the drift job diffs the generator's **raw** output. Formatting them therefore breaks the drift check by construction.
+
+### The verification failure is the part worth recording
+
+**The right check was run, at the wrong moment.** Mid-phase, after regenerating, `git diff --numstat -- '*.g.dart' '*.freezed.dart'` returned exactly the two genuinely-changed files. That was true when it ran.
+
+A later step in the **same phase** ran `dart format lib/` after further edits, which re-swept all 29. Nothing re-checked. `git add -A` then committed them, and the phase was reported complete with the earlier verification still standing as though it described the commit.
+
+So the sequence was: **verified correctly → invalidated by a later step → reported as still valid.** A stale check is not a weaker check; it is a statement about a state that no longer exists, which is exactly A-205's shape — there a build check read an artefact from a previous run, here a diff check described a working tree from earlier in the same phase.
+
+### And the diagnosis it produced was wrong
+
+Asked to investigate, the first conclusion offered to the project owner was that this was **a pre-existing `develop` condition**, on the reasoning that the 35 failing files included Mission 3-era ones — `gps_fix.freezed.dart`, `device_fingerprint.freezed.dart` — that Mission 7.4 never touched.
+
+That reasoning was backwards. **Those files were in the list precisely because `dart format lib/` had touched them.** The evidence cited for "not mine" was the defect itself.
+
+It was settled by testing rather than by argument: branching from `origin/develop`, clearing `.dart_tool/build`, and regenerating produced **zero diff**. `develop` has always been clean. The correction was issued before any fix was proposed on that false premise — but a whole plan (a separate PR to `develop`, then a rebase) had already been agreed on it.
+
+### Third occurrence in one session, and the first to survive
+
+| # | Where | Outcome |
+|---|---|---|
+| 1 | `prettier --write` on a glob, Mission 7.3 | Caught, 18 files restored |
+| 2 | `dart format lib/ test/` during Step 4 | Caught by `git diff --numstat`, 33 files restored |
+| 3 | `dart format lib/` during Step 5 Phase 2 | **Committed.** Caught by CI, two days of work later |
+
+The first two were caught because the check ran **last**. The third was not, because it ran in the middle.
+
+**Discipline is evidently not sufficient.** Three occurrences in one session, by the same hand, knowing about the trap, having already reverted it twice. The durable fix is tooling that makes the sweep impossible rather than a habit of checking afterwards — recorded as the fifth entry on open item 115.
+
+### One consequence worth stating
+
+No content was lost or altered. The two states differ **only** in whitespace, confirmed by formatting the regenerated output and observing a zero diff before deciding what to commit — and the entire history is recoverable either way, since both forms are generated from the same sources by the same pinned toolchain.
+
+What it cost was not correctness but **trust in a green check**: PR #17's drift failure was read first as a version-pinning problem, then as a `develop` condition, before it was read as what it was.

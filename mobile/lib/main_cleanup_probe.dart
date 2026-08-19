@@ -6,6 +6,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mobile/app/theme/app_theme.dart';
 import 'package:mobile/core/database/database_config.dart';
 import 'package:mobile/core/database/providers/database_provider.dart';
+import 'package:mobile/core/identity/device_id_store.dart';
+import 'package:mobile/core/identity/device_model_channel.dart';
 import 'package:mobile/core/upload/interfaces/chunk_upload_source.dart';
 import 'package:mobile/core/upload/providers/upload_ports.dart';
 import 'package:mobile/core/upload/uploadable_chunk.dart';
@@ -82,7 +84,17 @@ void main() async {
       ),
       // The same list main.dart binds, so this probe verifies the composition
       // the application actually ships rather than one it declared here.
-      ...recordingOverrides(documents.path, preferences),
+      // The device identifiers are resolved the same way `main` resolves them
+      // — through the real store and the real channel — so the probe exercises
+      // the shipped composition rather than a stubbed one. The probe deletes
+      // recordings; it does not record, so neither value is load-bearing here,
+      // but declaring them differently would make this list a different list.
+      ...recordingOverrides(
+        documents.path,
+        preferences,
+        deviceId: await DeviceIdStore(preferences: preferences).deviceId(),
+        deviceModel: await const DeviceModelChannel().read(),
+      ),
     ],
   );
 

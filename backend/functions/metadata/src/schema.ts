@@ -83,10 +83,24 @@ export const MetadataDocument = v.object({
   }),
 
   capture_conditions: v.object({
+    // Absence has THREE spellings on this field, and all three are accepted.
+    //
+    // The object may be null or absent; its members may independently be null.
+    // That is not permissiveness for its own sake — `chunk_metadata.gps_lat`
+    // and `gps_lng` are two independently nullable columns, so a schema
+    // requiring both-or-neither is NARROWER than the table it writes to, and
+    // could reject a half-fix the storage model permits.
+    //
+    // The client sends `{lat: null, lng: null}` rather than `gps: null`, and
+    // says why: omitting the object entirely "would make 'no fix' and 'field
+    // not implemented' the same wire value". Chapter 4.5 §2 nests the
+    // coordinates and never says what a missing fix looks like, so both
+    // readings were defensible and the two halves picked different ones. The
+    // first real device request is what found it. A-211.
     gps: v.nullish(
       v.object({
-        lat: v.pipe(v.number(), v.minValue(-90), v.maxValue(90)),
-        lng: v.pipe(v.number(), v.minValue(-180), v.maxValue(180)),
+        lat: v.nullish(v.pipe(v.number(), v.minValue(-90), v.maxValue(90))),
+        lng: v.nullish(v.pipe(v.number(), v.minValue(-180), v.maxValue(180))),
       }),
     ),
     // `chunk_metadata_battery_range` enforces 0–100 in the schema too. Checked

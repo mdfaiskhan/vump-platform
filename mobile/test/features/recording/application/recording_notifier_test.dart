@@ -5,6 +5,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mobile/core/errors/error_codes.dart';
 import 'package:mobile/core/errors/exceptions/storage_exception.dart';
 import 'package:mobile/core/errors/failure.dart';
+import 'package:mobile/core/identity/providers/identity_ports.dart';
+import 'package:mobile/core/identity/selected_task.dart';
 import 'package:mobile/features/recording/application/recording_notifier.dart';
 import 'package:mobile/features/recording/domain/entities/chunk_metadata.dart';
 import 'package:mobile/features/recording/domain/entities/chunk_processing_job.dart';
@@ -98,6 +100,66 @@ void main() {
       expect(session!.sessionId, 'sess_0001');
       expect(session.zoomFactor, 0.5);
       expect(session.startedAt, t0);
+    });
+
+    test('the selected Task is stamped onto the session — F38', () async {
+      final ProviderContainer c = build().container;
+      c
+          .read(selectedTaskProvider.notifier)
+          .select(const SelectedTask(projectId: 'prj-1', taskId: 'tsk-1'));
+
+      await notifierOf(c).checklistPassed(zoomFactor: 0.5, now: t0);
+
+      final RecordingSession? session = stateOf(c).activeSession;
+      expect(session!.taskId, 'tsk-1');
+      expect(session.projectId, 'prj-1');
+    });
+
+    test('no selection leaves both null rather than guessing', () async {
+      // The null reaches LocalSession, and A-068's Guard 1 refuses the chunk
+      // at upload. Substituting anything would upload it against a Task the
+      // Collector never chose.
+      final ProviderContainer c = build().container;
+
+      await notifierOf(c).checklistPassed(zoomFactor: 0.5, now: t0);
+
+      final RecordingSession? session = stateOf(c).activeSession;
+      expect(session!.taskId, isNull);
+      expect(session.projectId, isNull);
+    });
+
+    test('the Task is read ONCE, not re-read per chunk', () async {
+      // Changing the selection mid-recording must not split one session across
+      // two Tasks. That failure is attributed and WRONG, which is worse than
+      // an unattributed chunk: it is uploaded against somebody else's work.
+      final ProviderContainer c = build().container;
+      c
+          .read(selectedTaskProvider.notifier)
+          .select(const SelectedTask(projectId: 'prj-1', taskId: 'tsk-1'));
+
+      await notifierOf(c).checklistPassed(zoomFactor: 0.5, now: t0);
+      c
+          .read(selectedTaskProvider.notifier)
+          .select(const SelectedTask(projectId: 'prj-9', taskId: 'tsk-9'));
+
+      expect(stateOf(c).activeSession!.taskId, 'tsk-1');
+    });
+
+    test('the selection is cleared when the session ends', () async {
+      // Otherwise the next recording inherits it, from a path that never
+      // selected anything.
+      final ProviderContainer c = build().container;
+      c
+          .read(selectedTaskProvider.notifier)
+          .select(const SelectedTask(projectId: 'prj-1', taskId: 'tsk-1'));
+
+      await notifierOf(c).checklistPassed(zoomFactor: 0.5, now: t0);
+      await notifierOf(c).start(now: t0);
+      await notifierOf(c).stop(now: t0);
+      await pumpEventQueue();
+
+      expect(stateOf(c), isA<RecordingStateIdle>());
+      expect(c.read(selectedTaskProvider), isNull);
     });
 
     test('the zoom factor is fixed for the session, not re-read', () async {

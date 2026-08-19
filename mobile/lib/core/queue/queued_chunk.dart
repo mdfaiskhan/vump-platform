@@ -33,6 +33,7 @@ final class QueuedChunk implements Comparable<QueuedChunk> {
     required this.chunkId,
     required this.sessionId,
     required this.sequenceIndex,
+    this.taskId,
     required this.sessionStartedAt,
     required this.status,
     required this.fileSizeBytes,
@@ -48,6 +49,40 @@ final class QueuedChunk implements Comparable<QueuedChunk> {
 
   /// The owning session's UUID.
   final String sessionId;
+
+  /// The Task this chunk's session records against — Mission 7.4, F17.
+  ///
+  /// ## Why the taskId rides on the chunk
+  ///
+  /// `SessionRegistrar` needs it to call `POST /v1/tasks/{taskId}/sessions`,
+  /// and it lives on `LocalSession`, which `features/recording/` owns. A-100
+  /// recorded the problem: the port was *"owed to whichever mission builds
+  /// `features/projects_tasks/`"* and unsatisfiable by that owner, because
+  /// reaching the value meant importing `features/recording/`.
+  ///
+  /// ADR-022 anticipated this pair by name four missions in advance and
+  /// deliberately did not choose, *"because the right choice depends on what
+  /// the chunk turns out to be."* It turned out to be this class: already in
+  /// `core/`, already the neutral carrier crossing from the feature that
+  /// writes chunks to the one that uploads them. Carrying one more field is
+  /// R3's **first** resolution — *the concept is infrastructure* — rather than
+  /// a second mechanism for a crossing that already has one.
+  ///
+  /// ## Nullable, and the null is not a defect
+  ///
+  /// `LocalSession.taskId` is nullable and is null on every row written before
+  /// a real Task picker existed. Substituting a placeholder is the mistake
+  /// `ChunkRecordMapper` refused — *"an empty `collector_id` that reached an
+  /// upload would be indistinguishable from a real one"*. So a null arrives as
+  /// a null, and `SessionRegistrar`'s existing contract already says what
+  /// happens next: a `ValidationException` carrying
+  /// `ErrorCode.validationRequiredField`, which Chapter 5.13 §1 classes as
+  /// **terminal and device-side** — surfaced immediately, never retried,
+  /// because nothing about the stored row will change.
+  ///
+  /// Deliberately absent from [compareTo]: queue order is session start then
+  /// sequence index, and a Task has no bearing on either.
+  final String? taskId;
 
   /// Position within the session, zero-based (Ch. 5.6 §2).
   final int sequenceIndex;

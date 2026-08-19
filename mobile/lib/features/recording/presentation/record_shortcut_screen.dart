@@ -42,7 +42,7 @@ import 'package:mobile/app/theme/app_spacing.dart';
 /// actually chose.
 ///
 /// **What that did not fix:** the checklist ignores its `taskId` argument, and
-/// `TaskContext` is still `UnsourcedTaskContext`, so a recording started
+/// `TaskContext` had no source, so a recording started
 /// through the real path is attributed to nothing, exactly as one started
 /// through the debug button was. Open items 1 and 79.
 class RecordShortcutScreen extends StatelessWidget {

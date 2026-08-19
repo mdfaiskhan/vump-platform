@@ -15,15 +15,17 @@ import '../../../core/upload/fakes/upload_port_fakes.dart';
 
 /// Volume 5 Chapter 5.10's step sequencing, and A-068 Guard 1's verdict.
 void main() {
-  UploadableChunk chunkFor(String id) => UploadableChunk(
-    chunkId: id,
-    sessionId: 'sess_e810',
-    sequenceIndex: 3,
-    sessionStartedAt: DateTime.utc(2026, 8, 15, 9),
-    localFilePath: '/docs/recordings/sess_e810/0003.mp4',
-    fileSizeBytes: 512000000,
-    checksumSha256: 'abc123',
-  );
+  UploadableChunk chunkFor(String id, {String? taskId = 'tsk_7c3'}) =>
+      UploadableChunk(
+        chunkId: id,
+        sessionId: 'sess_e810',
+        taskId: taskId,
+        sequenceIndex: 3,
+        sessionStartedAt: DateTime.utc(2026, 8, 15, 9),
+        localFilePath: '/docs/recordings/sess_e810/0003.mp4',
+        fileSizeBytes: 512000000,
+        checksumSha256: 'abc123',
+      );
 
   ({
     ChunkUploadPipeline pipeline,
@@ -137,8 +139,14 @@ void main() {
     });
   });
 
-  group('Chapter 5.10 §1 — the four steps, in order', () {
-    test('register, upload, confirm, metadata', () async {
+  group('A-191 — steps 3 and 4 swapped against Ch 5.10 §1', () {
+    // The chapter lists the status PATCH as step 3 and the metadata POST as
+    // step 4. BR-21 makes that impossible: `complete_chunk()` refuses while
+    // `chunk_metadata.verified_at` is null, so step 3 would be refused for
+    // every chunk, always. This group asserts the order that works, and is
+    // named for the amendment rather than the chapter so the suite says what
+    // is true and why.
+    test('register, upload, metadata, confirm', () async {
       final ({
         ChunkUploadPipeline pipeline,
         FakeChunkUploadSource source,
@@ -152,8 +160,8 @@ void main() {
       expect(t.api.calls, <String>[
         'register',
         'upload',
-        'confirm',
         'metadata',
+        'confirm',
       ]);
     });
 
@@ -190,7 +198,18 @@ void main() {
       expect(t.api.confirmedStatus, 'complete');
     });
 
-    test('step 4 posts the document unchanged', () async {
+    test('step 4 posts the document with ONE field rewritten', () async {
+      // This test read "posts the document unchanged" until Mission 7.4 step
+      // 5, and that was not merely stale — **it asserted the A-207 defect as
+      // intended behaviour**. The document carries the LOCAL session id
+      // because it is assembled at finalization, and functions/metadata/ joins
+      // on sessions.id; posting it unchanged means every metadata POST is
+      // refused. The old assertion would have kept passing all the way to the
+      // device.
+      //
+      // Corrected to state what is actually true: everything except
+      // identity.session_id crosses untouched, and that one becomes the
+      // backend's.
       final ({
         ChunkUploadPipeline pipeline,
         FakeChunkUploadSource source,
@@ -201,7 +220,10 @@ void main() {
 
       await t.pipeline.uploadNext();
 
-      expect(t.api.postedDocument, completeIdentityDocument().toJson());
+      expect(
+        t.api.postedDocument,
+        completeIdentityDocument().withRemoteSessionId('srv_sess_1').toJson(),
+      );
     });
 
     test(
@@ -236,7 +258,11 @@ void main() {
       await t.pipeline.uploadNext();
 
       expect(t.source.transitions.last, 'complete:chk_1');
-      expect(t.api.calls.last, 'metadata');
+      // A-073's claim is the line above: the LOCAL complete follows the remote
+      // work, because BR-08 makes `complete` the point a chunk becomes
+      // deletable. Which remote call happens to be last is incidental to that
+      // claim, and A-191 changed it from the metadata POST to the status PATCH.
+      expect(t.api.calls.last, 'confirm');
     });
 
     test(
@@ -479,6 +505,130 @@ void main() {
 
     test('a complete outcome is not retryable', () {
       expect(const UploadOutcome.complete(chunkId: 'a').isRetryable, isFalse);
+    });
+  });
+
+  group('the session id on the wire — A-207, F36', () {
+    test('the POSTed document carries the BACKEND session id', () async {
+      // The document was assembled at chunk finalization, possibly offline,
+      // with the only session id the device had: its own. functions/metadata/
+      // joins on sessions.id and refuses a document that disagrees, so without
+      // the rewrite EVERY metadata POST is refused, for every chunk.
+      final ({
+        ChunkUploadPipeline pipeline,
+        FakeChunkUploadSource source,
+        FakeSessionRegistrar registrar,
+        _RecordingApi api,
+      })
+      t = build(queued: <UploadableChunk>[chunkFor('chk_1')]);
+
+      await t.pipeline.uploadNext();
+
+      final Map<String, Object?>? identity =
+          t.api.postedDocument?['identity'] as Map<String, Object?>?;
+      expect(identity?['session_id'], 'srv_sess_1');
+      expect(
+        identity?['session_id'],
+        isNot('sess_e810'),
+        reason: 'the local id must not reach the wire',
+      );
+    });
+
+    test('nothing else in the identity group is rewritten', () async {
+      // BR-22 makes system-generated metadata immutable once written. The
+      // session id is the ONE field whose correct value differs between where
+      // it is stored and where it is sent; a general copyWith would make that
+      // distinction invisible at the call site.
+      final ({
+        ChunkUploadPipeline pipeline,
+        FakeChunkUploadSource source,
+        FakeSessionRegistrar registrar,
+        _RecordingApi api,
+      })
+      t = build(queued: <UploadableChunk>[chunkFor('chk_1')]);
+
+      await t.pipeline.uploadNext();
+
+      final Map<String, Object?> identity =
+          t.api.postedDocument!['identity']! as Map<String, Object?>;
+      final Map<String, Object?> original =
+          completeIdentityDocument().toJson()['identity']!
+              as Map<String, Object?>;
+
+      for (final String field in <String>[
+        'project_id',
+        'task_id',
+        'collector_id',
+        'device_id',
+      ]) {
+        expect(identity[field], original[field], reason: field);
+      }
+    });
+
+    test('the stored document is untouched — the local id stays local', () {
+      // Every device-side lookup joins on the local id, and a retry re-reads
+      // the stored row. Rewriting in place would break both.
+      final ChunkMetadataDocument stored = completeIdentityDocument();
+
+      final ChunkMetadataDocument sent = stored.withRemoteSessionId('srv_1');
+
+      expect(sent.identity.sessionId, 'srv_1');
+      expect(
+        stored.identity.sessionId,
+        isNot('srv_1'),
+        reason: 'the rewrite must return a new document, not mutate one',
+      );
+    });
+  });
+
+  group('what step 1 asks the registrar for — F32/F35', () {
+    test('the Task rides on the chunk and reaches the registrar', () async {
+      // B3's whole point. F17 put taskId on the WATCH view; the pipeline
+      // consumes the CLAIM view, so the field existed and led nowhere. If this
+      // regresses, every upload registers under a null Task and fails as
+      // terminal — loudly, and naming the wrong thing.
+      final ({
+        ChunkUploadPipeline pipeline,
+        FakeChunkUploadSource source,
+        FakeSessionRegistrar registrar,
+        _RecordingApi api,
+      })
+      t = build(queued: <UploadableChunk>[chunkFor('chk_1')]);
+
+      await t.pipeline.uploadNext();
+
+      expect(t.registrar.askedTaskIds.single, 'tsk_7c3');
+    });
+
+    test('the session start time is sent, not the upload time — F15', () async {
+      // A deferred upload registers hours after capture, and the column would
+      // otherwise default to now().
+      final ({
+        ChunkUploadPipeline pipeline,
+        FakeChunkUploadSource source,
+        FakeSessionRegistrar registrar,
+        _RecordingApi api,
+      })
+      t = build(queued: <UploadableChunk>[chunkFor('chk_1')]);
+
+      await t.pipeline.uploadNext();
+
+      expect(t.registrar.askedStartedAt.single, DateTime.utc(2026, 8, 15, 9));
+    });
+
+    test('the LOCAL session id is what is asked about', () async {
+      // It becomes client_session_id. The backend's own id comes back.
+      final ({
+        ChunkUploadPipeline pipeline,
+        FakeChunkUploadSource source,
+        FakeSessionRegistrar registrar,
+        _RecordingApi api,
+      })
+      t = build(queued: <UploadableChunk>[chunkFor('chk_1')]);
+
+      await t.pipeline.uploadNext();
+
+      expect(t.registrar.asked.single, 'sess_e810');
     });
   });
 }

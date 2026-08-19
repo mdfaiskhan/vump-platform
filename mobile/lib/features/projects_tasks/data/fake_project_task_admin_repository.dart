@@ -6,15 +6,21 @@ import 'package:mobile/features/projects_tasks/domain/entities/project.dart';
 import 'package:mobile/features/projects_tasks/domain/entities/task.dart';
 import 'package:mobile/features/projects_tasks/domain/repositories/project_task_admin_repository.dart';
 
-/// A deterministic in-memory [ProjectTaskAdminRepository], standing in until
-/// Mission 7 wires the real one.
+/// A deterministic in-memory [ProjectTaskAdminRepository], for tests.
 ///
-/// **REMOVAL CONDITION, stated so it travels with the code:** this class, its
-/// `main.dart` override, `FakeProjectTaskRepository` and
-/// `InMemoryProjectTaskStore` are all deleted together when real repositories
-/// call Volume 4 Chapter 4.6 §3's endpoints — Mission 7, and Volume 11 Chapter
-/// 11.2's **M8** gate makes removing them mandatory rather than optional. The
-/// same condition `FakeProjectTaskRepository` already carries.
+/// ## IT IS NO LONGER WIRED INTO A BUILD — Mission 7.4 step 4
+///
+/// `ProjectTaskAdminRepositoryImpl` calls Chapter 4.6 §3's five write routes,
+/// and `main.dart` binds that. Volume 11 Chapter 11.2's **M8** gate — *"no
+/// fake/mock repository remains wired into a release build"* — is met.
+///
+/// **REMOVAL CONDITION, as written and as actually met:** it said this class,
+/// its `main.dart` override, `FakeProjectTaskRepository` and
+/// `InMemoryProjectTaskStore` were *"all deleted together"*. The overrides are
+/// deleted. The three classes are not, because seven test files drive screens
+/// through them and M8 is a rule about builds rather than about the existence
+/// of a test double. Rewritten rather than quietly reinterpreted, since the
+/// original wording would otherwise read later as unmet.
 ///
 /// ## It writes to the store the read fake reads
 ///

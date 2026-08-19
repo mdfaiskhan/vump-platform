@@ -6,7 +6,6 @@ import 'package:mobile/core/errors/exceptions/network_exception.dart';
 import 'package:mobile/core/errors/exceptions/storage_exception.dart';
 import 'package:mobile/core/network/network_constants.dart';
 import 'package:mobile/core/network/providers/dio_provider.dart';
-import 'package:mobile/core/network/vump_api.dart';
 import 'package:mobile/core/queue/chunk_upload_status.dart';
 import 'package:mobile/core/time/interfaces/clock.dart';
 import 'package:mobile/core/time/providers/clock_provider.dart';
@@ -183,9 +182,18 @@ class ChunkUploadPipeline {
 
     // ---- Step 1 — Register ---------------------------------------------
     final ChunkRegistration registration;
+    // Declared outside the try because step 4 needs it too: the metadata
+    // document is addressed to THIS id, not to the local one it was assembled
+    // with. A-207.
+    final String remoteSessionId;
     try {
-      final String remoteSessionId = await _registrar.remoteSessionId(
-        chunk.sessionId,
+      // The Task rides on the chunk (F17/B3), read from the LocalSession row
+      // at claim time. A null is refused inside the registrar as terminal —
+      // Chapter 5.13 §1's device-side class — rather than substituted.
+      remoteSessionId = await _registrar.remoteSessionId(
+        localSessionId: chunk.sessionId,
+        taskId: chunk.taskId,
+        startedAt: chunk.sessionStartedAt,
       );
       registration = await _api.registerChunk(
         remoteSessionId: remoteSessionId,
@@ -224,22 +232,51 @@ class ChunkUploadPipeline {
       return _fail(chunk, _classify(error), error.message);
     }
 
-    // ---- Steps 3 and 4 — Confirm, then metadata ------------------------
+    // ---- Steps 4 then 3 — Metadata, THEN confirm -----------------------
+    //
+    // **Deliberately the reverse of Chapter 5.10 §1's documented order**, which
+    // lists the status PATCH as step 3 and the metadata POST as step 4.
+    //
+    // That order cannot work. BR-21 requires a verified `chunk_metadata` row
+    // before `chunks.status` may reach `'complete'`, and migration 0006 makes
+    // `complete_chunk()` the only path — it raises `restrict_violation` when
+    // `verified_at` is null. A client following the chapter literally would
+    // have step 3 refused **for every chunk, always**, and would only POST the
+    // metadata that makes it possible afterwards.
+    //
+    // Found by Mission 7.3 tracing the handler against the gate, recorded as
+    // A-191, and confirmed against this exact code. The backend refuses with a
+    // `RESOURCE_NOT_FOUND` naming the absent metadata rather than an opaque
+    // 500, so a client that gets this wrong is told why — but it is still
+    // wrong, and the fix belongs here rather than in a message.
     try {
+      // The document carries the LOCAL session id, because it was assembled at
+      // chunk finalization — possibly offline, hours before any backend
+      // session existed. `functions/metadata/` joins on `sessions.id` and
+      // refuses a document that disagrees, so without this rewrite every
+      // metadata POST is refused, for every chunk. A-207.
+      //
+      // This is the only place that holds both ids: the local one the chunk
+      // was claimed with, and the remote one step 1 just returned. Nothing is
+      // persisted — the stored row keeps the local id, which is what every
+      // device-side lookup joins on and what a retry re-reads.
+      await _api.postMetadata(
+        chunkId: chunk.chunkId,
+        document: document.withRemoteSessionId(remoteSessionId).toJson(),
+      );
       await _api.confirmStatus(
         chunkId: chunk.chunkId,
         status: ChunkUploadStatus.complete.wireName,
-      );
-      await _api.postMetadata(
-        chunkId: chunk.chunkId,
-        document: document.toJson(),
       );
     } on AppException catch (error) {
       return _fail(chunk, _classify(error), error.message);
     }
 
-    // Step 5 is the backend's. The local row follows step 4 rather than step
-    // 3 — see the class comment and A-073.
+    // Step 5 is the backend's. The local row follows BOTH remote calls — A-073
+    // reasoned that BR-08 makes `complete` the point a chunk becomes locally
+    // deletable, so writing it before the metadata reached the backend would be
+    // unrecoverable. That reasoning is unchanged by A-191's reordering; it now
+    // simply agrees with the remote order for a second, independent reason.
     await _source.markComplete(chunk.chunkId);
     return UploadOutcome.complete(chunkId: chunk.chunkId);
   }
@@ -421,11 +458,6 @@ class UploadOutcome {
     return 'UploadOutcome.failed($chunkId, ${cause?.name}: $detail)';
   }
 }
-
-/// The Vump backend, for `features/upload/`.
-final Provider<VumpApi> vumpApiProvider = Provider<VumpApi>(
-  (Ref ref) => VumpApi(client: ref.watch(dioClientProvider)),
-);
 
 /// Chapter 5.10 §1's four calls, wired to the real clients.
 ///

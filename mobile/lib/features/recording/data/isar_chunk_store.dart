@@ -382,6 +382,14 @@ class IsarChunkStore
         session.sessionId: session.startedAt,
     };
 
+    // Mission 7.4 F17. No extra query: the session rows are already loaded for
+    // the join above, so the Task ride-along costs one more map over the same
+    // list. Nullable at source and left nullable here — see QueuedChunk.taskId.
+    final Map<String, String?> taskOf = <String, String?>{
+      for (final LocalSession session in sessions)
+        session.sessionId: session.taskId,
+    };
+
     final List<QueuedChunk> queue = <QueuedChunk>[];
     for (final LocalChunk row in rows) {
       // BR-08 and Chapter 5.15: a chunk cleared after a confirmed upload is
@@ -404,6 +412,7 @@ class IsarChunkStore
         QueuedChunk(
           chunkId: row.chunkId,
           sessionId: row.sessionId,
+          taskId: taskOf[row.sessionId],
           sequenceIndex: row.sequenceIndex,
           sessionStartedAt: sessionStart,
           status: status,
@@ -495,6 +504,13 @@ class IsarChunkStore
           for (final LocalSession session in sessions)
             session.sessionId: session.startedAt,
         };
+        // The claim path's half of F17 — B3. The same map `currentQueue`
+        // builds, from the same rows already loaded, so the Task costs one
+        // more lookup and no additional read.
+        final Map<String, String?> taskOf = <String, String?>{
+          for (final LocalSession session in sessions)
+            session.sessionId: session.taskId,
+        };
 
         // Same skips as currentQueue, for the same reasons: a soft-deleted
         // row is gone (BR-08), and a row whose session is missing has no
@@ -526,6 +542,7 @@ class IsarChunkStore
         return UploadableChunk(
           chunkId: best.chunkId,
           sessionId: best.sessionId,
+          taskId: taskOf[best.sessionId],
           sequenceIndex: best.sequenceIndex,
           sessionStartedAt: bestStart,
           localFilePath: best.localFilePath,

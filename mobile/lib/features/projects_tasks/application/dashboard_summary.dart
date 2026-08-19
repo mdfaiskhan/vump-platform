@@ -3,18 +3,32 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mobile/core/queue/chunk_upload_status.dart';
 import 'package:mobile/core/queue/providers/queue_ports.dart';
 import 'package:mobile/core/queue/queued_chunk.dart';
-import 'package:mobile/features/projects_tasks/application/projects_notifier.dart';
-import 'package:mobile/features/projects_tasks/domain/entities/project.dart';
 
 /// What C-03 can actually show — FR-PT-01 in part, FR-PT-02 in full.
 ///
-/// ## Two of FR-PT-01's four aggregates are ABSENT, deliberately
+/// ## THREE of FR-PT-01's four aggregates are ABSENT, deliberately
 ///
 /// FR-PT-01 asks for *"active projects, in-progress sessions, total recorded
-/// time, and sync status"*. This type carries the first and the last. The
-/// other two have no source this feature can reach, and **an absent tile was
-/// chosen over a zero**: `0h 0m` is a claim about how much the Collector has
-/// recorded, and it would be a false one.
+/// time, and sync status"*. This type carries **only the last**. The other
+/// three have no source this feature can reach, and **an absent tile was
+/// chosen over a wrong number**: `0h 0m` is a claim about how much the
+/// Collector has recorded, and it would be a false one.
+///
+/// - **Active projects.** It was here until Mission 7.4 step 4, counting the
+///   Projects `projectsProvider` held. F20 made that provider **paginated**,
+///   and `projectsProvider` now holds however many pages have been *loaded* —
+///   one, until a Collector scrolls C-04 and presses "Load more". So the count
+///   silently became *"active projects on the pages fetched so far"*, capping
+///   at `projectTaskPageSize`.
+///
+///   There is no cheap honest fix. A count needs a total, `GET /v1/projects`
+///   returns a page and no `?count=` or total exists in Chapter 4.6 §1's
+///   envelope, and walking every page to count them would issue an unbounded
+///   number of requests to render one tile. Rendering "200+" would invent a
+///   third display convention for a screen that already has exactly one rule
+///   for an unanswerable aggregate — omit it — so the tile is dropped on that
+///   existing precedent rather than kept as a number that is quietly wrong.
+///   Open item 111, and A-200.
 ///
 /// - **In-progress sessions.** FR-SES-02's session status lives on
 ///   `LocalSession.status`, owned by `features/recording/`, and no `core/`
@@ -36,23 +50,11 @@ import 'package:mobile/features/projects_tasks/domain/entities/project.dart';
 class DashboardSummary {
   /// Creates a summary.
   const DashboardSummary({
-    required this.activeProjectCount,
     required this.queuedChunks,
     required this.uploadingChunks,
     required this.failedChunks,
     required this.completeChunks,
   });
-
-  /// FR-PT-01's *"active projects"*.
-  ///
-  /// **"Active" means not archived**, and that is a reading rather than a
-  /// quotation. No chapter defines the word; `archived_at` is the only
-  /// activity signal Volume 4 Chapter 4.4 §2 gives a Project, and Chapter 4.2
-  /// §1 introduces soft-delete precisely so archived rows stay queryable and
-  /// distinguishable. The alternative reading — "has an assigned Task in
-  /// progress" — needs the session data that is not reachable. Recorded as an
-  /// amendment rather than left implicit.
-  final int activeProjectCount;
 
   /// FR-PT-02's *"pending"* count — Chapter 5.9 §1's `queued`.
   final int queuedChunks;
@@ -96,23 +98,16 @@ class DashboardSummary {
 /// `map` passes errors through untouched, leaving exactly one handler.
 final StreamProvider<DashboardSummary> dashboardSummaryProvider =
     StreamProvider<DashboardSummary>((Ref ref) {
-      final AsyncValue<List<Project>> projects = ref.watch(projectsProvider);
-
-      // Projects resolve once; the queue is continuous. While projects are
-      // still loading the count reads zero rather than blocking the chunk
-      // counts, which are the half of this screen that updates live.
-      final int activeProjects =
-          projects.valueOrNull
-              ?.where((Project p) => p.archivedAt == null)
-              .length ??
-          0;
-
+      // `projectsProvider` is deliberately NOT watched any more. It was read
+      // for the active-projects count, which F20's pagination made
+      // unanswerable — see the class comment. Watching it now would rebuild
+      // this stream every time a Collector loaded another page of C-04, to
+      // change nothing.
       return ref
           .watch(chunkQueueSourceProvider)
           .watchQueue()
           .map(
             (List<QueuedChunk> queue) => DashboardSummary(
-              activeProjectCount: activeProjects,
               queuedChunks: _countOf(queue, ChunkUploadStatus.queued),
               uploadingChunks: _countOf(queue, ChunkUploadStatus.uploading),
               failedChunks: _countOf(queue, ChunkUploadStatus.failed),

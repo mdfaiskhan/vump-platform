@@ -17,6 +17,7 @@ final _privateConstructorUsedError = UnsupportedError(
 /// @nodoc
 mixin _$User {
   String get uid => throw _privateConstructorUsedError;
+  String get backendUserId => throw _privateConstructorUsedError;
   String get email => throw _privateConstructorUsedError;
   Role get role => throw _privateConstructorUsedError;
   String get orgId => throw _privateConstructorUsedError;
@@ -34,6 +35,7 @@ abstract class $UserCopyWith<$Res> {
   @useResult
   $Res call(
       {String uid,
+      String backendUserId,
       String email,
       Role role,
       String orgId,
@@ -55,6 +57,7 @@ class _$UserCopyWithImpl<$Res, $Val extends User>
   @override
   $Res call({
     Object? uid = null,
+    Object? backendUserId = null,
     Object? email = null,
     Object? role = null,
     Object? orgId = null,
@@ -65,6 +68,10 @@ class _$UserCopyWithImpl<$Res, $Val extends User>
       uid: null == uid
           ? _value.uid
           : uid // ignore: cast_nullable_to_non_nullable
+              as String,
+      backendUserId: null == backendUserId
+          ? _value.backendUserId
+          : backendUserId // ignore: cast_nullable_to_non_nullable
               as String,
       email: null == email
           ? _value.email
@@ -99,6 +106,7 @@ abstract class _$$UserImplCopyWith<$Res> implements $UserCopyWith<$Res> {
   @useResult
   $Res call(
       {String uid,
+      String backendUserId,
       String email,
       Role role,
       String orgId,
@@ -117,6 +125,7 @@ class __$$UserImplCopyWithImpl<$Res>
   @override
   $Res call({
     Object? uid = null,
+    Object? backendUserId = null,
     Object? email = null,
     Object? role = null,
     Object? orgId = null,
@@ -127,6 +136,10 @@ class __$$UserImplCopyWithImpl<$Res>
       uid: null == uid
           ? _value.uid
           : uid // ignore: cast_nullable_to_non_nullable
+              as String,
+      backendUserId: null == backendUserId
+          ? _value.backendUserId
+          : backendUserId // ignore: cast_nullable_to_non_nullable
               as String,
       email: null == email
           ? _value.email
@@ -157,6 +170,7 @@ class __$$UserImplCopyWithImpl<$Res>
 class _$UserImpl implements _User {
   const _$UserImpl(
       {required this.uid,
+      required this.backendUserId,
       required this.email,
       required this.role,
       required this.orgId,
@@ -165,6 +179,8 @@ class _$UserImpl implements _User {
 
   @override
   final String uid;
+  @override
+  final String backendUserId;
   @override
   final String email;
   @override
@@ -178,7 +194,7 @@ class _$UserImpl implements _User {
 
   @override
   String toString() {
-    return 'User(uid: $uid, email: $email, role: $role, orgId: $orgId, emailVerified: $emailVerified, displayName: $displayName)';
+    return 'User(uid: $uid, backendUserId: $backendUserId, email: $email, role: $role, orgId: $orgId, emailVerified: $emailVerified, displayName: $displayName)';
   }
 
   @override
@@ -187,6 +203,8 @@ class _$UserImpl implements _User {
         (other.runtimeType == runtimeType &&
             other is _$UserImpl &&
             (identical(other.uid, uid) || other.uid == uid) &&
+            (identical(other.backendUserId, backendUserId) ||
+                other.backendUserId == backendUserId) &&
             (identical(other.email, email) || other.email == email) &&
             (identical(other.role, role) || other.role == role) &&
             (identical(other.orgId, orgId) || other.orgId == orgId) &&
@@ -197,8 +215,8 @@ class _$UserImpl implements _User {
   }
 
   @override
-  int get hashCode => Object.hash(
-      runtimeType, uid, email, role, orgId, emailVerified, displayName);
+  int get hashCode => Object.hash(runtimeType, uid, backendUserId, email, role,
+      orgId, emailVerified, displayName);
 
   @JsonKey(ignore: true)
   @override
@@ -210,6 +228,7 @@ class _$UserImpl implements _User {
 abstract class _User implements User {
   const factory _User(
       {required final String uid,
+      required final String backendUserId,
       required final String email,
       required final Role role,
       required final String orgId,
@@ -218,6 +237,8 @@ abstract class _User implements User {
 
   @override
   String get uid;
+  @override
+  String get backendUserId;
   @override
   String get email;
   @override

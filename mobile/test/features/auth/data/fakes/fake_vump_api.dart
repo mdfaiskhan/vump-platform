@@ -15,7 +15,18 @@ import 'package:mobile/core/network/vump_api.dart';
 /// member this class does not override throws, which is deliberate: a test that
 /// reaches an unexpected route fails loudly instead of receiving a null.
 class FakeVumpApi implements VumpApi {
-  FakeVumpApi({this.orgId = 'org-42', this.role = 'collector'});
+  FakeVumpApi({
+    this.userId = 'user-1',
+    this.orgId = 'org-42',
+    this.role = 'collector',
+  });
+
+  /// `users.id`, as `POST /auth/verify` reports it.
+  ///
+  /// **Deliberately unlike any Firebase uid a test sets**, so a call site that
+  /// confuses the two fails instead of passing. A-206 shipped because both are
+  /// non-empty opaque strings and nothing distinguished them.
+  final String userId;
 
   /// The organisation `POST /auth/verify` reports, ADR-048's authoritative
   /// source. Set it empty to exercise the unprovisioned-account rejection.
@@ -45,11 +56,7 @@ class FakeVumpApi implements VumpApi {
   }) async {
     postedPaths.add(path);
     if (path == '/auth/verify') {
-      return <String, Object?>{
-        'userId': 'user-1',
-        'orgId': orgId,
-        'role': role,
-      };
+      return <String, Object?>{'userId': userId, 'orgId': orgId, 'role': role};
     }
     return <String, Object?>{};
   }
@@ -61,7 +68,7 @@ class FakeVumpApi implements VumpApi {
     Map<String, dynamic>? queryParameters,
   }) async {
     fetchedPaths.add(path);
-    return <String, Object?>{'userId': 'user-1', 'orgId': orgId, 'role': role};
+    return <String, Object?>{'userId': userId, 'orgId': orgId, 'role': role};
   }
 
   @override

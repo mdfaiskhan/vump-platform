@@ -24,6 +24,7 @@ import 'package:mobile/features/auth/domain/repositories/auth_repository.dart';
 void main() {
   const User collector = User(
     uid: 'u1',
+    backendUserId: 'backend-u1',
     email: 'collector@example.com',
     role: Role.collector,
     orgId: 'org1',
@@ -31,6 +32,7 @@ void main() {
   );
   const User admin = User(
     uid: 'u2',
+    backendUserId: 'backend-u2',
     email: 'admin@example.com',
     role: Role.admin,
     orgId: 'org1',

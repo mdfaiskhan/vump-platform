@@ -30,6 +30,17 @@ class RecordingSession with _$RecordingSession {
     /// The UUID generated once at session start (Chapter 5.14 §3).
     required String sessionId,
 
+    /// The Task this session records against, and its Project.
+    ///
+    /// Nullable because a session can be started without a selection —
+    /// `PlatformTaskContext` then reports both as `MetadataIdentity.unsourced`
+    /// and A-068's Guard 1 refuses the chunk at upload. Carried on the session
+    /// rather than read ambiently at finalization so that every chunk of one
+    /// recording is attributed to the same Task, even if the selection changes
+    /// underneath. Mission 7.4, F38.
+    String? taskId,
+    String? projectId,
+
     /// The wide-angle factor for every chunk in this session — 0.5 or 0.6.
     required double zoomFactor,
 

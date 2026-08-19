@@ -409,13 +409,17 @@ class AuthRepositoryImpl implements AuthRepository {
       ),
     };
 
-    final String orgId = await _resolveOrgId();
+    final _VerifiedSession session = await _resolveSession();
 
     return User(
       uid: user.uid,
+      // `users.id`, NOT the Firebase uid — A-206. Every backend row that
+      // references a person holds this one, and the metadata route refuses a
+      // document whose `collector_id` is anything else.
+      backendUserId: session.userId,
       email: user.email ?? '',
       role: role,
-      orgId: orgId,
+      orgId: session.orgId,
       emailVerified: user.emailVerified,
       displayName: user.displayName,
     );
@@ -428,6 +432,13 @@ class AuthRepositoryImpl implements AuthRepository {
   /// and, on a first login, creates the `users` row that every other route's
   /// authorizer requires. The token is attached by `AuthInterceptor`, so this
   /// passes no credential itself.
+  ///
+  /// **`userId` comes from the response too, and it is not the Firebase uid.**
+  /// `POST /v1/auth/verify` has always returned `{ userId, orgId, role }` and
+  /// this method read `orgId` and discarded the rest. Mission 7.4 step 3 then
+  /// wired `identity.collector_id` to `fb.User.uid`, and the metadata route
+  /// joins `sessions.collector_id` — a `users.id` — and refuses a document that
+  /// disagrees. Every metadata POST would have been refused. A-206.
   ///
   /// **`org_id` comes from the response, not from the claim.** ADR-048 retires
   /// A-159's design in which the claim was authoritative: Chapter 4.7 §2 says
@@ -465,28 +476,37 @@ class AuthRepositoryImpl implements AuthRepository {
   /// the next resolution is a fresh call. The window is the overlap itself. It
   /// is the same single-flight `AuthInterceptor._refreshInFlight` already uses
   /// for concurrent 401s.
-  Future<String>? _orgIdInFlight;
+  Future<_VerifiedSession>? _sessionInFlight;
 
-  Future<String> _resolveOrgId() {
-    return _orgIdInFlight ??= _fetchOrgId().whenComplete(() {
-      _orgIdInFlight = null;
+  Future<_VerifiedSession> _resolveSession() {
+    return _sessionInFlight ??= _fetchSession().whenComplete(() {
+      _sessionInFlight = null;
     });
   }
 
-  Future<String> _fetchOrgId() async {
+  Future<_VerifiedSession> _fetchSession() async {
     final Map<String, Object?> data = await backend.post(
       '/auth/verify',
       what: 'Establishing your session',
     );
+    final Object? userId = data['userId'];
     final Object? orgId = data['orgId'];
-    if (orgId is String && orgId.isNotEmpty) {
-      return orgId;
+
+    // Both or neither. A response carrying one and not the other means the
+    // route's contract changed, and continuing with a blank would put an empty
+    // `collector_id` on every chunk this session records — the substitution
+    // A-068's Guard 1 exists to refuse, arriving from the other end.
+    if (userId is String &&
+        userId.isNotEmpty &&
+        orgId is String &&
+        orgId.isNotEmpty) {
+      return _VerifiedSession(userId: userId, orgId: orgId);
     }
     throw const AuthenticationException(
       errorCode: ErrorCode.authUnauthenticated,
       message:
-          'The backend did not return an organisation for this account, so '
-          'it has not been provisioned for this application.',
+          'The backend did not return a user and an organisation for this '
+          'account, so it has not been provisioned for this application.',
     );
   }
 
@@ -571,4 +591,20 @@ class AuthRepositoryImpl implements AuthRepository {
       );
     }
   }
+}
+
+/// What `POST /v1/auth/verify` establishes about the caller.
+///
+/// Two ids, kept together because they arrive together and because separating
+/// them is how A-206 happened: the Firebase uid and `users.id` are both
+/// non-empty strings on the same account, and nothing but a name distinguishes
+/// them at a call site.
+class _VerifiedSession {
+  const _VerifiedSession({required this.userId, required this.orgId});
+
+  /// `users.id` — the backend's identifier, never the Firebase uid.
+  final String userId;
+
+  /// `users.org_id`, the organisation BR-20 scopes every query by.
+  final String orgId;
 }

@@ -15,12 +15,15 @@ import 'package:mobile/core/database/providers/database_provider.dart';
 import 'package:mobile/core/environment/environment_profile.dart';
 import 'package:mobile/core/errors/app_exception.dart';
 import 'package:mobile/core/firebase/providers/firebase_provider.dart';
+import 'package:mobile/core/identity/device_id_store.dart';
+import 'package:mobile/core/identity/device_model_channel.dart';
+import 'package:mobile/core/identity/providers/identity_ports.dart';
+import 'package:mobile/core/identity/selected_task.dart';
 import 'package:mobile/core/logging/app_logger.dart';
 import 'package:mobile/core/logging/providers/logger_provider.dart';
 import 'package:mobile/core/network/providers/dio_provider.dart';
 import 'package:mobile/core/onboarding/providers/onboarding_ports.dart';
 import 'package:mobile/core/queue/providers/queue_ports.dart';
-import 'package:mobile/core/time/providers/clock_provider.dart';
 import 'package:mobile/core/upload/providers/upload_ports.dart';
 import 'package:mobile/features/auth/application/auth_notifier.dart';
 import 'package:mobile/features/auth/application/invite_code_notifier.dart';
@@ -29,9 +32,8 @@ import 'package:mobile/features/auth/data/invite_code_repository_impl.dart';
 import 'package:mobile/features/auth/data/repositories/auth_repository_impl.dart';
 import 'package:mobile/features/onboarding/data/shared_preferences_onboarding_seen_store.dart';
 import 'package:mobile/features/projects_tasks/application/project_task_providers.dart';
-import 'package:mobile/features/projects_tasks/data/fake_project_task_admin_repository.dart';
-import 'package:mobile/features/projects_tasks/data/fake_project_task_repository.dart';
-import 'package:mobile/features/projects_tasks/data/in_memory_project_task_store.dart';
+import 'package:mobile/features/projects_tasks/data/project_task_admin_repository_impl.dart';
+import 'package:mobile/features/projects_tasks/data/project_task_repository_impl.dart';
 import 'package:mobile/features/recording/application/checklist_notifier.dart';
 import 'package:mobile/features/recording/application/finalize_chunk_use_case.dart';
 import 'package:mobile/features/recording/application/recording_notifier.dart';
@@ -48,13 +50,15 @@ import 'package:mobile/features/recording/data/free_space_channel.dart';
 import 'package:mobile/features/recording/data/isar_chunk_store.dart';
 import 'package:mobile/features/recording/data/isolate_video_processor.dart';
 import 'package:mobile/features/recording/data/platform_device_context.dart';
+import 'package:mobile/features/recording/data/platform_task_context.dart';
 import 'package:mobile/features/recording/data/random_uuid_generator.dart';
 import 'package:mobile/features/recording/data/shared_preferences_wide_angle_eligibility_cache.dart';
 import 'package:mobile/features/recording/data/unavailable_capture_conditions_reader.dart';
-import 'package:mobile/features/recording/data/unsourced_task_context.dart';
+import 'package:mobile/features/recording/domain/entities/metadata_identity.dart';
 import 'package:mobile/features/upload/application/upload_dispatcher.dart';
 import 'package:mobile/features/upload/application/upload_dispatcher_status_notifier.dart';
 import 'package:mobile/features/upload/data/foreground_upload_service_host.dart';
+import 'package:mobile/features/upload/data/session_registrar_impl.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -74,14 +78,25 @@ Future<void> main() async {
   // tests. A-057's per-device verdict is what it holds.
   final SharedPreferences preferences = await SharedPreferences.getInstance();
 
+  // Chapter 4.5 §2's two device identifiers, resolved once here for the same
+  // reason the documents directory and the preferences instance are: both
+  // reads are asynchronous and `DeviceContext`'s getters are synchronous.
+  // Resolving at the composition root keeps the contract sync rather than
+  // rippling a future through `ChunkMetadataAssembler` and every caller.
+  //
+  // `deviceId` generates on first launch and is stable afterwards (F19);
+  // `deviceModel` is null when the platform cannot answer, which stays null
+  // rather than becoming an invented string — A-068's Guard 1 then refuses the
+  // chunk, which is the correct outcome. F22.
+  final String deviceId = await DeviceIdStore(
+    preferences: preferences,
+  ).deviceId();
+  final String? deviceModel = await const DeviceModelChannel().read();
+
   // The container is built before runApp so that asynchronous startup work can
   // be awaited here rather than inside a widget. ADR-010 requires Firebase to
   // be initialised exactly once, off the widget tree; this is the only place
   // that satisfies both.
-  // TEMPORARY, with the fakes it backs. Retired at Mission 7's M8 gate.
-  final InMemoryProjectTaskStore fakeProjectTaskStore =
-      InMemoryProjectTaskStore();
-
   final ProviderContainer container = ProviderContainer(
     overrides: <Override>[
       databaseDirectoryProvider.overrideWithValue(documents.path),
@@ -124,36 +139,29 @@ Future<void> main() async {
         SharedPreferencesOnboardingSeenStore(preferences),
       ),
 
-      // TEMPORARY — a fake repository, deliberately bound in the build.
+      // Volume 11 Chapter 11.1's M8 gate, met — Mission 7.4 step 4.
       //
-      // REMOVAL CONDITION: deleted when a real ProjectTaskRepository calls
-      // Volume 4 Chapter 4.6 §3's endpoints. That is Mission 7, and Volume 11
-      // Chapter 11.1's M8 gate ("no fake/mock repository remains wired into a
-      // release build") is what makes removing it mandatory rather than
-      // optional.
+      // These two bound `FakeProjectTaskRepository` and
+      // `FakeProjectTaskAdminRepository` over one in-memory store from Mission
+      // 5.1.1 until now, because M8 comes after M7 and there was no deployed
+      // endpoint to read. Mission 7.3 deployed all thirteen routes, so the
+      // gate's condition — "no fake/mock repository remains wired into a
+      // release build" — is met by these lines rather than deferred by them.
       //
-      // It is bound now, rather than left throwing, because M8 comes AFTER M7
-      // — the "UI Complete" gate Mission 5 exists to reach. `backend/` is
-      // empty, no Volume 4 endpoint is deployed (M2 is not met), so C-03–C-06
-      // cannot be built against a real repository at all. Binding the fake for
-      // Mission 5 is the milestone sequence working, not a shortcut past it.
+      // The fakes are not deleted. Seven test files drive screens through them,
+      // and a double no build reaches is not what M8 forbids; their own doc
+      // comments record that, and this file no longer names either class.
       //
-      // This is the only file in `lib/` that names the class. Every consumer
-      // holds `ProjectTaskRepository`, so the removal is one line here plus
-      // one deleted file.
-      // ONE store behind the fake, so a write made through the Admin
-      // repository is visible to the Collector's reads. Two independent fakes
-      // would let a created Project vanish, which reads as a bug in whichever
-      // screen is being built rather than in either fake. Same arrangement as
-      // the single IsarChunkStore behind four contracts, below.
-      projectTaskRepositoryProvider.overrideWithValue(
-        FakeProjectTaskRepository(store: fakeProjectTaskStore),
+      // ONE `VumpApi` behind both, from `core/network/` — the duplicate
+      // declaration `features/upload/` carried is gone (F30), so every feature
+      // now reaches the backend through the same provider.
+      projectTaskRepositoryProvider.overrideWith(
+        (Ref ref) =>
+            ProjectTaskRepositoryImpl(backend: ref.watch(vumpApiProvider)),
       ),
       projectTaskAdminRepositoryProvider.overrideWith(
-        (Ref ref) => FakeProjectTaskAdminRepository(
-          store: fakeProjectTaskStore,
-          clock: ref.watch(clockProvider),
-        ),
+        (Ref ref) =>
+            ProjectTaskAdminRepositoryImpl(backend: ref.watch(vumpApiProvider)),
       ),
 
       // The recording feature's collections, contributed here rather than by
@@ -170,7 +178,12 @@ Future<void> main() async {
         ).withSchemas(RecordingSchemas.all),
       ),
 
-      ...recordingOverrides(documents.path, preferences),
+      ...recordingOverrides(
+        documents.path,
+        preferences,
+        deviceId: deviceId,
+        deviceModel: deviceModel,
+      ),
       ...uploadOverrides(),
     ],
   );
@@ -214,10 +227,17 @@ Future<void> main() async {
 /// `requireValue` states that expectation rather than hiding it behind a
 /// silent null — if the ordering in `main` ever changes, this throws where the
 /// mistake is instead of recording chunks into nothing.
+///
+/// [deviceId] and [deviceModel] are Chapter 4.5 §2's device identifiers, both
+/// resolved by the caller because both reads are asynchronous. [deviceModel] is
+/// nullable: the platform may not answer, and an unanswered model becomes
+/// `MetadataIdentity.unsourced` rather than a substitute.
 List<Override> recordingOverrides(
   String documentsPath,
-  SharedPreferences preferences,
-) {
+  SharedPreferences preferences, {
+  required String deviceId,
+  required String? deviceModel,
+}) {
   return <Override>[
     recordingsDirectoryProvider.overrideWithValue(documentsPath),
 
@@ -286,17 +306,74 @@ List<Override> recordingOverrides(
     // pipeline must move exactly the rows C-11 renders and the finalizer
     // wrote — four contracts, one store, one connection.
     //
-    // sessionRegistrarProvider is deliberately NOT overridden: no
-    // implementation exists, because it needs a task_id that
-    // features/projects_tasks/ owns and that feature is unbuilt. The pipeline
-    // therefore throws at that seam rather than uploading, which is the
-    // feature's honest state. A fake satisfies it in the test suite only —
-    // Volume 11's M12 gate makes a fake wired into a build a defect.
     chunkUploadSourceProvider.overrideWith(
       (Ref ref) => ref.watch(_chunkStoreProvider),
     ),
     chunkMetadataSourceProvider.overrideWith(
       (Ref ref) => ref.watch(_chunkStoreProvider),
+    ),
+
+    // Volume 4 Chapter 4.5 §2's identity group.
+    //
+    // Both contracts live in `core/identity/` since step 1, so the
+    // implementations bind here rather than being constructed inside the
+    // finalizer override.
+    //
+    // Step 3 made the device group real — `collector_id`, `device_id` and
+    // `device_model` now carry values. `project_id` and `task_id` are still
+    // `MetadataIdentity.unsourced`: they come from the selected Task, and the
+    // repository that supplies one is step 4. Until then A-068's Guard 1 still
+    // refuses every chunk, which is why this step changes no end-to-end
+    // behaviour on its own.
+    // `ref.watch`, so a Task selected on C-06 reaches the next session the
+    // Collector starts — the same reactive shape `collectorId` uses below and
+    // for the same reason. Null until they choose one, which
+    // `PlatformTaskContext.unsourced` reports as absent rather than guessing.
+    //
+    // Note this is read at chunk finalization, while `RecordingNotifier` reads
+    // `selectedTaskProvider` ONCE at session start and carries the ids on the
+    // session. Both paths exist deliberately: the session's copy is what makes
+    // every chunk of one recording agree, and this one is what the assembler
+    // consults for a chunk whose session predates the field. F38.
+    taskContextProvider.overrideWith((Ref ref) {
+      final SelectedTask? selection = ref.watch(selectedTaskProvider);
+      return selection == null
+          ? const PlatformTaskContext.unsourced()
+          : PlatformTaskContext(selection: selection);
+    }),
+    deviceContextProvider.overrideWith(
+      // Three of the four values are supplied here rather than read inside the
+      // implementation, each for its own reason:
+      //
+      //  * `appVersion` — `app/config/` is granted to `core/` and `shared/` by
+      //    ADR-022 and not to a feature's `data/`.
+      //  * `deviceId` / `deviceModel` — resolved at startup, above, because
+      //    the reads are async and the contract's getters are not.
+      //  * `collectorId` — it belongs to `features/auth/`, and ADR-022 R3
+      //    forbids `features/recording/` from importing it in either
+      //    direction. R3's first resolution puts the contract in `core/` and
+      //    the composition root supplies the value.
+      //
+      // `ref.watch` on the notifier, not `read`: signing in and signing out
+      // must change the identifier a subsequent chunk is stamped with. A read
+      // would freeze whichever state happened to hold at container
+      // construction — which is `unauthenticated`, since `_restoreSession` has
+      // not completed — and every chunk of the session would carry a blank
+      // Collector. Mission 7.4, F21.
+      //
+      // `backendUserId`, NOT `uid` — A-206. `uid` is Firebase's; the metadata
+      // route joins `sessions.collector_id`, which is `users.id`, and refuses
+      // a document that disagrees. Step 3 shipped the Firebase one and no test
+      // on either side could tell them apart: both are non-empty opaque
+      // strings from the same signed-in account.
+      (Ref ref) => PlatformDeviceContext(
+        collectorId:
+            ref.watch(authNotifierProvider).valueOrNull?.user?.backendUserId ??
+            MetadataIdentity.unsourced,
+        deviceId: deviceId,
+        deviceModel: deviceModel ?? MetadataIdentity.unsourced,
+        appVersion: AppInfo.fullVersion,
+      ),
     ),
 
     // Volume 3 Ch. 3.9 §4's FinalizeChunkUseCase — Chapters 5.5, 5.7 and 5.8
@@ -305,13 +382,12 @@ List<Override> recordingOverrides(
     chunkFinalizerProvider.overrideWith(
       (Ref ref) => FinalizeChunkUseCase(
         videoProcessor: const IsolateVideoProcessor(),
-        metadataGenerator: const ChunkMetadataAssembler(
-          taskContext: UnsourcedTaskContext(),
-          // `app/config/` is granted to `core/` and `shared/` by ADR-022 and
-          // not to a feature's `data/`, so the version is read here and passed
-          // in rather than imported there.
-          deviceContext: PlatformDeviceContext(appVersion: AppInfo.fullVersion),
-          conditionsReader: UnavailableCaptureConditionsReader(),
+        metadataGenerator: ChunkMetadataAssembler(
+          // Read through the ports rather than constructed inline, since
+          // Mission 7.4 step 1 moved both contracts to `core/identity/`.
+          taskContext: ref.watch(taskContextProvider),
+          deviceContext: ref.watch(deviceContextProvider),
+          conditionsReader: const UnavailableCaptureConditionsReader(),
         ),
         chunkStore: ref.watch(chunkStoreProvider),
       ),
@@ -325,18 +401,16 @@ List<Override> recordingOverrides(
 /// binds this exact list rather than re-declaring one that could drift from
 /// what the application ships.
 ///
-/// ## Only one port, and the two that are deliberately absent
+/// ## Two ports here, and two bound elsewhere
 ///
-/// `uploadServiceHostProvider` is the only entry. The other two seams
-/// `features/upload/` declares are bound elsewhere or not at all:
+/// `uploadServiceHostProvider` and `sessionRegistrarProvider` are the entries.
+/// The other two seams `features/upload/` declares are bound elsewhere:
 ///
 /// - `chunkUploadSourceProvider` and `chunkMetadataSourceProvider` are in
 ///   [recordingOverrides], because the one `IsarChunkStore` satisfies them.
-/// - `sessionRegistrarProvider` has no implementation anywhere. It needs a
-///   `task_id` that `features/projects_tasks/` owns, and that feature is
-///   unbuilt (open item 36). The pipeline therefore throws at that seam, and
-///   `UploadDispatcher` converts the throw into a logged stop rather than a
-///   crash. A fake satisfies it in the test suite only.
+/// - `sessionRegistrarProvider` is bound here as of Mission 7.4 step 5. It
+///   threw from Mission 4.2 until then, which is why no chunk has reached
+///   `uploading` on a device.
 List<Override> uploadOverrides() {
   return <Override>[
     // Volume 5 Chapter 5.11 §1's Android foreground service. ADR-042 records
@@ -344,6 +418,21 @@ List<Override> uploadOverrides() {
     // process alive around it.
     uploadServiceHostProvider.overrideWith(
       (Ref ref) => ForegroundUploadServiceHost(),
+    ),
+
+    // Chapter 4.6 §4's session registration — Mission 7.4 step 5.
+    //
+    // **The seam that has thrown since Mission 4.2.** No chunk has ever
+    // reached `uploading` on a device, because constructing the pipeline threw
+    // here; `UploadDispatcher` holds the pipeline behind a function precisely
+    // so that throw landed on the first claimable chunk rather than on
+    // startup.
+    //
+    // It is bound now because F32 made the Task id a parameter, so an
+    // implementation needs nothing from `features/projects_tasks/` and could
+    // live beside `ChunkUploadApiImpl` (F33).
+    sessionRegistrarProvider.overrideWith(
+      (Ref ref) => SessionRegistrarImpl(backend: ref.watch(vumpApiProvider)),
     ),
 
     // Chapter 5.12 §2's ConnectivityService. Declared in core/, implemented in

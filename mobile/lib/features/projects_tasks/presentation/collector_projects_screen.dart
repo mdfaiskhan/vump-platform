@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:mobile/app/theme/app_spacing.dart';
 import 'package:mobile/features/projects_tasks/application/projects_notifier.dart';
 import 'package:mobile/features/projects_tasks/domain/entities/project.dart';
+import 'package:mobile/features/projects_tasks/presentation/load_more_tile.dart';
 
 /// C-04 — Projects List. FR-PT-03, and FR-PT-07's more-than-one case.
 ///
@@ -62,10 +63,22 @@ class CollectorProjectsScreen extends ConsumerWidget {
             onRefresh: () => ref.read(projectsProvider.notifier).refresh(),
             child: ListView.separated(
               padding: const EdgeInsets.all(AppSpacing.lg),
-              itemCount: value.length,
+              // One extra row when the backend said there is another page.
+              // `hasMore` is the notifier's narrow getter — F25 keeps the
+              // cursor off the state, so the list itself is still List<Project>
+              // and this widget is the only thing that had to learn about it.
+              itemCount:
+                  value.length +
+                  (ref.read(projectsProvider.notifier).hasMore ? 1 : 0),
               separatorBuilder: (_, _) => const SizedBox(height: AppSpacing.md),
               itemBuilder: (BuildContext context, int index) =>
-                  _ProjectCard(project: value[index]),
+                  index >= value.length
+                  ? LoadMoreTile(
+                      label: 'Projects',
+                      onLoad: () =>
+                          ref.read(projectsProvider.notifier).loadMore(),
+                    )
+                  : _ProjectCard(project: value[index]),
             ),
           ),
         AsyncError<List<Project>>() => const _ProjectsMessage(

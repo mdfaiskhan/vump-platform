@@ -4,9 +4,11 @@ import 'package:go_router/go_router.dart';
 
 import 'package:mobile/app/theme/app_spacing.dart';
 import 'package:mobile/features/projects_tasks/application/projects_notifier.dart';
+import 'package:mobile/features/projects_tasks/application/read_failure.dart';
 import 'package:mobile/features/projects_tasks/application/tasks_notifier.dart';
 import 'package:mobile/features/projects_tasks/domain/entities/project.dart';
 import 'package:mobile/features/projects_tasks/domain/entities/task.dart';
+import 'package:mobile/features/projects_tasks/presentation/load_more_tile.dart';
 
 /// A-03 — Project Detail (Admin).
 ///
@@ -57,11 +59,20 @@ class AdminProjectDetailScreen extends ConsumerWidget {
           project: project,
           tasks: value,
         ),
-        AsyncError<List<Task>>() => const _AdminDetailMessage(
-          message:
-              "This Project's Tasks couldn't be loaded. Check your connection "
-              'and try again.',
-        ),
+        // An Admin reaching a Project outside their org gets the same 404 a
+        // Collector does — A-186 applies the rule to both roles, because a
+        // 403 would confirm the guessed id exists either way. F28.
+        AsyncError<List<Task>>(:final Object error) =>
+          switch (classifyReadFailure(error)) {
+            ProjectTaskReadFailure.notVisible => const _AdminDetailMessage(
+              message: "This Project isn't available to you.",
+            ),
+            ProjectTaskReadFailure.unavailable => const _AdminDetailMessage(
+              message:
+                  "This Project's Tasks couldn't be loaded. Check your "
+                  'connection and try again.',
+            ),
+          },
         _ => const Center(child: CircularProgressIndicator()),
       },
       floatingActionButton: project == null
@@ -76,7 +87,7 @@ class AdminProjectDetailScreen extends ConsumerWidget {
   }
 }
 
-class _AdminTaskList extends StatelessWidget {
+class _AdminTaskList extends ConsumerWidget {
   const _AdminTaskList({
     required this.projectId,
     required this.project,
@@ -88,7 +99,7 @@ class _AdminTaskList extends StatelessWidget {
   final List<Task> tasks;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     if (project == null) {
       // BR-20 scopes an Admin to their own org, and that scope is enforced
       // server-side, so "outside your scope" and "does not exist" are
@@ -110,9 +121,21 @@ class _AdminTaskList extends StatelessWidget {
 
     return ListView.separated(
       padding: const EdgeInsets.all(AppSpacing.lg),
-      itemCount: tasks.length,
+      // One extra row when another page exists. `hasMore` is the notifier's
+      // narrow getter — F25 keeps the cursor off the state, so this list is
+      // still List<Task> and only this builder had to learn about paging.
+      itemCount:
+          tasks.length +
+          (ref.read(tasksProvider(projectId).notifier).hasMore ? 1 : 0),
       separatorBuilder: (_, _) => const SizedBox(height: AppSpacing.md),
       itemBuilder: (BuildContext context, int index) {
+        if (index >= tasks.length) {
+          return LoadMoreTile(
+            label: 'Tasks',
+            onLoad: () =>
+                ref.read(tasksProvider(projectId).notifier).loadMore(),
+          );
+        }
         final Task task = tasks[index];
         return Card(
           child: ListTile(

@@ -1,10 +1,13 @@
 import 'dart:io' show Platform;
 
 import 'package:flutter_test/flutter_test.dart';
+
+import 'package:mobile/core/identity/interfaces/device_context.dart';
+import 'package:mobile/core/identity/interfaces/task_context.dart';
 import 'package:mobile/features/recording/data/chunk_metadata_assembler.dart';
 import 'package:mobile/features/recording/data/codec_wire_name.dart';
 import 'package:mobile/features/recording/data/platform_device_context.dart';
-import 'package:mobile/features/recording/data/unsourced_task_context.dart';
+import 'package:mobile/features/recording/data/platform_task_context.dart';
 import 'package:mobile/features/recording/domain/entities/camera_specification.dart';
 import 'package:mobile/features/recording/domain/entities/chunk_integrity.dart';
 import 'package:mobile/features/recording/domain/entities/chunk_metadata.dart';
@@ -13,8 +16,6 @@ import 'package:mobile/features/recording/domain/entities/gps_fix.dart';
 import 'package:mobile/features/recording/domain/entities/metadata_capture_conditions.dart';
 import 'package:mobile/features/recording/domain/entities/recording_session.dart';
 import 'package:mobile/features/recording/domain/repositories/capture_conditions_reader.dart';
-import 'package:mobile/features/recording/domain/repositories/device_context.dart';
-import 'package:mobile/features/recording/domain/repositories/task_context.dart';
 
 /// Volume 4 Chapter 4.5's schema, assembled from Chapter 5.7 §2's sources.
 ///
@@ -208,8 +209,10 @@ void main() {
             batteryPercent: 82,
             networkType: 'wifi',
           ),
-          taskContext: const UnsourcedTaskContext(),
-          deviceContext: const PlatformDeviceContext(appVersion: '1.0.0+1'),
+          taskContext: const PlatformTaskContext.unsourced(),
+          deviceContext: const PlatformDeviceContext.unsourced(
+            appVersion: '1.0.0+1',
+          ),
         );
 
         expect(
@@ -230,8 +233,10 @@ void main() {
       // with an unattributable chunk.
       final ChunkMetadata sourced = await assemble();
       final ChunkMetadata unsourced = await assemble(
-        taskContext: const UnsourcedTaskContext(),
-        deviceContext: const PlatformDeviceContext(appVersion: '1.0.0+1'),
+        taskContext: const PlatformTaskContext.unsourced(),
+        deviceContext: const PlatformDeviceContext.unsourced(
+          appVersion: '1.0.0+1',
+        ),
       );
 
       expect(sourced.isIdentityComplete, isTrue);

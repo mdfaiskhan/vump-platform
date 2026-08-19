@@ -26,11 +26,11 @@ void main() {
     test('it returns three Projects, not one', () async {
       // FR-PT-07: "a Collector being assigned to more than one Project at a
       // time". A single-Project seed cannot exercise C-04 as a list at all.
-      expect(await repository.fetchProjects(), hasLength(3));
+      expect((await repository.fetchProjects()).items, hasLength(3));
     });
 
     test('exactly one Project is archived', () async {
-      final List<Project> projects = await repository.fetchProjects();
+      final List<Project> projects = (await repository.fetchProjects()).items;
 
       final Iterable<Project> archived = projects.where(
         (Project p) => p.archivedAt != null,
@@ -43,14 +43,14 @@ void main() {
     test('both a null and a non-null description are present', () async {
       // Chapter 4.4 §2 makes `description` nullable, so C-04 must render both
       // and the seed must contain both.
-      final List<Project> projects = await repository.fetchProjects();
+      final List<Project> projects = (await repository.fetchProjects()).items;
 
       expect(projects.any((Project p) => p.description == null), isTrue);
       expect(projects.any((Project p) => p.description != null), isTrue);
     });
 
     test('every Project carries the same org — BR-20 scoping', () async {
-      final List<Project> projects = await repository.fetchProjects();
+      final List<Project> projects = (await repository.fetchProjects()).items;
 
       expect(projects.map((Project p) => p.orgId).toSet(), <String>{
         'org-vump-demo',
@@ -63,7 +63,7 @@ void main() {
       // repository does not implement either, and would hide that nothing
       // client-side enforces BR-19. Every seeded Project comes back, including
       // the archived one.
-      final List<Project> projects = await repository.fetchProjects();
+      final List<Project> projects = (await repository.fetchProjects()).items;
 
       expect(projects.map((Project p) => p.id), <String>[
         'prj-riverside-survey',
@@ -75,9 +75,9 @@ void main() {
 
   group('fetchTasks — the seed FR-PT-04 and FR-PT-05 need', () {
     test('a known Project returns its Tasks', () async {
-      final List<Task> tasks = await repository.fetchTasks(
+      final List<Task> tasks = (await repository.fetchTasks(
         'prj-riverside-survey',
-      );
+      )).items;
 
       expect(tasks.map((Task t) => t.id), <String>[
         'tsk-riverside-embankment',
@@ -86,9 +86,9 @@ void main() {
     });
 
     test('every returned Task names the Project it was asked for', () async {
-      final List<Task> tasks = await repository.fetchTasks(
+      final List<Task> tasks = (await repository.fetchTasks(
         'prj-depot-inventory',
-      );
+      )).items;
 
       expect(
         tasks.every((Task t) => t.projectId == 'prj-depot-inventory'),
@@ -98,7 +98,10 @@ void main() {
 
     test('one Project is seeded with no Tasks at all — C-05 empty', () async {
       // The empty state a one-Project seed never reaches.
-      expect(await repository.fetchTasks('prj-northgate-retired'), isEmpty);
+      expect(
+        (await repository.fetchTasks('prj-northgate-retired')).items,
+        isEmpty,
+      );
     });
 
     test('an unknown Project id returns empty rather than throwing', () async {
@@ -106,13 +109,16 @@ void main() {
       // unassigned Project invisible rather than absent. Modelling a specific
       // status in the fake would be inventing a wire detail; empty is the
       // honest stand-in for "no Tasks to show".
-      expect(await repository.fetchTasks('prj-does-not-exist'), isEmpty);
+      expect(
+        (await repository.fetchTasks('prj-does-not-exist')).items,
+        isEmpty,
+      );
     });
 
     test('one Task carries three reference examples — C-06 list', () async {
-      final List<Task> tasks = await repository.fetchTasks(
+      final List<Task> tasks = (await repository.fetchTasks(
         'prj-riverside-survey',
-      );
+      )).items;
 
       final Task withExamples = tasks.firstWhere(
         (Task t) => t.id == 'tsk-riverside-embankment',
@@ -122,9 +128,9 @@ void main() {
     });
 
     test('another Task carries none — C-06 absent branch', () async {
-      final List<Task> tasks = await repository.fetchTasks(
+      final List<Task> tasks = (await repository.fetchTasks(
         'prj-riverside-survey',
-      );
+      )).items;
 
       final Task withoutExamples = tasks.firstWhere(
         (Task t) => t.id == 'tsk-riverside-bridge',
@@ -141,7 +147,9 @@ void main() {
         'prj-riverside-survey',
         'prj-depot-inventory',
       ]) {
-        for (final Task task in await repository.fetchTasks(projectId)) {
+        for (final Task task in (await repository.fetchTasks(
+          projectId,
+        )).items) {
           expect(task.instructions, isNotEmpty, reason: task.id);
         }
       }
@@ -154,17 +162,17 @@ void main() {
       // between runs makes a widget test flaky for reasons that have nothing
       // to do with the widget (Mission 4.4's injectable-clock reasoning).
       expect(
-        await repository.fetchProjects(),
-        await repository.fetchProjects(),
+        (await repository.fetchProjects()).items,
+        (await repository.fetchProjects()).items,
       );
       expect(
-        await repository.fetchTasks('prj-riverside-survey'),
-        await repository.fetchTasks('prj-riverside-survey'),
+        (await repository.fetchTasks('prj-riverside-survey')).items,
+        (await repository.fetchTasks('prj-riverside-survey')).items,
       );
     });
 
     test('timestamps are fixed literals, not derived from now', () async {
-      final List<Project> projects = await repository.fetchProjects();
+      final List<Project> projects = (await repository.fetchProjects()).items;
 
       expect(projects.map((Project p) => p.createdAt).toSet(), <DateTime>{
         DateTime.utc(2026, 8, 1),
@@ -174,15 +182,15 @@ void main() {
     test('a returned Projects list cannot be mutated by a caller', () async {
       // One shared seed behind every read. Handing out a mutable view would
       // let one screen's edit change what the next screen sees.
-      final List<Project> projects = await repository.fetchProjects();
+      final List<Project> projects = (await repository.fetchProjects()).items;
 
       expect(projects.clear, throwsUnsupportedError);
     });
 
     test('a returned Tasks list cannot be mutated by a caller', () async {
-      final List<Task> tasks = await repository.fetchTasks(
+      final List<Task> tasks = (await repository.fetchTasks(
         'prj-riverside-survey',
-      );
+      )).items;
 
       expect(tasks.clear, throwsUnsupportedError);
     });

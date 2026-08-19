@@ -356,7 +356,24 @@ jobs:
           # and self-declaring instead of a directory anyone can drop a file
           # into." The filename carries the permission, so a second onboarding
           # file cannot acquire it by being added nearby.
-          check shared_preferences     'lib/features/recording/data/|lib/main\.dart|lib/main_cleanup_probe\.dart|lib/features/onboarding/data/shared_preferences_onboarding_seen_store\.dart'
+          # The fifth owner, added by Mission 7.4. Chapter 5.7 §2's device
+          # identifier is `core/` infrastructure by ADR-022 R3's first
+          # resolution — both `features/recording/` and `features/upload/` need
+          # it and neither may import the other — so it cannot live under the
+          # `lib/features/recording/data/` grant that would otherwise cover it.
+          #
+          # `core/` owning a plugin is not new: `core/storage/` owns
+          # flutter_secure_storage, `core/network/` owns dio, `core/database/`
+          # owns isar. What is unusual is that this one is granted per-FILE
+          # rather than per-directory, which is deliberate — `core/identity/`
+          # also holds a platform channel and two contracts, and none of those
+          # has any business reaching a key-value store.
+          #
+          # ADR-008 is the reason it is this plugin and not secure storage: a
+          # device id travels in plaintext metadata to a column that is not
+          # encrypted, so it is not a secret and the Keychain is the wrong
+          # home. F19.
+          check shared_preferences     'lib/features/recording/data/|lib/main\.dart|lib/main_cleanup_probe\.dart|lib/features/onboarding/data/shared_preferences_onboarding_seen_store\.dart|lib/core/identity/device_id_store\.dart'
           check crypto                 lib/features/recording/data/
           check battery_plus           lib/features/recording/data/
           # connectivity_plus gains main.dart as a second owner, on exactly the
