@@ -7312,3 +7312,62 @@ These two helpers are private to `functions/metadata/`, while every other parame
 ### Third and fourth of a pattern
 
 A-206, A-207 and A-211 were each a **seam between two halves** that were individually correct. This one is different in shape and identical in cause: **a claim verified against a stand-in rather than against the real thing.** A-205's build check read a stale artefact; A-208's syntax passed an analyzer that was not the one that mattered; this passed a mock that cannot reject. In every case the green was real and measured the wrong object.
+
+---
+
+### A-213 — The first end-to-end upload in this project's history, and what it cost to get there
+
+| | |
+|---|---|
+| **What** | One chunk recorded on CPH2707, uploaded to S3, verified, and completed in Aurora |
+| **When** | 2026-08-20, Mission 7.4 device checkpoint |
+| **Previously** | **Zero.** No chunk had ever reached `uploading` on a device; no metadata POST had ever succeeded, in any environment, by any client |
+| **Bugs found live** | Two, both real, both fixed and redeployed during the run — A-211, A-212 |
+
+### The chain, as observed
+
+| Stage | Evidence |
+|---|---|
+| Sign-in | `200 POST /v1/auth/verify`, real `userId` (a `users.id` uuid, not the Firebase uid — A-206's fix, live) |
+| BR-19's join | `GET /v1/projects` returned `data: []` before seeding and the seeded Project after — **the empty answer is half the proof**, since it shows the join ran and matched nothing rather than failing open |
+| Session | `201 POST /v1/tasks/{taskId}/sessions`, and a repeat answered **200** — F5's idempotency and F34's no-caching argument, confirmed against the real backend rather than a scripted adapter |
+| Chunk | `201`, `s3_object_key` composed from real org/project/task/session ids |
+| Transfer | 3 presigned `PUT`s to S3, all 200 |
+| Metadata | `201` — **after** A-211 and A-212 |
+| Status | `200 PATCH .../status`, **14,457 ms** |
+| Backend | `sessions.status = complete`, `chunks.status = complete`, `chunk_metadata.verified_at` populated |
+
+Every one of those had been proven in isolation and none of them together. The database state is the part that matters: `verified_at` populated means `chunks-verify` downloaded the object, recomputed the hash, matched it against what the device registered, and then `complete_chunk()` and `complete_session()` both ran — BR-21 and FR-SES-02 satisfied by the machinery rather than by assertion.
+
+### Gap 9's resume, observed rather than inferred
+
+The status `PATCH` took **14,457 ms**. Mission 7.3 Part 3 set the Lambda timeout to 28 seconds from three measured Aurora resume times — 15876, 15889 and 15428 ms — and A-178 recorded them. Tonight's figure is a fourth measurement of the same phenomenon, from a real device on a real network, and it sits inside the same band.
+
+That is worth recording for two reasons. It is the first confirmation that the 28-second decision holds against a **client** request rather than a probe, and it is a reminder that the margin is roughly 13 seconds — comfortable, not generous. A resume plus a cold start plus the chunk hash is the stacked case A-186's timing note put near 40 seconds, and that case has still never been observed.
+
+### The two bugs, and what they have in common
+
+Full traces are in A-211 and A-212. The property worth stating here is the one they share with A-206 and A-207 before them, and with A-205 and A-208 in the toolchain medium:
+
+**Every one was a claim verified against a stand-in rather than against the real thing.**
+
+- A-206, A-207 — each half correct against its own reading; the seam never exercised.
+- A-211 — two defensible readings of a chapter that decides neither.
+- A-212 — a mock asserts what was **sent**, never what Postgres would **accept**. No INSERT in this project had reached a real database, so a defect dating to migration `0004` survived every green suite for four missions.
+
+Six amendments, one shape: the verification was real and measured the wrong object. **The device is the first artifact in this project that could not be substituted for**, which is why one evening of it produced two defects that 203 backend tests and 1150 mobile tests could not.
+
+### What is genuinely proven, and what is not
+
+**Proven end to end, once:** the full Chapter 5.10 pipeline against the deployed backend, with real identity on every field, for a chunk of **3 parts**.
+
+**Not proven, and stated plainly rather than implied by the milestone:**
+
+- **The 38-part case.** Tonight's chunk was short. Part count, presigned-URL expiry across a long transfer, and `chunks-verify`'s hash of a 633 MB object inside its timeout are all untouched. F4 measured 7780 ms for the hash at 1769 MB against a *seeded* object; a cold start plus S3 first-byte latency on top of it remains the unmeasured stacked case.
+- **The foreground service across a long upload** with the screen off and Android's battery optimiser active. Nothing in either suite exercises it.
+- **A failed part, mid-transfer.** The retry ladder and the resume path ran clean tonight because nothing went wrong at step 2.
+- **Three checklist items, deferred by decision rather than forgotten:** `deviceId` persistence across relaunch and reinstall, a second page via a small `?limit=`, and a real 404 firing the new copy. All three are covered by unit tests and each needed either a relaunch cycle or a temporary code change; the project owner deferred them once the core proof was in hand. **`nextCursor` has therefore still never been produced and consumed by anything real** — A-199's closure remains code-complete and device-unconfirmed.
+
+### One process note
+
+Both live-found bugs were fixed at the **root** rather than at the symptom, and the second was swept before redeploying: asked whether other numeric columns shared A-212's defect, the answer came from reading the schema — three numeric columns in total, all in one table, all through the same two helpers — rather than from a third device failure. That is the check that stopped this being three deploy cycles instead of two.
