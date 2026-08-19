@@ -85,6 +85,46 @@ void main() {
       );
     });
 
+    test(
+      'backendUserId is the response userId, NOT the Firebase uid',
+      () async {
+        // A-206. Step 3 wired `identity.collector_id` to `uid`; the metadata
+        // route joins `sessions.collector_id`, which is `users.id`, and refuses
+        // a document that disagrees. Every metadata POST would have been
+        // refused, for every chunk, forever.
+        //
+        // Asserted as a PAIR rather than as one field, because the defect was
+        // not a missing value — it was the wrong one of two present values.
+        final Session session = await repositoryFor(<String, dynamic>{
+          'role': 'collector',
+          'org_id': 'org-42',
+        }, backend: FakeVumpApi(userId: 'users-row-99')).restoreSession();
+
+        final SessionAuthenticated authenticated =
+            session as SessionAuthenticated;
+        expect(authenticated.user.backendUserId, 'users-row-99');
+        expect(authenticated.user.uid, 'uid-1');
+        expect(
+          authenticated.user.backendUserId,
+          isNot(authenticated.user.uid),
+          reason: 'the two identifiers must not be interchangeable',
+        );
+      },
+    );
+
+    test('a backend that returns no userId is refused', () async {
+      // Both or neither: a blank here would put an empty collector_id on every
+      // chunk the session records, which is the substitution A-068's Guard 1
+      // exists to refuse, arriving from the other end.
+      await expectLater(
+        repositoryFor(<String, dynamic>{
+          'role': 'collector',
+          'org_id': 'org-42',
+        }, backend: FakeVumpApi(userId: '')).restoreSession(),
+        throwsA(isA<AuthenticationException>()),
+      );
+    });
+
     test('an unrecognised role is refused, not defaulted', () async {
       // The case that would be most tempting to fall through on.
       await expectLater(

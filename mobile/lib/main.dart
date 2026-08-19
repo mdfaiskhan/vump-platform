@@ -349,9 +349,15 @@ List<Override> recordingOverrides(
       // construction — which is `unauthenticated`, since `_restoreSession` has
       // not completed — and every chunk of the session would carry a blank
       // Collector. Mission 7.4, F21.
+      //
+      // `backendUserId`, NOT `uid` — A-206. `uid` is Firebase's; the metadata
+      // route joins `sessions.collector_id`, which is `users.id`, and refuses
+      // a document that disagrees. Step 3 shipped the Firebase one and no test
+      // on either side could tell them apart: both are non-empty opaque
+      // strings from the same signed-in account.
       (Ref ref) => PlatformDeviceContext(
         collectorId:
-            ref.watch(authNotifierProvider).valueOrNull?.user?.uid ??
+            ref.watch(authNotifierProvider).valueOrNull?.user?.backendUserId ??
             MetadataIdentity.unsourced,
         deviceId: deviceId,
         deviceModel: deviceModel ?? MetadataIdentity.unsourced,

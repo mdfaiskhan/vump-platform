@@ -18,6 +18,7 @@ import 'package:mobile/features/auth/domain/repositories/auth_repository.dart';
 void main() {
   const User collector = User(
     uid: 'u1',
+    backendUserId: 'backend-u1',
     email: 'c@example.com',
     role: Role.collector,
     orgId: 'org1',
@@ -272,6 +273,7 @@ class _FakeAuthRepository implements AuthRepository {
     signInCalls += 1;
     return const User(
       uid: 'u1',
+      backendUserId: 'backend-u1',
       email: 'c@example.com',
       role: Role.collector,
       orgId: 'org1',

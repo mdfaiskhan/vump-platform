@@ -24,6 +24,7 @@ import 'package:mobile/features/auth/presentation/admin_invite_codes_screen.dart
 void main() {
   const User admin = User(
     uid: 'a1',
+    backendUserId: 'backend-a1',
     email: 'admin@example.com',
     role: Role.admin,
     orgId: 'org-42',

@@ -13,6 +13,7 @@ import 'package:mobile/features/auth/domain/entities/user.dart';
 void main() {
   const User collector = User(
     uid: 'u1',
+    backendUserId: 'backend-u1',
     email: 'c@example.com',
     role: Role.collector,
     orgId: 'org1',
@@ -20,6 +21,7 @@ void main() {
   );
   const User admin = User(
     uid: 'u2',
+    backendUserId: 'backend-u2',
     email: 'a@example.com',
     role: Role.admin,
     orgId: 'org1',
