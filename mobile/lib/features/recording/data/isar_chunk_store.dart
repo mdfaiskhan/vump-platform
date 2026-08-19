@@ -382,6 +382,14 @@ class IsarChunkStore
         session.sessionId: session.startedAt,
     };
 
+    // Mission 7.4 F17. No extra query: the session rows are already loaded for
+    // the join above, so the Task ride-along costs one more map over the same
+    // list. Nullable at source and left nullable here — see QueuedChunk.taskId.
+    final Map<String, String?> taskOf = <String, String?>{
+      for (final LocalSession session in sessions)
+        session.sessionId: session.taskId,
+    };
+
     final List<QueuedChunk> queue = <QueuedChunk>[];
     for (final LocalChunk row in rows) {
       // BR-08 and Chapter 5.15: a chunk cleared after a confirmed upload is
@@ -404,6 +412,7 @@ class IsarChunkStore
         QueuedChunk(
           chunkId: row.chunkId,
           sessionId: row.sessionId,
+          taskId: taskOf[row.sessionId],
           sequenceIndex: row.sequenceIndex,
           sessionStartedAt: sessionStart,
           status: status,
