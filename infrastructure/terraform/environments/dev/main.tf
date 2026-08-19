@@ -127,6 +127,17 @@ module "api_gateway" {
     DATABASE_CLUSTER_ARN   = module.database.cluster_arn
     DATABASE_NAME          = module.database.database_name
     FIREBASE_PROJECT_ID    = var.firebase_project_id
+
+    # The Fork 1 seam. `chunks-verify` invokes `chunks-upload` to finalise a
+    # multipart upload, because CompleteMultipartUpload needs s3:PutObject and
+    # A-143 keeps that away from the role that reads footage.
+    #
+    # Given to all seven rather than one: `lambda_environment` is shared, and a
+    # per-function variable would need the same seam in the module that
+    # DATABASE_CREDENTIALS_SECRET_ARN already has. It is a name, not a secret,
+    # and confers nothing without the lambda:InvokeFunction grant that only
+    # chunks-verify holds.
+    UPLOAD_FUNCTION_NAME = "vump-${var.environment_slug}-chunks-upload"
   }
 
   # DATABASE_CREDENTIALS_SECRET_ARN is per-function, not shared, so it is

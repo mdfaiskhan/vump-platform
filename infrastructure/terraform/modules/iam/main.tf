@@ -240,6 +240,37 @@ resource "aws_iam_role_policy" "data_api" {
 # the roles rather than by the handlers: a presigned URL carries the signer's
 # permissions, so the upload role *cannot* produce a URL that reads footage,
 # however the code that calls it is written. A-143.
+# The Fork 1 seam — Mission 7.3 Batch 2b.
+#
+# `CompleteMultipartUpload` requires `s3:PutObject`, and A-143 makes the
+# separation structural rather than conventional: the role that downloads
+# evidentiary footage to hash it must not be able to overwrite it. So
+# `chunks-verify` does not gain PutObject — it gains the ability to ask
+# `chunks-upload`, which already holds it, to finalise one specific upload.
+#
+# **This is materially narrower than PutObject.** The invoked function validates
+# the chunk before acting, so this cannot create an object at an arbitrary key,
+# cannot overwrite footage and cannot presign anything. A-143's stated property
+# — "chunks-verify holds s3:GetObject and cannot write" — remains literally
+# true.
+#
+# Chapter 4.10 §2 step 3 anticipated the two-function shape in its own wording:
+# "a Lambda (triggered either by that call or an S3 event notification)".
+resource "aws_iam_role_policy" "chunks_verify_invoke_upload" {
+  name = "invoke-chunks-upload"
+  role = aws_iam_role.lambda["chunks-verify"].id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Sid      = "FinalizeMultipartUploadViaChunksUpload"
+      Effect   = "Allow"
+      Action   = "lambda:InvokeFunction"
+      Resource = "arn:aws:lambda:${data.aws_region.current.region}:${data.aws_caller_identity.current.account_id}:function:vump-${var.environment_slug}-chunks-upload"
+    }]
+  })
+}
+
 resource "aws_iam_role_policy" "chunks_s3" {
   for_each = local.roles_with_s3
 
