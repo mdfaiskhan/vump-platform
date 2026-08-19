@@ -1,5 +1,7 @@
 import 'dart:io' show Platform;
 
+import 'package:mobile/core/identity/interfaces/device_context.dart';
+import 'package:mobile/core/identity/interfaces/task_context.dart';
 import 'package:mobile/features/recording/data/codec_wire_name.dart';
 import 'package:mobile/features/recording/domain/entities/camera_specification.dart';
 import 'package:mobile/features/recording/domain/entities/chunk_integrity.dart';
@@ -12,9 +14,7 @@ import 'package:mobile/features/recording/domain/entities/metadata_identity.dart
 import 'package:mobile/features/recording/domain/entities/metadata_timing.dart';
 import 'package:mobile/features/recording/domain/entities/recording_session.dart';
 import 'package:mobile/features/recording/domain/repositories/capture_conditions_reader.dart';
-import 'package:mobile/features/recording/domain/repositories/device_context.dart';
 import 'package:mobile/features/recording/domain/repositories/metadata_generator.dart';
-import 'package:mobile/features/recording/domain/repositories/task_context.dart';
 
 /// Builds Chapter 4.5's metadata object from the sources Chapter 5.7 §2 names.
 ///

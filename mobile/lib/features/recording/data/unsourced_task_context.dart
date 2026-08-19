@@ -1,5 +1,5 @@
+import 'package:mobile/core/identity/interfaces/task_context.dart';
 import 'package:mobile/features/recording/domain/entities/metadata_identity.dart';
-import 'package:mobile/features/recording/domain/repositories/task_context.dart';
 
 /// Supplies [MetadataIdentity.unsourced] for both Task fields, and says so.
 ///
