@@ -6757,3 +6757,39 @@ Worth noting alongside A-187's observation that **negative permission probes nee
 | "role X cannot touch role Z's row" | Neither | **Still blocked** — A-173 |
 
 Recorded as a proposal rather than a closure. **Gap 8 remains open**, and its status is unchanged: the credential exists, the proofs are not a CI job. What has changed is that two of the three shapes it needs now have a demonstrated method.
+
+---
+
+### A-194 — Two of this mission's self-corrections never reached the register, and one of them was ruled on
+
+| | |
+|---|---|
+| **Record** | Mission 7.3's own reports, Parts 3, 20, 21 and 25 |
+| **Class** | Findability failure — the correction was made, and made only in conversation |
+| **Status** | **Closed by this entry** |
+| **Date** | 2026-08-19, Mission 7.3 closing gate |
+
+Mission 7.3's close-out claimed *"three are corrections to this mission's own earlier readings (A-190, A-191, and Part 21's budget claim)"*. Audited at the Testing & Verification gate, **that count was wrong twice over**: the register holds **two** such corrections, not three, and one of the three named is not a self-correction at all.
+
+| Claimed | Actually |
+|---|---|
+| A-190 | ✅ Self-correction, in the register — corrects Part 1's reading of `CHUNK_ALREADY_REGISTERED` |
+| A-189 | ✅ Self-correction, in the register — **not claimed.** Records that Part 16 proposed `ON CONFLICT DO UPDATE` against a role with no `UPDATE` |
+| A-191 | ❌ Not a self-correction. It is a defect in Volume 5 Chapter 5.10, found by this mission but not made by it |
+| Part 21's budget claim | ❌ **Not in the register at all** |
+
+### The one that matters, because a decision was taken on it
+
+Part 20 recommended Fork 1 option B on two grounds: it preserves A-143, and *"the completion moves to a different invocation and the budget separates cleanly again"*. The second was wrong — a different **invocation** is not a different **request budget**, because one client `PATCH` waits for MPU assembly and the hash however many Lambdas are involved.
+
+**The project owner's Part 21 ruling cited that reasoning back verbatim** when re-affirming B. Part 21 opened by correcting it, the ruling was re-affirmed on the corrected premise, and the measurement that followed made the point moot — `completeMs` came in at 99ms against a 21-second margin.
+
+So the outcome is unaffected and the record was still incomplete: **a reader of the register would find no trace that a fork was first recommended on a premise that did not hold.** The correction lives in one doc comment inside `probe/index.mjs` and in a conversation.
+
+A smaller instance, recorded for completeness rather than because it changed anything: Part 3 stated *"no new Secrets Manager entries — eight before, eight after"*, and corrected it in the same report once F7's `vump_ci_proof` role turned out to need a ninth. That one never reached the register either.
+
+### Why this is worth an entry rather than a shrug
+
+This register exists because *"an architectural decision that is not recorded here does not exist"*, and the same standard has to apply to a decision's **rejected premises**. A-172 makes exactly this argument about a Mission 6 hand-off that compressed "a CI credential" into "a read-only CI credential": the compression was carried forward into a later trace before it was caught, and the correction was worth its own record.
+
+The pattern to keep: **a correction made in a report is not recorded.** Reports are dated artefacts and are not searched; the register is. Both of the corrections above were made promptly and visibly at the time — what failed was the step after.
