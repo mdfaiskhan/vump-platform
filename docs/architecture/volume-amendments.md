@@ -4674,6 +4674,7 @@ Every carried-forward item, in one place. Accurate as of **Mission 4.3**; origin
 | 97 | **A-08 Metadata Detail / Export is deferred, not traced — `features/metadata/` does not exist as a module** | **Explicitly deferred by Mission 5.2.5's brief rather than left implicitly untouched, because A-08's blocker is architectural rather than a screen-level gap.** Volume 3 Chapter 3.5 §2 assigns A-08 to a **`metadata`** module — *"Metadata Detail/Export (A-08); `MetadataRepository`, the full FR-META-01–07 field model (freezed classes)"* — with the justification that metadata *"has independent integrity rules (BR-21/BR-22) that outlive both the recording and upload processes"*. **That module has never been created.** `lib/features/` holds six: `auth`, `onboarding`, `projects_tasks`, `recording`, `settings`, `upload`.<br><br>**Building it is a real architectural step, not a trace outcome.** A seventh feature module takes the `Architecture boundaries` job's cross-feature sweep from **30 ordered pairs to 42** (item 77 records the 20 → 30 move for the same reason), and Volume 3 Ch. 3.5 §4 places `metadata` in the dependency graph with two readers — *"read by recording (to write metadata) and by upload/admin_shared (to display and export it)"* — so its creation is a module-boundary decision with existing consumers, not a screen build.<br><br>A-08's other blockers are already recorded and neither is subtle: no deployed backend (item 36) and no client path to verification state (item 83, which **does** apply here). **Owed to whichever mission builds the metadata module.** No trace was run and none is needed to know that. | Item 36, item 83, item 77, V3 Ch. 3.5 §2/§4, Ch. 2.5 A-08 |
 | 93 | **A-01 Admin Dashboard is in Chapter 2.5's inventory and no functional requirement governs it** | **Third instance of the surface-with-no-backing family, and the first at SCREEN scale.** FR-ADM-01 through 08 cover create, edit, assign, reassign, view-status, view-metadata, prevent-Collector-writes and visibility. **None is a dashboard.** FR-PT-01 — *"The system shall display a Home Dashboard showing active projects, in-progress sessions, total recorded time, and sync status"* — is the Collector's, and Chapter 1.3 gives it no Admin counterpart. A-01's only descriptions are narrative: Chapter 1.1 §7.3's three-tile sketch, Chapter 1.1 §4.2 step 18's **two-tile** sketch (the PRD disagreeing with itself about this screen's content), Chapter 2.5's row transcribing §7.3, and Chapter 2.2 step 2's navigation duty.<br><br>**The family, now three rows and three scales:** item 88 is `archived_at`, a **column** that is live, rendered and read with no requirement behind it; item 91 is *"Project-level settings"*, a **field group** a screen names with no column behind it; this is a **whole screen** the inventory names with no requirement behind it. Kept separate for the reason item 91 was: different owners, different scales, and different decisions will answer them.<br><br>**Not a blocker.** Mission 5.2.4 built A-01 to Chapter 2.2 step 2's navigation duty and the one sourced tile (A-123); this row records that the screen rests on inventory and narrative rather than on a requirement, so a future scope review knows what it is looking at. | A-123, items 88 and 91, Ch. 2.5 A-01, Ch. 1.1 §7.3/§4.2 |
 | 94 | **`tasks` has no status column, so "outstanding" is underivable — and so is any notion of Task progress or completion** | **Recorded independently of A-01, because any future specification touching Task state hits the same wall.** Volume 4 Chapter 4.4 §3's `tasks` table has **six columns — `id`, `project_id`, `title`, `instructions`, `reference_examples`, `created_at` — and no status of any kind.** `sessions` has a status; `chunks` has a status; **Tasks do not.**<br><br>The immediate consequence is that Chapter 1.1 §7.3 and Chapter 2.5's A-01 both ask for *"outstanding Task counts"* and the word **is never defined** — it appears three times in Volumes 1 and 2 (Ch. 1.1 §7.3, Ch. 2.5's A-01 row, and US-05, which is a *Collector* story using it colloquially). **But undefined is the lesser half.** Even once someone defines it, there is no field to compute it from: *"has no sessions yet"* needs sessions per Task (item 36), *"has no assigned Collector"* needs assignments (items 89, 92), and *"not yet complete"* needs a completion concept Tasks do not have at any layer.<br><br>**Why it is not folded into A-01's record:** a Task-progress indicator on A-03, a "done" filter on C-05, an FR-ADM-05 rollup, or any Phase 3 QA workflow would each hit this identically. Closing it means adding a column and deciding its lifecycle — a schema decision in Chapter 4.4, not a screen's problem. | A-123, item 93, Ch. 4.4 §3, Ch. 1.1 §7.3 |
+| 111 | **FR-PT-01's *"active projects"* count is unanswerable once the Projects list is paginated** | **Third of FR-PT-01's four aggregates to go absent, and the first to go absent because of something this project built rather than something a chapter omitted.** `DashboardSummary.activeProjectCount` counted `projectsProvider`'s Projects, which was a total until Mission 7.4's F20 made that provider hold *the pages loaded so far* — one, until a Collector opens C-04 and presses "Load more".<br><br>**Closing it needs a total, and there is nowhere to get one.** Chapter 4.6 §1's envelope carries `data` and `meta.nextCursor` and no count; walking every page to render one tile is an unbounded number of requests; and "200+" would be a third display convention on a screen that already has exactly one rule for an unanswerable aggregate — omit the tile, per A-110. The tile is therefore dropped on that precedent, leaving **one of FR-PT-01's four things rendered**.<br><br>**It is a product/spec question, not an engineering one:** either the dashboard stops promising a count, or Chapter 4.6 §1 gains a total on list envelopes. The second is a change to a route catalog Mission 7.3 closed and should not be made for a tile alone — but it would also close items 75 and 76's shape if a general aggregate endpoint were ever specified. | A-200, ADR-051, Ch. 4.6 §1, FR-PT-01 |
 | 92 | **No endpoint anywhere in Chapter 4.6 returns an organisation's Collectors — a catalog-level omission that four separate specifications assume away** | **Recorded as its own row rather than inside A-06's, because it is not one screen's problem.** Chapter 4.6's complete catalog is **15 routes**, and its only user-facing one is `GET /v1/users/me` — *"Current user's profile + role"*, the caller and nobody else. **Four specifications assume a Collector directory exists and none of them can be satisfied:** FR-ADM-03 (*"assign one or more Collectors"* — an Admin must identify them); UC-07's exception flow (*"If the Admin attempts to assign a Collector who does not have an account or is deactivated, the system blocks the assignment and explains why"* — presupposes the Admin picked from something); Chapter 2.2's Admin flow step 6 (*"Collector(s) **selected** and confirmed"* — selected from what?); and Chapter 2.7's A-06, which lists Collector rows.<br><br>**The gap is total, not merely endpoint-level.** Verified at every layer this project has: Firestore holds one collection, `org_invite_codes`, with `allow read: if false` (*"Nobody reads, ever"*); `functions/src/index.ts` states in its own comment that *"no `orgs` collection exists"* and names the users table as *"Volume 4 Ch. 4.4's"*, behind the unbuilt backend; `features/auth/` yields the caller's own session and nothing else; and **no fake in `lib/` or `test/` holds a user list**. So the only user id this application can obtain is the signed-in Admin's own `uid`, which Chapter 4.4 §4's `role='collector'` annotation makes the wrong one.<br><br>**Closing it needs a route added to Chapter 4.6** — something like `GET /v1/users?role=collector`, org-scoped per BR-20 — and that is a backend/spec decision, not an engineering one. **No stand-in was invented**: seeding a roster into a fake would be inventing a domain concept this project has never modelled rather than standing in for one with a known shape, which is the line between a fake and a fabrication (A-122). | A-122, item 89, FR-ADM-03, UC-07, Ch. 2.2 step 6, Ch. 4.6 §2 |
 | 90 | **Chapter 2.9 contradicts itself about editing a Task: §2 principle 4 requires a confirmation, §4.4 forbids one** | **A PRODUCT/SPEC DECISION FOR FAISAL — a genuine authorial contradiction inside one chapter, not something derivable.** Both sentences name the same action explicitly and state opposite rules.<br><br>**§2, principle 4:** *"Admin actions that affect a Collector are never destructive-by-default. Removing a Collector from a Task, or **editing Task instructions after Collectors are already assigned, always confirms the action and states its effect in plain language before it takes effect**."*<br><br>**§4.4:** *"Reversible actions (reassigning a Collector, **editing Task instructions**) **do not require a confirmation dialog** — they save immediately and can be changed again just as easily."*<br><br>**This is unlike G3.** There the sources disagreed in emphasis and one class of them specified a mechanism, so the resolution was derivable by asking which sources were normative (A-116). Here both sentences are behavioural rules in the same chapter, at the same level of authority, naming the same action — and §2 P4 even supplies the reasoning (*"affect a Collector"*) that §4.4's *"reversible"* framing rejects. **There is no reading that satisfies both.** Mission 5.2.2 therefore held A-05's **edit** half back entirely rather than pick one: `updateTask` exists and works, and shipping either behaviour would encode an answer nobody has given into UI a Collector depends on. Settling it needs one sentence struck or amended, not an implementation judgement. | A-121, Ch. 2.9 §2 P4, Ch. 2.9 §4.4, FR-ADM-02 |
 | 91 | **Chapter 2.5's A-04 names "Project-level settings"; the phrase appears exactly once in all of Volume 2 — in that row** | **Third instance of one shape, and kept as a separate row so the family stays visible.** Ch. 2.5's A-04: *"Name, description, and **Project-level settings**."* Nothing defines them: `projects` has seven columns and none is a setting (Ch. 4.4 §2), `POST /v1/projects` carries no such field, no FR mentions one, and no other chapter uses the phrase. So A-04 renders name and description with **no settings section and no empty placeholder implying one is coming** — the treatment C-06 gave `requirements` (A-110), and a test asserts the absence.<br><br>**The family, three rows and three owners:** item 69 is FR-PT-05/A-05's `requirements` — a **Task** field named by a requirement with no column. This is A-04's **Project-level settings** — a **Project** field group named by a screen with no column. Both are *"a surface names something the schema does not have"*, and they are separate items because they have different owners, different chapters and will be answered by different decisions. Folding them would make one product answer look like it closed both. | A-110, item 69, Ch. 2.5 A-04, Ch. 4.4 §2 |
@@ -6884,3 +6885,111 @@ Granted per-**file**, not per-directory, on the precedent A-067 set and ADR-039 
 `core/` owning a confined plugin is not itself new — `core/storage/` owns `flutter_secure_storage`, `core/network/` owns `dio`, `core/database/` owns `isar`. What is new is that this package now has an owner **above** the feature layer, which follows from ADR-022 R3: a device id is needed by two features and belongs to neither.
 
 **The rule was verified non-vacuous before this entry was written.** The violation was found by running the check locally *after* the code was written and passing analysis and tests — the import was already in place, the suite was green, and only the boundary job caught it. That is the job doing exactly what Mission 4.3's open item 41 asked of it.
+
+---
+
+### A-199 — A-184 is closed, and the fix reached further than the port
+
+| | |
+|---|---|
+| **Was** | A-184: `fetchProjects()` and `fetchTasks(id)` returned `List`, discarded `meta`, and *"saw page one and stopped"* |
+| **Now** | Both return a `PagedResult` carrying `nextCursor`; the notifiers thread it; four screens offer the next page |
+| **Status** | **Closed** |
+| **Date** | 2026-08-19, Mission 7.4 step 4 |
+
+Recorded because the fix was **not** confined to the two methods A-184 named, and a reader tracing it from that entry alone would miss half of it.
+
+**`VumpApi` could not read a list endpoint at all.** A list route's `data` is a JSON array, `_unwrap` required an object, and it raised `NETWORK_SERIALIZATION` on anything else. That was correct for what `get` promises, and it meant `GET /v1/projects` would have failed on its first call — not truncated, *refused*. So A-184's *"the client discards `meta`"* was the visible half of a client that could not have consumed the rows either.
+
+`getList` is separate from `get` rather than a widening of it, because `get`, `post` and `patch` have three callers between them that have been exercised against the real backend, and giving them a `meta` field none of them has would edit a verified request path for nothing.
+
+**The cursor stops at the notifier.** F25: the repository returns a page, the notifier keeps `nextCursor` privately, and the published state is still `List<Project>`. Seven consumers, no type change. Pagination is a property of the read, not of what a screen renders.
+
+### A-200 — FR-PT-01's third aggregate goes absent, for the reason the other two did
+
+| | |
+|---|---|
+| **Volume** | 1, FR-PT-01 — *"active projects, in-progress sessions, total recorded time, and sync status"* |
+| **Was** | Two of four absent: *in-progress sessions* and *total recorded time* |
+| **Now** | *Active projects* joins them. Only *sync status* survives |
+| **Cause** | F20's pagination, not a new discovery about the data |
+| **Status** | Open item 111 |
+| **Date** | 2026-08-19, Mission 7.4 step 4 |
+
+`DashboardSummary.activeProjectCount` counted `projectsProvider`'s Projects. That was a total while the provider held every Project; after F20 it holds **however many pages have been loaded**, which is one until a Collector scrolls C-04 and presses "Load more". The tile did not become wrong so much as it stopped being about what its label says.
+
+**There is no cheap honest fix, and each rejected option is rejected for its own reason:**
+
+- *Count what is loaded and label it differently.* There is no honest label. "Projects on the pages you have loaded" is not a dashboard statistic.
+- *Walk every page to count them.* An unbounded number of requests to render one tile, on a screen whose other numbers are local.
+- *Render "200+".* This screen already has exactly one rule for an aggregate it cannot answer — omit the tile — and A-110's argument is that an absent tile beats a false one. A third convention would make the two existing absences look like oversights rather than decisions.
+- *Add a total to the envelope.* Chapter 4.6 §1 has no `total`, and adding one is a backend change to a catalog Mission 7.3 closed, for a tile.
+
+So the tile is dropped on the precedent the same screen already set. The honest summary is that **FR-PT-01 is now one-quarter rendered**, and that is a product gap rather than an implementation one — recorded rather than made to look smaller.
+
+### A-201 — Three screens select a row out of a page, and 200 is a bound not a fix
+
+| | |
+|---|---|
+| **Record** | C-06 Task Detail; C-05 and A-05 Project Detail |
+| **Shape** | Each selects one row **out of a list**, because Chapter 4.6 §3 has no `GET /v1/tasks/{id}` and no `GET /v1/projects/{id}` |
+| **Was about to be** | At `DEFAULT_LIMIT` = 50, the 51st Task in a Project renders *"This Task isn't available to you"* |
+| **Now** | Page size raised to `MAX_LIMIT` = 200 |
+| **Residual** | The 201st Task reproduces it exactly |
+| **Status** | **Open**, with a revisit trigger |
+| **Date** | 2026-08-19, Mission 7.4 step 4 |
+
+The failure is worth naming precisely, because it is not a truncated list. That copy was written to mean BR-19 — *"not assigned to you"*, deliberately indistinguishable from *"does not exist"* — so pagination would make the app **state an authorization fact that is false**. A Collector would be told they lack access to their own assigned Task.
+
+200 is the backend's own ceiling: `parsePageRequest` **rejects** an out-of-range `limit` rather than clamping it, so this cannot be raised further without changing `MAX_LIMIT`, and `MAX_LIMIT` was chosen against ADR-044's 1 MiB response ceiling.
+
+**Revisit trigger, stated so it is not a standing invitation:** a real `GET /v1/tasks/{id}` route, *if and when a mission actually approaches one*. Chapter 4.6's catalog was closed by Mission 7.3, and opening it now for a case no real org is near would be scope creep into finished territory. What makes this recordable rather than deferred-and-forgotten is that the trigger is a route, not a date.
+
+### A-202 — `MAX_LIMIT` times a maximal row exceeds ADR-044's ceiling, and already did
+
+| | |
+|---|---|
+| **Record** | `pagination.ts`'s `MAX_LIMIT = 200`, justified as *"a generous row is on the order of a few kilobytes, so 200 leaves roughly an order of magnitude of headroom"* |
+| **Holds for** | `projects` — seven short columns |
+| **Does not hold for** | `tasks` — the backend accepts `instructions` up to **20,000 characters** |
+| **Status** | Open, raised not created by A-201 |
+| **Date** | 2026-08-19, Mission 7.4 step 4 |
+
+200 maximal Task rows is roughly 4 MiB against ADR-044's 1 MiB ceiling. The arithmetic that matters, though, is that **50 maximal rows is already about 1 MiB** — the exposure exists at `DEFAULT_LIMIT` and predates this mission. A-201 makes it four times more reachable; it did not introduce it.
+
+Two things keep it recordable rather than blocking. It **fails loudly** — the Data API terminates the call and the client sees a refused read, not a silently short list. And it needs a Task with instructions near the schema cap, a length no real Task has been observed to approach, because the cap was set as a bound rather than measured.
+
+What would settle it is the measurement `pagination.ts` itself defers — *"the measurement belongs to Mission 6.3, when real rows exist"* — and real rows still do not exist. Recorded so that the first org with long instructions is a known case rather than a mystery.
+
+### A-203 — Two `vumpApiProvider` declarations, and the third consumer is what found it
+
+| | |
+|---|---|
+| **Was** | `core/network/providers/dio_provider.dart` and `features/upload/application/chunk_upload_pipeline.dart` each declared `final Provider<VumpApi> vumpApiProvider` |
+| **Effect** | Two `VumpApi` instances over one shared `DioClient`; which one a file got depended on which it imported |
+| **Status** | **Closed.** The `features/upload/` one is deleted |
+| **Date** | 2026-08-19, Mission 7.4 step 4 |
+
+Harmless in effect — `VumpApi` holds only its client and no state — and that is exactly why it survived two missions. Both providers worked, both suites were green, and nothing distinguished them at a call site.
+
+**It was found by needing a third consumer.** `features/projects_tasks/data/` cannot import the `features/upload/` one at all under ADR-022 R3, so the duplicate would have presented as *"the provider I need is unreachable"* rather than as *"there are two"*. A reader who resolved that by declaring a third in `features/projects_tasks/` would have been following the local precedent exactly.
+
+The fix touched one file and no test — the import that resolves the surviving provider was already present, so deleting the declaration was sufficient, and the upload suite passed unmodified at 184 tests. Recorded because *"the duplicate that does not matter yet"* is a shape worth recognising: the cost is not the second instance, it is that the second declaration is a template.
+
+### A-204 — M8's gate is met, and the fakes outlive the condition that named them
+
+| | |
+|---|---|
+| **Gate** | Volume 11, Ch. 11.1 M8 — *"Every repository reads/writes the real backend — no fake/mock repository remains wired into a release build"* |
+| **Condition as written** | The three fake classes *"and their `main.dart` overrides are deleted together"* |
+| **What happened** | The overrides are deleted. The classes are not |
+| **Status** | Gate **met**; the conditions rewritten in all three files |
+| **Date** | 2026-08-19, Mission 7.4 step 4 |
+
+`FakeProjectTaskRepository`, `FakeProjectTaskAdminRepository` and `InMemoryProjectTaskStore` were bound in `main.dart` from Mission 5.1.1 because M8 comes after M7 and there was no deployed endpoint to read. Mission 7.3 deployed all thirteen routes; `main.dart` now binds the real repositories, and no composition root names a fake.
+
+**The classes stay, and the removal conditions were rewritten rather than reinterpreted.** Seven test files drive screens through them — both accessibility sweeps among them — and M8 is a rule about what a *build* reaches, not about whether a test double exists. Deleting them would take seven test files with it for nothing the gate asks for.
+
+The reason this is an entry rather than a comment edit is the failure it avoids: a removal condition that is met in substance but not in letter reads, on a later audit, as **unmet**. Mission 7.3's closing gate spent real effort on exactly that shape — a claim in a record that the code did not match. Three doc comments now say what actually happened, and this entry says why they differ from what they used to say.
+
+One divergence is now labelled rather than left implicit: `FakeProjectTaskRepository.fetchTasks` answers an unknown Project with an **empty list**, and the real repository raises A-186's `RESOURCE_NOT_FOUND`. The fake keeps the old answer so the screen tests that predate the real repository still describe what they were written to describe, and the 404 path is covered against the controllable double instead.
