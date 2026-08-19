@@ -130,12 +130,17 @@ void main() {
   });
 
   group('Chapter 4.6 §5 — the registration contract', () {
-    test('the body is exactly the three fields, and no ids', () async {
+    test('the body carries chunk_id and the three measured fields', () async {
       final ({ChunkUploadApiImpl api, FakeBackendAdapter backend}) t = build();
       await register(t.api);
 
       final RecordedRequest request = t.backend.backendRequests.first;
+      // `chunk_id` is the client's own identity for the chunk (Ch. 5.14 §3,
+      // F2), and the backend requires it. The three key components below are
+      // still absent, because the Lambda composes the S3 key — two different
+      // reasons that are easy to conflate.
       expect(request.body, <String, Object?>{
+        'chunk_id': 'chk_1',
         'sequence_index': 3,
         'file_size_bytes': fileContents.length,
         'checksum_sha256': 'abc123',
