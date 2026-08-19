@@ -1,8 +1,10 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mobile/core/errors/exceptions/network_exception.dart';
+import 'package:mobile/features/projects_tasks/application/page_size.dart';
 import 'package:mobile/features/projects_tasks/application/project_task_providers.dart';
 import 'package:mobile/features/projects_tasks/application/tasks_notifier.dart';
+import 'package:mobile/features/projects_tasks/domain/entities/paged_result.dart';
 import 'package:mobile/features/projects_tasks/domain/entities/task.dart';
 
 import 'fakes/controllable_project_task_repository.dart';
@@ -188,6 +190,107 @@ void main() {
             .requireValue
             .map((Task t) => t.id),
         <String>['t2'],
+      );
+    });
+  });
+
+  group('pagination — F20, and why the page size matters here most', () {
+    test('the first read asks for MAX_LIMIT and no cursor', () async {
+      // C-06 selects its Task out of THIS list, because Chapter 4.6 §3 has no
+      // GET /v1/tasks/{id}. At the backend's default of 50 the 51st Task in a
+      // Project would render "This Task isn't available to you" — a false
+      // claim about authorization. F26.
+      final _Harness harness = build(
+        tasks: <String, List<Task>>{
+          'prj-1': <Task>[task('t1', 'prj-1')],
+        },
+      );
+
+      await harness.container.read(tasksProvider('prj-1').future);
+
+      expect(harness.repo.cursors, <String?>[null]);
+      expect(harness.repo.limits, <int?>[projectTaskPageSize]);
+    });
+
+    test('loadMore sends the cursor back and appends', () async {
+      final _Harness harness = build();
+      harness.repo.taskPages = <String, List<PagedResult<Task>>>{
+        'prj-1': <PagedResult<Task>>[
+          PagedResult<Task>(
+            items: <Task>[task('t1', 'prj-1')],
+            nextCursor: 'C1',
+          ),
+          PagedResult<Task>.last(<Task>[task('t2', 'prj-1')]),
+        ],
+      };
+
+      await harness.container.read(tasksProvider('prj-1').future);
+      final bool loaded = await harness.container
+          .read(tasksProvider('prj-1').notifier)
+          .loadMore();
+
+      expect(loaded, isTrue);
+      expect(harness.repo.cursors, <String?>[null, 'C1']);
+      expect(
+        harness.container
+            .read(tasksProvider('prj-1'))
+            .requireValue
+            .map((Task t) => t.id),
+        <String>['t1', 't2'],
+      );
+    });
+
+    test('a failed loadMore keeps the Tasks already on screen', () async {
+      final _Harness harness = build();
+      harness.repo.taskPages = <String, List<PagedResult<Task>>>{
+        'prj-1': <PagedResult<Task>>[
+          PagedResult<Task>(
+            items: <Task>[task('t1', 'prj-1')],
+            nextCursor: 'C1',
+          ),
+        ],
+      };
+
+      await harness.container.read(tasksProvider('prj-1').future);
+      harness.repo.failWith();
+      final bool loaded = await harness.container
+          .read(tasksProvider('prj-1').notifier)
+          .loadMore();
+
+      expect(loaded, isFalse);
+      final AsyncValue<List<Task>> state = harness.container.read(
+        tasksProvider('prj-1'),
+      );
+      expect(state.hasError, isFalse);
+      expect(state.requireValue.single.id, 't1');
+    });
+
+    test('each family member paginates on its own cursor', () async {
+      // Two Projects, two cursors. One shared field would make loading page
+      // two of one Project fetch page two of the other.
+      final _Harness harness = build();
+      harness.repo.taskPages = <String, List<PagedResult<Task>>>{
+        'prj-1': <PagedResult<Task>>[
+          PagedResult<Task>(
+            items: <Task>[task('t1', 'prj-1')],
+            nextCursor: 'C-ONE',
+          ),
+        ],
+        'prj-2': <PagedResult<Task>>[
+          PagedResult<Task>.last(<Task>[task('t2', 'prj-2')]),
+        ],
+      };
+
+      await harness.container.read(tasksProvider('prj-1').future);
+      await harness.container.read(tasksProvider('prj-2').future);
+
+      expect(
+        harness.container.read(tasksProvider('prj-1').notifier).hasMore,
+        isTrue,
+      );
+      expect(
+        harness.container.read(tasksProvider('prj-2').notifier).hasMore,
+        isFalse,
       );
     });
   });

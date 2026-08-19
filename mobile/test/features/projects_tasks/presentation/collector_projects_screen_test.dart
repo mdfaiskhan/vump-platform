@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mobile/features/projects_tasks/application/project_task_providers.dart';
+import 'package:mobile/features/projects_tasks/domain/entities/paged_result.dart';
 import 'package:mobile/features/projects_tasks/domain/entities/project.dart';
 import 'package:mobile/features/projects_tasks/presentation/collector_projects_screen.dart';
 
@@ -152,6 +153,100 @@ void main() {
         findsOneWidget,
       );
       expect(find.textContaining('pull down to try again'), findsOneWidget);
+    });
+  });
+
+  group('the load-more row — F20', () {
+    Future<ControllableProjectTaskRepository> pumpPaged(
+      WidgetTester tester, {
+      required List<PagedResult<Project>> pages,
+    }) async {
+      final ControllableProjectTaskRepository repo =
+          ControllableProjectTaskRepository()..projectPages = pages;
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: <Override>[
+            projectTaskRepositoryProvider.overrideWithValue(repo),
+          ],
+          child: const MaterialApp(home: CollectorProjectsScreen()),
+        ),
+      );
+      await tester.pumpAndSettle();
+      return repo;
+    }
+
+    testWidgets('appears only when the backend said there is more', (
+      WidgetTester tester,
+    ) async {
+      await pumpPaged(
+        tester,
+        pages: <PagedResult<Project>>[
+          PagedResult<Project>(
+            items: <Project>[project('a')],
+            nextCursor: 'C1',
+          ),
+        ],
+      );
+
+      expect(find.text('Load more'), findsOneWidget);
+    });
+
+    testWidgets('is absent on a last page', (WidgetTester tester) async {
+      await pump(tester, projects: <Project>[project('a')]);
+
+      expect(find.text('Load more'), findsNothing);
+    });
+
+    testWidgets('tapping it appends the next page and then disappears', (
+      WidgetTester tester,
+    ) async {
+      await pumpPaged(
+        tester,
+        pages: <PagedResult<Project>>[
+          PagedResult<Project>(
+            items: <Project>[project('a')],
+            nextCursor: 'C1',
+          ),
+          PagedResult<Project>.last(<Project>[project('b')]),
+        ],
+      );
+
+      expect(find.text('Project b'), findsNothing);
+
+      await tester.tap(find.text('Load more'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Project a'), findsOneWidget);
+      expect(find.text('Project b'), findsOneWidget);
+      expect(find.text('Load more'), findsNothing);
+    });
+
+    testWidgets('a failed page offers a retry and keeps the rows', (
+      WidgetTester tester,
+    ) async {
+      // The whole reason `loadMore` does not publish an AsyncError: the rows
+      // already on screen are valid, and a full-screen error would discard
+      // them because MORE could not be fetched.
+      final ControllableProjectTaskRepository repo = await pumpPaged(
+        tester,
+        pages: <PagedResult<Project>>[
+          PagedResult<Project>(
+            items: <Project>[project('a')],
+            nextCursor: 'C1',
+          ),
+        ],
+      );
+
+      repo.failWith();
+      await tester.tap(find.text('Load more'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Project a'), findsOneWidget);
+      expect(find.text('Try again'), findsOneWidget);
+      expect(
+        find.textContaining('More Projects could not be loaded'),
+        findsOneWidget,
+      );
     });
   });
 }

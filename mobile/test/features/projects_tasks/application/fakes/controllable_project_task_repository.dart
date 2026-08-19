@@ -1,5 +1,6 @@
 import 'package:mobile/core/errors/error_codes.dart';
 import 'package:mobile/core/errors/exceptions/network_exception.dart';
+import 'package:mobile/features/projects_tasks/domain/entities/paged_result.dart';
 import 'package:mobile/features/projects_tasks/domain/entities/project.dart';
 import 'package:mobile/features/projects_tasks/domain/entities/task.dart';
 import 'package:mobile/features/projects_tasks/domain/repositories/project_task_repository.dart';
@@ -33,8 +34,31 @@ class ControllableProjectTaskRepository implements ProjectTaskRepository {
   /// What [fetchTasks] answers, keyed by `project_id`.
   Map<String, List<Task>> tasks;
 
+  /// Successive pages [fetchProjects] answers, consumed in order.
+  ///
+  /// Empty means *"one last page of [projects]"*, which is what every test
+  /// written before pagination expects. A test that cares about paging scripts
+  /// the pages it wants instead — the instrument does not slice [projects],
+  /// because a slicing double proves its own arithmetic rather than the
+  /// notifier's.
+  List<PagedResult<Project>> projectPages = <PagedResult<Project>>[];
+
+  /// Successive pages [fetchTasks] answers, keyed by `project_id`.
+  Map<String, List<PagedResult<Task>>> taskPages =
+      <String, List<PagedResult<Task>>>{};
+
   /// Every `projectId` [fetchTasks] was called with, in call order.
   final List<String> fetchTasksCalls = <String>[];
+
+  /// Every `cursor` the two reads were called with, in call order.
+  ///
+  /// Null for a first page. This is what proves the notifier sends back the
+  /// cursor it was given rather than re-reading page one — the failure A-184
+  /// describes, in the shape it would take after a half-done fix.
+  final List<String?> cursors = <String?>[];
+
+  /// Every `limit` the two reads were called with, in call order.
+  final List<int?> limits = <int?>[];
 
   /// How many times [fetchProjects] was called.
   int fetchProjectsCalls = 0;
@@ -51,22 +75,40 @@ class ControllableProjectTaskRepository implements ProjectTaskRepository {
   }
 
   @override
-  Future<List<Project>> fetchProjects() async {
+  Future<PagedResult<Project>> fetchProjects({
+    String? cursor,
+    int? limit,
+  }) async {
     fetchProjectsCalls++;
+    cursors.add(cursor);
+    limits.add(limit);
     final NetworkException? pending = failure;
     if (pending != null) {
       throw pending;
     }
-    return projects;
+    if (projectPages.isNotEmpty) {
+      return projectPages.removeAt(0);
+    }
+    return PagedResult<Project>.last(projects);
   }
 
   @override
-  Future<List<Task>> fetchTasks(String projectId) async {
+  Future<PagedResult<Task>> fetchTasks(
+    String projectId, {
+    String? cursor,
+    int? limit,
+  }) async {
     fetchTasksCalls.add(projectId);
+    cursors.add(cursor);
+    limits.add(limit);
     final NetworkException? pending = failure;
     if (pending != null) {
       throw pending;
     }
-    return tasks[projectId] ?? const <Task>[];
+    final List<PagedResult<Task>>? scripted = taskPages[projectId];
+    if (scripted != null && scripted.isNotEmpty) {
+      return scripted.removeAt(0);
+    }
+    return PagedResult<Task>.last(tasks[projectId] ?? const <Task>[]);
   }
 }

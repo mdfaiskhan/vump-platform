@@ -1,8 +1,10 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mobile/core/errors/exceptions/network_exception.dart';
+import 'package:mobile/features/projects_tasks/application/page_size.dart';
 import 'package:mobile/features/projects_tasks/application/project_task_providers.dart';
 import 'package:mobile/features/projects_tasks/application/projects_notifier.dart';
+import 'package:mobile/features/projects_tasks/domain/entities/paged_result.dart';
 import 'package:mobile/features/projects_tasks/domain/entities/project.dart';
 
 import 'fakes/controllable_project_task_repository.dart';
@@ -157,6 +159,140 @@ void main() {
       );
       expect(state.hasError, isFalse);
       expect(state.requireValue, hasLength(1));
+    });
+  });
+
+  group('pagination — F20, the fix A-184 asked for', () {
+    test('the first read asks for MAX_LIMIT and no cursor', () async {
+      // F26: the page size is the backend's maximum rather than its default,
+      // because three screens select a single row out of these lists and a row
+      // past the page boundary renders as "not available to you".
+      final _Harness harness = build(projects: <Project>[project('a')]);
+
+      await harness.container.read(projectsProvider.future);
+
+      expect(harness.repo.cursors, <String?>[null]);
+      expect(harness.repo.limits, <int?>[projectTaskPageSize]);
+      expect(projectTaskPageSize, 200, reason: "the backend's MAX_LIMIT");
+    });
+
+    test('hasMore follows the cursor, not the item count', () async {
+      final _Harness harness = build();
+      harness.repo.projectPages = <PagedResult<Project>>[
+        PagedResult<Project>(items: <Project>[project('a')], nextCursor: 'C1'),
+      ];
+
+      await harness.container.read(projectsProvider.future);
+
+      expect(harness.container.read(projectsProvider.notifier).hasMore, isTrue);
+    });
+
+    test('a last page reports no more', () async {
+      final _Harness harness = build(projects: <Project>[project('a')]);
+
+      await harness.container.read(projectsProvider.future);
+
+      expect(
+        harness.container.read(projectsProvider.notifier).hasMore,
+        isFalse,
+      );
+    });
+
+    test('loadMore sends back the cursor it was given', () async {
+      // The half-done-fix failure: reading page one again forever, with the
+      // list never advancing and nothing reporting it.
+      final _Harness harness = build();
+      harness.repo.projectPages = <PagedResult<Project>>[
+        PagedResult<Project>(items: <Project>[project('a')], nextCursor: 'C1'),
+        PagedResult<Project>(items: <Project>[project('b')], nextCursor: 'C2'),
+      ];
+
+      await harness.container.read(projectsProvider.future);
+      await harness.container.read(projectsProvider.notifier).loadMore();
+
+      expect(harness.repo.cursors, <String?>[null, 'C1']);
+    });
+
+    test('loadMore appends rather than replacing', () async {
+      final _Harness harness = build();
+      harness.repo.projectPages = <PagedResult<Project>>[
+        PagedResult<Project>(items: <Project>[project('a')], nextCursor: 'C1'),
+        PagedResult<Project>.last(<Project>[project('b')]),
+      ];
+
+      await harness.container.read(projectsProvider.future);
+      final bool loaded = await harness.container
+          .read(projectsProvider.notifier)
+          .loadMore();
+
+      expect(loaded, isTrue);
+      expect(
+        harness.container
+            .read(projectsProvider)
+            .requireValue
+            .map((Project p) => p.id),
+        <String>['a', 'b'],
+      );
+      expect(
+        harness.container.read(projectsProvider.notifier).hasMore,
+        isFalse,
+        reason: 'the second page was the last one',
+      );
+    });
+
+    test('loadMore on a last page is a no-op and issues no request', () async {
+      final _Harness harness = build(projects: <Project>[project('a')]);
+
+      await harness.container.read(projectsProvider.future);
+      final int before = harness.repo.fetchProjectsCalls;
+      final bool loaded = await harness.container
+          .read(projectsProvider.notifier)
+          .loadMore();
+
+      expect(loaded, isFalse);
+      expect(harness.repo.fetchProjectsCalls, before);
+    });
+
+    test('a failed loadMore keeps the rows already loaded', () async {
+      // Deliberate: replacing a good list with an AsyncError would discard
+      // valid data because MORE of it could not be fetched. The caller learns
+      // from the returned false; the tile it came from renders the retry.
+      final _Harness harness = build();
+      harness.repo.projectPages = <PagedResult<Project>>[
+        PagedResult<Project>(items: <Project>[project('a')], nextCursor: 'C1'),
+      ];
+
+      await harness.container.read(projectsProvider.future);
+      harness.repo.failWith();
+      final bool loaded = await harness.container
+          .read(projectsProvider.notifier)
+          .loadMore();
+
+      expect(loaded, isFalse);
+      final AsyncValue<List<Project>> state = harness.container.read(
+        projectsProvider,
+      );
+      expect(state.hasError, isFalse);
+      expect(state.requireValue.single.id, 'a');
+    });
+
+    test('refresh resets the cursor before re-reading', () async {
+      // A refresh that kept the cursor would append page two of a list it had
+      // just discarded.
+      final _Harness harness = build();
+      harness.repo.projectPages = <PagedResult<Project>>[
+        PagedResult<Project>(items: <Project>[project('a')], nextCursor: 'C1'),
+        PagedResult<Project>.last(<Project>[project('z')]),
+      ];
+
+      await harness.container.read(projectsProvider.future);
+      await harness.container.read(projectsProvider.notifier).refresh();
+
+      expect(harness.repo.cursors, <String?>[null, null]);
+      expect(
+        harness.container.read(projectsProvider).requireValue.single.id,
+        'z',
+      );
     });
   });
 }
