@@ -183,8 +183,13 @@ class ChunkUploadPipeline {
     // ---- Step 1 — Register ---------------------------------------------
     final ChunkRegistration registration;
     try {
+      // The Task rides on the chunk (F17/B3), read from the LocalSession row
+      // at claim time. A null is refused inside the registrar as terminal —
+      // Chapter 5.13 §1's device-side class — rather than substituted.
       final String remoteSessionId = await _registrar.remoteSessionId(
-        chunk.sessionId,
+        localSessionId: chunk.sessionId,
+        taskId: chunk.taskId,
+        startedAt: chunk.sessionStartedAt,
       );
       registration = await _api.registerChunk(
         remoteSessionId: remoteSessionId,

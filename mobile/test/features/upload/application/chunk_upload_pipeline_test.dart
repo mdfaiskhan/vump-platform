@@ -15,15 +15,17 @@ import '../../../core/upload/fakes/upload_port_fakes.dart';
 
 /// Volume 5 Chapter 5.10's step sequencing, and A-068 Guard 1's verdict.
 void main() {
-  UploadableChunk chunkFor(String id) => UploadableChunk(
-    chunkId: id,
-    sessionId: 'sess_e810',
-    sequenceIndex: 3,
-    sessionStartedAt: DateTime.utc(2026, 8, 15, 9),
-    localFilePath: '/docs/recordings/sess_e810/0003.mp4',
-    fileSizeBytes: 512000000,
-    checksumSha256: 'abc123',
-  );
+  UploadableChunk chunkFor(String id, {String? taskId = 'tsk_7c3'}) =>
+      UploadableChunk(
+        chunkId: id,
+        sessionId: 'sess_e810',
+        taskId: taskId,
+        sequenceIndex: 3,
+        sessionStartedAt: DateTime.utc(2026, 8, 15, 9),
+        localFilePath: '/docs/recordings/sess_e810/0003.mp4',
+        fileSizeBytes: 512000000,
+        checksumSha256: 'abc123',
+      );
 
   ({
     ChunkUploadPipeline pipeline,
@@ -489,6 +491,57 @@ void main() {
 
     test('a complete outcome is not retryable', () {
       expect(const UploadOutcome.complete(chunkId: 'a').isRetryable, isFalse);
+    });
+  });
+
+  group('what step 1 asks the registrar for — F32/F35', () {
+    test('the Task rides on the chunk and reaches the registrar', () async {
+      // B3's whole point. F17 put taskId on the WATCH view; the pipeline
+      // consumes the CLAIM view, so the field existed and led nowhere. If this
+      // regresses, every upload registers under a null Task and fails as
+      // terminal — loudly, and naming the wrong thing.
+      final ({
+        ChunkUploadPipeline pipeline,
+        FakeChunkUploadSource source,
+        FakeSessionRegistrar registrar,
+        _RecordingApi api,
+      })
+      t = build(queued: <UploadableChunk>[chunkFor('chk_1')]);
+
+      await t.pipeline.uploadNext();
+
+      expect(t.registrar.askedTaskIds.single, 'tsk_7c3');
+    });
+
+    test('the session start time is sent, not the upload time — F15', () async {
+      // A deferred upload registers hours after capture, and the column would
+      // otherwise default to now().
+      final ({
+        ChunkUploadPipeline pipeline,
+        FakeChunkUploadSource source,
+        FakeSessionRegistrar registrar,
+        _RecordingApi api,
+      })
+      t = build(queued: <UploadableChunk>[chunkFor('chk_1')]);
+
+      await t.pipeline.uploadNext();
+
+      expect(t.registrar.askedStartedAt.single, DateTime.utc(2026, 8, 15, 9));
+    });
+
+    test('the LOCAL session id is what is asked about', () async {
+      // It becomes client_session_id. The backend's own id comes back.
+      final ({
+        ChunkUploadPipeline pipeline,
+        FakeChunkUploadSource source,
+        FakeSessionRegistrar registrar,
+        _RecordingApi api,
+      })
+      t = build(queued: <UploadableChunk>[chunkFor('chk_1')]);
+
+      await t.pipeline.uploadNext();
+
+      expect(t.registrar.asked.single, 'sess_e810');
     });
   });
 }

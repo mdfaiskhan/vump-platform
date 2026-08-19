@@ -58,6 +58,7 @@ import 'package:mobile/features/recording/domain/entities/metadata_identity.dart
 import 'package:mobile/features/upload/application/upload_dispatcher.dart';
 import 'package:mobile/features/upload/application/upload_dispatcher_status_notifier.dart';
 import 'package:mobile/features/upload/data/foreground_upload_service_host.dart';
+import 'package:mobile/features/upload/data/session_registrar_impl.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -305,12 +306,6 @@ List<Override> recordingOverrides(
     // pipeline must move exactly the rows C-11 renders and the finalizer
     // wrote — four contracts, one store, one connection.
     //
-    // sessionRegistrarProvider is deliberately NOT overridden: no
-    // implementation exists, because it needs a task_id that
-    // features/projects_tasks/ owns and that feature is unbuilt. The pipeline
-    // therefore throws at that seam rather than uploading, which is the
-    // feature's honest state. A fake satisfies it in the test suite only —
-    // Volume 11's M12 gate makes a fake wired into a build a defect.
     chunkUploadSourceProvider.overrideWith(
       (Ref ref) => ref.watch(_chunkStoreProvider),
     ),
@@ -406,18 +401,16 @@ List<Override> recordingOverrides(
 /// binds this exact list rather than re-declaring one that could drift from
 /// what the application ships.
 ///
-/// ## Only one port, and the two that are deliberately absent
+/// ## Two ports here, and two bound elsewhere
 ///
-/// `uploadServiceHostProvider` is the only entry. The other two seams
-/// `features/upload/` declares are bound elsewhere or not at all:
+/// `uploadServiceHostProvider` and `sessionRegistrarProvider` are the entries.
+/// The other two seams `features/upload/` declares are bound elsewhere:
 ///
 /// - `chunkUploadSourceProvider` and `chunkMetadataSourceProvider` are in
 ///   [recordingOverrides], because the one `IsarChunkStore` satisfies them.
-/// - `sessionRegistrarProvider` has no implementation anywhere. It needs a
-///   `task_id` that `features/projects_tasks/` owns, and that feature is
-///   unbuilt (open item 36). The pipeline therefore throws at that seam, and
-///   `UploadDispatcher` converts the throw into a logged stop rather than a
-///   crash. A fake satisfies it in the test suite only.
+/// - `sessionRegistrarProvider` is bound here as of Mission 7.4 step 5. It
+///   threw from Mission 4.2 until then, which is why no chunk has reached
+///   `uploading` on a device.
 List<Override> uploadOverrides() {
   return <Override>[
     // Volume 5 Chapter 5.11 §1's Android foreground service. ADR-042 records
@@ -425,6 +418,21 @@ List<Override> uploadOverrides() {
     // process alive around it.
     uploadServiceHostProvider.overrideWith(
       (Ref ref) => ForegroundUploadServiceHost(),
+    ),
+
+    // Chapter 4.6 §4's session registration — Mission 7.4 step 5.
+    //
+    // **The seam that has thrown since Mission 4.2.** No chunk has ever
+    // reached `uploading` on a device, because constructing the pipeline threw
+    // here; `UploadDispatcher` holds the pipeline behind a function precisely
+    // so that throw landed on the first claimable chunk rather than on
+    // startup.
+    //
+    // It is bound now because F32 made the Task id a parameter, so an
+    // implementation needs nothing from `features/projects_tasks/` and could
+    // live beside `ChunkUploadApiImpl` (F33).
+    sessionRegistrarProvider.overrideWith(
+      (Ref ref) => SessionRegistrarImpl(backend: ref.watch(vumpApiProvider)),
     ),
 
     // Chapter 5.12 §2's ConnectivityService. Declared in core/, implemented in

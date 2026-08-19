@@ -1,12 +1,12 @@
 import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:mobile/core/identity/providers/identity_ports.dart';
-import 'package:mobile/core/identity/selected_task.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mobile/core/errors/error_codes.dart';
 import 'package:mobile/core/errors/exceptions/storage_exception.dart';
 import 'package:mobile/core/errors/failure.dart';
+import 'package:mobile/core/identity/providers/identity_ports.dart';
+import 'package:mobile/core/identity/selected_task.dart';
 import 'package:mobile/features/recording/application/recording_notifier.dart';
 import 'package:mobile/features/recording/domain/entities/chunk_metadata.dart';
 import 'package:mobile/features/recording/domain/entities/chunk_processing_job.dart';
