@@ -22,7 +22,7 @@ const EmbeddedGpsFixSchema = Schema(
       id: 1,
       name: r'longitude',
       type: IsarType.double,
-    ),
+    )
   },
   estimateSize: _embeddedGpsFixEstimateSize,
   serialize: _embeddedGpsFixSerialize,
@@ -80,74 +80,71 @@ P _embeddedGpsFixDeserializeProp<P>(
 extension EmbeddedGpsFixQueryFilter
     on QueryBuilder<EmbeddedGpsFix, EmbeddedGpsFix, QFilterCondition> {
   QueryBuilder<EmbeddedGpsFix, EmbeddedGpsFix, QAfterFilterCondition>
-  latitudeIsNull() {
+      latitudeIsNull() {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(
-        const FilterCondition.isNull(property: r'latitude'),
-      );
+      return query.addFilterCondition(const FilterCondition.isNull(
+        property: r'latitude',
+      ));
     });
   }
 
   QueryBuilder<EmbeddedGpsFix, EmbeddedGpsFix, QAfterFilterCondition>
-  latitudeIsNotNull() {
+      latitudeIsNotNull() {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(
-        const FilterCondition.isNotNull(property: r'latitude'),
-      );
+      return query.addFilterCondition(const FilterCondition.isNotNull(
+        property: r'latitude',
+      ));
     });
   }
 
   QueryBuilder<EmbeddedGpsFix, EmbeddedGpsFix, QAfterFilterCondition>
-  latitudeEqualTo(double? value, {double epsilon = Query.epsilon}) {
+      latitudeEqualTo(
+    double? value, {
+    double epsilon = Query.epsilon,
+  }) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(
-        FilterCondition.equalTo(
-          property: r'latitude',
-          value: value,
-          epsilon: epsilon,
-        ),
-      );
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'latitude',
+        value: value,
+        epsilon: epsilon,
+      ));
     });
   }
 
   QueryBuilder<EmbeddedGpsFix, EmbeddedGpsFix, QAfterFilterCondition>
-  latitudeGreaterThan(
+      latitudeGreaterThan(
     double? value, {
     bool include = false,
     double epsilon = Query.epsilon,
   }) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(
-        FilterCondition.greaterThan(
-          include: include,
-          property: r'latitude',
-          value: value,
-          epsilon: epsilon,
-        ),
-      );
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'latitude',
+        value: value,
+        epsilon: epsilon,
+      ));
     });
   }
 
   QueryBuilder<EmbeddedGpsFix, EmbeddedGpsFix, QAfterFilterCondition>
-  latitudeLessThan(
+      latitudeLessThan(
     double? value, {
     bool include = false,
     double epsilon = Query.epsilon,
   }) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(
-        FilterCondition.lessThan(
-          include: include,
-          property: r'latitude',
-          value: value,
-          epsilon: epsilon,
-        ),
-      );
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'latitude',
+        value: value,
+        epsilon: epsilon,
+      ));
     });
   }
 
   QueryBuilder<EmbeddedGpsFix, EmbeddedGpsFix, QAfterFilterCondition>
-  latitudeBetween(
+      latitudeBetween(
     double? lower,
     double? upper, {
     bool includeLower = true,
@@ -155,88 +152,83 @@ extension EmbeddedGpsFixQueryFilter
     double epsilon = Query.epsilon,
   }) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(
-        FilterCondition.between(
-          property: r'latitude',
-          lower: lower,
-          includeLower: includeLower,
-          upper: upper,
-          includeUpper: includeUpper,
-          epsilon: epsilon,
-        ),
-      );
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'latitude',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+        epsilon: epsilon,
+      ));
     });
   }
 
   QueryBuilder<EmbeddedGpsFix, EmbeddedGpsFix, QAfterFilterCondition>
-  longitudeIsNull() {
+      longitudeIsNull() {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(
-        const FilterCondition.isNull(property: r'longitude'),
-      );
+      return query.addFilterCondition(const FilterCondition.isNull(
+        property: r'longitude',
+      ));
     });
   }
 
   QueryBuilder<EmbeddedGpsFix, EmbeddedGpsFix, QAfterFilterCondition>
-  longitudeIsNotNull() {
+      longitudeIsNotNull() {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(
-        const FilterCondition.isNotNull(property: r'longitude'),
-      );
+      return query.addFilterCondition(const FilterCondition.isNotNull(
+        property: r'longitude',
+      ));
     });
   }
 
   QueryBuilder<EmbeddedGpsFix, EmbeddedGpsFix, QAfterFilterCondition>
-  longitudeEqualTo(double? value, {double epsilon = Query.epsilon}) {
+      longitudeEqualTo(
+    double? value, {
+    double epsilon = Query.epsilon,
+  }) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(
-        FilterCondition.equalTo(
-          property: r'longitude',
-          value: value,
-          epsilon: epsilon,
-        ),
-      );
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'longitude',
+        value: value,
+        epsilon: epsilon,
+      ));
     });
   }
 
   QueryBuilder<EmbeddedGpsFix, EmbeddedGpsFix, QAfterFilterCondition>
-  longitudeGreaterThan(
+      longitudeGreaterThan(
     double? value, {
     bool include = false,
     double epsilon = Query.epsilon,
   }) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(
-        FilterCondition.greaterThan(
-          include: include,
-          property: r'longitude',
-          value: value,
-          epsilon: epsilon,
-        ),
-      );
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'longitude',
+        value: value,
+        epsilon: epsilon,
+      ));
     });
   }
 
   QueryBuilder<EmbeddedGpsFix, EmbeddedGpsFix, QAfterFilterCondition>
-  longitudeLessThan(
+      longitudeLessThan(
     double? value, {
     bool include = false,
     double epsilon = Query.epsilon,
   }) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(
-        FilterCondition.lessThan(
-          include: include,
-          property: r'longitude',
-          value: value,
-          epsilon: epsilon,
-        ),
-      );
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'longitude',
+        value: value,
+        epsilon: epsilon,
+      ));
     });
   }
 
   QueryBuilder<EmbeddedGpsFix, EmbeddedGpsFix, QAfterFilterCondition>
-  longitudeBetween(
+      longitudeBetween(
     double? lower,
     double? upper, {
     bool includeLower = true,
@@ -244,16 +236,14 @@ extension EmbeddedGpsFixQueryFilter
     double epsilon = Query.epsilon,
   }) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(
-        FilterCondition.between(
-          property: r'longitude',
-          lower: lower,
-          includeLower: includeLower,
-          upper: upper,
-          includeUpper: includeUpper,
-          epsilon: epsilon,
-        ),
-      );
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'longitude',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+        epsilon: epsilon,
+      ));
     });
   }
 }

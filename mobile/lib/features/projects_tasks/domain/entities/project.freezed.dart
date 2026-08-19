@@ -12,8 +12,7 @@ part of 'project.dart';
 T _$identity<T>(T value) => value;
 
 final _privateConstructorUsedError = UnsupportedError(
-  'It seems like you constructed your class using `MyClass._()`. This constructor is only meant to be used by freezed and you are not supposed to need it nor use it.\nPlease check the documentation here for more information: https://github.com/rrousselGit/freezed#adding-getters-and-methods-to-our-models',
-);
+    'It seems like you constructed your class using `MyClass._()`. This constructor is only meant to be used by freezed and you are not supposed to need it nor use it.\nPlease check the documentation here for more information: https://github.com/rrousselGit/freezed#adding-getters-and-methods-to-our-models');
 
 /// @nodoc
 mixin _$Project {
@@ -34,15 +33,14 @@ abstract class $ProjectCopyWith<$Res> {
   factory $ProjectCopyWith(Project value, $Res Function(Project) then) =
       _$ProjectCopyWithImpl<$Res, Project>;
   @useResult
-  $Res call({
-    String id,
-    String orgId,
-    String name,
-    String createdBy,
-    DateTime createdAt,
-    String? description,
-    DateTime? archivedAt,
-  });
+  $Res call(
+      {String id,
+      String orgId,
+      String name,
+      String createdBy,
+      DateTime createdAt,
+      String? description,
+      DateTime? archivedAt});
 }
 
 /// @nodoc
@@ -66,59 +64,54 @@ class _$ProjectCopyWithImpl<$Res, $Val extends Project>
     Object? description = freezed,
     Object? archivedAt = freezed,
   }) {
-    return _then(
-      _value.copyWith(
-            id: null == id
-                ? _value.id
-                : id // ignore: cast_nullable_to_non_nullable
-                      as String,
-            orgId: null == orgId
-                ? _value.orgId
-                : orgId // ignore: cast_nullable_to_non_nullable
-                      as String,
-            name: null == name
-                ? _value.name
-                : name // ignore: cast_nullable_to_non_nullable
-                      as String,
-            createdBy: null == createdBy
-                ? _value.createdBy
-                : createdBy // ignore: cast_nullable_to_non_nullable
-                      as String,
-            createdAt: null == createdAt
-                ? _value.createdAt
-                : createdAt // ignore: cast_nullable_to_non_nullable
-                      as DateTime,
-            description: freezed == description
-                ? _value.description
-                : description // ignore: cast_nullable_to_non_nullable
-                      as String?,
-            archivedAt: freezed == archivedAt
-                ? _value.archivedAt
-                : archivedAt // ignore: cast_nullable_to_non_nullable
-                      as DateTime?,
-          )
-          as $Val,
-    );
+    return _then(_value.copyWith(
+      id: null == id
+          ? _value.id
+          : id // ignore: cast_nullable_to_non_nullable
+              as String,
+      orgId: null == orgId
+          ? _value.orgId
+          : orgId // ignore: cast_nullable_to_non_nullable
+              as String,
+      name: null == name
+          ? _value.name
+          : name // ignore: cast_nullable_to_non_nullable
+              as String,
+      createdBy: null == createdBy
+          ? _value.createdBy
+          : createdBy // ignore: cast_nullable_to_non_nullable
+              as String,
+      createdAt: null == createdAt
+          ? _value.createdAt
+          : createdAt // ignore: cast_nullable_to_non_nullable
+              as DateTime,
+      description: freezed == description
+          ? _value.description
+          : description // ignore: cast_nullable_to_non_nullable
+              as String?,
+      archivedAt: freezed == archivedAt
+          ? _value.archivedAt
+          : archivedAt // ignore: cast_nullable_to_non_nullable
+              as DateTime?,
+    ) as $Val);
   }
 }
 
 /// @nodoc
 abstract class _$$ProjectImplCopyWith<$Res> implements $ProjectCopyWith<$Res> {
   factory _$$ProjectImplCopyWith(
-    _$ProjectImpl value,
-    $Res Function(_$ProjectImpl) then,
-  ) = __$$ProjectImplCopyWithImpl<$Res>;
+          _$ProjectImpl value, $Res Function(_$ProjectImpl) then) =
+      __$$ProjectImplCopyWithImpl<$Res>;
   @override
   @useResult
-  $Res call({
-    String id,
-    String orgId,
-    String name,
-    String createdBy,
-    DateTime createdAt,
-    String? description,
-    DateTime? archivedAt,
-  });
+  $Res call(
+      {String id,
+      String orgId,
+      String name,
+      String createdBy,
+      DateTime createdAt,
+      String? description,
+      DateTime? archivedAt});
 }
 
 /// @nodoc
@@ -126,9 +119,8 @@ class __$$ProjectImplCopyWithImpl<$Res>
     extends _$ProjectCopyWithImpl<$Res, _$ProjectImpl>
     implements _$$ProjectImplCopyWith<$Res> {
   __$$ProjectImplCopyWithImpl(
-    _$ProjectImpl _value,
-    $Res Function(_$ProjectImpl) _then,
-  ) : super(_value, _then);
+      _$ProjectImpl _value, $Res Function(_$ProjectImpl) _then)
+      : super(_value, _then);
 
   @pragma('vm:prefer-inline')
   @override
@@ -141,53 +133,50 @@ class __$$ProjectImplCopyWithImpl<$Res>
     Object? description = freezed,
     Object? archivedAt = freezed,
   }) {
-    return _then(
-      _$ProjectImpl(
-        id: null == id
-            ? _value.id
-            : id // ignore: cast_nullable_to_non_nullable
-                  as String,
-        orgId: null == orgId
-            ? _value.orgId
-            : orgId // ignore: cast_nullable_to_non_nullable
-                  as String,
-        name: null == name
-            ? _value.name
-            : name // ignore: cast_nullable_to_non_nullable
-                  as String,
-        createdBy: null == createdBy
-            ? _value.createdBy
-            : createdBy // ignore: cast_nullable_to_non_nullable
-                  as String,
-        createdAt: null == createdAt
-            ? _value.createdAt
-            : createdAt // ignore: cast_nullable_to_non_nullable
-                  as DateTime,
-        description: freezed == description
-            ? _value.description
-            : description // ignore: cast_nullable_to_non_nullable
-                  as String?,
-        archivedAt: freezed == archivedAt
-            ? _value.archivedAt
-            : archivedAt // ignore: cast_nullable_to_non_nullable
-                  as DateTime?,
-      ),
-    );
+    return _then(_$ProjectImpl(
+      id: null == id
+          ? _value.id
+          : id // ignore: cast_nullable_to_non_nullable
+              as String,
+      orgId: null == orgId
+          ? _value.orgId
+          : orgId // ignore: cast_nullable_to_non_nullable
+              as String,
+      name: null == name
+          ? _value.name
+          : name // ignore: cast_nullable_to_non_nullable
+              as String,
+      createdBy: null == createdBy
+          ? _value.createdBy
+          : createdBy // ignore: cast_nullable_to_non_nullable
+              as String,
+      createdAt: null == createdAt
+          ? _value.createdAt
+          : createdAt // ignore: cast_nullable_to_non_nullable
+              as DateTime,
+      description: freezed == description
+          ? _value.description
+          : description // ignore: cast_nullable_to_non_nullable
+              as String?,
+      archivedAt: freezed == archivedAt
+          ? _value.archivedAt
+          : archivedAt // ignore: cast_nullable_to_non_nullable
+              as DateTime?,
+    ));
   }
 }
 
 /// @nodoc
 
 class _$ProjectImpl implements _Project {
-  const _$ProjectImpl({
-    required this.id,
-    required this.orgId,
-    required this.name,
-    required this.createdBy,
-    required this.createdAt,
-    this.description,
-    this.archivedAt,
-  });
+  const _$ProjectImpl(
+      {required this.id,
+      required this.orgId,
+      required this.name,
+      required this.createdBy,
+      required this.createdAt,
+      this.description,
+      this.archivedAt});
 
   @override
   final String id;
@@ -228,16 +217,8 @@ class _$ProjectImpl implements _Project {
   }
 
   @override
-  int get hashCode => Object.hash(
-    runtimeType,
-    id,
-    orgId,
-    name,
-    createdBy,
-    createdAt,
-    description,
-    archivedAt,
-  );
+  int get hashCode => Object.hash(runtimeType, id, orgId, name, createdBy,
+      createdAt, description, archivedAt);
 
   @JsonKey(ignore: true)
   @override
@@ -247,15 +228,14 @@ class _$ProjectImpl implements _Project {
 }
 
 abstract class _Project implements Project {
-  const factory _Project({
-    required final String id,
-    required final String orgId,
-    required final String name,
-    required final String createdBy,
-    required final DateTime createdAt,
-    final String? description,
-    final DateTime? archivedAt,
-  }) = _$ProjectImpl;
+  const factory _Project(
+      {required final String id,
+      required final String orgId,
+      required final String name,
+      required final String createdBy,
+      required final DateTime createdAt,
+      final String? description,
+      final DateTime? archivedAt}) = _$ProjectImpl;
 
   @override
   String get id;

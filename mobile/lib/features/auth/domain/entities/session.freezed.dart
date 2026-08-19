@@ -12,8 +12,7 @@ part of 'session.dart';
 T _$identity<T>(T value) => value;
 
 final _privateConstructorUsedError = UnsupportedError(
-  'It seems like you constructed your class using `MyClass._()`. This constructor is only meant to be used by freezed and you are not supposed to need it nor use it.\nPlease check the documentation here for more information: https://github.com/rrousselGit/freezed#adding-getters-and-methods-to-our-models',
-);
+    'It seems like you constructed your class using `MyClass._()`. This constructor is only meant to be used by freezed and you are not supposed to need it nor use it.\nPlease check the documentation here for more information: https://github.com/rrousselGit/freezed#adding-getters-and-methods-to-our-models');
 
 /// @nodoc
 mixin _$Session {
@@ -22,39 +21,45 @@ mixin _$Session {
     required TResult Function() unknown,
     required TResult Function() unauthenticated,
     required TResult Function(User user) authenticated,
-  }) => throw _privateConstructorUsedError;
+  }) =>
+      throw _privateConstructorUsedError;
   @optionalTypeArgs
   TResult? whenOrNull<TResult extends Object?>({
     TResult? Function()? unknown,
     TResult? Function()? unauthenticated,
     TResult? Function(User user)? authenticated,
-  }) => throw _privateConstructorUsedError;
+  }) =>
+      throw _privateConstructorUsedError;
   @optionalTypeArgs
   TResult maybeWhen<TResult extends Object?>({
     TResult Function()? unknown,
     TResult Function()? unauthenticated,
     TResult Function(User user)? authenticated,
     required TResult orElse(),
-  }) => throw _privateConstructorUsedError;
+  }) =>
+      throw _privateConstructorUsedError;
   @optionalTypeArgs
   TResult map<TResult extends Object?>({
     required TResult Function(SessionUnknown value) unknown,
     required TResult Function(SessionUnauthenticated value) unauthenticated,
     required TResult Function(SessionAuthenticated value) authenticated,
-  }) => throw _privateConstructorUsedError;
+  }) =>
+      throw _privateConstructorUsedError;
   @optionalTypeArgs
   TResult? mapOrNull<TResult extends Object?>({
     TResult? Function(SessionUnknown value)? unknown,
     TResult? Function(SessionUnauthenticated value)? unauthenticated,
     TResult? Function(SessionAuthenticated value)? authenticated,
-  }) => throw _privateConstructorUsedError;
+  }) =>
+      throw _privateConstructorUsedError;
   @optionalTypeArgs
   TResult maybeMap<TResult extends Object?>({
     TResult Function(SessionUnknown value)? unknown,
     TResult Function(SessionUnauthenticated value)? unauthenticated,
     TResult Function(SessionAuthenticated value)? authenticated,
     required TResult orElse(),
-  }) => throw _privateConstructorUsedError;
+  }) =>
+      throw _privateConstructorUsedError;
 }
 
 /// @nodoc
@@ -76,10 +81,9 @@ class _$SessionCopyWithImpl<$Res, $Val extends Session>
 
 /// @nodoc
 abstract class _$$SessionUnknownImplCopyWith<$Res> {
-  factory _$$SessionUnknownImplCopyWith(
-    _$SessionUnknownImpl value,
-    $Res Function(_$SessionUnknownImpl) then,
-  ) = __$$SessionUnknownImplCopyWithImpl<$Res>;
+  factory _$$SessionUnknownImplCopyWith(_$SessionUnknownImpl value,
+          $Res Function(_$SessionUnknownImpl) then) =
+      __$$SessionUnknownImplCopyWithImpl<$Res>;
 }
 
 /// @nodoc
@@ -87,9 +91,8 @@ class __$$SessionUnknownImplCopyWithImpl<$Res>
     extends _$SessionCopyWithImpl<$Res, _$SessionUnknownImpl>
     implements _$$SessionUnknownImplCopyWith<$Res> {
   __$$SessionUnknownImplCopyWithImpl(
-    _$SessionUnknownImpl _value,
-    $Res Function(_$SessionUnknownImpl) _then,
-  ) : super(_value, _then);
+      _$SessionUnknownImpl _value, $Res Function(_$SessionUnknownImpl) _then)
+      : super(_value, _then);
 }
 
 /// @nodoc
@@ -187,9 +190,9 @@ abstract class SessionUnknown implements Session {
 /// @nodoc
 abstract class _$$SessionUnauthenticatedImplCopyWith<$Res> {
   factory _$$SessionUnauthenticatedImplCopyWith(
-    _$SessionUnauthenticatedImpl value,
-    $Res Function(_$SessionUnauthenticatedImpl) then,
-  ) = __$$SessionUnauthenticatedImplCopyWithImpl<$Res>;
+          _$SessionUnauthenticatedImpl value,
+          $Res Function(_$SessionUnauthenticatedImpl) then) =
+      __$$SessionUnauthenticatedImplCopyWithImpl<$Res>;
 }
 
 /// @nodoc
@@ -197,9 +200,9 @@ class __$$SessionUnauthenticatedImplCopyWithImpl<$Res>
     extends _$SessionCopyWithImpl<$Res, _$SessionUnauthenticatedImpl>
     implements _$$SessionUnauthenticatedImplCopyWith<$Res> {
   __$$SessionUnauthenticatedImplCopyWithImpl(
-    _$SessionUnauthenticatedImpl _value,
-    $Res Function(_$SessionUnauthenticatedImpl) _then,
-  ) : super(_value, _then);
+      _$SessionUnauthenticatedImpl _value,
+      $Res Function(_$SessionUnauthenticatedImpl) _then)
+      : super(_value, _then);
 }
 
 /// @nodoc
@@ -297,10 +300,9 @@ abstract class SessionUnauthenticated implements Session {
 
 /// @nodoc
 abstract class _$$SessionAuthenticatedImplCopyWith<$Res> {
-  factory _$$SessionAuthenticatedImplCopyWith(
-    _$SessionAuthenticatedImpl value,
-    $Res Function(_$SessionAuthenticatedImpl) then,
-  ) = __$$SessionAuthenticatedImplCopyWithImpl<$Res>;
+  factory _$$SessionAuthenticatedImplCopyWith(_$SessionAuthenticatedImpl value,
+          $Res Function(_$SessionAuthenticatedImpl) then) =
+      __$$SessionAuthenticatedImplCopyWithImpl<$Res>;
   @useResult
   $Res call({User user});
 
@@ -311,22 +313,21 @@ abstract class _$$SessionAuthenticatedImplCopyWith<$Res> {
 class __$$SessionAuthenticatedImplCopyWithImpl<$Res>
     extends _$SessionCopyWithImpl<$Res, _$SessionAuthenticatedImpl>
     implements _$$SessionAuthenticatedImplCopyWith<$Res> {
-  __$$SessionAuthenticatedImplCopyWithImpl(
-    _$SessionAuthenticatedImpl _value,
-    $Res Function(_$SessionAuthenticatedImpl) _then,
-  ) : super(_value, _then);
+  __$$SessionAuthenticatedImplCopyWithImpl(_$SessionAuthenticatedImpl _value,
+      $Res Function(_$SessionAuthenticatedImpl) _then)
+      : super(_value, _then);
 
   @pragma('vm:prefer-inline')
   @override
-  $Res call({Object? user = null}) {
-    return _then(
-      _$SessionAuthenticatedImpl(
-        null == user
-            ? _value.user
-            : user // ignore: cast_nullable_to_non_nullable
-                  as User,
-      ),
-    );
+  $Res call({
+    Object? user = null,
+  }) {
+    return _then(_$SessionAuthenticatedImpl(
+      null == user
+          ? _value.user
+          : user // ignore: cast_nullable_to_non_nullable
+              as User,
+    ));
   }
 
   @override
@@ -366,11 +367,9 @@ class _$SessionAuthenticatedImpl implements SessionAuthenticated {
   @override
   @pragma('vm:prefer-inline')
   _$$SessionAuthenticatedImplCopyWith<_$SessionAuthenticatedImpl>
-  get copyWith =>
-      __$$SessionAuthenticatedImplCopyWithImpl<_$SessionAuthenticatedImpl>(
-        this,
-        _$identity,
-      );
+      get copyWith =>
+          __$$SessionAuthenticatedImplCopyWithImpl<_$SessionAuthenticatedImpl>(
+              this, _$identity);
 
   @override
   @optionalTypeArgs
@@ -448,5 +447,5 @@ abstract class SessionAuthenticated implements Session {
   User get user;
   @JsonKey(ignore: true)
   _$$SessionAuthenticatedImplCopyWith<_$SessionAuthenticatedImpl>
-  get copyWith => throw _privateConstructorUsedError;
+      get copyWith => throw _privateConstructorUsedError;
 }

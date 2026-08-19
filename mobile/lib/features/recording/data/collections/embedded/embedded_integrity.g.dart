@@ -22,7 +22,7 @@ const EmbeddedIntegritySchema = Schema(
       id: 1,
       name: r'checksumSha256',
       type: IsarType.string,
-    ),
+    )
   },
   estimateSize: _embeddedIntegrityEstimateSize,
   serialize: _embeddedIntegritySerialize,
@@ -86,147 +86,145 @@ P _embeddedIntegrityDeserializeProp<P>(
 extension EmbeddedIntegrityQueryFilter
     on QueryBuilder<EmbeddedIntegrity, EmbeddedIntegrity, QFilterCondition> {
   QueryBuilder<EmbeddedIntegrity, EmbeddedIntegrity, QAfterFilterCondition>
-  byteCountIsNull() {
+      byteCountIsNull() {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(
-        const FilterCondition.isNull(property: r'byteCount'),
-      );
+      return query.addFilterCondition(const FilterCondition.isNull(
+        property: r'byteCount',
+      ));
     });
   }
 
   QueryBuilder<EmbeddedIntegrity, EmbeddedIntegrity, QAfterFilterCondition>
-  byteCountIsNotNull() {
+      byteCountIsNotNull() {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(
-        const FilterCondition.isNotNull(property: r'byteCount'),
-      );
+      return query.addFilterCondition(const FilterCondition.isNotNull(
+        property: r'byteCount',
+      ));
     });
   }
 
   QueryBuilder<EmbeddedIntegrity, EmbeddedIntegrity, QAfterFilterCondition>
-  byteCountEqualTo(int? value) {
+      byteCountEqualTo(int? value) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(
-        FilterCondition.equalTo(property: r'byteCount', value: value),
-      );
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'byteCount',
+        value: value,
+      ));
     });
   }
 
   QueryBuilder<EmbeddedIntegrity, EmbeddedIntegrity, QAfterFilterCondition>
-  byteCountGreaterThan(int? value, {bool include = false}) {
+      byteCountGreaterThan(
+    int? value, {
+    bool include = false,
+  }) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(
-        FilterCondition.greaterThan(
-          include: include,
-          property: r'byteCount',
-          value: value,
-        ),
-      );
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'byteCount',
+        value: value,
+      ));
     });
   }
 
   QueryBuilder<EmbeddedIntegrity, EmbeddedIntegrity, QAfterFilterCondition>
-  byteCountLessThan(int? value, {bool include = false}) {
+      byteCountLessThan(
+    int? value, {
+    bool include = false,
+  }) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(
-        FilterCondition.lessThan(
-          include: include,
-          property: r'byteCount',
-          value: value,
-        ),
-      );
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'byteCount',
+        value: value,
+      ));
     });
   }
 
   QueryBuilder<EmbeddedIntegrity, EmbeddedIntegrity, QAfterFilterCondition>
-  byteCountBetween(
+      byteCountBetween(
     int? lower,
     int? upper, {
     bool includeLower = true,
     bool includeUpper = true,
   }) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(
-        FilterCondition.between(
-          property: r'byteCount',
-          lower: lower,
-          includeLower: includeLower,
-          upper: upper,
-          includeUpper: includeUpper,
-        ),
-      );
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'byteCount',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+      ));
     });
   }
 
   QueryBuilder<EmbeddedIntegrity, EmbeddedIntegrity, QAfterFilterCondition>
-  checksumSha256IsNull() {
+      checksumSha256IsNull() {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(
-        const FilterCondition.isNull(property: r'checksumSha256'),
-      );
+      return query.addFilterCondition(const FilterCondition.isNull(
+        property: r'checksumSha256',
+      ));
     });
   }
 
   QueryBuilder<EmbeddedIntegrity, EmbeddedIntegrity, QAfterFilterCondition>
-  checksumSha256IsNotNull() {
+      checksumSha256IsNotNull() {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(
-        const FilterCondition.isNotNull(property: r'checksumSha256'),
-      );
+      return query.addFilterCondition(const FilterCondition.isNotNull(
+        property: r'checksumSha256',
+      ));
     });
   }
 
   QueryBuilder<EmbeddedIntegrity, EmbeddedIntegrity, QAfterFilterCondition>
-  checksumSha256EqualTo(String? value, {bool caseSensitive = true}) {
+      checksumSha256EqualTo(
+    String? value, {
+    bool caseSensitive = true,
+  }) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(
-        FilterCondition.equalTo(
-          property: r'checksumSha256',
-          value: value,
-          caseSensitive: caseSensitive,
-        ),
-      );
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'checksumSha256',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
     });
   }
 
   QueryBuilder<EmbeddedIntegrity, EmbeddedIntegrity, QAfterFilterCondition>
-  checksumSha256GreaterThan(
+      checksumSha256GreaterThan(
     String? value, {
     bool include = false,
     bool caseSensitive = true,
   }) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(
-        FilterCondition.greaterThan(
-          include: include,
-          property: r'checksumSha256',
-          value: value,
-          caseSensitive: caseSensitive,
-        ),
-      );
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'checksumSha256',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
     });
   }
 
   QueryBuilder<EmbeddedIntegrity, EmbeddedIntegrity, QAfterFilterCondition>
-  checksumSha256LessThan(
+      checksumSha256LessThan(
     String? value, {
     bool include = false,
     bool caseSensitive = true,
   }) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(
-        FilterCondition.lessThan(
-          include: include,
-          property: r'checksumSha256',
-          value: value,
-          caseSensitive: caseSensitive,
-        ),
-      );
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'checksumSha256',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
     });
   }
 
   QueryBuilder<EmbeddedIntegrity, EmbeddedIntegrity, QAfterFilterCondition>
-  checksumSha256Between(
+      checksumSha256Between(
     String? lower,
     String? upper, {
     bool includeLower = true,
@@ -234,86 +232,84 @@ extension EmbeddedIntegrityQueryFilter
     bool caseSensitive = true,
   }) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(
-        FilterCondition.between(
-          property: r'checksumSha256',
-          lower: lower,
-          includeLower: includeLower,
-          upper: upper,
-          includeUpper: includeUpper,
-          caseSensitive: caseSensitive,
-        ),
-      );
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'checksumSha256',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+        caseSensitive: caseSensitive,
+      ));
     });
   }
 
   QueryBuilder<EmbeddedIntegrity, EmbeddedIntegrity, QAfterFilterCondition>
-  checksumSha256StartsWith(String value, {bool caseSensitive = true}) {
+      checksumSha256StartsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(
-        FilterCondition.startsWith(
-          property: r'checksumSha256',
-          value: value,
-          caseSensitive: caseSensitive,
-        ),
-      );
+      return query.addFilterCondition(FilterCondition.startsWith(
+        property: r'checksumSha256',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
     });
   }
 
   QueryBuilder<EmbeddedIntegrity, EmbeddedIntegrity, QAfterFilterCondition>
-  checksumSha256EndsWith(String value, {bool caseSensitive = true}) {
+      checksumSha256EndsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(
-        FilterCondition.endsWith(
-          property: r'checksumSha256',
-          value: value,
-          caseSensitive: caseSensitive,
-        ),
-      );
+      return query.addFilterCondition(FilterCondition.endsWith(
+        property: r'checksumSha256',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
     });
   }
 
   QueryBuilder<EmbeddedIntegrity, EmbeddedIntegrity, QAfterFilterCondition>
-  checksumSha256Contains(String value, {bool caseSensitive = true}) {
+      checksumSha256Contains(String value, {bool caseSensitive = true}) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(
-        FilterCondition.contains(
-          property: r'checksumSha256',
-          value: value,
-          caseSensitive: caseSensitive,
-        ),
-      );
+      return query.addFilterCondition(FilterCondition.contains(
+        property: r'checksumSha256',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
     });
   }
 
   QueryBuilder<EmbeddedIntegrity, EmbeddedIntegrity, QAfterFilterCondition>
-  checksumSha256Matches(String pattern, {bool caseSensitive = true}) {
+      checksumSha256Matches(String pattern, {bool caseSensitive = true}) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(
-        FilterCondition.matches(
-          property: r'checksumSha256',
-          wildcard: pattern,
-          caseSensitive: caseSensitive,
-        ),
-      );
+      return query.addFilterCondition(FilterCondition.matches(
+        property: r'checksumSha256',
+        wildcard: pattern,
+        caseSensitive: caseSensitive,
+      ));
     });
   }
 
   QueryBuilder<EmbeddedIntegrity, EmbeddedIntegrity, QAfterFilterCondition>
-  checksumSha256IsEmpty() {
+      checksumSha256IsEmpty() {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(
-        FilterCondition.equalTo(property: r'checksumSha256', value: ''),
-      );
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'checksumSha256',
+        value: '',
+      ));
     });
   }
 
   QueryBuilder<EmbeddedIntegrity, EmbeddedIntegrity, QAfterFilterCondition>
-  checksumSha256IsNotEmpty() {
+      checksumSha256IsNotEmpty() {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(
-        FilterCondition.greaterThan(property: r'checksumSha256', value: ''),
-      );
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        property: r'checksumSha256',
+        value: '',
+      ));
     });
   }
 }

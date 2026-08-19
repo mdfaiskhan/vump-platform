@@ -12,8 +12,7 @@ part of 'auth_state.dart';
 T _$identity<T>(T value) => value;
 
 final _privateConstructorUsedError = UnsupportedError(
-  'It seems like you constructed your class using `MyClass._()`. This constructor is only meant to be used by freezed and you are not supposed to need it nor use it.\nPlease check the documentation here for more information: https://github.com/rrousselGit/freezed#adding-getters-and-methods-to-our-models',
-);
+    'It seems like you constructed your class using `MyClass._()`. This constructor is only meant to be used by freezed and you are not supposed to need it nor use it.\nPlease check the documentation here for more information: https://github.com/rrousselGit/freezed#adding-getters-and-methods-to-our-models');
 
 /// @nodoc
 mixin _$AuthState {
@@ -22,39 +21,45 @@ mixin _$AuthState {
     required TResult Function() unauthenticated,
     required TResult Function(User user) authenticated,
     required TResult Function() expired,
-  }) => throw _privateConstructorUsedError;
+  }) =>
+      throw _privateConstructorUsedError;
   @optionalTypeArgs
   TResult? whenOrNull<TResult extends Object?>({
     TResult? Function()? unauthenticated,
     TResult? Function(User user)? authenticated,
     TResult? Function()? expired,
-  }) => throw _privateConstructorUsedError;
+  }) =>
+      throw _privateConstructorUsedError;
   @optionalTypeArgs
   TResult maybeWhen<TResult extends Object?>({
     TResult Function()? unauthenticated,
     TResult Function(User user)? authenticated,
     TResult Function()? expired,
     required TResult orElse(),
-  }) => throw _privateConstructorUsedError;
+  }) =>
+      throw _privateConstructorUsedError;
   @optionalTypeArgs
   TResult map<TResult extends Object?>({
     required TResult Function(AuthStateUnauthenticated value) unauthenticated,
     required TResult Function(AuthStateAuthenticated value) authenticated,
     required TResult Function(AuthStateExpired value) expired,
-  }) => throw _privateConstructorUsedError;
+  }) =>
+      throw _privateConstructorUsedError;
   @optionalTypeArgs
   TResult? mapOrNull<TResult extends Object?>({
     TResult? Function(AuthStateUnauthenticated value)? unauthenticated,
     TResult? Function(AuthStateAuthenticated value)? authenticated,
     TResult? Function(AuthStateExpired value)? expired,
-  }) => throw _privateConstructorUsedError;
+  }) =>
+      throw _privateConstructorUsedError;
   @optionalTypeArgs
   TResult maybeMap<TResult extends Object?>({
     TResult Function(AuthStateUnauthenticated value)? unauthenticated,
     TResult Function(AuthStateAuthenticated value)? authenticated,
     TResult Function(AuthStateExpired value)? expired,
     required TResult orElse(),
-  }) => throw _privateConstructorUsedError;
+  }) =>
+      throw _privateConstructorUsedError;
 }
 
 /// @nodoc
@@ -77,9 +82,9 @@ class _$AuthStateCopyWithImpl<$Res, $Val extends AuthState>
 /// @nodoc
 abstract class _$$AuthStateUnauthenticatedImplCopyWith<$Res> {
   factory _$$AuthStateUnauthenticatedImplCopyWith(
-    _$AuthStateUnauthenticatedImpl value,
-    $Res Function(_$AuthStateUnauthenticatedImpl) then,
-  ) = __$$AuthStateUnauthenticatedImplCopyWithImpl<$Res>;
+          _$AuthStateUnauthenticatedImpl value,
+          $Res Function(_$AuthStateUnauthenticatedImpl) then) =
+      __$$AuthStateUnauthenticatedImplCopyWithImpl<$Res>;
 }
 
 /// @nodoc
@@ -87,9 +92,9 @@ class __$$AuthStateUnauthenticatedImplCopyWithImpl<$Res>
     extends _$AuthStateCopyWithImpl<$Res, _$AuthStateUnauthenticatedImpl>
     implements _$$AuthStateUnauthenticatedImplCopyWith<$Res> {
   __$$AuthStateUnauthenticatedImplCopyWithImpl(
-    _$AuthStateUnauthenticatedImpl _value,
-    $Res Function(_$AuthStateUnauthenticatedImpl) _then,
-  ) : super(_value, _then);
+      _$AuthStateUnauthenticatedImpl _value,
+      $Res Function(_$AuthStateUnauthenticatedImpl) _then)
+      : super(_value, _then);
 }
 
 /// @nodoc
@@ -189,9 +194,9 @@ abstract class AuthStateUnauthenticated extends AuthState {
 /// @nodoc
 abstract class _$$AuthStateAuthenticatedImplCopyWith<$Res> {
   factory _$$AuthStateAuthenticatedImplCopyWith(
-    _$AuthStateAuthenticatedImpl value,
-    $Res Function(_$AuthStateAuthenticatedImpl) then,
-  ) = __$$AuthStateAuthenticatedImplCopyWithImpl<$Res>;
+          _$AuthStateAuthenticatedImpl value,
+          $Res Function(_$AuthStateAuthenticatedImpl) then) =
+      __$$AuthStateAuthenticatedImplCopyWithImpl<$Res>;
   @useResult
   $Res call({User user});
 
@@ -203,21 +208,21 @@ class __$$AuthStateAuthenticatedImplCopyWithImpl<$Res>
     extends _$AuthStateCopyWithImpl<$Res, _$AuthStateAuthenticatedImpl>
     implements _$$AuthStateAuthenticatedImplCopyWith<$Res> {
   __$$AuthStateAuthenticatedImplCopyWithImpl(
-    _$AuthStateAuthenticatedImpl _value,
-    $Res Function(_$AuthStateAuthenticatedImpl) _then,
-  ) : super(_value, _then);
+      _$AuthStateAuthenticatedImpl _value,
+      $Res Function(_$AuthStateAuthenticatedImpl) _then)
+      : super(_value, _then);
 
   @pragma('vm:prefer-inline')
   @override
-  $Res call({Object? user = null}) {
-    return _then(
-      _$AuthStateAuthenticatedImpl(
-        null == user
-            ? _value.user
-            : user // ignore: cast_nullable_to_non_nullable
-                  as User,
-      ),
-    );
+  $Res call({
+    Object? user = null,
+  }) {
+    return _then(_$AuthStateAuthenticatedImpl(
+      null == user
+          ? _value.user
+          : user // ignore: cast_nullable_to_non_nullable
+              as User,
+    ));
   }
 
   @override
@@ -257,11 +262,8 @@ class _$AuthStateAuthenticatedImpl extends AuthStateAuthenticated {
   @override
   @pragma('vm:prefer-inline')
   _$$AuthStateAuthenticatedImplCopyWith<_$AuthStateAuthenticatedImpl>
-  get copyWith =>
-      __$$AuthStateAuthenticatedImplCopyWithImpl<_$AuthStateAuthenticatedImpl>(
-        this,
-        _$identity,
-      );
+      get copyWith => __$$AuthStateAuthenticatedImplCopyWithImpl<
+          _$AuthStateAuthenticatedImpl>(this, _$identity);
 
   @override
   @optionalTypeArgs
@@ -340,25 +342,23 @@ abstract class AuthStateAuthenticated extends AuthState {
   User get user;
   @JsonKey(ignore: true)
   _$$AuthStateAuthenticatedImplCopyWith<_$AuthStateAuthenticatedImpl>
-  get copyWith => throw _privateConstructorUsedError;
+      get copyWith => throw _privateConstructorUsedError;
 }
 
 /// @nodoc
 abstract class _$$AuthStateExpiredImplCopyWith<$Res> {
-  factory _$$AuthStateExpiredImplCopyWith(
-    _$AuthStateExpiredImpl value,
-    $Res Function(_$AuthStateExpiredImpl) then,
-  ) = __$$AuthStateExpiredImplCopyWithImpl<$Res>;
+  factory _$$AuthStateExpiredImplCopyWith(_$AuthStateExpiredImpl value,
+          $Res Function(_$AuthStateExpiredImpl) then) =
+      __$$AuthStateExpiredImplCopyWithImpl<$Res>;
 }
 
 /// @nodoc
 class __$$AuthStateExpiredImplCopyWithImpl<$Res>
     extends _$AuthStateCopyWithImpl<$Res, _$AuthStateExpiredImpl>
     implements _$$AuthStateExpiredImplCopyWith<$Res> {
-  __$$AuthStateExpiredImplCopyWithImpl(
-    _$AuthStateExpiredImpl _value,
-    $Res Function(_$AuthStateExpiredImpl) _then,
-  ) : super(_value, _then);
+  __$$AuthStateExpiredImplCopyWithImpl(_$AuthStateExpiredImpl _value,
+      $Res Function(_$AuthStateExpiredImpl) _then)
+      : super(_value, _then);
 }
 
 /// @nodoc

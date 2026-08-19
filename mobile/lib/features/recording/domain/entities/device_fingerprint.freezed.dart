@@ -12,8 +12,7 @@ part of 'device_fingerprint.dart';
 T _$identity<T>(T value) => value;
 
 final _privateConstructorUsedError = UnsupportedError(
-  'It seems like you constructed your class using `MyClass._()`. This constructor is only meant to be used by freezed and you are not supposed to need it nor use it.\nPlease check the documentation here for more information: https://github.com/rrousselGit/freezed#adding-getters-and-methods-to-our-models',
-);
+    'It seems like you constructed your class using `MyClass._()`. This constructor is only meant to be used by freezed and you are not supposed to need it nor use it.\nPlease check the documentation here for more information: https://github.com/rrousselGit/freezed#adding-getters-and-methods-to-our-models');
 
 /// @nodoc
 mixin _$DeviceFingerprint {
@@ -31,9 +30,8 @@ mixin _$DeviceFingerprint {
 /// @nodoc
 abstract class $DeviceFingerprintCopyWith<$Res> {
   factory $DeviceFingerprintCopyWith(
-    DeviceFingerprint value,
-    $Res Function(DeviceFingerprint) then,
-  ) = _$DeviceFingerprintCopyWithImpl<$Res, DeviceFingerprint>;
+          DeviceFingerprint value, $Res Function(DeviceFingerprint) then) =
+      _$DeviceFingerprintCopyWithImpl<$Res, DeviceFingerprint>;
   @useResult
   $Res call({String appVersion, String osVersion});
 }
@@ -50,30 +48,29 @@ class _$DeviceFingerprintCopyWithImpl<$Res, $Val extends DeviceFingerprint>
 
   @pragma('vm:prefer-inline')
   @override
-  $Res call({Object? appVersion = null, Object? osVersion = null}) {
-    return _then(
-      _value.copyWith(
-            appVersion: null == appVersion
-                ? _value.appVersion
-                : appVersion // ignore: cast_nullable_to_non_nullable
-                      as String,
-            osVersion: null == osVersion
-                ? _value.osVersion
-                : osVersion // ignore: cast_nullable_to_non_nullable
-                      as String,
-          )
-          as $Val,
-    );
+  $Res call({
+    Object? appVersion = null,
+    Object? osVersion = null,
+  }) {
+    return _then(_value.copyWith(
+      appVersion: null == appVersion
+          ? _value.appVersion
+          : appVersion // ignore: cast_nullable_to_non_nullable
+              as String,
+      osVersion: null == osVersion
+          ? _value.osVersion
+          : osVersion // ignore: cast_nullable_to_non_nullable
+              as String,
+    ) as $Val);
   }
 }
 
 /// @nodoc
 abstract class _$$DeviceFingerprintImplCopyWith<$Res>
     implements $DeviceFingerprintCopyWith<$Res> {
-  factory _$$DeviceFingerprintImplCopyWith(
-    _$DeviceFingerprintImpl value,
-    $Res Function(_$DeviceFingerprintImpl) then,
-  ) = __$$DeviceFingerprintImplCopyWithImpl<$Res>;
+  factory _$$DeviceFingerprintImplCopyWith(_$DeviceFingerprintImpl value,
+          $Res Function(_$DeviceFingerprintImpl) then) =
+      __$$DeviceFingerprintImplCopyWithImpl<$Res>;
   @override
   @useResult
   $Res call({String appVersion, String osVersion});
@@ -83,36 +80,34 @@ abstract class _$$DeviceFingerprintImplCopyWith<$Res>
 class __$$DeviceFingerprintImplCopyWithImpl<$Res>
     extends _$DeviceFingerprintCopyWithImpl<$Res, _$DeviceFingerprintImpl>
     implements _$$DeviceFingerprintImplCopyWith<$Res> {
-  __$$DeviceFingerprintImplCopyWithImpl(
-    _$DeviceFingerprintImpl _value,
-    $Res Function(_$DeviceFingerprintImpl) _then,
-  ) : super(_value, _then);
+  __$$DeviceFingerprintImplCopyWithImpl(_$DeviceFingerprintImpl _value,
+      $Res Function(_$DeviceFingerprintImpl) _then)
+      : super(_value, _then);
 
   @pragma('vm:prefer-inline')
   @override
-  $Res call({Object? appVersion = null, Object? osVersion = null}) {
-    return _then(
-      _$DeviceFingerprintImpl(
-        appVersion: null == appVersion
-            ? _value.appVersion
-            : appVersion // ignore: cast_nullable_to_non_nullable
-                  as String,
-        osVersion: null == osVersion
-            ? _value.osVersion
-            : osVersion // ignore: cast_nullable_to_non_nullable
-                  as String,
-      ),
-    );
+  $Res call({
+    Object? appVersion = null,
+    Object? osVersion = null,
+  }) {
+    return _then(_$DeviceFingerprintImpl(
+      appVersion: null == appVersion
+          ? _value.appVersion
+          : appVersion // ignore: cast_nullable_to_non_nullable
+              as String,
+      osVersion: null == osVersion
+          ? _value.osVersion
+          : osVersion // ignore: cast_nullable_to_non_nullable
+              as String,
+    ));
   }
 }
 
 /// @nodoc
 
 class _$DeviceFingerprintImpl implements _DeviceFingerprint {
-  const _$DeviceFingerprintImpl({
-    required this.appVersion,
-    required this.osVersion,
-  });
+  const _$DeviceFingerprintImpl(
+      {required this.appVersion, required this.osVersion});
 
   /// The application's version, as `AppInfo.fullVersion` reports it.
   @override
@@ -146,21 +141,20 @@ class _$DeviceFingerprintImpl implements _DeviceFingerprint {
   @pragma('vm:prefer-inline')
   _$$DeviceFingerprintImplCopyWith<_$DeviceFingerprintImpl> get copyWith =>
       __$$DeviceFingerprintImplCopyWithImpl<_$DeviceFingerprintImpl>(
-        this,
-        _$identity,
-      );
+          this, _$identity);
 }
 
 abstract class _DeviceFingerprint implements DeviceFingerprint {
-  const factory _DeviceFingerprint({
-    required final String appVersion,
-    required final String osVersion,
-  }) = _$DeviceFingerprintImpl;
+  const factory _DeviceFingerprint(
+      {required final String appVersion,
+      required final String osVersion}) = _$DeviceFingerprintImpl;
 
   @override
+
   /// The application's version, as `AppInfo.fullVersion` reports it.
   String get appVersion;
   @override
+
   /// The platform's version, as `Platform.operatingSystemVersion` reports.
   String get osVersion;
   @override

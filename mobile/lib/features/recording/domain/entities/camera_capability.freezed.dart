@@ -12,8 +12,7 @@ part of 'camera_capability.dart';
 T _$identity<T>(T value) => value;
 
 final _privateConstructorUsedError = UnsupportedError(
-  'It seems like you constructed your class using `MyClass._()`. This constructor is only meant to be used by freezed and you are not supposed to need it nor use it.\nPlease check the documentation here for more information: https://github.com/rrousselGit/freezed#adding-getters-and-methods-to-our-models',
-);
+    'It seems like you constructed your class using `MyClass._()`. This constructor is only meant to be used by freezed and you are not supposed to need it nor use it.\nPlease check the documentation here for more information: https://github.com/rrousselGit/freezed#adding-getters-and-methods-to-our-models');
 
 /// @nodoc
 mixin _$CameraCapability {
@@ -39,15 +38,13 @@ mixin _$CameraCapability {
 /// @nodoc
 abstract class $CameraCapabilityCopyWith<$Res> {
   factory $CameraCapabilityCopyWith(
-    CameraCapability value,
-    $Res Function(CameraCapability) then,
-  ) = _$CameraCapabilityCopyWithImpl<$Res, CameraCapability>;
+          CameraCapability value, $Res Function(CameraCapability) then) =
+      _$CameraCapabilityCopyWithImpl<$Res, CameraCapability>;
   @useResult
-  $Res call({
-    bool hasRearCamera,
-    bool? hasDedicatedUltraWide,
-    double? minimumZoomFactor,
-  });
+  $Res call(
+      {bool hasRearCamera,
+      bool? hasDedicatedUltraWide,
+      double? minimumZoomFactor});
 }
 
 /// @nodoc
@@ -67,50 +64,44 @@ class _$CameraCapabilityCopyWithImpl<$Res, $Val extends CameraCapability>
     Object? hasDedicatedUltraWide = freezed,
     Object? minimumZoomFactor = freezed,
   }) {
-    return _then(
-      _value.copyWith(
-            hasRearCamera: null == hasRearCamera
-                ? _value.hasRearCamera
-                : hasRearCamera // ignore: cast_nullable_to_non_nullable
-                      as bool,
-            hasDedicatedUltraWide: freezed == hasDedicatedUltraWide
-                ? _value.hasDedicatedUltraWide
-                : hasDedicatedUltraWide // ignore: cast_nullable_to_non_nullable
-                      as bool?,
-            minimumZoomFactor: freezed == minimumZoomFactor
-                ? _value.minimumZoomFactor
-                : minimumZoomFactor // ignore: cast_nullable_to_non_nullable
-                      as double?,
-          )
-          as $Val,
-    );
+    return _then(_value.copyWith(
+      hasRearCamera: null == hasRearCamera
+          ? _value.hasRearCamera
+          : hasRearCamera // ignore: cast_nullable_to_non_nullable
+              as bool,
+      hasDedicatedUltraWide: freezed == hasDedicatedUltraWide
+          ? _value.hasDedicatedUltraWide
+          : hasDedicatedUltraWide // ignore: cast_nullable_to_non_nullable
+              as bool?,
+      minimumZoomFactor: freezed == minimumZoomFactor
+          ? _value.minimumZoomFactor
+          : minimumZoomFactor // ignore: cast_nullable_to_non_nullable
+              as double?,
+    ) as $Val);
   }
 }
 
 /// @nodoc
 abstract class _$$CameraCapabilityImplCopyWith<$Res>
     implements $CameraCapabilityCopyWith<$Res> {
-  factory _$$CameraCapabilityImplCopyWith(
-    _$CameraCapabilityImpl value,
-    $Res Function(_$CameraCapabilityImpl) then,
-  ) = __$$CameraCapabilityImplCopyWithImpl<$Res>;
+  factory _$$CameraCapabilityImplCopyWith(_$CameraCapabilityImpl value,
+          $Res Function(_$CameraCapabilityImpl) then) =
+      __$$CameraCapabilityImplCopyWithImpl<$Res>;
   @override
   @useResult
-  $Res call({
-    bool hasRearCamera,
-    bool? hasDedicatedUltraWide,
-    double? minimumZoomFactor,
-  });
+  $Res call(
+      {bool hasRearCamera,
+      bool? hasDedicatedUltraWide,
+      double? minimumZoomFactor});
 }
 
 /// @nodoc
 class __$$CameraCapabilityImplCopyWithImpl<$Res>
     extends _$CameraCapabilityCopyWithImpl<$Res, _$CameraCapabilityImpl>
     implements _$$CameraCapabilityImplCopyWith<$Res> {
-  __$$CameraCapabilityImplCopyWithImpl(
-    _$CameraCapabilityImpl _value,
-    $Res Function(_$CameraCapabilityImpl) _then,
-  ) : super(_value, _then);
+  __$$CameraCapabilityImplCopyWithImpl(_$CameraCapabilityImpl _value,
+      $Res Function(_$CameraCapabilityImpl) _then)
+      : super(_value, _then);
 
   @pragma('vm:prefer-inline')
   @override
@@ -119,33 +110,31 @@ class __$$CameraCapabilityImplCopyWithImpl<$Res>
     Object? hasDedicatedUltraWide = freezed,
     Object? minimumZoomFactor = freezed,
   }) {
-    return _then(
-      _$CameraCapabilityImpl(
-        hasRearCamera: null == hasRearCamera
-            ? _value.hasRearCamera
-            : hasRearCamera // ignore: cast_nullable_to_non_nullable
-                  as bool,
-        hasDedicatedUltraWide: freezed == hasDedicatedUltraWide
-            ? _value.hasDedicatedUltraWide
-            : hasDedicatedUltraWide // ignore: cast_nullable_to_non_nullable
-                  as bool?,
-        minimumZoomFactor: freezed == minimumZoomFactor
-            ? _value.minimumZoomFactor
-            : minimumZoomFactor // ignore: cast_nullable_to_non_nullable
-                  as double?,
-      ),
-    );
+    return _then(_$CameraCapabilityImpl(
+      hasRearCamera: null == hasRearCamera
+          ? _value.hasRearCamera
+          : hasRearCamera // ignore: cast_nullable_to_non_nullable
+              as bool,
+      hasDedicatedUltraWide: freezed == hasDedicatedUltraWide
+          ? _value.hasDedicatedUltraWide
+          : hasDedicatedUltraWide // ignore: cast_nullable_to_non_nullable
+              as bool?,
+      minimumZoomFactor: freezed == minimumZoomFactor
+          ? _value.minimumZoomFactor
+          : minimumZoomFactor // ignore: cast_nullable_to_non_nullable
+              as double?,
+    ));
   }
 }
 
 /// @nodoc
 
 class _$CameraCapabilityImpl extends _CameraCapability {
-  const _$CameraCapabilityImpl({
-    required this.hasRearCamera,
-    required this.hasDedicatedUltraWide,
-    required this.minimumZoomFactor,
-  }) : super._();
+  const _$CameraCapabilityImpl(
+      {required this.hasRearCamera,
+      required this.hasDedicatedUltraWide,
+      required this.minimumZoomFactor})
+      : super._();
 
   /// Whether any rear-facing camera exists. BR-01 requires one.
   @override
@@ -184,37 +173,33 @@ class _$CameraCapabilityImpl extends _CameraCapability {
 
   @override
   int get hashCode => Object.hash(
-    runtimeType,
-    hasRearCamera,
-    hasDedicatedUltraWide,
-    minimumZoomFactor,
-  );
+      runtimeType, hasRearCamera, hasDedicatedUltraWide, minimumZoomFactor);
 
   @JsonKey(ignore: true)
   @override
   @pragma('vm:prefer-inline')
   _$$CameraCapabilityImplCopyWith<_$CameraCapabilityImpl> get copyWith =>
       __$$CameraCapabilityImplCopyWithImpl<_$CameraCapabilityImpl>(
-        this,
-        _$identity,
-      );
+          this, _$identity);
 }
 
 abstract class _CameraCapability extends CameraCapability {
-  const factory _CameraCapability({
-    required final bool hasRearCamera,
-    required final bool? hasDedicatedUltraWide,
-    required final double? minimumZoomFactor,
-  }) = _$CameraCapabilityImpl;
+  const factory _CameraCapability(
+      {required final bool hasRearCamera,
+      required final bool? hasDedicatedUltraWide,
+      required final double? minimumZoomFactor}) = _$CameraCapabilityImpl;
   const _CameraCapability._() : super._();
 
   @override
+
   /// Whether any rear-facing camera exists. BR-01 requires one.
   bool get hasRearCamera;
   @override
+
   /// Tri-state: true, false, or null for "the platform cannot say".
   bool? get hasDedicatedUltraWide;
   @override
+
   /// The smallest zoom factor the rear camera reports, or null if unknown.
   ///
   /// Below 1.0 means the sensor zooms out past its native field of view,

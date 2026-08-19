@@ -22,7 +22,11 @@ const LocalChunkSchema = CollectionSchema(
       name: r'checksumSha256',
       type: IsarType.string,
     ),
-    r'chunkId': PropertySchema(id: 1, name: r'chunkId', type: IsarType.string),
+    r'chunkId': PropertySchema(
+      id: 1,
+      name: r'chunkId',
+      type: IsarType.string,
+    ),
     r'fileSizeBytes': PropertySchema(
       id: 2,
       name: r'fileSizeBytes',
@@ -58,12 +62,16 @@ const LocalChunkSchema = CollectionSchema(
       name: r'sessionId',
       type: IsarType.string,
     ),
-    r'status': PropertySchema(id: 9, name: r'status', type: IsarType.string),
+    r'status': PropertySchema(
+      id: 9,
+      name: r'status',
+      type: IsarType.string,
+    ),
     r'uploadAttemptCount': PropertySchema(
       id: 10,
       name: r'uploadAttemptCount',
       type: IsarType.long,
-    ),
+    )
   },
   estimateSize: _localChunkEstimateSize,
   serialize: _localChunkSerialize,
@@ -81,7 +89,7 @@ const LocalChunkSchema = CollectionSchema(
           name: r'chunkId',
           type: IndexType.hash,
           caseSensitive: true,
-        ),
+        )
       ],
     ),
     r'sessionId': IndexSchema(
@@ -94,9 +102,9 @@ const LocalChunkSchema = CollectionSchema(
           name: r'sessionId',
           type: IndexType.hash,
           caseSensitive: true,
-        ),
+        )
       ],
-    ),
+    )
   },
   links: {},
   embeddedSchemas: {},
@@ -262,10 +270,8 @@ extension LocalChunkByIndex on IsarCollection<LocalChunk> {
     return putAllByIndex(r'chunkId', objects);
   }
 
-  List<Id> putAllByChunkIdSync(
-    List<LocalChunk> objects, {
-    bool saveLinks = true,
-  }) {
+  List<Id> putAllByChunkIdSync(List<LocalChunk> objects,
+      {bool saveLinks = true}) {
     return putAllByIndexSync(r'chunkId', objects, saveLinks: saveLinks);
   }
 }
@@ -283,7 +289,10 @@ extension LocalChunkQueryWhere
     on QueryBuilder<LocalChunk, LocalChunk, QWhereClause> {
   QueryBuilder<LocalChunk, LocalChunk, QAfterWhereClause> idEqualTo(Id id) {
     return QueryBuilder.apply(this, (query) {
-      return query.addWhereClause(IdWhereClause.between(lower: id, upper: id));
+      return query.addWhereClause(IdWhereClause.between(
+        lower: id,
+        upper: id,
+      ));
     });
   }
 
@@ -309,10 +318,8 @@ extension LocalChunkQueryWhere
     });
   }
 
-  QueryBuilder<LocalChunk, LocalChunk, QAfterWhereClause> idGreaterThan(
-    Id id, {
-    bool include = false,
-  }) {
+  QueryBuilder<LocalChunk, LocalChunk, QAfterWhereClause> idGreaterThan(Id id,
+      {bool include = false}) {
     return QueryBuilder.apply(this, (query) {
       return query.addWhereClause(
         IdWhereClause.greaterThan(lower: id, includeLower: include),
@@ -320,10 +327,8 @@ extension LocalChunkQueryWhere
     });
   }
 
-  QueryBuilder<LocalChunk, LocalChunk, QAfterWhereClause> idLessThan(
-    Id id, {
-    bool include = false,
-  }) {
+  QueryBuilder<LocalChunk, LocalChunk, QAfterWhereClause> idLessThan(Id id,
+      {bool include = false}) {
     return QueryBuilder.apply(this, (query) {
       return query.addWhereClause(
         IdWhereClause.lessThan(upper: id, includeUpper: include),
@@ -338,121 +343,101 @@ extension LocalChunkQueryWhere
     bool includeUpper = true,
   }) {
     return QueryBuilder.apply(this, (query) {
-      return query.addWhereClause(
-        IdWhereClause.between(
-          lower: lowerId,
-          includeLower: includeLower,
-          upper: upperId,
-          includeUpper: includeUpper,
-        ),
-      );
+      return query.addWhereClause(IdWhereClause.between(
+        lower: lowerId,
+        includeLower: includeLower,
+        upper: upperId,
+        includeUpper: includeUpper,
+      ));
     });
   }
 
   QueryBuilder<LocalChunk, LocalChunk, QAfterWhereClause> chunkIdEqualTo(
-    String chunkId,
-  ) {
+      String chunkId) {
     return QueryBuilder.apply(this, (query) {
-      return query.addWhereClause(
-        IndexWhereClause.equalTo(indexName: r'chunkId', value: [chunkId]),
-      );
+      return query.addWhereClause(IndexWhereClause.equalTo(
+        indexName: r'chunkId',
+        value: [chunkId],
+      ));
     });
   }
 
   QueryBuilder<LocalChunk, LocalChunk, QAfterWhereClause> chunkIdNotEqualTo(
-    String chunkId,
-  ) {
+      String chunkId) {
     return QueryBuilder.apply(this, (query) {
       if (query.whereSort == Sort.asc) {
         return query
-            .addWhereClause(
-              IndexWhereClause.between(
-                indexName: r'chunkId',
-                lower: [],
-                upper: [chunkId],
-                includeUpper: false,
-              ),
-            )
-            .addWhereClause(
-              IndexWhereClause.between(
-                indexName: r'chunkId',
-                lower: [chunkId],
-                includeLower: false,
-                upper: [],
-              ),
-            );
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'chunkId',
+              lower: [],
+              upper: [chunkId],
+              includeUpper: false,
+            ))
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'chunkId',
+              lower: [chunkId],
+              includeLower: false,
+              upper: [],
+            ));
       } else {
         return query
-            .addWhereClause(
-              IndexWhereClause.between(
-                indexName: r'chunkId',
-                lower: [chunkId],
-                includeLower: false,
-                upper: [],
-              ),
-            )
-            .addWhereClause(
-              IndexWhereClause.between(
-                indexName: r'chunkId',
-                lower: [],
-                upper: [chunkId],
-                includeUpper: false,
-              ),
-            );
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'chunkId',
+              lower: [chunkId],
+              includeLower: false,
+              upper: [],
+            ))
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'chunkId',
+              lower: [],
+              upper: [chunkId],
+              includeUpper: false,
+            ));
       }
     });
   }
 
   QueryBuilder<LocalChunk, LocalChunk, QAfterWhereClause> sessionIdEqualTo(
-    String sessionId,
-  ) {
+      String sessionId) {
     return QueryBuilder.apply(this, (query) {
-      return query.addWhereClause(
-        IndexWhereClause.equalTo(indexName: r'sessionId', value: [sessionId]),
-      );
+      return query.addWhereClause(IndexWhereClause.equalTo(
+        indexName: r'sessionId',
+        value: [sessionId],
+      ));
     });
   }
 
   QueryBuilder<LocalChunk, LocalChunk, QAfterWhereClause> sessionIdNotEqualTo(
-    String sessionId,
-  ) {
+      String sessionId) {
     return QueryBuilder.apply(this, (query) {
       if (query.whereSort == Sort.asc) {
         return query
-            .addWhereClause(
-              IndexWhereClause.between(
-                indexName: r'sessionId',
-                lower: [],
-                upper: [sessionId],
-                includeUpper: false,
-              ),
-            )
-            .addWhereClause(
-              IndexWhereClause.between(
-                indexName: r'sessionId',
-                lower: [sessionId],
-                includeLower: false,
-                upper: [],
-              ),
-            );
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'sessionId',
+              lower: [],
+              upper: [sessionId],
+              includeUpper: false,
+            ))
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'sessionId',
+              lower: [sessionId],
+              includeLower: false,
+              upper: [],
+            ));
       } else {
         return query
-            .addWhereClause(
-              IndexWhereClause.between(
-                indexName: r'sessionId',
-                lower: [sessionId],
-                includeLower: false,
-                upper: [],
-              ),
-            )
-            .addWhereClause(
-              IndexWhereClause.between(
-                indexName: r'sessionId',
-                lower: [],
-                upper: [sessionId],
-                includeUpper: false,
-              ),
-            );
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'sessionId',
+              lower: [sessionId],
+              includeLower: false,
+              upper: [],
+            ))
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'sessionId',
+              lower: [],
+              upper: [sessionId],
+              includeUpper: false,
+            ));
       }
     });
   }
@@ -461,56 +446,53 @@ extension LocalChunkQueryWhere
 extension LocalChunkQueryFilter
     on QueryBuilder<LocalChunk, LocalChunk, QFilterCondition> {
   QueryBuilder<LocalChunk, LocalChunk, QAfterFilterCondition>
-  checksumSha256EqualTo(String value, {bool caseSensitive = true}) {
+      checksumSha256EqualTo(
+    String value, {
+    bool caseSensitive = true,
+  }) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(
-        FilterCondition.equalTo(
-          property: r'checksumSha256',
-          value: value,
-          caseSensitive: caseSensitive,
-        ),
-      );
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'checksumSha256',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
     });
   }
 
   QueryBuilder<LocalChunk, LocalChunk, QAfterFilterCondition>
-  checksumSha256GreaterThan(
+      checksumSha256GreaterThan(
     String value, {
     bool include = false,
     bool caseSensitive = true,
   }) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(
-        FilterCondition.greaterThan(
-          include: include,
-          property: r'checksumSha256',
-          value: value,
-          caseSensitive: caseSensitive,
-        ),
-      );
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'checksumSha256',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
     });
   }
 
   QueryBuilder<LocalChunk, LocalChunk, QAfterFilterCondition>
-  checksumSha256LessThan(
+      checksumSha256LessThan(
     String value, {
     bool include = false,
     bool caseSensitive = true,
   }) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(
-        FilterCondition.lessThan(
-          include: include,
-          property: r'checksumSha256',
-          value: value,
-          caseSensitive: caseSensitive,
-        ),
-      );
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'checksumSha256',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
     });
   }
 
   QueryBuilder<LocalChunk, LocalChunk, QAfterFilterCondition>
-  checksumSha256Between(
+      checksumSha256Between(
     String lower,
     String upper, {
     bool includeLower = true,
@@ -518,86 +500,84 @@ extension LocalChunkQueryFilter
     bool caseSensitive = true,
   }) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(
-        FilterCondition.between(
-          property: r'checksumSha256',
-          lower: lower,
-          includeLower: includeLower,
-          upper: upper,
-          includeUpper: includeUpper,
-          caseSensitive: caseSensitive,
-        ),
-      );
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'checksumSha256',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+        caseSensitive: caseSensitive,
+      ));
     });
   }
 
   QueryBuilder<LocalChunk, LocalChunk, QAfterFilterCondition>
-  checksumSha256StartsWith(String value, {bool caseSensitive = true}) {
+      checksumSha256StartsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(
-        FilterCondition.startsWith(
-          property: r'checksumSha256',
-          value: value,
-          caseSensitive: caseSensitive,
-        ),
-      );
+      return query.addFilterCondition(FilterCondition.startsWith(
+        property: r'checksumSha256',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
     });
   }
 
   QueryBuilder<LocalChunk, LocalChunk, QAfterFilterCondition>
-  checksumSha256EndsWith(String value, {bool caseSensitive = true}) {
+      checksumSha256EndsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(
-        FilterCondition.endsWith(
-          property: r'checksumSha256',
-          value: value,
-          caseSensitive: caseSensitive,
-        ),
-      );
+      return query.addFilterCondition(FilterCondition.endsWith(
+        property: r'checksumSha256',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
     });
   }
 
   QueryBuilder<LocalChunk, LocalChunk, QAfterFilterCondition>
-  checksumSha256Contains(String value, {bool caseSensitive = true}) {
+      checksumSha256Contains(String value, {bool caseSensitive = true}) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(
-        FilterCondition.contains(
-          property: r'checksumSha256',
-          value: value,
-          caseSensitive: caseSensitive,
-        ),
-      );
+      return query.addFilterCondition(FilterCondition.contains(
+        property: r'checksumSha256',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
     });
   }
 
   QueryBuilder<LocalChunk, LocalChunk, QAfterFilterCondition>
-  checksumSha256Matches(String pattern, {bool caseSensitive = true}) {
+      checksumSha256Matches(String pattern, {bool caseSensitive = true}) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(
-        FilterCondition.matches(
-          property: r'checksumSha256',
-          wildcard: pattern,
-          caseSensitive: caseSensitive,
-        ),
-      );
+      return query.addFilterCondition(FilterCondition.matches(
+        property: r'checksumSha256',
+        wildcard: pattern,
+        caseSensitive: caseSensitive,
+      ));
     });
   }
 
   QueryBuilder<LocalChunk, LocalChunk, QAfterFilterCondition>
-  checksumSha256IsEmpty() {
+      checksumSha256IsEmpty() {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(
-        FilterCondition.equalTo(property: r'checksumSha256', value: ''),
-      );
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'checksumSha256',
+        value: '',
+      ));
     });
   }
 
   QueryBuilder<LocalChunk, LocalChunk, QAfterFilterCondition>
-  checksumSha256IsNotEmpty() {
+      checksumSha256IsNotEmpty() {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(
-        FilterCondition.greaterThan(property: r'checksumSha256', value: ''),
-      );
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        property: r'checksumSha256',
+        value: '',
+      ));
     });
   }
 
@@ -606,31 +586,27 @@ extension LocalChunkQueryFilter
     bool caseSensitive = true,
   }) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(
-        FilterCondition.equalTo(
-          property: r'chunkId',
-          value: value,
-          caseSensitive: caseSensitive,
-        ),
-      );
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'chunkId',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
     });
   }
 
   QueryBuilder<LocalChunk, LocalChunk, QAfterFilterCondition>
-  chunkIdGreaterThan(
+      chunkIdGreaterThan(
     String value, {
     bool include = false,
     bool caseSensitive = true,
   }) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(
-        FilterCondition.greaterThan(
-          include: include,
-          property: r'chunkId',
-          value: value,
-          caseSensitive: caseSensitive,
-        ),
-      );
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'chunkId',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
     });
   }
 
@@ -640,14 +616,12 @@ extension LocalChunkQueryFilter
     bool caseSensitive = true,
   }) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(
-        FilterCondition.lessThan(
-          include: include,
-          property: r'chunkId',
-          value: value,
-          caseSensitive: caseSensitive,
-        ),
-      );
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'chunkId',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
     });
   }
 
@@ -659,16 +633,14 @@ extension LocalChunkQueryFilter
     bool caseSensitive = true,
   }) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(
-        FilterCondition.between(
-          property: r'chunkId',
-          lower: lower,
-          includeLower: includeLower,
-          upper: upper,
-          includeUpper: includeUpper,
-          caseSensitive: caseSensitive,
-        ),
-      );
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'chunkId',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+        caseSensitive: caseSensitive,
+      ));
     });
   }
 
@@ -677,13 +649,11 @@ extension LocalChunkQueryFilter
     bool caseSensitive = true,
   }) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(
-        FilterCondition.startsWith(
-          property: r'chunkId',
-          value: value,
-          caseSensitive: caseSensitive,
-        ),
-      );
+      return query.addFilterCondition(FilterCondition.startsWith(
+        property: r'chunkId',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
     });
   }
 
@@ -692,125 +662,120 @@ extension LocalChunkQueryFilter
     bool caseSensitive = true,
   }) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(
-        FilterCondition.endsWith(
-          property: r'chunkId',
-          value: value,
-          caseSensitive: caseSensitive,
-        ),
-      );
+      return query.addFilterCondition(FilterCondition.endsWith(
+        property: r'chunkId',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
     });
   }
 
   QueryBuilder<LocalChunk, LocalChunk, QAfterFilterCondition> chunkIdContains(
-    String value, {
-    bool caseSensitive = true,
-  }) {
+      String value,
+      {bool caseSensitive = true}) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(
-        FilterCondition.contains(
-          property: r'chunkId',
-          value: value,
-          caseSensitive: caseSensitive,
-        ),
-      );
+      return query.addFilterCondition(FilterCondition.contains(
+        property: r'chunkId',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
     });
   }
 
   QueryBuilder<LocalChunk, LocalChunk, QAfterFilterCondition> chunkIdMatches(
-    String pattern, {
-    bool caseSensitive = true,
-  }) {
+      String pattern,
+      {bool caseSensitive = true}) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(
-        FilterCondition.matches(
-          property: r'chunkId',
-          wildcard: pattern,
-          caseSensitive: caseSensitive,
-        ),
-      );
+      return query.addFilterCondition(FilterCondition.matches(
+        property: r'chunkId',
+        wildcard: pattern,
+        caseSensitive: caseSensitive,
+      ));
     });
   }
 
   QueryBuilder<LocalChunk, LocalChunk, QAfterFilterCondition> chunkIdIsEmpty() {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(
-        FilterCondition.equalTo(property: r'chunkId', value: ''),
-      );
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'chunkId',
+        value: '',
+      ));
     });
   }
 
   QueryBuilder<LocalChunk, LocalChunk, QAfterFilterCondition>
-  chunkIdIsNotEmpty() {
+      chunkIdIsNotEmpty() {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(
-        FilterCondition.greaterThan(property: r'chunkId', value: ''),
-      );
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        property: r'chunkId',
+        value: '',
+      ));
     });
   }
 
   QueryBuilder<LocalChunk, LocalChunk, QAfterFilterCondition>
-  fileSizeBytesEqualTo(int value) {
+      fileSizeBytesEqualTo(int value) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(
-        FilterCondition.equalTo(property: r'fileSizeBytes', value: value),
-      );
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'fileSizeBytes',
+        value: value,
+      ));
     });
   }
 
   QueryBuilder<LocalChunk, LocalChunk, QAfterFilterCondition>
-  fileSizeBytesGreaterThan(int value, {bool include = false}) {
+      fileSizeBytesGreaterThan(
+    int value, {
+    bool include = false,
+  }) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(
-        FilterCondition.greaterThan(
-          include: include,
-          property: r'fileSizeBytes',
-          value: value,
-        ),
-      );
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'fileSizeBytes',
+        value: value,
+      ));
     });
   }
 
   QueryBuilder<LocalChunk, LocalChunk, QAfterFilterCondition>
-  fileSizeBytesLessThan(int value, {bool include = false}) {
+      fileSizeBytesLessThan(
+    int value, {
+    bool include = false,
+  }) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(
-        FilterCondition.lessThan(
-          include: include,
-          property: r'fileSizeBytes',
-          value: value,
-        ),
-      );
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'fileSizeBytes',
+        value: value,
+      ));
     });
   }
 
   QueryBuilder<LocalChunk, LocalChunk, QAfterFilterCondition>
-  fileSizeBytesBetween(
+      fileSizeBytesBetween(
     int lower,
     int upper, {
     bool includeLower = true,
     bool includeUpper = true,
   }) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(
-        FilterCondition.between(
-          property: r'fileSizeBytes',
-          lower: lower,
-          includeLower: includeLower,
-          upper: upper,
-          includeUpper: includeUpper,
-        ),
-      );
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'fileSizeBytes',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+      ));
     });
   }
 
   QueryBuilder<LocalChunk, LocalChunk, QAfterFilterCondition> idEqualTo(
-    Id value,
-  ) {
+      Id value) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(
-        FilterCondition.equalTo(property: r'id', value: value),
-      );
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'id',
+        value: value,
+      ));
     });
   }
 
@@ -819,13 +784,11 @@ extension LocalChunkQueryFilter
     bool include = false,
   }) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(
-        FilterCondition.greaterThan(
-          include: include,
-          property: r'id',
-          value: value,
-        ),
-      );
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'id',
+        value: value,
+      ));
     });
   }
 
@@ -834,13 +797,11 @@ extension LocalChunkQueryFilter
     bool include = false,
   }) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(
-        FilterCondition.lessThan(
-          include: include,
-          property: r'id',
-          value: value,
-        ),
-      );
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'id',
+        value: value,
+      ));
     });
   }
 
@@ -851,142 +812,138 @@ extension LocalChunkQueryFilter
     bool includeUpper = true,
   }) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(
-        FilterCondition.between(
-          property: r'id',
-          lower: lower,
-          includeLower: includeLower,
-          upper: upper,
-          includeUpper: includeUpper,
-        ),
-      );
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'id',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+      ));
     });
   }
 
   QueryBuilder<LocalChunk, LocalChunk, QAfterFilterCondition>
-  localDeletedAtIsNull() {
+      localDeletedAtIsNull() {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(
-        const FilterCondition.isNull(property: r'localDeletedAt'),
-      );
+      return query.addFilterCondition(const FilterCondition.isNull(
+        property: r'localDeletedAt',
+      ));
     });
   }
 
   QueryBuilder<LocalChunk, LocalChunk, QAfterFilterCondition>
-  localDeletedAtIsNotNull() {
+      localDeletedAtIsNotNull() {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(
-        const FilterCondition.isNotNull(property: r'localDeletedAt'),
-      );
+      return query.addFilterCondition(const FilterCondition.isNotNull(
+        property: r'localDeletedAt',
+      ));
     });
   }
 
   QueryBuilder<LocalChunk, LocalChunk, QAfterFilterCondition>
-  localDeletedAtEqualTo(DateTime? value) {
+      localDeletedAtEqualTo(DateTime? value) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(
-        FilterCondition.equalTo(property: r'localDeletedAt', value: value),
-      );
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'localDeletedAt',
+        value: value,
+      ));
     });
   }
 
   QueryBuilder<LocalChunk, LocalChunk, QAfterFilterCondition>
-  localDeletedAtGreaterThan(DateTime? value, {bool include = false}) {
+      localDeletedAtGreaterThan(
+    DateTime? value, {
+    bool include = false,
+  }) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(
-        FilterCondition.greaterThan(
-          include: include,
-          property: r'localDeletedAt',
-          value: value,
-        ),
-      );
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'localDeletedAt',
+        value: value,
+      ));
     });
   }
 
   QueryBuilder<LocalChunk, LocalChunk, QAfterFilterCondition>
-  localDeletedAtLessThan(DateTime? value, {bool include = false}) {
+      localDeletedAtLessThan(
+    DateTime? value, {
+    bool include = false,
+  }) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(
-        FilterCondition.lessThan(
-          include: include,
-          property: r'localDeletedAt',
-          value: value,
-        ),
-      );
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'localDeletedAt',
+        value: value,
+      ));
     });
   }
 
   QueryBuilder<LocalChunk, LocalChunk, QAfterFilterCondition>
-  localDeletedAtBetween(
+      localDeletedAtBetween(
     DateTime? lower,
     DateTime? upper, {
     bool includeLower = true,
     bool includeUpper = true,
   }) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(
-        FilterCondition.between(
-          property: r'localDeletedAt',
-          lower: lower,
-          includeLower: includeLower,
-          upper: upper,
-          includeUpper: includeUpper,
-        ),
-      );
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'localDeletedAt',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+      ));
     });
   }
 
   QueryBuilder<LocalChunk, LocalChunk, QAfterFilterCondition>
-  localFilePathEqualTo(String value, {bool caseSensitive = true}) {
+      localFilePathEqualTo(
+    String value, {
+    bool caseSensitive = true,
+  }) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(
-        FilterCondition.equalTo(
-          property: r'localFilePath',
-          value: value,
-          caseSensitive: caseSensitive,
-        ),
-      );
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'localFilePath',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
     });
   }
 
   QueryBuilder<LocalChunk, LocalChunk, QAfterFilterCondition>
-  localFilePathGreaterThan(
+      localFilePathGreaterThan(
     String value, {
     bool include = false,
     bool caseSensitive = true,
   }) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(
-        FilterCondition.greaterThan(
-          include: include,
-          property: r'localFilePath',
-          value: value,
-          caseSensitive: caseSensitive,
-        ),
-      );
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'localFilePath',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
     });
   }
 
   QueryBuilder<LocalChunk, LocalChunk, QAfterFilterCondition>
-  localFilePathLessThan(
+      localFilePathLessThan(
     String value, {
     bool include = false,
     bool caseSensitive = true,
   }) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(
-        FilterCondition.lessThan(
-          include: include,
-          property: r'localFilePath',
-          value: value,
-          caseSensitive: caseSensitive,
-        ),
-      );
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'localFilePath',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
     });
   }
 
   QueryBuilder<LocalChunk, LocalChunk, QAfterFilterCondition>
-  localFilePathBetween(
+      localFilePathBetween(
     String lower,
     String upper, {
     bool includeLower = true,
@@ -994,231 +951,227 @@ extension LocalChunkQueryFilter
     bool caseSensitive = true,
   }) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(
-        FilterCondition.between(
-          property: r'localFilePath',
-          lower: lower,
-          includeLower: includeLower,
-          upper: upper,
-          includeUpper: includeUpper,
-          caseSensitive: caseSensitive,
-        ),
-      );
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'localFilePath',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+        caseSensitive: caseSensitive,
+      ));
     });
   }
 
   QueryBuilder<LocalChunk, LocalChunk, QAfterFilterCondition>
-  localFilePathStartsWith(String value, {bool caseSensitive = true}) {
+      localFilePathStartsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(
-        FilterCondition.startsWith(
-          property: r'localFilePath',
-          value: value,
-          caseSensitive: caseSensitive,
-        ),
-      );
+      return query.addFilterCondition(FilterCondition.startsWith(
+        property: r'localFilePath',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
     });
   }
 
   QueryBuilder<LocalChunk, LocalChunk, QAfterFilterCondition>
-  localFilePathEndsWith(String value, {bool caseSensitive = true}) {
+      localFilePathEndsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(
-        FilterCondition.endsWith(
-          property: r'localFilePath',
-          value: value,
-          caseSensitive: caseSensitive,
-        ),
-      );
+      return query.addFilterCondition(FilterCondition.endsWith(
+        property: r'localFilePath',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
     });
   }
 
   QueryBuilder<LocalChunk, LocalChunk, QAfterFilterCondition>
-  localFilePathContains(String value, {bool caseSensitive = true}) {
+      localFilePathContains(String value, {bool caseSensitive = true}) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(
-        FilterCondition.contains(
-          property: r'localFilePath',
-          value: value,
-          caseSensitive: caseSensitive,
-        ),
-      );
+      return query.addFilterCondition(FilterCondition.contains(
+        property: r'localFilePath',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
     });
   }
 
   QueryBuilder<LocalChunk, LocalChunk, QAfterFilterCondition>
-  localFilePathMatches(String pattern, {bool caseSensitive = true}) {
+      localFilePathMatches(String pattern, {bool caseSensitive = true}) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(
-        FilterCondition.matches(
-          property: r'localFilePath',
-          wildcard: pattern,
-          caseSensitive: caseSensitive,
-        ),
-      );
+      return query.addFilterCondition(FilterCondition.matches(
+        property: r'localFilePath',
+        wildcard: pattern,
+        caseSensitive: caseSensitive,
+      ));
     });
   }
 
   QueryBuilder<LocalChunk, LocalChunk, QAfterFilterCondition>
-  localFilePathIsEmpty() {
+      localFilePathIsEmpty() {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(
-        FilterCondition.equalTo(property: r'localFilePath', value: ''),
-      );
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'localFilePath',
+        value: '',
+      ));
     });
   }
 
   QueryBuilder<LocalChunk, LocalChunk, QAfterFilterCondition>
-  localFilePathIsNotEmpty() {
+      localFilePathIsNotEmpty() {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(
-        FilterCondition.greaterThan(property: r'localFilePath', value: ''),
-      );
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        property: r'localFilePath',
+        value: '',
+      ));
     });
   }
 
   QueryBuilder<LocalChunk, LocalChunk, QAfterFilterCondition>
-  nextAttemptAtIsNull() {
+      nextAttemptAtIsNull() {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(
-        const FilterCondition.isNull(property: r'nextAttemptAt'),
-      );
+      return query.addFilterCondition(const FilterCondition.isNull(
+        property: r'nextAttemptAt',
+      ));
     });
   }
 
   QueryBuilder<LocalChunk, LocalChunk, QAfterFilterCondition>
-  nextAttemptAtIsNotNull() {
+      nextAttemptAtIsNotNull() {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(
-        const FilterCondition.isNotNull(property: r'nextAttemptAt'),
-      );
+      return query.addFilterCondition(const FilterCondition.isNotNull(
+        property: r'nextAttemptAt',
+      ));
     });
   }
 
   QueryBuilder<LocalChunk, LocalChunk, QAfterFilterCondition>
-  nextAttemptAtEqualTo(DateTime? value) {
+      nextAttemptAtEqualTo(DateTime? value) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(
-        FilterCondition.equalTo(property: r'nextAttemptAt', value: value),
-      );
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'nextAttemptAt',
+        value: value,
+      ));
     });
   }
 
   QueryBuilder<LocalChunk, LocalChunk, QAfterFilterCondition>
-  nextAttemptAtGreaterThan(DateTime? value, {bool include = false}) {
+      nextAttemptAtGreaterThan(
+    DateTime? value, {
+    bool include = false,
+  }) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(
-        FilterCondition.greaterThan(
-          include: include,
-          property: r'nextAttemptAt',
-          value: value,
-        ),
-      );
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'nextAttemptAt',
+        value: value,
+      ));
     });
   }
 
   QueryBuilder<LocalChunk, LocalChunk, QAfterFilterCondition>
-  nextAttemptAtLessThan(DateTime? value, {bool include = false}) {
+      nextAttemptAtLessThan(
+    DateTime? value, {
+    bool include = false,
+  }) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(
-        FilterCondition.lessThan(
-          include: include,
-          property: r'nextAttemptAt',
-          value: value,
-        ),
-      );
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'nextAttemptAt',
+        value: value,
+      ));
     });
   }
 
   QueryBuilder<LocalChunk, LocalChunk, QAfterFilterCondition>
-  nextAttemptAtBetween(
+      nextAttemptAtBetween(
     DateTime? lower,
     DateTime? upper, {
     bool includeLower = true,
     bool includeUpper = true,
   }) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(
-        FilterCondition.between(
-          property: r'nextAttemptAt',
-          lower: lower,
-          includeLower: includeLower,
-          upper: upper,
-          includeUpper: includeUpper,
-        ),
-      );
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'nextAttemptAt',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+      ));
     });
   }
 
   QueryBuilder<LocalChunk, LocalChunk, QAfterFilterCondition>
-  s3ObjectKeyIsNull() {
+      s3ObjectKeyIsNull() {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(
-        const FilterCondition.isNull(property: r's3ObjectKey'),
-      );
+      return query.addFilterCondition(const FilterCondition.isNull(
+        property: r's3ObjectKey',
+      ));
     });
   }
 
   QueryBuilder<LocalChunk, LocalChunk, QAfterFilterCondition>
-  s3ObjectKeyIsNotNull() {
+      s3ObjectKeyIsNotNull() {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(
-        const FilterCondition.isNotNull(property: r's3ObjectKey'),
-      );
+      return query.addFilterCondition(const FilterCondition.isNotNull(
+        property: r's3ObjectKey',
+      ));
     });
   }
 
   QueryBuilder<LocalChunk, LocalChunk, QAfterFilterCondition>
-  s3ObjectKeyEqualTo(String? value, {bool caseSensitive = true}) {
+      s3ObjectKeyEqualTo(
+    String? value, {
+    bool caseSensitive = true,
+  }) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(
-        FilterCondition.equalTo(
-          property: r's3ObjectKey',
-          value: value,
-          caseSensitive: caseSensitive,
-        ),
-      );
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r's3ObjectKey',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
     });
   }
 
   QueryBuilder<LocalChunk, LocalChunk, QAfterFilterCondition>
-  s3ObjectKeyGreaterThan(
+      s3ObjectKeyGreaterThan(
     String? value, {
     bool include = false,
     bool caseSensitive = true,
   }) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(
-        FilterCondition.greaterThan(
-          include: include,
-          property: r's3ObjectKey',
-          value: value,
-          caseSensitive: caseSensitive,
-        ),
-      );
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r's3ObjectKey',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
     });
   }
 
   QueryBuilder<LocalChunk, LocalChunk, QAfterFilterCondition>
-  s3ObjectKeyLessThan(
+      s3ObjectKeyLessThan(
     String? value, {
     bool include = false,
     bool caseSensitive = true,
   }) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(
-        FilterCondition.lessThan(
-          include: include,
-          property: r's3ObjectKey',
-          value: value,
-          caseSensitive: caseSensitive,
-        ),
-      );
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r's3ObjectKey',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
     });
   }
 
   QueryBuilder<LocalChunk, LocalChunk, QAfterFilterCondition>
-  s3ObjectKeyBetween(
+      s3ObjectKeyBetween(
     String? lower,
     String? upper, {
     bool includeLower = true,
@@ -1226,141 +1179,140 @@ extension LocalChunkQueryFilter
     bool caseSensitive = true,
   }) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(
-        FilterCondition.between(
-          property: r's3ObjectKey',
-          lower: lower,
-          includeLower: includeLower,
-          upper: upper,
-          includeUpper: includeUpper,
-          caseSensitive: caseSensitive,
-        ),
-      );
+      return query.addFilterCondition(FilterCondition.between(
+        property: r's3ObjectKey',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+        caseSensitive: caseSensitive,
+      ));
     });
   }
 
   QueryBuilder<LocalChunk, LocalChunk, QAfterFilterCondition>
-  s3ObjectKeyStartsWith(String value, {bool caseSensitive = true}) {
+      s3ObjectKeyStartsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(
-        FilterCondition.startsWith(
-          property: r's3ObjectKey',
-          value: value,
-          caseSensitive: caseSensitive,
-        ),
-      );
+      return query.addFilterCondition(FilterCondition.startsWith(
+        property: r's3ObjectKey',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
     });
   }
 
   QueryBuilder<LocalChunk, LocalChunk, QAfterFilterCondition>
-  s3ObjectKeyEndsWith(String value, {bool caseSensitive = true}) {
+      s3ObjectKeyEndsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(
-        FilterCondition.endsWith(
-          property: r's3ObjectKey',
-          value: value,
-          caseSensitive: caseSensitive,
-        ),
-      );
+      return query.addFilterCondition(FilterCondition.endsWith(
+        property: r's3ObjectKey',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
     });
   }
 
   QueryBuilder<LocalChunk, LocalChunk, QAfterFilterCondition>
-  s3ObjectKeyContains(String value, {bool caseSensitive = true}) {
+      s3ObjectKeyContains(String value, {bool caseSensitive = true}) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(
-        FilterCondition.contains(
-          property: r's3ObjectKey',
-          value: value,
-          caseSensitive: caseSensitive,
-        ),
-      );
+      return query.addFilterCondition(FilterCondition.contains(
+        property: r's3ObjectKey',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
     });
   }
 
   QueryBuilder<LocalChunk, LocalChunk, QAfterFilterCondition>
-  s3ObjectKeyMatches(String pattern, {bool caseSensitive = true}) {
+      s3ObjectKeyMatches(String pattern, {bool caseSensitive = true}) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(
-        FilterCondition.matches(
-          property: r's3ObjectKey',
-          wildcard: pattern,
-          caseSensitive: caseSensitive,
-        ),
-      );
+      return query.addFilterCondition(FilterCondition.matches(
+        property: r's3ObjectKey',
+        wildcard: pattern,
+        caseSensitive: caseSensitive,
+      ));
     });
   }
 
   QueryBuilder<LocalChunk, LocalChunk, QAfterFilterCondition>
-  s3ObjectKeyIsEmpty() {
+      s3ObjectKeyIsEmpty() {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(
-        FilterCondition.equalTo(property: r's3ObjectKey', value: ''),
-      );
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r's3ObjectKey',
+        value: '',
+      ));
     });
   }
 
   QueryBuilder<LocalChunk, LocalChunk, QAfterFilterCondition>
-  s3ObjectKeyIsNotEmpty() {
+      s3ObjectKeyIsNotEmpty() {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(
-        FilterCondition.greaterThan(property: r's3ObjectKey', value: ''),
-      );
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        property: r's3ObjectKey',
+        value: '',
+      ));
     });
   }
 
   QueryBuilder<LocalChunk, LocalChunk, QAfterFilterCondition>
-  sequenceIndexEqualTo(int value) {
+      sequenceIndexEqualTo(int value) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(
-        FilterCondition.equalTo(property: r'sequenceIndex', value: value),
-      );
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'sequenceIndex',
+        value: value,
+      ));
     });
   }
 
   QueryBuilder<LocalChunk, LocalChunk, QAfterFilterCondition>
-  sequenceIndexGreaterThan(int value, {bool include = false}) {
+      sequenceIndexGreaterThan(
+    int value, {
+    bool include = false,
+  }) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(
-        FilterCondition.greaterThan(
-          include: include,
-          property: r'sequenceIndex',
-          value: value,
-        ),
-      );
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'sequenceIndex',
+        value: value,
+      ));
     });
   }
 
   QueryBuilder<LocalChunk, LocalChunk, QAfterFilterCondition>
-  sequenceIndexLessThan(int value, {bool include = false}) {
+      sequenceIndexLessThan(
+    int value, {
+    bool include = false,
+  }) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(
-        FilterCondition.lessThan(
-          include: include,
-          property: r'sequenceIndex',
-          value: value,
-        ),
-      );
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'sequenceIndex',
+        value: value,
+      ));
     });
   }
 
   QueryBuilder<LocalChunk, LocalChunk, QAfterFilterCondition>
-  sequenceIndexBetween(
+      sequenceIndexBetween(
     int lower,
     int upper, {
     bool includeLower = true,
     bool includeUpper = true,
   }) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(
-        FilterCondition.between(
-          property: r'sequenceIndex',
-          lower: lower,
-          includeLower: includeLower,
-          upper: upper,
-          includeUpper: includeUpper,
-        ),
-      );
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'sequenceIndex',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+      ));
     });
   }
 
@@ -1369,31 +1321,27 @@ extension LocalChunkQueryFilter
     bool caseSensitive = true,
   }) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(
-        FilterCondition.equalTo(
-          property: r'sessionId',
-          value: value,
-          caseSensitive: caseSensitive,
-        ),
-      );
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'sessionId',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
     });
   }
 
   QueryBuilder<LocalChunk, LocalChunk, QAfterFilterCondition>
-  sessionIdGreaterThan(
+      sessionIdGreaterThan(
     String value, {
     bool include = false,
     bool caseSensitive = true,
   }) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(
-        FilterCondition.greaterThan(
-          include: include,
-          property: r'sessionId',
-          value: value,
-          caseSensitive: caseSensitive,
-        ),
-      );
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'sessionId',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
     });
   }
 
@@ -1403,14 +1351,12 @@ extension LocalChunkQueryFilter
     bool caseSensitive = true,
   }) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(
-        FilterCondition.lessThan(
-          include: include,
-          property: r'sessionId',
-          value: value,
-          caseSensitive: caseSensitive,
-        ),
-      );
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'sessionId',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
     });
   }
 
@@ -1422,29 +1368,28 @@ extension LocalChunkQueryFilter
     bool caseSensitive = true,
   }) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(
-        FilterCondition.between(
-          property: r'sessionId',
-          lower: lower,
-          includeLower: includeLower,
-          upper: upper,
-          includeUpper: includeUpper,
-          caseSensitive: caseSensitive,
-        ),
-      );
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'sessionId',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+        caseSensitive: caseSensitive,
+      ));
     });
   }
 
   QueryBuilder<LocalChunk, LocalChunk, QAfterFilterCondition>
-  sessionIdStartsWith(String value, {bool caseSensitive = true}) {
+      sessionIdStartsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(
-        FilterCondition.startsWith(
-          property: r'sessionId',
-          value: value,
-          caseSensitive: caseSensitive,
-        ),
-      );
+      return query.addFilterCondition(FilterCondition.startsWith(
+        property: r'sessionId',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
     });
   }
 
@@ -1453,61 +1398,55 @@ extension LocalChunkQueryFilter
     bool caseSensitive = true,
   }) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(
-        FilterCondition.endsWith(
-          property: r'sessionId',
-          value: value,
-          caseSensitive: caseSensitive,
-        ),
-      );
+      return query.addFilterCondition(FilterCondition.endsWith(
+        property: r'sessionId',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
     });
   }
 
   QueryBuilder<LocalChunk, LocalChunk, QAfterFilterCondition> sessionIdContains(
-    String value, {
-    bool caseSensitive = true,
-  }) {
+      String value,
+      {bool caseSensitive = true}) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(
-        FilterCondition.contains(
-          property: r'sessionId',
-          value: value,
-          caseSensitive: caseSensitive,
-        ),
-      );
+      return query.addFilterCondition(FilterCondition.contains(
+        property: r'sessionId',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
     });
   }
 
   QueryBuilder<LocalChunk, LocalChunk, QAfterFilterCondition> sessionIdMatches(
-    String pattern, {
-    bool caseSensitive = true,
-  }) {
+      String pattern,
+      {bool caseSensitive = true}) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(
-        FilterCondition.matches(
-          property: r'sessionId',
-          wildcard: pattern,
-          caseSensitive: caseSensitive,
-        ),
-      );
+      return query.addFilterCondition(FilterCondition.matches(
+        property: r'sessionId',
+        wildcard: pattern,
+        caseSensitive: caseSensitive,
+      ));
     });
   }
 
   QueryBuilder<LocalChunk, LocalChunk, QAfterFilterCondition>
-  sessionIdIsEmpty() {
+      sessionIdIsEmpty() {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(
-        FilterCondition.equalTo(property: r'sessionId', value: ''),
-      );
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'sessionId',
+        value: '',
+      ));
     });
   }
 
   QueryBuilder<LocalChunk, LocalChunk, QAfterFilterCondition>
-  sessionIdIsNotEmpty() {
+      sessionIdIsNotEmpty() {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(
-        FilterCondition.greaterThan(property: r'sessionId', value: ''),
-      );
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        property: r'sessionId',
+        value: '',
+      ));
     });
   }
 
@@ -1516,13 +1455,11 @@ extension LocalChunkQueryFilter
     bool caseSensitive = true,
   }) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(
-        FilterCondition.equalTo(
-          property: r'status',
-          value: value,
-          caseSensitive: caseSensitive,
-        ),
-      );
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'status',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
     });
   }
 
@@ -1532,14 +1469,12 @@ extension LocalChunkQueryFilter
     bool caseSensitive = true,
   }) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(
-        FilterCondition.greaterThan(
-          include: include,
-          property: r'status',
-          value: value,
-          caseSensitive: caseSensitive,
-        ),
-      );
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'status',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
     });
   }
 
@@ -1549,14 +1484,12 @@ extension LocalChunkQueryFilter
     bool caseSensitive = true,
   }) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(
-        FilterCondition.lessThan(
-          include: include,
-          property: r'status',
-          value: value,
-          caseSensitive: caseSensitive,
-        ),
-      );
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'status',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
     });
   }
 
@@ -1568,16 +1501,14 @@ extension LocalChunkQueryFilter
     bool caseSensitive = true,
   }) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(
-        FilterCondition.between(
-          property: r'status',
-          lower: lower,
-          includeLower: includeLower,
-          upper: upper,
-          includeUpper: includeUpper,
-          caseSensitive: caseSensitive,
-        ),
-      );
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'status',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+        caseSensitive: caseSensitive,
+      ));
     });
   }
 
@@ -1586,13 +1517,11 @@ extension LocalChunkQueryFilter
     bool caseSensitive = true,
   }) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(
-        FilterCondition.startsWith(
-          property: r'status',
-          value: value,
-          caseSensitive: caseSensitive,
-        ),
-      );
+      return query.addFilterCondition(FilterCondition.startsWith(
+        property: r'status',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
     });
   }
 
@@ -1601,115 +1530,110 @@ extension LocalChunkQueryFilter
     bool caseSensitive = true,
   }) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(
-        FilterCondition.endsWith(
-          property: r'status',
-          value: value,
-          caseSensitive: caseSensitive,
-        ),
-      );
+      return query.addFilterCondition(FilterCondition.endsWith(
+        property: r'status',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
     });
   }
 
   QueryBuilder<LocalChunk, LocalChunk, QAfterFilterCondition> statusContains(
-    String value, {
-    bool caseSensitive = true,
-  }) {
+      String value,
+      {bool caseSensitive = true}) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(
-        FilterCondition.contains(
-          property: r'status',
-          value: value,
-          caseSensitive: caseSensitive,
-        ),
-      );
+      return query.addFilterCondition(FilterCondition.contains(
+        property: r'status',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
     });
   }
 
   QueryBuilder<LocalChunk, LocalChunk, QAfterFilterCondition> statusMatches(
-    String pattern, {
-    bool caseSensitive = true,
-  }) {
+      String pattern,
+      {bool caseSensitive = true}) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(
-        FilterCondition.matches(
-          property: r'status',
-          wildcard: pattern,
-          caseSensitive: caseSensitive,
-        ),
-      );
+      return query.addFilterCondition(FilterCondition.matches(
+        property: r'status',
+        wildcard: pattern,
+        caseSensitive: caseSensitive,
+      ));
     });
   }
 
   QueryBuilder<LocalChunk, LocalChunk, QAfterFilterCondition> statusIsEmpty() {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(
-        FilterCondition.equalTo(property: r'status', value: ''),
-      );
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'status',
+        value: '',
+      ));
     });
   }
 
   QueryBuilder<LocalChunk, LocalChunk, QAfterFilterCondition>
-  statusIsNotEmpty() {
+      statusIsNotEmpty() {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(
-        FilterCondition.greaterThan(property: r'status', value: ''),
-      );
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        property: r'status',
+        value: '',
+      ));
     });
   }
 
   QueryBuilder<LocalChunk, LocalChunk, QAfterFilterCondition>
-  uploadAttemptCountEqualTo(int value) {
+      uploadAttemptCountEqualTo(int value) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(
-        FilterCondition.equalTo(property: r'uploadAttemptCount', value: value),
-      );
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'uploadAttemptCount',
+        value: value,
+      ));
     });
   }
 
   QueryBuilder<LocalChunk, LocalChunk, QAfterFilterCondition>
-  uploadAttemptCountGreaterThan(int value, {bool include = false}) {
+      uploadAttemptCountGreaterThan(
+    int value, {
+    bool include = false,
+  }) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(
-        FilterCondition.greaterThan(
-          include: include,
-          property: r'uploadAttemptCount',
-          value: value,
-        ),
-      );
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'uploadAttemptCount',
+        value: value,
+      ));
     });
   }
 
   QueryBuilder<LocalChunk, LocalChunk, QAfterFilterCondition>
-  uploadAttemptCountLessThan(int value, {bool include = false}) {
+      uploadAttemptCountLessThan(
+    int value, {
+    bool include = false,
+  }) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(
-        FilterCondition.lessThan(
-          include: include,
-          property: r'uploadAttemptCount',
-          value: value,
-        ),
-      );
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'uploadAttemptCount',
+        value: value,
+      ));
     });
   }
 
   QueryBuilder<LocalChunk, LocalChunk, QAfterFilterCondition>
-  uploadAttemptCountBetween(
+      uploadAttemptCountBetween(
     int lower,
     int upper, {
     bool includeLower = true,
     bool includeUpper = true,
   }) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(
-        FilterCondition.between(
-          property: r'uploadAttemptCount',
-          lower: lower,
-          includeLower: includeLower,
-          upper: upper,
-          includeUpper: includeUpper,
-        ),
-      );
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'uploadAttemptCount',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+      ));
     });
   }
 }
@@ -1729,7 +1653,7 @@ extension LocalChunkQuerySortBy
   }
 
   QueryBuilder<LocalChunk, LocalChunk, QAfterSortBy>
-  sortByChecksumSha256Desc() {
+      sortByChecksumSha256Desc() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'checksumSha256', Sort.desc);
     });
@@ -1766,7 +1690,7 @@ extension LocalChunkQuerySortBy
   }
 
   QueryBuilder<LocalChunk, LocalChunk, QAfterSortBy>
-  sortByLocalDeletedAtDesc() {
+      sortByLocalDeletedAtDesc() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'localDeletedAt', Sort.desc);
     });
@@ -1845,14 +1769,14 @@ extension LocalChunkQuerySortBy
   }
 
   QueryBuilder<LocalChunk, LocalChunk, QAfterSortBy>
-  sortByUploadAttemptCount() {
+      sortByUploadAttemptCount() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'uploadAttemptCount', Sort.asc);
     });
   }
 
   QueryBuilder<LocalChunk, LocalChunk, QAfterSortBy>
-  sortByUploadAttemptCountDesc() {
+      sortByUploadAttemptCountDesc() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'uploadAttemptCount', Sort.desc);
     });
@@ -1868,7 +1792,7 @@ extension LocalChunkQuerySortThenBy
   }
 
   QueryBuilder<LocalChunk, LocalChunk, QAfterSortBy>
-  thenByChecksumSha256Desc() {
+      thenByChecksumSha256Desc() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'checksumSha256', Sort.desc);
     });
@@ -1917,7 +1841,7 @@ extension LocalChunkQuerySortThenBy
   }
 
   QueryBuilder<LocalChunk, LocalChunk, QAfterSortBy>
-  thenByLocalDeletedAtDesc() {
+      thenByLocalDeletedAtDesc() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'localDeletedAt', Sort.desc);
     });
@@ -1996,14 +1920,14 @@ extension LocalChunkQuerySortThenBy
   }
 
   QueryBuilder<LocalChunk, LocalChunk, QAfterSortBy>
-  thenByUploadAttemptCount() {
+      thenByUploadAttemptCount() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'uploadAttemptCount', Sort.asc);
     });
   }
 
   QueryBuilder<LocalChunk, LocalChunk, QAfterSortBy>
-  thenByUploadAttemptCountDesc() {
+      thenByUploadAttemptCountDesc() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'uploadAttemptCount', Sort.desc);
     });
@@ -2012,20 +1936,16 @@ extension LocalChunkQuerySortThenBy
 
 extension LocalChunkQueryWhereDistinct
     on QueryBuilder<LocalChunk, LocalChunk, QDistinct> {
-  QueryBuilder<LocalChunk, LocalChunk, QDistinct> distinctByChecksumSha256({
-    bool caseSensitive = true,
-  }) {
+  QueryBuilder<LocalChunk, LocalChunk, QDistinct> distinctByChecksumSha256(
+      {bool caseSensitive = true}) {
     return QueryBuilder.apply(this, (query) {
-      return query.addDistinctBy(
-        r'checksumSha256',
-        caseSensitive: caseSensitive,
-      );
+      return query.addDistinctBy(r'checksumSha256',
+          caseSensitive: caseSensitive);
     });
   }
 
-  QueryBuilder<LocalChunk, LocalChunk, QDistinct> distinctByChunkId({
-    bool caseSensitive = true,
-  }) {
+  QueryBuilder<LocalChunk, LocalChunk, QDistinct> distinctByChunkId(
+      {bool caseSensitive = true}) {
     return QueryBuilder.apply(this, (query) {
       return query.addDistinctBy(r'chunkId', caseSensitive: caseSensitive);
     });
@@ -2043,14 +1963,11 @@ extension LocalChunkQueryWhereDistinct
     });
   }
 
-  QueryBuilder<LocalChunk, LocalChunk, QDistinct> distinctByLocalFilePath({
-    bool caseSensitive = true,
-  }) {
+  QueryBuilder<LocalChunk, LocalChunk, QDistinct> distinctByLocalFilePath(
+      {bool caseSensitive = true}) {
     return QueryBuilder.apply(this, (query) {
-      return query.addDistinctBy(
-        r'localFilePath',
-        caseSensitive: caseSensitive,
-      );
+      return query.addDistinctBy(r'localFilePath',
+          caseSensitive: caseSensitive);
     });
   }
 
@@ -2060,9 +1977,8 @@ extension LocalChunkQueryWhereDistinct
     });
   }
 
-  QueryBuilder<LocalChunk, LocalChunk, QDistinct> distinctByS3ObjectKey({
-    bool caseSensitive = true,
-  }) {
+  QueryBuilder<LocalChunk, LocalChunk, QDistinct> distinctByS3ObjectKey(
+      {bool caseSensitive = true}) {
     return QueryBuilder.apply(this, (query) {
       return query.addDistinctBy(r's3ObjectKey', caseSensitive: caseSensitive);
     });
@@ -2074,24 +1990,22 @@ extension LocalChunkQueryWhereDistinct
     });
   }
 
-  QueryBuilder<LocalChunk, LocalChunk, QDistinct> distinctBySessionId({
-    bool caseSensitive = true,
-  }) {
+  QueryBuilder<LocalChunk, LocalChunk, QDistinct> distinctBySessionId(
+      {bool caseSensitive = true}) {
     return QueryBuilder.apply(this, (query) {
       return query.addDistinctBy(r'sessionId', caseSensitive: caseSensitive);
     });
   }
 
-  QueryBuilder<LocalChunk, LocalChunk, QDistinct> distinctByStatus({
-    bool caseSensitive = true,
-  }) {
+  QueryBuilder<LocalChunk, LocalChunk, QDistinct> distinctByStatus(
+      {bool caseSensitive = true}) {
     return QueryBuilder.apply(this, (query) {
       return query.addDistinctBy(r'status', caseSensitive: caseSensitive);
     });
   }
 
   QueryBuilder<LocalChunk, LocalChunk, QDistinct>
-  distinctByUploadAttemptCount() {
+      distinctByUploadAttemptCount() {
     return QueryBuilder.apply(this, (query) {
       return query.addDistinctBy(r'uploadAttemptCount');
     });
@@ -2125,7 +2039,7 @@ extension LocalChunkQueryProperty
   }
 
   QueryBuilder<LocalChunk, DateTime?, QQueryOperations>
-  localDeletedAtProperty() {
+      localDeletedAtProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'localDeletedAt');
     });
@@ -2138,7 +2052,7 @@ extension LocalChunkQueryProperty
   }
 
   QueryBuilder<LocalChunk, DateTime?, QQueryOperations>
-  nextAttemptAtProperty() {
+      nextAttemptAtProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'nextAttemptAt');
     });

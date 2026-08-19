@@ -12,8 +12,7 @@ part of 'collector_authored.dart';
 T _$identity<T>(T value) => value;
 
 final _privateConstructorUsedError = UnsupportedError(
-  'It seems like you constructed your class using `MyClass._()`. This constructor is only meant to be used by freezed and you are not supposed to need it nor use it.\nPlease check the documentation here for more information: https://github.com/rrousselGit/freezed#adding-getters-and-methods-to-our-models',
-);
+    'It seems like you constructed your class using `MyClass._()`. This constructor is only meant to be used by freezed and you are not supposed to need it nor use it.\nPlease check the documentation here for more information: https://github.com/rrousselGit/freezed#adding-getters-and-methods-to-our-models');
 
 /// @nodoc
 mixin _$CollectorAuthored {
@@ -28,9 +27,8 @@ mixin _$CollectorAuthored {
 /// @nodoc
 abstract class $CollectorAuthoredCopyWith<$Res> {
   factory $CollectorAuthoredCopyWith(
-    CollectorAuthored value,
-    $Res Function(CollectorAuthored) then,
-  ) = _$CollectorAuthoredCopyWithImpl<$Res, CollectorAuthored>;
+          CollectorAuthored value, $Res Function(CollectorAuthored) then) =
+      _$CollectorAuthoredCopyWithImpl<$Res, CollectorAuthored>;
   @useResult
   $Res call({String? notes, List<String> tags});
 }
@@ -47,30 +45,29 @@ class _$CollectorAuthoredCopyWithImpl<$Res, $Val extends CollectorAuthored>
 
   @pragma('vm:prefer-inline')
   @override
-  $Res call({Object? notes = freezed, Object? tags = null}) {
-    return _then(
-      _value.copyWith(
-            notes: freezed == notes
-                ? _value.notes
-                : notes // ignore: cast_nullable_to_non_nullable
-                      as String?,
-            tags: null == tags
-                ? _value.tags
-                : tags // ignore: cast_nullable_to_non_nullable
-                      as List<String>,
-          )
-          as $Val,
-    );
+  $Res call({
+    Object? notes = freezed,
+    Object? tags = null,
+  }) {
+    return _then(_value.copyWith(
+      notes: freezed == notes
+          ? _value.notes
+          : notes // ignore: cast_nullable_to_non_nullable
+              as String?,
+      tags: null == tags
+          ? _value.tags
+          : tags // ignore: cast_nullable_to_non_nullable
+              as List<String>,
+    ) as $Val);
   }
 }
 
 /// @nodoc
 abstract class _$$CollectorAuthoredImplCopyWith<$Res>
     implements $CollectorAuthoredCopyWith<$Res> {
-  factory _$$CollectorAuthoredImplCopyWith(
-    _$CollectorAuthoredImpl value,
-    $Res Function(_$CollectorAuthoredImpl) then,
-  ) = __$$CollectorAuthoredImplCopyWithImpl<$Res>;
+  factory _$$CollectorAuthoredImplCopyWith(_$CollectorAuthoredImpl value,
+          $Res Function(_$CollectorAuthoredImpl) then) =
+      __$$CollectorAuthoredImplCopyWithImpl<$Res>;
   @override
   @useResult
   $Res call({String? notes, List<String> tags});
@@ -80,36 +77,35 @@ abstract class _$$CollectorAuthoredImplCopyWith<$Res>
 class __$$CollectorAuthoredImplCopyWithImpl<$Res>
     extends _$CollectorAuthoredCopyWithImpl<$Res, _$CollectorAuthoredImpl>
     implements _$$CollectorAuthoredImplCopyWith<$Res> {
-  __$$CollectorAuthoredImplCopyWithImpl(
-    _$CollectorAuthoredImpl _value,
-    $Res Function(_$CollectorAuthoredImpl) _then,
-  ) : super(_value, _then);
+  __$$CollectorAuthoredImplCopyWithImpl(_$CollectorAuthoredImpl _value,
+      $Res Function(_$CollectorAuthoredImpl) _then)
+      : super(_value, _then);
 
   @pragma('vm:prefer-inline')
   @override
-  $Res call({Object? notes = freezed, Object? tags = null}) {
-    return _then(
-      _$CollectorAuthoredImpl(
-        notes: freezed == notes
-            ? _value.notes
-            : notes // ignore: cast_nullable_to_non_nullable
-                  as String?,
-        tags: null == tags
-            ? _value._tags
-            : tags // ignore: cast_nullable_to_non_nullable
-                  as List<String>,
-      ),
-    );
+  $Res call({
+    Object? notes = freezed,
+    Object? tags = null,
+  }) {
+    return _then(_$CollectorAuthoredImpl(
+      notes: freezed == notes
+          ? _value.notes
+          : notes // ignore: cast_nullable_to_non_nullable
+              as String?,
+      tags: null == tags
+          ? _value._tags
+          : tags // ignore: cast_nullable_to_non_nullable
+              as List<String>,
+    ));
   }
 }
 
 /// @nodoc
 
 class _$CollectorAuthoredImpl implements _CollectorAuthored {
-  const _$CollectorAuthoredImpl({
-    this.notes,
-    final List<String> tags = const <String>[],
-  }) : _tags = tags;
+  const _$CollectorAuthoredImpl(
+      {this.notes, final List<String> tags = const <String>[]})
+      : _tags = tags;
 
   @override
   final String? notes;
@@ -138,26 +134,19 @@ class _$CollectorAuthoredImpl implements _CollectorAuthored {
 
   @override
   int get hashCode => Object.hash(
-    runtimeType,
-    notes,
-    const DeepCollectionEquality().hash(_tags),
-  );
+      runtimeType, notes, const DeepCollectionEquality().hash(_tags));
 
   @JsonKey(ignore: true)
   @override
   @pragma('vm:prefer-inline')
   _$$CollectorAuthoredImplCopyWith<_$CollectorAuthoredImpl> get copyWith =>
       __$$CollectorAuthoredImplCopyWithImpl<_$CollectorAuthoredImpl>(
-        this,
-        _$identity,
-      );
+          this, _$identity);
 }
 
 abstract class _CollectorAuthored implements CollectorAuthored {
-  const factory _CollectorAuthored({
-    final String? notes,
-    final List<String> tags,
-  }) = _$CollectorAuthoredImpl;
+  const factory _CollectorAuthored(
+      {final String? notes, final List<String> tags}) = _$CollectorAuthoredImpl;
 
   @override
   String? get notes;

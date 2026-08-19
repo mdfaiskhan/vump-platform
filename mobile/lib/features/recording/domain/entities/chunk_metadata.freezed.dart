@@ -12,8 +12,7 @@ part of 'chunk_metadata.dart';
 T _$identity<T>(T value) => value;
 
 final _privateConstructorUsedError = UnsupportedError(
-  'It seems like you constructed your class using `MyClass._()`. This constructor is only meant to be used by freezed and you are not supposed to need it nor use it.\nPlease check the documentation here for more information: https://github.com/rrousselGit/freezed#adding-getters-and-methods-to-our-models',
-);
+    'It seems like you constructed your class using `MyClass._()`. This constructor is only meant to be used by freezed and you are not supposed to need it nor use it.\nPlease check the documentation here for more information: https://github.com/rrousselGit/freezed#adding-getters-and-methods-to-our-models');
 
 /// @nodoc
 mixin _$ChunkMetadata {
@@ -36,20 +35,18 @@ mixin _$ChunkMetadata {
 /// @nodoc
 abstract class $ChunkMetadataCopyWith<$Res> {
   factory $ChunkMetadataCopyWith(
-    ChunkMetadata value,
-    $Res Function(ChunkMetadata) then,
-  ) = _$ChunkMetadataCopyWithImpl<$Res, ChunkMetadata>;
+          ChunkMetadata value, $Res Function(ChunkMetadata) then) =
+      _$ChunkMetadataCopyWithImpl<$Res, ChunkMetadata>;
   @useResult
-  $Res call({
-    String chunkId,
-    MetadataIdentity identity,
-    MetadataTiming timing,
-    MetadataCapture capture,
-    MetadataDeviceContext deviceContext,
-    MetadataCaptureConditions captureConditions,
-    ChunkIntegrity integrity,
-    CollectorAuthored collectorAuthored,
-  });
+  $Res call(
+      {String chunkId,
+      MetadataIdentity identity,
+      MetadataTiming timing,
+      MetadataCapture capture,
+      MetadataDeviceContext deviceContext,
+      MetadataCaptureConditions captureConditions,
+      ChunkIntegrity integrity,
+      CollectorAuthored collectorAuthored});
 
   $MetadataIdentityCopyWith<$Res> get identity;
   $MetadataTimingCopyWith<$Res> get timing;
@@ -82,43 +79,40 @@ class _$ChunkMetadataCopyWithImpl<$Res, $Val extends ChunkMetadata>
     Object? integrity = null,
     Object? collectorAuthored = null,
   }) {
-    return _then(
-      _value.copyWith(
-            chunkId: null == chunkId
-                ? _value.chunkId
-                : chunkId // ignore: cast_nullable_to_non_nullable
-                      as String,
-            identity: null == identity
-                ? _value.identity
-                : identity // ignore: cast_nullable_to_non_nullable
-                      as MetadataIdentity,
-            timing: null == timing
-                ? _value.timing
-                : timing // ignore: cast_nullable_to_non_nullable
-                      as MetadataTiming,
-            capture: null == capture
-                ? _value.capture
-                : capture // ignore: cast_nullable_to_non_nullable
-                      as MetadataCapture,
-            deviceContext: null == deviceContext
-                ? _value.deviceContext
-                : deviceContext // ignore: cast_nullable_to_non_nullable
-                      as MetadataDeviceContext,
-            captureConditions: null == captureConditions
-                ? _value.captureConditions
-                : captureConditions // ignore: cast_nullable_to_non_nullable
-                      as MetadataCaptureConditions,
-            integrity: null == integrity
-                ? _value.integrity
-                : integrity // ignore: cast_nullable_to_non_nullable
-                      as ChunkIntegrity,
-            collectorAuthored: null == collectorAuthored
-                ? _value.collectorAuthored
-                : collectorAuthored // ignore: cast_nullable_to_non_nullable
-                      as CollectorAuthored,
-          )
-          as $Val,
-    );
+    return _then(_value.copyWith(
+      chunkId: null == chunkId
+          ? _value.chunkId
+          : chunkId // ignore: cast_nullable_to_non_nullable
+              as String,
+      identity: null == identity
+          ? _value.identity
+          : identity // ignore: cast_nullable_to_non_nullable
+              as MetadataIdentity,
+      timing: null == timing
+          ? _value.timing
+          : timing // ignore: cast_nullable_to_non_nullable
+              as MetadataTiming,
+      capture: null == capture
+          ? _value.capture
+          : capture // ignore: cast_nullable_to_non_nullable
+              as MetadataCapture,
+      deviceContext: null == deviceContext
+          ? _value.deviceContext
+          : deviceContext // ignore: cast_nullable_to_non_nullable
+              as MetadataDeviceContext,
+      captureConditions: null == captureConditions
+          ? _value.captureConditions
+          : captureConditions // ignore: cast_nullable_to_non_nullable
+              as MetadataCaptureConditions,
+      integrity: null == integrity
+          ? _value.integrity
+          : integrity // ignore: cast_nullable_to_non_nullable
+              as ChunkIntegrity,
+      collectorAuthored: null == collectorAuthored
+          ? _value.collectorAuthored
+          : collectorAuthored // ignore: cast_nullable_to_non_nullable
+              as CollectorAuthored,
+    ) as $Val);
   }
 
   @override
@@ -156,9 +150,8 @@ class _$ChunkMetadataCopyWithImpl<$Res, $Val extends ChunkMetadata>
   @override
   @pragma('vm:prefer-inline')
   $MetadataCaptureConditionsCopyWith<$Res> get captureConditions {
-    return $MetadataCaptureConditionsCopyWith<$Res>(_value.captureConditions, (
-      value,
-    ) {
+    return $MetadataCaptureConditionsCopyWith<$Res>(_value.captureConditions,
+        (value) {
       return _then(_value.copyWith(captureConditions: value) as $Val);
     });
   }
@@ -184,21 +177,19 @@ class _$ChunkMetadataCopyWithImpl<$Res, $Val extends ChunkMetadata>
 abstract class _$$ChunkMetadataImplCopyWith<$Res>
     implements $ChunkMetadataCopyWith<$Res> {
   factory _$$ChunkMetadataImplCopyWith(
-    _$ChunkMetadataImpl value,
-    $Res Function(_$ChunkMetadataImpl) then,
-  ) = __$$ChunkMetadataImplCopyWithImpl<$Res>;
+          _$ChunkMetadataImpl value, $Res Function(_$ChunkMetadataImpl) then) =
+      __$$ChunkMetadataImplCopyWithImpl<$Res>;
   @override
   @useResult
-  $Res call({
-    String chunkId,
-    MetadataIdentity identity,
-    MetadataTiming timing,
-    MetadataCapture capture,
-    MetadataDeviceContext deviceContext,
-    MetadataCaptureConditions captureConditions,
-    ChunkIntegrity integrity,
-    CollectorAuthored collectorAuthored,
-  });
+  $Res call(
+      {String chunkId,
+      MetadataIdentity identity,
+      MetadataTiming timing,
+      MetadataCapture capture,
+      MetadataDeviceContext deviceContext,
+      MetadataCaptureConditions captureConditions,
+      ChunkIntegrity integrity,
+      CollectorAuthored collectorAuthored});
 
   @override
   $MetadataIdentityCopyWith<$Res> get identity;
@@ -221,9 +212,8 @@ class __$$ChunkMetadataImplCopyWithImpl<$Res>
     extends _$ChunkMetadataCopyWithImpl<$Res, _$ChunkMetadataImpl>
     implements _$$ChunkMetadataImplCopyWith<$Res> {
   __$$ChunkMetadataImplCopyWithImpl(
-    _$ChunkMetadataImpl _value,
-    $Res Function(_$ChunkMetadataImpl) _then,
-  ) : super(_value, _then);
+      _$ChunkMetadataImpl _value, $Res Function(_$ChunkMetadataImpl) _then)
+      : super(_value, _then);
 
   @pragma('vm:prefer-inline')
   @override
@@ -237,58 +227,56 @@ class __$$ChunkMetadataImplCopyWithImpl<$Res>
     Object? integrity = null,
     Object? collectorAuthored = null,
   }) {
-    return _then(
-      _$ChunkMetadataImpl(
-        chunkId: null == chunkId
-            ? _value.chunkId
-            : chunkId // ignore: cast_nullable_to_non_nullable
-                  as String,
-        identity: null == identity
-            ? _value.identity
-            : identity // ignore: cast_nullable_to_non_nullable
-                  as MetadataIdentity,
-        timing: null == timing
-            ? _value.timing
-            : timing // ignore: cast_nullable_to_non_nullable
-                  as MetadataTiming,
-        capture: null == capture
-            ? _value.capture
-            : capture // ignore: cast_nullable_to_non_nullable
-                  as MetadataCapture,
-        deviceContext: null == deviceContext
-            ? _value.deviceContext
-            : deviceContext // ignore: cast_nullable_to_non_nullable
-                  as MetadataDeviceContext,
-        captureConditions: null == captureConditions
-            ? _value.captureConditions
-            : captureConditions // ignore: cast_nullable_to_non_nullable
-                  as MetadataCaptureConditions,
-        integrity: null == integrity
-            ? _value.integrity
-            : integrity // ignore: cast_nullable_to_non_nullable
-                  as ChunkIntegrity,
-        collectorAuthored: null == collectorAuthored
-            ? _value.collectorAuthored
-            : collectorAuthored // ignore: cast_nullable_to_non_nullable
-                  as CollectorAuthored,
-      ),
-    );
+    return _then(_$ChunkMetadataImpl(
+      chunkId: null == chunkId
+          ? _value.chunkId
+          : chunkId // ignore: cast_nullable_to_non_nullable
+              as String,
+      identity: null == identity
+          ? _value.identity
+          : identity // ignore: cast_nullable_to_non_nullable
+              as MetadataIdentity,
+      timing: null == timing
+          ? _value.timing
+          : timing // ignore: cast_nullable_to_non_nullable
+              as MetadataTiming,
+      capture: null == capture
+          ? _value.capture
+          : capture // ignore: cast_nullable_to_non_nullable
+              as MetadataCapture,
+      deviceContext: null == deviceContext
+          ? _value.deviceContext
+          : deviceContext // ignore: cast_nullable_to_non_nullable
+              as MetadataDeviceContext,
+      captureConditions: null == captureConditions
+          ? _value.captureConditions
+          : captureConditions // ignore: cast_nullable_to_non_nullable
+              as MetadataCaptureConditions,
+      integrity: null == integrity
+          ? _value.integrity
+          : integrity // ignore: cast_nullable_to_non_nullable
+              as ChunkIntegrity,
+      collectorAuthored: null == collectorAuthored
+          ? _value.collectorAuthored
+          : collectorAuthored // ignore: cast_nullable_to_non_nullable
+              as CollectorAuthored,
+    ));
   }
 }
 
 /// @nodoc
 
 class _$ChunkMetadataImpl extends _ChunkMetadata {
-  const _$ChunkMetadataImpl({
-    required this.chunkId,
-    required this.identity,
-    required this.timing,
-    required this.capture,
-    required this.deviceContext,
-    required this.captureConditions,
-    required this.integrity,
-    this.collectorAuthored = CollectorAuthored.empty,
-  }) : super._();
+  const _$ChunkMetadataImpl(
+      {required this.chunkId,
+      required this.identity,
+      required this.timing,
+      required this.capture,
+      required this.deviceContext,
+      required this.captureConditions,
+      required this.integrity,
+      this.collectorAuthored = CollectorAuthored.empty})
+      : super._();
 
   /// The chunk's stable UUID, minted at capture-stop (Mission 3.4.5).
   @override
@@ -335,17 +323,8 @@ class _$ChunkMetadataImpl extends _ChunkMetadata {
   }
 
   @override
-  int get hashCode => Object.hash(
-    runtimeType,
-    chunkId,
-    identity,
-    timing,
-    capture,
-    deviceContext,
-    captureConditions,
-    integrity,
-    collectorAuthored,
-  );
+  int get hashCode => Object.hash(runtimeType, chunkId, identity, timing,
+      capture, deviceContext, captureConditions, integrity, collectorAuthored);
 
   @JsonKey(ignore: true)
   @override
@@ -355,19 +334,19 @@ class _$ChunkMetadataImpl extends _ChunkMetadata {
 }
 
 abstract class _ChunkMetadata extends ChunkMetadata {
-  const factory _ChunkMetadata({
-    required final String chunkId,
-    required final MetadataIdentity identity,
-    required final MetadataTiming timing,
-    required final MetadataCapture capture,
-    required final MetadataDeviceContext deviceContext,
-    required final MetadataCaptureConditions captureConditions,
-    required final ChunkIntegrity integrity,
-    final CollectorAuthored collectorAuthored,
-  }) = _$ChunkMetadataImpl;
+  const factory _ChunkMetadata(
+      {required final String chunkId,
+      required final MetadataIdentity identity,
+      required final MetadataTiming timing,
+      required final MetadataCapture capture,
+      required final MetadataDeviceContext deviceContext,
+      required final MetadataCaptureConditions captureConditions,
+      required final ChunkIntegrity integrity,
+      final CollectorAuthored collectorAuthored}) = _$ChunkMetadataImpl;
   const _ChunkMetadata._() : super._();
 
   @override
+
   /// The chunk's stable UUID, minted at capture-stop (Mission 3.4.5).
   String get chunkId;
   @override

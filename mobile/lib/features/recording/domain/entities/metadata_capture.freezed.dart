@@ -12,8 +12,7 @@ part of 'metadata_capture.dart';
 T _$identity<T>(T value) => value;
 
 final _privateConstructorUsedError = UnsupportedError(
-  'It seems like you constructed your class using `MyClass._()`. This constructor is only meant to be used by freezed and you are not supposed to need it nor use it.\nPlease check the documentation here for more information: https://github.com/rrousselGit/freezed#adding-getters-and-methods-to-our-models',
-);
+    'It seems like you constructed your class using `MyClass._()`. This constructor is only meant to be used by freezed and you are not supposed to need it nor use it.\nPlease check the documentation here for more information: https://github.com/rrousselGit/freezed#adding-getters-and-methods-to-our-models');
 
 /// @nodoc
 mixin _$MetadataCapture {
@@ -46,18 +45,16 @@ mixin _$MetadataCapture {
 /// @nodoc
 abstract class $MetadataCaptureCopyWith<$Res> {
   factory $MetadataCaptureCopyWith(
-    MetadataCapture value,
-    $Res Function(MetadataCapture) then,
-  ) = _$MetadataCaptureCopyWithImpl<$Res, MetadataCapture>;
+          MetadataCapture value, $Res Function(MetadataCapture) then) =
+      _$MetadataCaptureCopyWithImpl<$Res, MetadataCapture>;
   @useResult
-  $Res call({
-    String resolution,
-    int frameRate,
-    int bitrateKbps,
-    String codec,
-    double zoomFactor,
-    String camera,
-  });
+  $Res call(
+      {String resolution,
+      int frameRate,
+      int bitrateKbps,
+      String codec,
+      double zoomFactor,
+      String camera});
 }
 
 /// @nodoc
@@ -80,55 +77,50 @@ class _$MetadataCaptureCopyWithImpl<$Res, $Val extends MetadataCapture>
     Object? zoomFactor = null,
     Object? camera = null,
   }) {
-    return _then(
-      _value.copyWith(
-            resolution: null == resolution
-                ? _value.resolution
-                : resolution // ignore: cast_nullable_to_non_nullable
-                      as String,
-            frameRate: null == frameRate
-                ? _value.frameRate
-                : frameRate // ignore: cast_nullable_to_non_nullable
-                      as int,
-            bitrateKbps: null == bitrateKbps
-                ? _value.bitrateKbps
-                : bitrateKbps // ignore: cast_nullable_to_non_nullable
-                      as int,
-            codec: null == codec
-                ? _value.codec
-                : codec // ignore: cast_nullable_to_non_nullable
-                      as String,
-            zoomFactor: null == zoomFactor
-                ? _value.zoomFactor
-                : zoomFactor // ignore: cast_nullable_to_non_nullable
-                      as double,
-            camera: null == camera
-                ? _value.camera
-                : camera // ignore: cast_nullable_to_non_nullable
-                      as String,
-          )
-          as $Val,
-    );
+    return _then(_value.copyWith(
+      resolution: null == resolution
+          ? _value.resolution
+          : resolution // ignore: cast_nullable_to_non_nullable
+              as String,
+      frameRate: null == frameRate
+          ? _value.frameRate
+          : frameRate // ignore: cast_nullable_to_non_nullable
+              as int,
+      bitrateKbps: null == bitrateKbps
+          ? _value.bitrateKbps
+          : bitrateKbps // ignore: cast_nullable_to_non_nullable
+              as int,
+      codec: null == codec
+          ? _value.codec
+          : codec // ignore: cast_nullable_to_non_nullable
+              as String,
+      zoomFactor: null == zoomFactor
+          ? _value.zoomFactor
+          : zoomFactor // ignore: cast_nullable_to_non_nullable
+              as double,
+      camera: null == camera
+          ? _value.camera
+          : camera // ignore: cast_nullable_to_non_nullable
+              as String,
+    ) as $Val);
   }
 }
 
 /// @nodoc
 abstract class _$$MetadataCaptureImplCopyWith<$Res>
     implements $MetadataCaptureCopyWith<$Res> {
-  factory _$$MetadataCaptureImplCopyWith(
-    _$MetadataCaptureImpl value,
-    $Res Function(_$MetadataCaptureImpl) then,
-  ) = __$$MetadataCaptureImplCopyWithImpl<$Res>;
+  factory _$$MetadataCaptureImplCopyWith(_$MetadataCaptureImpl value,
+          $Res Function(_$MetadataCaptureImpl) then) =
+      __$$MetadataCaptureImplCopyWithImpl<$Res>;
   @override
   @useResult
-  $Res call({
-    String resolution,
-    int frameRate,
-    int bitrateKbps,
-    String codec,
-    double zoomFactor,
-    String camera,
-  });
+  $Res call(
+      {String resolution,
+      int frameRate,
+      int bitrateKbps,
+      String codec,
+      double zoomFactor,
+      String camera});
 }
 
 /// @nodoc
@@ -136,9 +128,8 @@ class __$$MetadataCaptureImplCopyWithImpl<$Res>
     extends _$MetadataCaptureCopyWithImpl<$Res, _$MetadataCaptureImpl>
     implements _$$MetadataCaptureImplCopyWith<$Res> {
   __$$MetadataCaptureImplCopyWithImpl(
-    _$MetadataCaptureImpl _value,
-    $Res Function(_$MetadataCaptureImpl) _then,
-  ) : super(_value, _then);
+      _$MetadataCaptureImpl _value, $Res Function(_$MetadataCaptureImpl) _then)
+      : super(_value, _then);
 
   @pragma('vm:prefer-inline')
   @override
@@ -150,48 +141,45 @@ class __$$MetadataCaptureImplCopyWithImpl<$Res>
     Object? zoomFactor = null,
     Object? camera = null,
   }) {
-    return _then(
-      _$MetadataCaptureImpl(
-        resolution: null == resolution
-            ? _value.resolution
-            : resolution // ignore: cast_nullable_to_non_nullable
-                  as String,
-        frameRate: null == frameRate
-            ? _value.frameRate
-            : frameRate // ignore: cast_nullable_to_non_nullable
-                  as int,
-        bitrateKbps: null == bitrateKbps
-            ? _value.bitrateKbps
-            : bitrateKbps // ignore: cast_nullable_to_non_nullable
-                  as int,
-        codec: null == codec
-            ? _value.codec
-            : codec // ignore: cast_nullable_to_non_nullable
-                  as String,
-        zoomFactor: null == zoomFactor
-            ? _value.zoomFactor
-            : zoomFactor // ignore: cast_nullable_to_non_nullable
-                  as double,
-        camera: null == camera
-            ? _value.camera
-            : camera // ignore: cast_nullable_to_non_nullable
-                  as String,
-      ),
-    );
+    return _then(_$MetadataCaptureImpl(
+      resolution: null == resolution
+          ? _value.resolution
+          : resolution // ignore: cast_nullable_to_non_nullable
+              as String,
+      frameRate: null == frameRate
+          ? _value.frameRate
+          : frameRate // ignore: cast_nullable_to_non_nullable
+              as int,
+      bitrateKbps: null == bitrateKbps
+          ? _value.bitrateKbps
+          : bitrateKbps // ignore: cast_nullable_to_non_nullable
+              as int,
+      codec: null == codec
+          ? _value.codec
+          : codec // ignore: cast_nullable_to_non_nullable
+              as String,
+      zoomFactor: null == zoomFactor
+          ? _value.zoomFactor
+          : zoomFactor // ignore: cast_nullable_to_non_nullable
+              as double,
+      camera: null == camera
+          ? _value.camera
+          : camera // ignore: cast_nullable_to_non_nullable
+              as String,
+    ));
   }
 }
 
 /// @nodoc
 
 class _$MetadataCaptureImpl implements _MetadataCapture {
-  const _$MetadataCaptureImpl({
-    required this.resolution,
-    required this.frameRate,
-    required this.bitrateKbps,
-    required this.codec,
-    required this.zoomFactor,
-    required this.camera,
-  });
+  const _$MetadataCaptureImpl(
+      {required this.resolution,
+      required this.frameRate,
+      required this.bitrateKbps,
+      required this.codec,
+      required this.zoomFactor,
+      required this.camera});
 
   /// `"1920x1080"` — formatted from `CameraSpecification`'s two constants
   /// rather than written as a literal, so it cannot drift from them.
@@ -243,54 +231,50 @@ class _$MetadataCaptureImpl implements _MetadataCapture {
   }
 
   @override
-  int get hashCode => Object.hash(
-    runtimeType,
-    resolution,
-    frameRate,
-    bitrateKbps,
-    codec,
-    zoomFactor,
-    camera,
-  );
+  int get hashCode => Object.hash(runtimeType, resolution, frameRate,
+      bitrateKbps, codec, zoomFactor, camera);
 
   @JsonKey(ignore: true)
   @override
   @pragma('vm:prefer-inline')
   _$$MetadataCaptureImplCopyWith<_$MetadataCaptureImpl> get copyWith =>
       __$$MetadataCaptureImplCopyWithImpl<_$MetadataCaptureImpl>(
-        this,
-        _$identity,
-      );
+          this, _$identity);
 }
 
 abstract class _MetadataCapture implements MetadataCapture {
-  const factory _MetadataCapture({
-    required final String resolution,
-    required final int frameRate,
-    required final int bitrateKbps,
-    required final String codec,
-    required final double zoomFactor,
-    required final String camera,
-  }) = _$MetadataCaptureImpl;
+  const factory _MetadataCapture(
+      {required final String resolution,
+      required final int frameRate,
+      required final int bitrateKbps,
+      required final String codec,
+      required final double zoomFactor,
+      required final String camera}) = _$MetadataCaptureImpl;
 
   @override
+
   /// `"1920x1080"` — formatted from `CameraSpecification`'s two constants
   /// rather than written as a literal, so it cannot drift from them.
   String get resolution;
   @override
+
   /// From `CameraSpecification.frameRate`.
   int get frameRate;
   @override
+
   /// From `CameraSpecification.targetVideoBitrateKbps`.
   int get bitrateKbps;
   @override
+
   /// The **wire** spelling, `"h264"` — see `CodecWireName` for why this
   /// differs from `CameraSpecification.videoCodec`'s `'H.264'`.
   String get codec;
   @override
+
   /// From `RecordingSession.zoomFactor` — the ladder's verdict.
   double get zoomFactor;
   @override
+
   /// `"rear-wide"`. BR-01 fixes the camera and BR-02 the field of view, so
   /// this is constant for every chunk this application will ever produce.
   String get camera;

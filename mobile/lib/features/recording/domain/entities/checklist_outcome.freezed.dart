@@ -12,8 +12,7 @@ part of 'checklist_outcome.dart';
 T _$identity<T>(T value) => value;
 
 final _privateConstructorUsedError = UnsupportedError(
-  'It seems like you constructed your class using `MyClass._()`. This constructor is only meant to be used by freezed and you are not supposed to need it nor use it.\nPlease check the documentation here for more information: https://github.com/rrousselGit/freezed#adding-getters-and-methods-to-our-models',
-);
+    'It seems like you constructed your class using `MyClass._()`. This constructor is only meant to be used by freezed and you are not supposed to need it nor use it.\nPlease check the documentation here for more information: https://github.com/rrousselGit/freezed#adding-getters-and-methods-to-our-models');
 
 /// @nodoc
 mixin _$ChecklistOutcome {
@@ -44,18 +43,16 @@ mixin _$ChecklistOutcome {
 /// @nodoc
 abstract class $ChecklistOutcomeCopyWith<$Res> {
   factory $ChecklistOutcomeCopyWith(
-    ChecklistOutcome value,
-    $Res Function(ChecklistOutcome) then,
-  ) = _$ChecklistOutcomeCopyWithImpl<$Res, ChecklistOutcome>;
+          ChecklistOutcome value, $Res Function(ChecklistOutcome) then) =
+      _$ChecklistOutcomeCopyWithImpl<$Res, ChecklistOutcome>;
   @useResult
-  $Res call({
-    bool? permissionsGranted,
-    ErrorCode? permissionFailure,
-    int? availableBytes,
-    int? batteryPercent,
-    NetworkType? network,
-    WideAngleEligibility? wideAngle,
-  });
+  $Res call(
+      {bool? permissionsGranted,
+      ErrorCode? permissionFailure,
+      int? availableBytes,
+      int? batteryPercent,
+      NetworkType? network,
+      WideAngleEligibility? wideAngle});
 
   $WideAngleEligibilityCopyWith<$Res>? get wideAngle;
 }
@@ -80,35 +77,32 @@ class _$ChecklistOutcomeCopyWithImpl<$Res, $Val extends ChecklistOutcome>
     Object? network = freezed,
     Object? wideAngle = freezed,
   }) {
-    return _then(
-      _value.copyWith(
-            permissionsGranted: freezed == permissionsGranted
-                ? _value.permissionsGranted
-                : permissionsGranted // ignore: cast_nullable_to_non_nullable
-                      as bool?,
-            permissionFailure: freezed == permissionFailure
-                ? _value.permissionFailure
-                : permissionFailure // ignore: cast_nullable_to_non_nullable
-                      as ErrorCode?,
-            availableBytes: freezed == availableBytes
-                ? _value.availableBytes
-                : availableBytes // ignore: cast_nullable_to_non_nullable
-                      as int?,
-            batteryPercent: freezed == batteryPercent
-                ? _value.batteryPercent
-                : batteryPercent // ignore: cast_nullable_to_non_nullable
-                      as int?,
-            network: freezed == network
-                ? _value.network
-                : network // ignore: cast_nullable_to_non_nullable
-                      as NetworkType?,
-            wideAngle: freezed == wideAngle
-                ? _value.wideAngle
-                : wideAngle // ignore: cast_nullable_to_non_nullable
-                      as WideAngleEligibility?,
-          )
-          as $Val,
-    );
+    return _then(_value.copyWith(
+      permissionsGranted: freezed == permissionsGranted
+          ? _value.permissionsGranted
+          : permissionsGranted // ignore: cast_nullable_to_non_nullable
+              as bool?,
+      permissionFailure: freezed == permissionFailure
+          ? _value.permissionFailure
+          : permissionFailure // ignore: cast_nullable_to_non_nullable
+              as ErrorCode?,
+      availableBytes: freezed == availableBytes
+          ? _value.availableBytes
+          : availableBytes // ignore: cast_nullable_to_non_nullable
+              as int?,
+      batteryPercent: freezed == batteryPercent
+          ? _value.batteryPercent
+          : batteryPercent // ignore: cast_nullable_to_non_nullable
+              as int?,
+      network: freezed == network
+          ? _value.network
+          : network // ignore: cast_nullable_to_non_nullable
+              as NetworkType?,
+      wideAngle: freezed == wideAngle
+          ? _value.wideAngle
+          : wideAngle // ignore: cast_nullable_to_non_nullable
+              as WideAngleEligibility?,
+    ) as $Val);
   }
 
   @override
@@ -127,20 +121,18 @@ class _$ChecklistOutcomeCopyWithImpl<$Res, $Val extends ChecklistOutcome>
 /// @nodoc
 abstract class _$$ChecklistOutcomeImplCopyWith<$Res>
     implements $ChecklistOutcomeCopyWith<$Res> {
-  factory _$$ChecklistOutcomeImplCopyWith(
-    _$ChecklistOutcomeImpl value,
-    $Res Function(_$ChecklistOutcomeImpl) then,
-  ) = __$$ChecklistOutcomeImplCopyWithImpl<$Res>;
+  factory _$$ChecklistOutcomeImplCopyWith(_$ChecklistOutcomeImpl value,
+          $Res Function(_$ChecklistOutcomeImpl) then) =
+      __$$ChecklistOutcomeImplCopyWithImpl<$Res>;
   @override
   @useResult
-  $Res call({
-    bool? permissionsGranted,
-    ErrorCode? permissionFailure,
-    int? availableBytes,
-    int? batteryPercent,
-    NetworkType? network,
-    WideAngleEligibility? wideAngle,
-  });
+  $Res call(
+      {bool? permissionsGranted,
+      ErrorCode? permissionFailure,
+      int? availableBytes,
+      int? batteryPercent,
+      NetworkType? network,
+      WideAngleEligibility? wideAngle});
 
   @override
   $WideAngleEligibilityCopyWith<$Res>? get wideAngle;
@@ -150,10 +142,9 @@ abstract class _$$ChecklistOutcomeImplCopyWith<$Res>
 class __$$ChecklistOutcomeImplCopyWithImpl<$Res>
     extends _$ChecklistOutcomeCopyWithImpl<$Res, _$ChecklistOutcomeImpl>
     implements _$$ChecklistOutcomeImplCopyWith<$Res> {
-  __$$ChecklistOutcomeImplCopyWithImpl(
-    _$ChecklistOutcomeImpl _value,
-    $Res Function(_$ChecklistOutcomeImpl) _then,
-  ) : super(_value, _then);
+  __$$ChecklistOutcomeImplCopyWithImpl(_$ChecklistOutcomeImpl _value,
+      $Res Function(_$ChecklistOutcomeImpl) _then)
+      : super(_value, _then);
 
   @pragma('vm:prefer-inline')
   @override
@@ -165,48 +156,46 @@ class __$$ChecklistOutcomeImplCopyWithImpl<$Res>
     Object? network = freezed,
     Object? wideAngle = freezed,
   }) {
-    return _then(
-      _$ChecklistOutcomeImpl(
-        permissionsGranted: freezed == permissionsGranted
-            ? _value.permissionsGranted
-            : permissionsGranted // ignore: cast_nullable_to_non_nullable
-                  as bool?,
-        permissionFailure: freezed == permissionFailure
-            ? _value.permissionFailure
-            : permissionFailure // ignore: cast_nullable_to_non_nullable
-                  as ErrorCode?,
-        availableBytes: freezed == availableBytes
-            ? _value.availableBytes
-            : availableBytes // ignore: cast_nullable_to_non_nullable
-                  as int?,
-        batteryPercent: freezed == batteryPercent
-            ? _value.batteryPercent
-            : batteryPercent // ignore: cast_nullable_to_non_nullable
-                  as int?,
-        network: freezed == network
-            ? _value.network
-            : network // ignore: cast_nullable_to_non_nullable
-                  as NetworkType?,
-        wideAngle: freezed == wideAngle
-            ? _value.wideAngle
-            : wideAngle // ignore: cast_nullable_to_non_nullable
-                  as WideAngleEligibility?,
-      ),
-    );
+    return _then(_$ChecklistOutcomeImpl(
+      permissionsGranted: freezed == permissionsGranted
+          ? _value.permissionsGranted
+          : permissionsGranted // ignore: cast_nullable_to_non_nullable
+              as bool?,
+      permissionFailure: freezed == permissionFailure
+          ? _value.permissionFailure
+          : permissionFailure // ignore: cast_nullable_to_non_nullable
+              as ErrorCode?,
+      availableBytes: freezed == availableBytes
+          ? _value.availableBytes
+          : availableBytes // ignore: cast_nullable_to_non_nullable
+              as int?,
+      batteryPercent: freezed == batteryPercent
+          ? _value.batteryPercent
+          : batteryPercent // ignore: cast_nullable_to_non_nullable
+              as int?,
+      network: freezed == network
+          ? _value.network
+          : network // ignore: cast_nullable_to_non_nullable
+              as NetworkType?,
+      wideAngle: freezed == wideAngle
+          ? _value.wideAngle
+          : wideAngle // ignore: cast_nullable_to_non_nullable
+              as WideAngleEligibility?,
+    ));
   }
 }
 
 /// @nodoc
 
 class _$ChecklistOutcomeImpl extends _ChecklistOutcome {
-  const _$ChecklistOutcomeImpl({
-    this.permissionsGranted,
-    this.permissionFailure,
-    this.availableBytes,
-    this.batteryPercent,
-    this.network,
-    this.wideAngle,
-  }) : super._();
+  const _$ChecklistOutcomeImpl(
+      {this.permissionsGranted,
+      this.permissionFailure,
+      this.availableBytes,
+      this.batteryPercent,
+      this.network,
+      this.wideAngle})
+      : super._();
 
   /// FR-CHK-01. Null until probed; an [ErrorCode] names *which* grant is
   /// missing, which is what C-08's per-row remedy needs.
@@ -257,54 +246,50 @@ class _$ChecklistOutcomeImpl extends _ChecklistOutcome {
   }
 
   @override
-  int get hashCode => Object.hash(
-    runtimeType,
-    permissionsGranted,
-    permissionFailure,
-    availableBytes,
-    batteryPercent,
-    network,
-    wideAngle,
-  );
+  int get hashCode => Object.hash(runtimeType, permissionsGranted,
+      permissionFailure, availableBytes, batteryPercent, network, wideAngle);
 
   @JsonKey(ignore: true)
   @override
   @pragma('vm:prefer-inline')
   _$$ChecklistOutcomeImplCopyWith<_$ChecklistOutcomeImpl> get copyWith =>
       __$$ChecklistOutcomeImplCopyWithImpl<_$ChecklistOutcomeImpl>(
-        this,
-        _$identity,
-      );
+          this, _$identity);
 }
 
 abstract class _ChecklistOutcome extends ChecklistOutcome {
-  const factory _ChecklistOutcome({
-    final bool? permissionsGranted,
-    final ErrorCode? permissionFailure,
-    final int? availableBytes,
-    final int? batteryPercent,
-    final NetworkType? network,
-    final WideAngleEligibility? wideAngle,
-  }) = _$ChecklistOutcomeImpl;
+  const factory _ChecklistOutcome(
+      {final bool? permissionsGranted,
+      final ErrorCode? permissionFailure,
+      final int? availableBytes,
+      final int? batteryPercent,
+      final NetworkType? network,
+      final WideAngleEligibility? wideAngle}) = _$ChecklistOutcomeImpl;
   const _ChecklistOutcome._() : super._();
 
   @override
+
   /// FR-CHK-01. Null until probed; an [ErrorCode] names *which* grant is
   /// missing, which is what C-08's per-row remedy needs.
   bool? get permissionsGranted;
   @override
+
   /// Why [permissionsGranted] is false, when it is.
   ErrorCode? get permissionFailure;
   @override
+
   /// FR-CHK-02 — bytes free on the volume recordings are written to.
   int? get availableBytes;
   @override
+
   /// FR-CHK-03 — charge percentage, 0–100.
   int? get batteryPercent;
   @override
+
   /// FR-CHK-04 — the connection kind. Never blocks (Ch. 2.9 §5).
   NetworkType? get network;
   @override
+
   /// A-057's verdict, from cache when the fingerprint still matches.
   WideAngleEligibility? get wideAngle;
   @override
