@@ -224,22 +224,41 @@ class ChunkUploadPipeline {
       return _fail(chunk, _classify(error), error.message);
     }
 
-    // ---- Steps 3 and 4 — Confirm, then metadata ------------------------
+    // ---- Steps 4 then 3 — Metadata, THEN confirm -----------------------
+    //
+    // **Deliberately the reverse of Chapter 5.10 §1's documented order**, which
+    // lists the status PATCH as step 3 and the metadata POST as step 4.
+    //
+    // That order cannot work. BR-21 requires a verified `chunk_metadata` row
+    // before `chunks.status` may reach `'complete'`, and migration 0006 makes
+    // `complete_chunk()` the only path — it raises `restrict_violation` when
+    // `verified_at` is null. A client following the chapter literally would
+    // have step 3 refused **for every chunk, always**, and would only POST the
+    // metadata that makes it possible afterwards.
+    //
+    // Found by Mission 7.3 tracing the handler against the gate, recorded as
+    // A-191, and confirmed against this exact code. The backend refuses with a
+    // `RESOURCE_NOT_FOUND` naming the absent metadata rather than an opaque
+    // 500, so a client that gets this wrong is told why — but it is still
+    // wrong, and the fix belongs here rather than in a message.
     try {
-      await _api.confirmStatus(
-        chunkId: chunk.chunkId,
-        status: ChunkUploadStatus.complete.wireName,
-      );
       await _api.postMetadata(
         chunkId: chunk.chunkId,
         document: document.toJson(),
+      );
+      await _api.confirmStatus(
+        chunkId: chunk.chunkId,
+        status: ChunkUploadStatus.complete.wireName,
       );
     } on AppException catch (error) {
       return _fail(chunk, _classify(error), error.message);
     }
 
-    // Step 5 is the backend's. The local row follows step 4 rather than step
-    // 3 — see the class comment and A-073.
+    // Step 5 is the backend's. The local row follows BOTH remote calls — A-073
+    // reasoned that BR-08 makes `complete` the point a chunk becomes locally
+    // deletable, so writing it before the metadata reached the backend would be
+    // unrecoverable. That reasoning is unchanged by A-191's reordering; it now
+    // simply agrees with the remote order for a second, independent reason.
     await _source.markComplete(chunk.chunkId);
     return UploadOutcome.complete(chunkId: chunk.chunkId);
   }
