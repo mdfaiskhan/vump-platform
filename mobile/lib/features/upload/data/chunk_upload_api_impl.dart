@@ -52,10 +52,22 @@ class ChunkUploadApiImpl implements ChunkUploadApi {
     final Map<String, Object?> data = await _api.post(
       '/sessions/$remoteSessionId/chunks',
       what: 'chunk registration',
-      // Chapter 4.6 §5's body, exactly. No org_id, project_id or task_id: the
-      // Lambda composes the S3 key (Volume 4 Ch. 4.10 §2 step 1) and returns
-      // it, so the client never assembles one.
+      // Chapter 4.6 §5's three fields **plus `chunk_id`** — Mission 7.3, F2.
+      //
+      // The chapter's sample body omits it, and the backend requires it: the id
+      // is minted on this device the moment a chunk begins finalizing (Ch. 5.14
+      // §3) and every retry must reuse *"the exact same chunk_id"* (Ch. 5.13
+      // §4). Migration 0010 dropped `chunks.id`'s server-side default precisely
+      // so a registration that omits it fails loudly rather than minting a
+      // second identity this client would then reject in the echo check below.
+      //
+      // Still no org_id, project_id or task_id: the Lambda composes the S3 key
+      // (Ch. 4.10 §2 step 1) and returns it, so the client never assembles one.
+      // A-071 corrected the register's earlier belief that it did. `chunk_id`
+      // is not a key component the client is supplying — it is the client's own
+      // identity for the chunk, which is why it belongs here and they do not.
       body: <String, Object?>{
+        'chunk_id': chunkId,
         'sequence_index': sequenceIndex,
         'file_size_bytes': fileSizeBytes,
         'checksum_sha256': checksumSha256,
