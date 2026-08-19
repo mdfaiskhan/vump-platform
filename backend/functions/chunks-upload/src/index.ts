@@ -370,6 +370,36 @@ export function isFinalizeRequest(event: unknown): event is FinalizeRequest {
 export async function finalizeUpload(request: FinalizeRequest): Promise<{ key: string }> {
   const { chunkBucket } = loadConfig();
 
+  // **The key and upload id are attacker-controlled if the caller is
+  // compromised, so neither is used before it is checked against the row.**
+  //
+  // Mission 7.3's security review found this missing. The IAM policy's own
+  // comment claimed "the invoked function validates the chunk before acting",
+  // and it did not — `request.key` and `request.uploadId` went straight to S3.
+  // Without this, a compromised `chunks-verify` could finalise *any*
+  // in-progress multipart upload in the bucket whose key and id it could read
+  // from `chunks`, truncating footage that was still uploading. A-195.
+  //
+  // Reading `chunks` needs no new grant: this role already holds SELECT on it
+  // for registration.
+  const registered = await execute(
+    'SELECT s3_object_key, upload_id FROM chunks WHERE id = :chunkId',
+    { parameters: [uuidParam('chunkId', request.chunkId)] },
+  );
+  const row = registered.records?.[0];
+  if (row === undefined) {
+    throw new Error(`No chunk ${request.chunkId}; refusing to finalise.`);
+  }
+  if (
+    readString(row, 0, 'chunks.s3_object_key') !== request.key ||
+    readOptionalString(row, 1) !== request.uploadId
+  ) {
+    // The caller named an upload this chunk does not own. Nothing is finalised.
+    throw new Error(
+      `Chunk ${request.chunkId} does not own the key or upload id supplied; refusing to finalise.`,
+    );
+  }
+
   const parts: CompletedPart[] = [];
   let marker: string | undefined;
   do {

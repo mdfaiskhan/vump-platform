@@ -248,11 +248,17 @@ resource "aws_iam_role_policy" "data_api" {
 # `chunks-verify` does not gain PutObject — it gains the ability to ask
 # `chunks-upload`, which already holds it, to finalise one specific upload.
 #
-# **This is materially narrower than PutObject.** The invoked function validates
-# the chunk before acting, so this cannot create an object at an arbitrary key,
-# cannot overwrite footage and cannot presign anything. A-143's stated property
-# — "chunks-verify holds s3:GetObject and cannot write" — remains literally
-# true.
+# **This is materially narrower than PutObject**, but the reason is the invoked
+# function's validation and not the IAM boundary alone — and that validation was
+# missing when this comment was first written. A-195 records it: `finalizeUpload`
+# now reads the chunk row and refuses unless the supplied key AND upload id are
+# the ones that chunk owns, so the capability is "finalise this specific
+# registered upload" rather than "finalise anything in the bucket".
+#
+# With that check in place: this cannot create an object at an arbitrary key,
+# cannot overwrite completed footage, and cannot presign anything. A-143's stated
+# property — "chunks-verify holds s3:GetObject and cannot write" — remains
+# literally true, and is now true for the reason this comment gives.
 #
 # Chapter 4.10 §2 step 3 anticipated the two-function shape in its own wording:
 # "a Lambda (triggered either by that call or an S3 event notification)".

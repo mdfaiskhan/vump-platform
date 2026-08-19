@@ -234,7 +234,50 @@ describe('the Fork 1 seam', () => {
     expect(isFinalizeRequest({ httpMethod: 'POST', resource: '/v1/x' })).toBe(false);
   });
 
+  /** The ownership row `finalizeUpload` checks before touching S3. */
+  const ownedBy = (key = KEY, uploadId = 'upload-1') => ({
+    records: [[{ stringValue: key }, { stringValue: uploadId }]],
+  });
+
+  it('refuses a key the chunk does not own — the compromised-caller case', async () => {
+    rds.on(ExecuteStatementCommand).resolves(ownedBy(KEY, 'upload-1'));
+
+    await expect(
+      handler({
+        action: 'finalize-upload',
+        chunkId: CHUNK,
+        // Someone else's object, as a compromised chunks-verify could name.
+        key: 'other-org/other-project/other-task/other-session/0001_x.mp4',
+        uploadId: 'upload-1',
+      }),
+    ).rejects.toThrow(/does not own the key or upload id/i);
+
+    expect(s3.commandCalls(ListPartsCommand)).toHaveLength(0);
+    expect(s3.commandCalls(CompleteMultipartUploadCommand)).toHaveLength(0);
+  });
+
+  it('refuses an upload id the chunk does not own', async () => {
+    rds.on(ExecuteStatementCommand).resolves(ownedBy(KEY, 'upload-1'));
+
+    await expect(
+      handler({ action: 'finalize-upload', chunkId: CHUNK, key: KEY, uploadId: 'upload-999' }),
+    ).rejects.toThrow(/does not own the key or upload id/i);
+
+    expect(s3.commandCalls(CompleteMultipartUploadCommand)).toHaveLength(0);
+  });
+
+  it('refuses a chunk id that does not exist', async () => {
+    rds.on(ExecuteStatementCommand).resolves({ records: [] });
+
+    await expect(
+      handler({ action: 'finalize-upload', chunkId: CHUNK, key: KEY, uploadId: 'upload-1' }),
+    ).rejects.toThrow(/No chunk/i);
+
+    expect(s3.commandCalls(ListPartsCommand)).toHaveLength(0);
+  });
+
   it('discovers parts with ListParts rather than trusting a reported list', async () => {
+    rds.on(ExecuteStatementCommand).resolves(ownedBy());
     s3.on(ListPartsCommand).resolves({
       Parts: [
         { PartNumber: 2, ETag: '"b"' },
@@ -255,6 +298,7 @@ describe('the Fork 1 seam', () => {
   });
 
   it('follows ListParts pagination rather than assuming one page', async () => {
+    rds.on(ExecuteStatementCommand).resolves(ownedBy());
     s3.on(ListPartsCommand)
       .resolvesOnce({
         Parts: [{ PartNumber: 1, ETag: '"a"' }],
@@ -272,6 +316,7 @@ describe('the Fork 1 seam', () => {
   });
 
   it('refuses to complete an upload with no parts', async () => {
+    rds.on(ExecuteStatementCommand).resolves(ownedBy());
     s3.on(ListPartsCommand).resolves({ Parts: [], IsTruncated: false });
 
     await expect(
