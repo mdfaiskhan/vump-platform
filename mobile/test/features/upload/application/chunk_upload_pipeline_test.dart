@@ -137,8 +137,14 @@ void main() {
     });
   });
 
-  group('Chapter 5.10 §1 — the four steps, in order', () {
-    test('register, upload, confirm, metadata', () async {
+  group('A-191 — steps 3 and 4 swapped against Ch 5.10 §1', () {
+    // The chapter lists the status PATCH as step 3 and the metadata POST as
+    // step 4. BR-21 makes that impossible: `complete_chunk()` refuses while
+    // `chunk_metadata.verified_at` is null, so step 3 would be refused for
+    // every chunk, always. This group asserts the order that works, and is
+    // named for the amendment rather than the chapter so the suite says what
+    // is true and why.
+    test('register, upload, metadata, confirm', () async {
       final ({
         ChunkUploadPipeline pipeline,
         FakeChunkUploadSource source,
@@ -152,8 +158,8 @@ void main() {
       expect(t.api.calls, <String>[
         'register',
         'upload',
-        'confirm',
         'metadata',
+        'confirm',
       ]);
     });
 
@@ -236,7 +242,11 @@ void main() {
       await t.pipeline.uploadNext();
 
       expect(t.source.transitions.last, 'complete:chk_1');
-      expect(t.api.calls.last, 'metadata');
+      // A-073's claim is the line above: the LOCAL complete follows the remote
+      // work, because BR-08 makes `complete` the point a chunk becomes
+      // deletable. Which remote call happens to be last is incidental to that
+      // claim, and A-191 changed it from the metadata POST to the status PATCH.
+      expect(t.api.calls.last, 'confirm');
     });
 
     test(
