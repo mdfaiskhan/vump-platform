@@ -15,6 +15,8 @@ import 'package:mobile/core/database/providers/database_provider.dart';
 import 'package:mobile/core/environment/environment_profile.dart';
 import 'package:mobile/core/errors/app_exception.dart';
 import 'package:mobile/core/firebase/providers/firebase_provider.dart';
+import 'package:mobile/core/identity/device_id_store.dart';
+import 'package:mobile/core/identity/device_model_channel.dart';
 import 'package:mobile/core/identity/providers/identity_ports.dart';
 import 'package:mobile/core/logging/app_logger.dart';
 import 'package:mobile/core/logging/providers/logger_provider.dart';
@@ -53,6 +55,7 @@ import 'package:mobile/features/recording/data/random_uuid_generator.dart';
 import 'package:mobile/features/recording/data/shared_preferences_wide_angle_eligibility_cache.dart';
 import 'package:mobile/features/recording/data/unavailable_capture_conditions_reader.dart';
 import 'package:mobile/features/recording/data/unsourced_task_context.dart';
+import 'package:mobile/features/recording/domain/entities/metadata_identity.dart';
 import 'package:mobile/features/upload/application/upload_dispatcher.dart';
 import 'package:mobile/features/upload/application/upload_dispatcher_status_notifier.dart';
 import 'package:mobile/features/upload/data/foreground_upload_service_host.dart';
@@ -74,6 +77,21 @@ Future<void> main() async {
   // instance rather than resolving one itself so it stays substitutable in
   // tests. A-057's per-device verdict is what it holds.
   final SharedPreferences preferences = await SharedPreferences.getInstance();
+
+  // Chapter 4.5 §2's two device identifiers, resolved once here for the same
+  // reason the documents directory and the preferences instance are: both
+  // reads are asynchronous and `DeviceContext`'s getters are synchronous.
+  // Resolving at the composition root keeps the contract sync rather than
+  // rippling a future through `ChunkMetadataAssembler` and every caller.
+  //
+  // `deviceId` generates on first launch and is stable afterwards (F19);
+  // `deviceModel` is null when the platform cannot answer, which stays null
+  // rather than becoming an invented string — A-068's Guard 1 then refuses the
+  // chunk, which is the correct outcome. F22.
+  final String deviceId = await DeviceIdStore(
+    preferences: preferences,
+  ).deviceId();
+  final String? deviceModel = await const DeviceModelChannel().read();
 
   // The container is built before runApp so that asynchronous startup work can
   // be awaited here rather than inside a widget. ADR-010 requires Firebase to
@@ -171,7 +189,12 @@ Future<void> main() async {
         ).withSchemas(RecordingSchemas.all),
       ),
 
-      ...recordingOverrides(documents.path, preferences),
+      ...recordingOverrides(
+        documents.path,
+        preferences,
+        deviceId: deviceId,
+        deviceModel: deviceModel,
+      ),
       ...uploadOverrides(),
     ],
   );
@@ -215,10 +238,17 @@ Future<void> main() async {
 /// `requireValue` states that expectation rather than hiding it behind a
 /// silent null — if the ordering in `main` ever changes, this throws where the
 /// mistake is instead of recording chunks into nothing.
+///
+/// [deviceId] and [deviceModel] are Chapter 4.5 §2's device identifiers, both
+/// resolved by the caller because both reads are asynchronous. [deviceModel] is
+/// nullable: the platform may not answer, and an unanswered model becomes
+/// `MetadataIdentity.unsourced` rather than a substitute.
 List<Override> recordingOverrides(
   String documentsPath,
-  SharedPreferences preferences,
-) {
+  SharedPreferences preferences, {
+  required String deviceId,
+  required String? deviceModel,
+}) {
   return <Override>[
     recordingsDirectoryProvider.overrideWithValue(documentsPath),
 
@@ -300,19 +330,46 @@ List<Override> recordingOverrides(
       (Ref ref) => ref.watch(_chunkStoreProvider),
     ),
 
-    // Volume 4 Chapter 4.5 §2's identity group — Mission 7.4 step 1.
+    // Volume 4 Chapter 4.5 §2's identity group.
     //
-    // Both contracts now live in `core/identity/`, so the implementations bind
-    // here rather than being constructed inside the finalizer override. The
-    // values are unchanged: `project_id`, `task_id`, `collector_id` and
-    // `device_id` are still `MetadataIdentity.unsourced`, and A-068's Guard 1
-    // still refuses every chunk. Steps 3 and 4 make them real.
+    // Both contracts live in `core/identity/` since step 1, so the
+    // implementations bind here rather than being constructed inside the
+    // finalizer override.
+    //
+    // Step 3 made the device group real — `collector_id`, `device_id` and
+    // `device_model` now carry values. `project_id` and `task_id` are still
+    // `MetadataIdentity.unsourced`: they come from the selected Task, and the
+    // repository that supplies one is step 4. Until then A-068's Guard 1 still
+    // refuses every chunk, which is why this step changes no end-to-end
+    // behaviour on its own.
     taskContextProvider.overrideWith((Ref ref) => const UnsourcedTaskContext()),
     deviceContextProvider.overrideWith(
-      // `app/config/` is granted to `core/` and `shared/` by ADR-022 and not
-      // to a feature's `data/`, so the version is read here and passed in
-      // rather than imported there.
-      (Ref ref) => const PlatformDeviceContext(appVersion: AppInfo.fullVersion),
+      // Three of the four values are supplied here rather than read inside the
+      // implementation, each for its own reason:
+      //
+      //  * `appVersion` — `app/config/` is granted to `core/` and `shared/` by
+      //    ADR-022 and not to a feature's `data/`.
+      //  * `deviceId` / `deviceModel` — resolved at startup, above, because
+      //    the reads are async and the contract's getters are not.
+      //  * `collectorId` — it belongs to `features/auth/`, and ADR-022 R3
+      //    forbids `features/recording/` from importing it in either
+      //    direction. R3's first resolution puts the contract in `core/` and
+      //    the composition root supplies the value.
+      //
+      // `ref.watch` on the notifier, not `read`: signing in and signing out
+      // must change the identifier a subsequent chunk is stamped with. A read
+      // would freeze whichever state happened to hold at container
+      // construction — which is `unauthenticated`, since `_restoreSession` has
+      // not completed — and every chunk of the session would carry a blank
+      // Collector. Mission 7.4, F21.
+      (Ref ref) => PlatformDeviceContext(
+        collectorId:
+            ref.watch(authNotifierProvider).valueOrNull?.user?.uid ??
+            MetadataIdentity.unsourced,
+        deviceId: deviceId,
+        deviceModel: deviceModel ?? MetadataIdentity.unsourced,
+        appVersion: AppInfo.fullVersion,
+      ),
     ),
 
     // Volume 3 Ch. 3.9 §4's FinalizeChunkUseCase — Chapters 5.5, 5.7 and 5.8
@@ -324,9 +381,6 @@ List<Override> recordingOverrides(
         metadataGenerator: ChunkMetadataAssembler(
           // Read through the ports rather than constructed inline, since
           // Mission 7.4 step 1 moved both contracts to `core/identity/`.
-          // The bindings below still supply the unsourced implementations —
-          // the plumbing moved before the values, so this step changes no
-          // behaviour and a green suite means the move was clean.
           taskContext: ref.watch(taskContextProvider),
           deviceContext: ref.watch(deviceContextProvider),
           conditionsReader: const UnavailableCaptureConditionsReader(),
