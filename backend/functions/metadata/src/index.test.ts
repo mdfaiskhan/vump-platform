@@ -188,6 +188,75 @@ describe('POST — valibot validates Chapter 4.5 §2s shape', () => {
 
     expect(response.statusCode).toBe(201);
   });
+
+  it('accepts the shape a real device sends with no fix — A-211', async () => {
+    // The blocker the first real upload found. The client sends the `gps`
+    // object ALWAYS PRESENT with null members, deliberately: omitting it
+    // "would make 'no fix' and 'field not implemented' the same wire value".
+    // This schema required both-or-neither and rejected it, so every metadata
+    // POST from a device without a fix was refused — indoors, or with location
+    // services off, which is an ordinary case rather than an edge one.
+    rds.on(ExecuteStatementCommand).resolvesOnce(identityRow()).resolves({ records: [] });
+
+    const response = await handler(
+      event('POST', {
+        body: {
+          ...document,
+          capture_conditions: {
+            gps: { lat: null, lng: null },
+            battery_pct: 51,
+            network_type: 'wifi',
+          },
+        },
+      }),
+    );
+
+    expect(response.statusCode).toBe(201);
+  });
+
+  it('accepts a half fix, because the two columns are independent', async () => {
+    // `chunk_metadata.gps_lat` and `gps_lng` are two separately nullable
+    // columns. A schema requiring both-or-neither is NARROWER than the table
+    // it writes to — it would reject a row the storage model permits, which is
+    // the shape of the original defect rather than a hypothetical.
+    rds.on(ExecuteStatementCommand).resolvesOnce(identityRow()).resolves({ records: [] });
+
+    const response = await handler(
+      event('POST', {
+        body: {
+          ...document,
+          capture_conditions: {
+            gps: { lat: 19.07, lng: null },
+            battery_pct: null,
+            network_type: null,
+          },
+        },
+      }),
+    );
+
+    expect(response.statusCode).toBe(201);
+  });
+
+  it('still rejects an out-of-range coordinate that IS present', async () => {
+    // Widening nullability must not widen the range check. A latitude of 200
+    // is a defect whether or not the longitude is absent.
+    rds.on(ExecuteStatementCommand).resolvesOnce(identityRow()).resolves({ records: [] });
+
+    const response = await handler(
+      event('POST', {
+        body: {
+          ...document,
+          capture_conditions: {
+            gps: { lat: 200, lng: null },
+            battery_pct: null,
+            network_type: null,
+          },
+        },
+      }),
+    );
+
+    expect(response.statusCode).toBe(400);
+  });
 });
 
 describe('POST — the identity group is asserted, never trusted', () => {
