@@ -6,7 +6,6 @@ import 'package:mobile/core/errors/exceptions/network_exception.dart';
 import 'package:mobile/core/errors/exceptions/storage_exception.dart';
 import 'package:mobile/core/network/network_constants.dart';
 import 'package:mobile/core/network/providers/dio_provider.dart';
-import 'package:mobile/core/network/vump_api.dart';
 import 'package:mobile/core/queue/chunk_upload_status.dart';
 import 'package:mobile/core/time/interfaces/clock.dart';
 import 'package:mobile/core/time/providers/clock_provider.dart';
@@ -440,11 +439,6 @@ class UploadOutcome {
     return 'UploadOutcome.failed($chunkId, ${cause?.name}: $detail)';
   }
 }
-
-/// The Vump backend, for `features/upload/`.
-final Provider<VumpApi> vumpApiProvider = Provider<VumpApi>(
-  (Ref ref) => VumpApi(client: ref.watch(dioClientProvider)),
-);
 
 /// Chapter 5.10 §1's four calls, wired to the real clients.
 ///
