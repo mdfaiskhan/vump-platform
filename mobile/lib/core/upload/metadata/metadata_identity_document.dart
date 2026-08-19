@@ -25,7 +25,10 @@ class MetadataIdentityDocument {
     this.deviceId,
   });
 
-  /// `identity.session_id`.
+  /// `identity.session_id` — **the LOCAL session UUID as written, and the
+  /// BACKEND's by the time it reaches the wire.**
+  ///
+  /// See [withRemoteSessionId]. A-207.
   final String? sessionId;
 
   /// `identity.project_id` — no source until `features/projects_tasks/` exists.
@@ -34,11 +37,42 @@ class MetadataIdentityDocument {
   /// `identity.task_id` — no source until `features/projects_tasks/` exists.
   final String? taskId;
 
-  /// `identity.collector_id` — `features/auth/`'s `User.uid`, not yet inverted.
+  /// `identity.collector_id` — `users.id` from `POST /v1/auth/verify`, not the
+  /// Firebase uid. A-206.
   final String? collectorId;
 
-  /// `identity.device_id` — nothing in the project produces one yet.
+  /// `identity.device_id` — F19's install-scoped UUID.
   final String? deviceId;
+
+  /// This identity with [remoteSessionId] in place of the local one — A-207.
+  ///
+  /// ## Why a rewrite exists at all, and why it is only this field
+  ///
+  /// The document is assembled at **chunk finalization**, which happens while
+  /// recording and may happen with no network at all. The only session id the
+  /// device has then is its own, and F5 makes the two deliberately distinct:
+  /// `sessions.client_session_id` is the device's, `sessions.id` is the
+  /// backend's.
+  ///
+  /// `functions/metadata/` resolves a chunk's true identity from a join and
+  /// refuses a document that disagrees — and it joins on `s.id`. So the stored
+  /// value is right for the device and wrong for the wire, and **every metadata
+  /// POST would be refused** without this.
+  ///
+  /// A general `copyWith` is deliberately not offered. BR-22 makes
+  /// system-generated metadata immutable once written, and this is the single
+  /// field whose correct value differs between where it is stored and where it
+  /// is sent. A method that could rewrite any of the five would make that
+  /// distinction invisible at the call site.
+  MetadataIdentityDocument withRemoteSessionId(String remoteSessionId) {
+    return MetadataIdentityDocument(
+      sessionId: remoteSessionId,
+      projectId: projectId,
+      taskId: taskId,
+      collectorId: collectorId,
+      deviceId: deviceId,
+    );
+  }
 
   /// Whether all five fields name something real.
   ///

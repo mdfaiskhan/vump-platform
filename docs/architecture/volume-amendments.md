@@ -7045,7 +7045,7 @@ This is A-195's shape in the build medium. There the IAM boundary was reviewed c
 | **The backend checks it against** | `sessions.collector_id`, which is `users.id`, a database uuid |
 | **Consequence** | **Every metadata POST would be refused**, for every chunk, forever |
 | **Class** | Implementation defect — a value of the right shape from the wrong namespace |
-| **Status** | **Open.** Fixed in step 5 |
+| **Status** | **Closed**, Mission 7.4 step 5 |
 | **Date** | 2026-08-19, Mission 7.4 step 5 trace |
 
 `functions/metadata/src/index.ts` resolves a chunk's *true* identity from a join and refuses a document that disagrees: `check('identity.collector_id', document.identity.collector_id, truth.collectorId)`, where `truth.collectorId` is `s.collector_id`. That column holds `users.id`. The client was sending a Firebase uid.
@@ -7079,7 +7079,7 @@ Checked, since one was wrong: `project_id` and `task_id` now come from real `Pro
 | **Backend checks it against** | `s.id` — the `sessions` row's own primary key, generated server-side |
 | **Consequence** | **Every metadata POST would be refused**, independently of A-206 |
 | **Class** | Design gap, not a slip: the value is right for where it is written and wrong for where it is sent |
-| **Status** | **Open.** Resolved in step 5 |
+| **Status** | **Closed**, Mission 7.4 step 5 |
 | **Date** | 2026-08-19, Mission 7.4 step 5 trace |
 
 F5 made these two ids deliberately distinct. `sessions.client_session_id` is the device's UUID, `sessions.id` is the backend's, and the pair plus `UNIQUE (collector_id, client_session_id)` is what makes `POST /v1/tasks/{id}/sessions` idempotent. `SessionRegistrar` exists precisely because *"that `{id}` is **not** the local session UUID this app mints at session start"*.
@@ -7097,3 +7097,76 @@ The two ids are therefore both correct and both necessary: the local one is what
 `SessionRegistrar`'s doc has said since Mission 4.2 that the local and backend session ids are different things, and the metadata document was still built with one and validated against the other. The knowledge existed in one file and the defect in another, with no path between them that any test could traverse — the metadata POST had no reachable caller, because `sessionRegistrarProvider` threw.
 
 This is A-206's shape a second time in one trace: **a field correct with respect to its source, never checked against its destination, and the destination unreachable so nothing complained.** Two instances in the same identity group, found by reading the backend's join rather than by running anything, is the argument for tracing a payload against its validator before the first end-to-end attempt rather than after it.
+
+---
+
+### A-208 — A syntax the SDK parses and the code generator does not
+
+| | |
+|---|---|
+| **Record** | `analysis_options.yaml`; invariant I49 |
+| **Syntax** | Null-aware collection elements — `{'cursor': ?cursor}`, `[?value]` |
+| **`flutter analyze`** | Accepts it, and `use_null_aware_elements` actively **asks** for it |
+| **`build_runner`** | Cannot parse it. **Every** generator then refuses to run |
+| **Status** | **Closed.** The lint is silenced; the two uses are rewritten; I49 records the rule |
+| **Date** | 2026-08-20, Mission 7.4 step 5 |
+
+`build_runner` bundles its own analyzer rather than using the SDK's, and that one is older. Meeting a null-aware element it reports the **file** as having syntax errors, and freezed, `json_serializable` and `isar_generator` all decline — against files unrelated to the one containing the syntax:
+
+```
+[SEVERE] freezed on lib/core/network/vump_api.dart (cached):
+This builder requires Dart inputs without syntax errors.
+```
+
+So the rule is not merely unhelpful here. **Following it breaks the build**, which is why the lint is silenced project-wide rather than suppressed per line.
+
+### The part worth recording is the detection delay
+
+The syntax entered `lib/` in **step 4**, in `VumpApi.getList` and the admin repository. Step 4 then ran `flutter analyze` (clean), the full suite (1123 green), the boundary checks (all five), and committed. Everything was true. Nothing in that verification touches a code generator.
+
+It surfaced in **step 5**, on the first line of the first phase, because adding `backendUserId` to a `@freezed` class needed codegen — and the failure named `vump_api.dart` and `project_task_admin_repository_impl.dart`, two files step 5 had not touched.
+
+**A green verification that cannot fail on a defect is the same shape as A-205**, one step earlier: there, a build check read a stale artefact and would have passed through a broken build. Here, a lint-clean suite passes through a syntax that has already broken the generator for whoever runs it next. Both are checks whose success did not depend on the thing they appeared to be checking.
+
+### Why an invariant and not a comment
+
+Because the cost is paid by a **different mission than the one that incurs it**. A comment in `analysis_options.yaml` is read by someone editing `analysis_options.yaml`; the person who needs the rule is writing a map literal three files away, with a linter that has been told to stay quiet. I49 puts it where the other cross-cutting rules are, and states plainly that nothing enforces it.
+
+The revisit trigger is concrete and outside this project's control: **`build_runner`'s bundled analyzer catching up to the SDK's.** When it does, the `errors:` entry and I49 both come out. Until then the rule holds, and it is the only invariant in the register imposed by a tool rather than by a decision.
+
+---
+
+### A-209 — A-100 is closed, and the port it named could never have been implemented
+
+| | |
+|---|---|
+| **Was** | A-100: `SessionRegistrar` *"owed to whichever mission builds `features/projects_tasks/`"* |
+| **Now** | `SessionRegistrarImpl` in `features/upload/data/`, bound at the composition root |
+| **Status** | **Closed** |
+| **Date** | 2026-08-20, Mission 7.4 step 5 |
+
+The port was declared in Mission 4.2 and `sessionRegistrarProvider` threw for three missions. That is the reason **no chunk has ever reached `uploading` on a device**: constructing the pipeline threw, which is why `UploadDispatcher` holds it behind a function rather than a field, so the throw landed on the first claimable chunk instead of on startup.
+
+### The port could not be implemented as declared, by anyone
+
+`remoteSessionId(String localSessionId)` had to produce a Task id from a local session id, and the only source is `LocalSession.taskId` — owned by `features/recording/`. The nominated implementor, `features/projects_tasks/`, could not reach it under ADR-022 R3. **The owner named in the doc was the one owner structurally incapable of satisfying it.**
+
+F17 had already resolved the underlying problem by putting the Task on the chunk, so the caller holds it by the time it reaches step 1. F32 passes it. That is not a widening of the port's responsibility — it is the port asking for what its caller was given.
+
+### And that moved the implementation
+
+With the Task arriving as a `String`, an implementation needs **nothing** from `features/projects_tasks/`: it posts to a URL and reads an id back, which is what `ChunkUploadApiImpl` beside it already does four times over. So it lives in `features/upload/data/` (F33), and the port's doc — which had said the opposite since Mission 4.2 — is rewritten rather than left contradicting the code.
+
+The port stays in `core/upload/`, because `features/upload/application/` declares the need and may not import `data/` (ADR-022 §5.3).
+
+### One design point that reads as an omission and is not
+
+**Nothing is cached** (F34). The pipeline calls this once per chunk — 38 for a full recording, more with retries — and each call is a real `POST`. That is deliberate twice over.
+
+It costs two Lambda invocations and about four Data API calls against an upload moving 633 MB in 38 parts, which is noise on the critical path.
+
+And `startSession` re-runs `assertAssigned` every time. Chapter 4.8 §3: a removed assignment *"immediately excludes that Task from all future queries, even if the mobile app's local cache hasn't refreshed yet."* **Each registration is therefore a live authorization re-check**, and caching the id — in memory or in a column — would let a Collector whose assignment was revoked mid-session upload the remaining thirty chunks. The repetition is the feature.
+
+### What remains unproven
+
+Everything above is proven against a scripted HTTP adapter. `POST /v1/tasks/{id}/sessions` has never been called by this client against the deployed backend, and the 200-on-repeat path — the one the whole no-caching argument rests on — has never been observed outside the backend's own tests. Both are device-checkpoint items.

@@ -130,6 +130,13 @@ Every architectural invariant in force, with its authority and how it is checked
 | **I46** | `core/queue/` imports no feature | ADR-040 | CI `Architecture boundaries` |
 | **I47** | `core/upload/` imports no feature | ADR-040, ADR-041 | CI `Architecture boundaries` |
 | **I48** | No layer outside `core/network/` names a Dio type — including through `DioClient`'s return values | ADR-007, ADR-041 | CI `Architecture boundaries` (the `dio` rule, now matching directives) |
+| **I49** | No **null-aware collection element** (`{'k': ?value}`, `[?value]`) anywhere in `lib/` or `test/` | Toolchain, A-208 | Nothing, until `build_runner`'s bundled analyzer catches up |
+
+**I49 is the only invariant here imposed by a tool rather than by a decision, and it is the only one whose violation is silent until an unrelated action.** `build_runner` bundles its own analyzer, and that one cannot parse a null-aware collection element. When it meets one, **every generator refuses to run** — freezed, `json_serializable`, `isar_generator` — and reports the failure against files that have nothing to do with the one containing the syntax.
+
+`analysis_options.yaml` sets `use_null_aware_elements: ignore`, so the linter will never *suggest* the syntax. That is most of the protection, and it is why the rule is listed here rather than under "enforced by the analyzer": nothing stops it being written by hand.
+
+**What makes it worth a numbered invariant rather than a code comment:** the detection is delayed by an arbitrary amount of time. A mission that writes the syntax, runs `flutter analyze` and `flutter test`, and never touches a `@freezed` class or an Isar collection will be **completely green**. The cost lands on the next mission that adds a generated field — Mission 7.4 step 5 was that mission, and the syntax had been sitting in `lib/` since step 4, through a full green verification and a commit. Recorded as A-208.
 
 **I2 widened at Mission 3.7 and is enforced again.** It read `isar` only in `core/database/` until Volume 5 Chapter 5.8's three collections were placed in the feature that owns them — a collection cannot be declared without importing the package, so the tables could satisfy the old rule or live with their feature, not both. ADR-039 supersedes ADR-009 on that clause alone and the CI check was widened to match; the job passes. **The rule did not weaken.** The engine, its lifecycle and its migrations are still `core/database/`'s exclusively, the two feature locations are a directory and a filename prefix rather than a layer, and nothing above `data/` may name an Isar type.
 

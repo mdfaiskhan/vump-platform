@@ -182,11 +182,15 @@ class ChunkUploadPipeline {
 
     // ---- Step 1 — Register ---------------------------------------------
     final ChunkRegistration registration;
+    // Declared outside the try because step 4 needs it too: the metadata
+    // document is addressed to THIS id, not to the local one it was assembled
+    // with. A-207.
+    final String remoteSessionId;
     try {
       // The Task rides on the chunk (F17/B3), read from the LocalSession row
       // at claim time. A null is refused inside the registrar as terminal —
       // Chapter 5.13 §1's device-side class — rather than substituted.
-      final String remoteSessionId = await _registrar.remoteSessionId(
+      remoteSessionId = await _registrar.remoteSessionId(
         localSessionId: chunk.sessionId,
         taskId: chunk.taskId,
         startedAt: chunk.sessionStartedAt,
@@ -246,9 +250,19 @@ class ChunkUploadPipeline {
     // 500, so a client that gets this wrong is told why — but it is still
     // wrong, and the fix belongs here rather than in a message.
     try {
+      // The document carries the LOCAL session id, because it was assembled at
+      // chunk finalization — possibly offline, hours before any backend
+      // session existed. `functions/metadata/` joins on `sessions.id` and
+      // refuses a document that disagrees, so without this rewrite every
+      // metadata POST is refused, for every chunk. A-207.
+      //
+      // This is the only place that holds both ids: the local one the chunk
+      // was claimed with, and the remote one step 1 just returned. Nothing is
+      // persisted — the stored row keeps the local id, which is what every
+      // device-side lookup joins on and what a retry re-reads.
       await _api.postMetadata(
         chunkId: chunk.chunkId,
-        document: document.toJson(),
+        document: document.withRemoteSessionId(remoteSessionId).toJson(),
       );
       await _api.confirmStatus(
         chunkId: chunk.chunkId,
