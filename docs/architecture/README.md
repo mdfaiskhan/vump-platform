@@ -245,7 +245,7 @@ forecloses, and what must now be maintained.
 
 ## Current State
 
-`decisions/` holds ADR-001 through ADR-046.
+`decisions/` holds ADR-001 through ADR-050.
 
 All are Accepted and therefore binding, except ADR-021 (**Superseded** by ADR-038) and ADR-009 (**Superseded** by ADR-039).
 
@@ -297,6 +297,14 @@ All are Accepted and therefore binding, except ADR-021 (**Superseded** by ADR-03
 | ADR-044 | Database access via the RDS Data API |
 | ADR-045 | Backend dependency and toolchain standards |
 | ADR-046 | Database migrations |
+| ADR-047 | Build flavors select the environment |
+| ADR-048 | Request authorizer for caller resolution |
+| ADR-049 | Credential mechanism for CI and humans |
+| ADR-050 | Device identity is install-scoped and self-minted |
+
+ADR-047 through ADR-049 were accepted during Missions 6.4, 7.2 and 7.3 and reached this table late — Mission 7.4 added the four rows together. The table is the index a reader scans before starting work, so a decision missing from it is binding and invisible at the same time, which is the failure this document exists to prevent.
+
+ADR-050 closes a deferral rather than opening an argument, in the same shape as ADR-043 and ADR-044 below: Volume 5 Chapter 5.7 §2 asked for a *"cached, stable"* device identifier without saying what it is, Mission 3 recorded the gap, and Mission 7.4 is the first mission where a real value has a backend to reach.
 
 ADR-043 and ADR-044 both close deferrals rather than opening arguments. ADR-043 discharges Volume 4, Chapter 4.9 §5's infrastructure-as-code choice, which was deferred to Volume 7 and never made there. ADR-044 resolves a contradiction between Volume 4, Chapter 4.9 §2 and Volume 8, Chapter 8.4 §1 over how a Lambda function reaches Aurora — the same shape as ADR-015, and discovered the same way, by an implementation that could not start without an answer.
 

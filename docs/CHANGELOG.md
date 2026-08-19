@@ -40,6 +40,10 @@ Mission 4.8's security review found it, by reading `git log` against this file r
 
 ### Added
 
+- **2026-08-19** — **Chunks now carry a real Collector, device id and device model.** Three of `ChunkMetadata`'s identity fields have returned `MetadataIdentity.unsourced` since Mission 3.8, because there was no backend to send them to and no decision about what to send. All three are now supplied by the composition root: `collector_id` from the auth notifier (watched, not read — a read would freeze the unauthenticated state that holds while `_restoreSession` runs, and every chunk of the session would carry a blank Collector), `device_id` from a new install-scoped store, `device_model` from a new platform channel. ADR-050. Mission 7.4 step 3.
+
+  **`project_id` and `task_id` are still unsourced**, so A-068's Guard 1 still refuses every chunk and nothing uploads end to end yet. They come from the selected Task, and the repository that supplies one is step 4.
+
 - **2026-08-19** — **All thirteen stubbed API routes are implemented.** Projects, Tasks and assignments; session registration and listing; chunk registration, status, and metadata read/write. Every `NOT_IMPLEMENTED` refusal is gone, so all fifteen of Volume 4 Chapter 4.6's endpoints now have real behaviour. Mission 7.3.
 
   **Migration 0010 is what made eight of them possible.** Migration 0007 was written against Chapter 4.6's *route list* and not Chapter 4.8 §3's *scope filters* — and a scope filter is a join, which needs `SELECT` on every table in it. BR-19's *"Collector: only Projects with an assigned Task"* was not merely unimplemented but unimplementable, and A-119 had recorded the scope difference as *"real and untestable until Mission 7"* without knowing that. Chapter 5.14 §1's deterministic S3 key was in the same state: three of its five components were unreachable by the role Chapter 4.10 §2 assigns to compute it.
@@ -188,6 +192,10 @@ Mission 4.8's security review found it, by reading `git log` against this file r
 - **2026-08-15** — Camera module, capability ladder and fixed capture specification (BR-01/BR-02). Mission 3.1. (`4c7f3d1`)
 
 ### Security
+
+- **2026-08-19** — **The device identifier is install-scoped and self-minted, and `ANDROID_ID` was rejected.** A v4 UUID generated on first launch and persisted, rather than the OS identifier the platform offers. Two grounds: `ANDROID_ID` resets on factory reset, so it does not provide the stability Volume 5 Chapter 5.7 §2 asks for, and it is an OS-scoped identifier that outlives the app, carrying correlation surface this project has no use for. The app needs to answer one question — *"did these chunks come from the same install?"* — and a self-minted UUID answers exactly that and nothing else.
+
+  **It is stored in `shared_preferences`, not the Keychain**, and that is deliberate rather than an oversight. ADR-008 scopes `flutter_secure_storage` to secrets; a device id travels in plaintext metadata to an unencrypted column, so secure storage would imply a confidentiality property the value does not have anywhere else in its life. The stated cost: a reinstall mints a new id. Nothing treats `device_id` as a key. ADR-050, A-196. Mission 7.4 step 3.
 
 - **2026-08-19** — **The Fork 1 seam validated nothing, and three records said it did.** `chunks-verify` gains `lambda:InvokeFunction` on one ARN so it can ask `chunks-upload` to finalise a multipart upload — `CompleteMultipartUpload` needs `s3:PutObject`, and A-143 keeps that away from the role that downloads evidentiary footage. The IAM policy's own comment claimed the invoked function *"validates the chunk before acting"*. **It did not**: the key and upload id went straight from the invoke payload to S3.
 

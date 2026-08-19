@@ -6837,3 +6837,50 @@ Three tests cover it: a foreign key, a foreign upload id, and an unknown chunk i
 ### The lesson, which is not "add validation"
 
 The IAM boundary was reviewed carefully and the handler was not. A capability's real extent is the **intersection** of what IAM permits and what the invoked code does with it, and reviewing one half thoroughly reads as diligence while proving nothing about the other. This is Mission 4.9 §4's pattern again — *"reviewed carefully, read correctly, and committed without once being run where it would actually have to work"* — in the security-review medium.
+
+---
+
+### A-196 — Chapter 5.7 §2's device identifier, decided at last
+
+| | |
+|---|---|
+| **Record** | Volume 5, Chapter 5.7 §2 |
+| **Says** | The device identifier is *"cached, stable"* |
+| **Left open** | What it **is**. Mission 3 flagged the gap and bound `MetadataIdentity.unsourced` behind it for four missions |
+| **Now** | A v4 UUID, minted on first access, persisted in `shared_preferences`, scoped to the **install** rather than to the device |
+| **Recorded in** | ADR-050 |
+| **Date** | 2026-08-19, Mission 7.4 step 3 |
+
+The full argument is in ADR-050 and is not repeated here. What belongs in the register is the shape of the gap, because it is a recurring one: **a spec adjective with no referent.** *"Cached, stable"* reads like a requirement and is satisfiable by at least two things that behave very differently under a factory reset, and nothing in Volume 5 chooses between them. Mission 3 was right to leave it open and right to make the absence loud — `unsourced` plus A-068's Guard 1 meant four missions of recording could not silently upload unattributed footage while the question sat unanswered.
+
+The honest cost is recorded rather than buried: **a reinstall mints a new device id.** `ANDROID_ID` would not have avoided that — it resets on factory reset — so the choice was between two identifiers that both break, one of which also carries OS-wide correlation surface.
+
+### A-197 — F23's move was half a move, and that was the point
+
+| | |
+|---|---|
+| **Ruling** | *"Move `RandomUuidGenerator` to `core/`, don't duplicate"* — Mission 7.4 Part 6 |
+| **Done** | The **minting** moved to `core/identity/uuid_v4.dart`. The **class** stayed in `features/recording/data/` as an adapter over it |
+| **Why not the whole class** | `RandomUuidGenerator implements SessionIdGenerator, ChunkIdGenerator` — both `features/recording/domain/` contracts. A `core/` class implementing them would be `core/` → `features/` |
+| **Date** | 2026-08-19, Mission 7.4 step 3 |
+
+ADR-022 R3 is usually cited for the sideways import, and invariant I41 forbids `core/` → `features/` separately, but the two are the same rule in practice: **a shared module may not name the thing that consumes it.** Moving the class wholesale would have satisfied the letter of the ruling and broken the constraint the ruling exists to serve.
+
+So the source is shared — one implementation of RFC 4122 §4.4, which is what *"don't duplicate"* asks for — and the ports stay where their callers are. Both `ChunkIdGenerator` and `SessionIdGenerator` still resolve to the same instance at the composition root, so the property the ruling was protecting is intact.
+
+Recorded because the ruling and the implementation do not look identical on inspection, and a reader finding the class still in `features/` should find the reason here rather than concluding the ruling was ignored.
+
+### A-198 — `core/identity/` takes the fifth `shared_preferences` grant
+
+| | |
+|---|---|
+| **Record** | `.github/workflows/ci.yml`, the `Architecture boundaries` job |
+| **Was** | Four owners: `features/recording/data/`, `main.dart`, `main_cleanup_probe.dart`, and one named onboarding file |
+| **Now** | Plus `lib/core/identity/device_id_store.dart` |
+| **Date** | 2026-08-19, Mission 7.4 step 3 |
+
+Granted per-**file**, not per-directory, on the precedent A-067 set and ADR-039 states: *"the file that may import [the package] announces it in its own filename … greppable and self-declaring instead of a directory anyone can drop a file into."* `core/identity/` also holds a platform channel and two contracts, none of which has any business reaching a key-value store, so a directory grant would have handed the permission to three files that must not have it and to every file added there afterwards.
+
+`core/` owning a confined plugin is not itself new — `core/storage/` owns `flutter_secure_storage`, `core/network/` owns `dio`, `core/database/` owns `isar`. What is new is that this package now has an owner **above** the feature layer, which follows from ADR-022 R3: a device id is needed by two features and belongs to neither.
+
+**The rule was verified non-vacuous before this entry was written.** The violation was found by running the check locally *after* the code was written and passing analysis and tests — the import was already in place, the suite was green, and only the boundary job caught it. That is the job doing exactly what Mission 4.3's open item 41 asked of it.
