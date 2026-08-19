@@ -30,6 +30,21 @@ export interface BackendConfig {
   readonly databaseName: string;
   /** Firebase project id. Public — ADR-016 and ADR-010 both record why. */
   readonly firebaseProjectId: string;
+  /**
+   * The `chunks-upload` function's name, for the Fork 1 seam.
+   *
+   * `chunks-verify` invokes it to finalise a multipart upload, because
+   * `CompleteMultipartUpload` needs `s3:PutObject` and A-143 keeps that away
+   * from the role that reads footage. A name rather than an ARN: the ARN is
+   * derivable and the name is what `InvokeCommand` takes.
+   *
+   * Supplied to every function rather than one, because `lambda_environment` is
+   * shared and a per-function variable would need the same seam in Terraform
+   * that `DATABASE_CREDENTIALS_SECRET_ARN` already has. It is not a secret and
+   * confers nothing without the matching `lambda:InvokeFunction` grant, which
+   * only `chunks-verify` holds.
+   */
+  readonly uploadFunctionName: string;
 }
 
 function required(name: string): string {
@@ -77,6 +92,7 @@ export function loadConfig(): BackendConfig {
     databaseCredentialsSecretArn: required('DATABASE_CREDENTIALS_SECRET_ARN'),
     databaseName: required('DATABASE_NAME'),
     firebaseProjectId: required('FIREBASE_PROJECT_ID'),
+    uploadFunctionName: required('UPLOAD_FUNCTION_NAME'),
   };
   return cached;
 }

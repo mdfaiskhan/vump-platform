@@ -129,6 +129,22 @@ export class ApiError extends Error {
     return new ApiError('RESOURCE_NOT_FOUND', `${what} was not found.`, 404);
   }
 
+  /**
+   * 409. **A plain retry does not reach this** — A-190.
+   *
+   * Chapter 5.10 §3 makes a repeated registration *"safe to repeat"*, so the
+   * same `chunk_id` with the same session, sequence index and checksum succeeds
+   * and returns fresh presigned URLs. This is for the same id claiming
+   * different facts, which cannot be honoured either way round.
+   */
+  static chunkAlreadyRegistered(): ApiError {
+    return new ApiError(
+      'CHUNK_ALREADY_REGISTERED',
+      'This chunk_id is already registered with a different session, sequence index or checksum.',
+      409,
+    );
+  }
+
   /** 409, because the request is well-formed and the state is what refuses it. */
   static sessionAlreadyRegistered(): ApiError {
     return new ApiError(
