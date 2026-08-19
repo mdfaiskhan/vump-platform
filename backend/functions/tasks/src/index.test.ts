@@ -31,6 +31,7 @@ const ENV = {
   DATABASE_CREDENTIALS_SECRET_ARN: 'arn:aws:secretsmanager:ap-south-1:000000000000:secret:x',
   DATABASE_NAME: 'vump_dev',
   FIREBASE_PROJECT_ID: 'vump-platform-f86af',
+  UPLOAD_FUNCTION_NAME: 'vump-dev-chunks-upload',
 };
 
 const ORG = '00000000-0000-4000-8000-000000000001';
