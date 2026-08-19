@@ -66,12 +66,16 @@ void main() {
     find.ancestor(of: find.text(label), matching: find.byType(Card)).first,
   );
 
-  group('active projects — archivedAt == null', () {
-    testWidgets('archived Projects are excluded from the count', (
+  group('active projects — the tile is GONE, F27', () {
+    testWidgets('no Active projects tile is rendered, at any Project count', (
       WidgetTester tester,
     ) async {
-      // "Active" is a reading, not a quotation: no chapter defines it, and
-      // archived_at is the only activity signal Ch. 4.4 §2 gives a Project.
+      // It counted `projectsProvider`'s Projects until Mission 7.4 step 4.
+      // F20 paginated that provider, so the count silently became "Projects on
+      // the pages loaded so far" — and this screen's existing rule for an
+      // aggregate it cannot answer is to omit the tile rather than approximate
+      // it. Two of FR-PT-01's four were already absent on those terms; this is
+      // the third. A-200.
       await pumpDashboard(
         tester,
         projects: <Project>[
@@ -81,16 +85,18 @@ void main() {
         ],
       );
 
-      expect(find.text('Active projects'), findsOneWidget);
-      expect(find.text('2'), findsWidgets);
+      expect(find.text('Active projects'), findsNothing);
     });
 
-    testWidgets('no Projects reads zero, which is a real answer', (
+    testWidgets('and none with no Projects either', (
       WidgetTester tester,
     ) async {
+      // Asserted separately because "absent because there are none" and
+      // "absent because the tile was removed" would look identical from the
+      // test above alone.
       await pumpDashboard(tester);
 
-      expect(find.text('Active projects'), findsOneWidget);
+      expect(find.text('Active projects'), findsNothing);
     });
   });
 

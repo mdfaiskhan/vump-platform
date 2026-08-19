@@ -69,11 +69,12 @@ class _DashboardBody extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.all(AppSpacing.lg),
       children: <Widget>[
-        _StatCard(
-          label: 'Active projects',
-          value: '${summary.activeProjectCount}',
-        ),
-        const SizedBox(height: AppSpacing.md),
+        // "Active projects" was the first tile until Mission 7.4 step 4. F20
+        // paginated `projectsProvider`, so the count it was reading became
+        // "projects on the pages loaded so far" — and this screen's existing
+        // rule for an aggregate it cannot answer is to omit the tile, not to
+        // approximate it. Two of FR-PT-01's four were already absent on those
+        // terms; this is the third. A-200.
         _StatCard(label: 'Waiting to upload', value: '${summary.queuedChunks}'),
         const SizedBox(height: AppSpacing.md),
         _StatCard(label: 'Uploading', value: '${summary.uploadingChunks}'),
