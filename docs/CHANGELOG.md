@@ -40,6 +40,16 @@ Mission 4.8's security review found it, by reading `git log` against this file r
 
 ### Added
 
+- **2026-08-19** — **The mobile app reads and writes the real backend for Projects and Tasks.** `ProjectTaskRepositoryImpl` and `ProjectTaskAdminRepositoryImpl` call Volume 4 Chapter 4.6 §3's seven routes, and `main.dart` binds them in place of the two fakes it has bound since Mission 5.1.1. **Volume 11 Chapter 11.1's M8 gate — *"no fake/mock repository remains wired into a release build"* — is met.** The fake classes survive as test doubles only; seven test files drive screens through them, and their removal conditions are rewritten to say what actually happened rather than being left to read later as unmet. A-204. Mission 7.4 step 4.
+
+- **2026-08-19** — **Cursor pagination reaches the client, closing A-184.** `GET /v1/projects` and `GET /v1/projects/{id}/tasks` have returned at most one page plus a `meta.nextCursor` since Mission 7.3, and the client discarded `meta` entirely — an org with 51 Projects rendered 50, with nothing on either side reporting the truncation. Four screens now offer the next page, and the repositories return a `PagedResult` that can say *"and there is more"*. ADR-051, A-199.
+
+  **`VumpApi` could not have read a list at all**, which A-184 did not know: a list route's `data` is a JSON array and `_unwrap` required an object, so the first call would have been refused rather than truncated. `getList` is new and `get`/`post`/`patch` are untouched, because those three have callers already exercised against the real backend.
+
+  **The cursor stops at the notifier.** Repositories return a page; the notifiers hold `nextCursor` privately and still publish a plain `List`, so none of the seven consumers of `projectsProvider` and `tasksProvider` changed type.
+
+- **2026-08-19** — **"Load more" is an explicit control rather than infinite scroll**, and a failed page becomes a retry on that row rather than an error over the whole list. Appending must not blank a list of 200 while the 201st arrives, and must not discard rows a Collector is reading because *more* of them could not be fetched.
+
 - **2026-08-19** — **Chunks now carry a real Collector, device id and device model.** Three of `ChunkMetadata`'s identity fields have returned `MetadataIdentity.unsourced` since Mission 3.8, because there was no backend to send them to and no decision about what to send. All three are now supplied by the composition root: `collector_id` from the auth notifier (watched, not read — a read would freeze the unauthenticated state that holds while `_restoreSession` runs, and every chunk of the session would carry a blank Collector), `device_id` from a new install-scoped store, `device_model` from a new platform channel. ADR-050. Mission 7.4 step 3.
 
   **`project_id` and `task_id` are still unsourced**, so A-068's Guard 1 still refuses every chunk and nothing uploads end to end yet. They come from the selected Task, and the repository that supplies one is step 4.
@@ -339,6 +349,14 @@ Mission 4.8's security review found it, by reading `git log` against this file r
 - **2026-08-15** — Per-device wide-angle eligibility is cached in `shared_preferences` — a tier name and two version strings. No secret, no credential, and no identifier of any person or device; ADR-008 governs secrets and this holds none. Mission 3.1, A-057. (`4c7f3d1`)
 
 ### Fixed
+
+- **2026-08-19** — **The app could have told a Collector they lack access to their own assigned Task.** C-06 Task Detail selects its Task out of the Project's list, because Chapter 4.6 §3 has no `GET /v1/tasks/{id}`, and renders *"This Task isn't available to you"* when it is absent — copy written to mean BR-19. Pagination at the backend's default page size of 50 would have produced that message for the 51st Task in a Project: **a false statement about authorization, not a truncated list.** Fixed by requesting the backend's `MAX_LIMIT` of 200. The residual gap above 200 is A-201, with a revisit trigger rather than a date. Mission 7.4 step 4.
+
+- **2026-08-19** — **A stale link no longer tells a Collector to check their connection.** `FakeProjectTaskRepository` answered an unknown Project with an empty list, so *"couldn't be loaded — check your connection"* covered everything that could go wrong. The real backend answers A-186's uniform `404 RESOURCE_NOT_FOUND` for a Project outside the caller's reach, which is not a connection problem, and pointing a Collector at a network that is working is Chapter 2.9 §2's named-cause rule failing in the direction hardest to notice. C-05, C-06 and A-05 now distinguish the two. The invisible-Project copy claims neither *"not assigned"* nor *"does not exist"*, since BR-19 makes them deliberately indistinguishable.
+
+- **2026-08-19** — **Two live `vumpApiProvider` declarations, now one.** `core/network/` and `features/upload/application/` each declared one, so which `VumpApi` a file received depended on which it imported. Harmless in effect — the class holds only its client — and that is why it survived two missions with both suites green. Found by needing a third consumer, which under ADR-022 R3 cannot import the `features/upload/` one at all. A-203.
+
+- **2026-08-19** — **C-03's "Active projects" tile is removed.** It counted `projectsProvider`, which after pagination holds the pages loaded rather than every Project, so the number silently became *"active projects on page one"*. There is no total in Chapter 4.6 §1's envelope and walking every page to render one tile is unbounded, so the tile is dropped on the precedent this screen already set for two other FR-PT-01 aggregates: an absent tile beats a false number. **FR-PT-01 is now one-quarter rendered**, which is a product gap recorded as open item 111 rather than made to look smaller. A-200.
 
 - **2026-08-19** — **Nine applied migrations could never be re-run.** The runner hashes the bytes on disk, and `core.autocrlf` had materialised CRLF after 0001–0009 were applied from LF files — invalidating every stored checksum at once, without changing a character of SQL. `git diff` could never show it, because git compares normalised content. A `.gitattributes` entry pins `*.sql` to LF. Mission 7.3.
 

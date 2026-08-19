@@ -245,7 +245,7 @@ forecloses, and what must now be maintained.
 
 ## Current State
 
-`decisions/` holds ADR-001 through ADR-050.
+`decisions/` holds ADR-001 through ADR-051.
 
 All are Accepted and therefore binding, except ADR-021 (**Superseded** by ADR-038) and ADR-009 (**Superseded** by ADR-039).
 
@@ -301,8 +301,11 @@ All are Accepted and therefore binding, except ADR-021 (**Superseded** by ADR-03
 | ADR-048 | Request authorizer for caller resolution |
 | ADR-049 | Credential mechanism for CI and humans |
 | ADR-050 | Device identity is install-scoped and self-minted |
+| ADR-051 | Client-side cursor pagination stops at the notifier |
 
 ADR-047 through ADR-049 were accepted during Missions 6.4, 7.2 and 7.3 and reached this table late — Mission 7.4 added the four rows together. The table is the index a reader scans before starting work, so a decision missing from it is binding and invisible at the same time, which is the failure this document exists to prevent.
+
+ADR-051 discharges A-184 and settles the client half of a contract Chapter 4.6 §1 fixed in Mission 6.2. Its load-bearing paragraph is not the layering — it is that the page size is the backend's maximum rather than its default, because three screens select a single row out of a paginated list and a row past the boundary makes the app state a false authorization fact.
 
 ADR-050 closes a deferral rather than opening an argument, in the same shape as ADR-043 and ADR-044 below: Volume 5 Chapter 5.7 §2 asked for a *"cached, stable"* device identifier without saying what it is, Mission 3 recorded the gap, and Mission 7.4 is the first mission where a real value has a backend to reach.
 

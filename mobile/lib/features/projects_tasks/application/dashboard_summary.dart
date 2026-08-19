@@ -28,7 +28,7 @@ import 'package:mobile/core/queue/queued_chunk.dart';
 ///   third display convention for a screen that already has exactly one rule
 ///   for an unanswerable aggregate — omit it — so the tile is dropped on that
 ///   existing precedent rather than kept as a number that is quietly wrong.
-///   Open item 90, and A-200.
+///   Open item 111, and A-200.
 ///
 /// - **In-progress sessions.** FR-SES-02's session status lives on
 ///   `LocalSession.status`, owned by `features/recording/`, and no `core/`

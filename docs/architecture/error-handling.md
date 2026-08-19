@@ -178,7 +178,15 @@ Four properties are required of every boundary, and all four are visible above:
 
 ### 8. Network errors
 
-`NetworkException` carries one field beyond the base: **`statusCode`**, held because *"retry and refresh policies are written against it, and reconstructing it from an `ErrorCode` would be lossy"*. It is null for transport failures, where no response was ever received.
+`NetworkException` carries two fields beyond the base.
+
+**`statusCode`**, held because *"retry and refresh policies are written against it, and reconstructing it from an `ErrorCode` would be lossy"*. Null for transport failures, where no response was ever received.
+
+**`backendCode`** — added by Mission 7.4, F29. Volume 4 Chapter 4.6 §1 requires that errors *"always carry a specific code, never a bare HTTP status alone, mirroring Chapter 2.9's named-cause-and-fix rule at the API layer"*, and until 7.4 the client honoured that **in the message string only**: `ErrorInterceptor` classifies by status, and `VumpApi` interpolated the envelope's code into the prose. A caller needing to tell `RESOURCE_NOT_FOUND` from `REQUEST_INVALID_CURSOR` — a 404 and a 400 that both arrive with a generic `ErrorCode` — had to match on English.
+
+It is **optional and additive**. Null for every transport failure, for every response carrying no envelope, for a non-Vump host such as S3, and for every caller that does not ask. The status-derived `errorCode` is unchanged, so nothing that branched on it before behaves differently.
+
+It is a `String` rather than an enum, deliberately. The backend's code set is declared in `errors.ts` and grows there; mirroring it as a Dart enum would make every new backend code a client release, and an unknown value would have to collapse to `unknown` — losing exactly the specificity the field exists to preserve. The one place it is read so far is `features/projects_tasks/`'s `classifyReadFailure`, which distinguishes A-186's *"absent, not forbidden"* 404 from a lost connection.
 
 **The mapping is complete and lives in one place** — `ErrorInterceptor.mapToNetworkException`, exposed as a static so it is testable without a live client:
 
@@ -321,7 +329,7 @@ All four Dio timeout types collapse to a single `NETWORK_TIMEOUT` code, with the
 ```text
 Exception  (dart:core, implemented not extended)
 └── AppException                        abstract — errorCode, message, cause, stackTrace
-    ├── NetworkException                + statusCode
+    ├── NetworkException                + statusCode, backendCode
     ├── AuthenticationException
     ├── StorageException
     ├── ValidationException             + field
@@ -330,7 +338,7 @@ Exception  (dart:core, implemented not extended)
 
 **`AppException implements Exception`** rather than extending it — `Exception` is an interface in Dart with no state to inherit.
 
-**Adding a subclass is permitted and expected**; that is why the base is abstract rather than sealed. The bar: a new subclass is justified only when it carries a **field** the base cannot, or when its consumer differs from every existing type's. `NetworkException.statusCode` and `ValidationException.field` are the two cases that met it. A new subclass that adds no field and no distinct consumer should be an `ErrorCode` case on an existing type instead.
+**Adding a subclass is permitted and expected**; that is why the base is abstract rather than sealed. The bar: a new subclass is justified only when it carries a **field** the base cannot, or when its consumer differs from every existing type's. `NetworkException.statusCode` and `ValidationException.field` are the two cases that met it, and `NetworkException.backendCode` is a third field on an existing subclass rather than a fourth type — it belongs to the same consumer for the same reason `statusCode` does. A new subclass that adds no field and no distinct consumer should be an `ErrorCode` case on an existing type instead.
 
 **There is no parallel `Failure` hierarchy, and there must not be** (§2, ADR-023 §3, A-035).
 
@@ -354,7 +362,7 @@ Exception  (dart:core, implemented not extended)
 
 `Failure` implements `==` and `hashCode` over both fields, so it is comparable in a test and usable as a value in state. `AppException` does not — an exception is an event, not a value, and two failures of the same kind are equal while two exceptions are distinct occurrences.
 
-**`toString()` is for logs and is composed, not overridden away.** `AppException.toString()` emits `Type(CODE): message | cause: …`; subclasses append their own field — `NetworkException` appends `| status: 404`, `ValidationException` appends `| field: email`. A subclass that adds a field extends the base's output rather than replacing it.
+**`toString()` is for logs and is composed, not overridden away.** `AppException.toString()` emits `Type(CODE): message | cause: …`; subclasses append their own field — `NetworkException` appends `| status: 404` and, when it has one, `| code: RESOURCE_NOT_FOUND`; `ValidationException` appends `| field: email`. A subclass that adds a field extends the base's output rather than replacing it.
 
 ### 19. Error codes
 
