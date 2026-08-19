@@ -12,12 +12,24 @@ part of 'recording_session.dart';
 T _$identity<T>(T value) => value;
 
 final _privateConstructorUsedError = UnsupportedError(
-    'It seems like you constructed your class using `MyClass._()`. This constructor is only meant to be used by freezed and you are not supposed to need it nor use it.\nPlease check the documentation here for more information: https://github.com/rrousselGit/freezed#adding-getters-and-methods-to-our-models');
+  'It seems like you constructed your class using `MyClass._()`. This constructor is only meant to be used by freezed and you are not supposed to need it nor use it.\nPlease check the documentation here for more information: https://github.com/rrousselGit/freezed#adding-getters-and-methods-to-our-models',
+);
 
 /// @nodoc
 mixin _$RecordingSession {
   /// The UUID generated once at session start (Chapter 5.14 §3).
   String get sessionId => throw _privateConstructorUsedError;
+
+  /// The Task this session records against, and its Project.
+  ///
+  /// Nullable because a session can be started without a selection —
+  /// `PlatformTaskContext` then reports both as `MetadataIdentity.unsourced`
+  /// and A-068's Guard 1 refuses the chunk at upload. Carried on the session
+  /// rather than read ambiently at finalization so that every chunk of one
+  /// recording is attributed to the same Task, even if the selection changes
+  /// underneath. Mission 7.4, F38.
+  String? get taskId => throw _privateConstructorUsedError;
+  String? get projectId => throw _privateConstructorUsedError;
 
   /// The wide-angle factor for every chunk in this session — 0.5 or 0.6.
   double get zoomFactor => throw _privateConstructorUsedError;
@@ -33,10 +45,17 @@ mixin _$RecordingSession {
 /// @nodoc
 abstract class $RecordingSessionCopyWith<$Res> {
   factory $RecordingSessionCopyWith(
-          RecordingSession value, $Res Function(RecordingSession) then) =
-      _$RecordingSessionCopyWithImpl<$Res, RecordingSession>;
+    RecordingSession value,
+    $Res Function(RecordingSession) then,
+  ) = _$RecordingSessionCopyWithImpl<$Res, RecordingSession>;
   @useResult
-  $Res call({String sessionId, double zoomFactor, DateTime startedAt});
+  $Res call({
+    String sessionId,
+    String? taskId,
+    String? projectId,
+    double zoomFactor,
+    DateTime startedAt,
+  });
 }
 
 /// @nodoc
@@ -53,80 +72,129 @@ class _$RecordingSessionCopyWithImpl<$Res, $Val extends RecordingSession>
   @override
   $Res call({
     Object? sessionId = null,
+    Object? taskId = freezed,
+    Object? projectId = freezed,
     Object? zoomFactor = null,
     Object? startedAt = null,
   }) {
-    return _then(_value.copyWith(
-      sessionId: null == sessionId
-          ? _value.sessionId
-          : sessionId // ignore: cast_nullable_to_non_nullable
-              as String,
-      zoomFactor: null == zoomFactor
-          ? _value.zoomFactor
-          : zoomFactor // ignore: cast_nullable_to_non_nullable
-              as double,
-      startedAt: null == startedAt
-          ? _value.startedAt
-          : startedAt // ignore: cast_nullable_to_non_nullable
-              as DateTime,
-    ) as $Val);
+    return _then(
+      _value.copyWith(
+            sessionId: null == sessionId
+                ? _value.sessionId
+                : sessionId // ignore: cast_nullable_to_non_nullable
+                      as String,
+            taskId: freezed == taskId
+                ? _value.taskId
+                : taskId // ignore: cast_nullable_to_non_nullable
+                      as String?,
+            projectId: freezed == projectId
+                ? _value.projectId
+                : projectId // ignore: cast_nullable_to_non_nullable
+                      as String?,
+            zoomFactor: null == zoomFactor
+                ? _value.zoomFactor
+                : zoomFactor // ignore: cast_nullable_to_non_nullable
+                      as double,
+            startedAt: null == startedAt
+                ? _value.startedAt
+                : startedAt // ignore: cast_nullable_to_non_nullable
+                      as DateTime,
+          )
+          as $Val,
+    );
   }
 }
 
 /// @nodoc
 abstract class _$$RecordingSessionImplCopyWith<$Res>
     implements $RecordingSessionCopyWith<$Res> {
-  factory _$$RecordingSessionImplCopyWith(_$RecordingSessionImpl value,
-          $Res Function(_$RecordingSessionImpl) then) =
-      __$$RecordingSessionImplCopyWithImpl<$Res>;
+  factory _$$RecordingSessionImplCopyWith(
+    _$RecordingSessionImpl value,
+    $Res Function(_$RecordingSessionImpl) then,
+  ) = __$$RecordingSessionImplCopyWithImpl<$Res>;
   @override
   @useResult
-  $Res call({String sessionId, double zoomFactor, DateTime startedAt});
+  $Res call({
+    String sessionId,
+    String? taskId,
+    String? projectId,
+    double zoomFactor,
+    DateTime startedAt,
+  });
 }
 
 /// @nodoc
 class __$$RecordingSessionImplCopyWithImpl<$Res>
     extends _$RecordingSessionCopyWithImpl<$Res, _$RecordingSessionImpl>
     implements _$$RecordingSessionImplCopyWith<$Res> {
-  __$$RecordingSessionImplCopyWithImpl(_$RecordingSessionImpl _value,
-      $Res Function(_$RecordingSessionImpl) _then)
-      : super(_value, _then);
+  __$$RecordingSessionImplCopyWithImpl(
+    _$RecordingSessionImpl _value,
+    $Res Function(_$RecordingSessionImpl) _then,
+  ) : super(_value, _then);
 
   @pragma('vm:prefer-inline')
   @override
   $Res call({
     Object? sessionId = null,
+    Object? taskId = freezed,
+    Object? projectId = freezed,
     Object? zoomFactor = null,
     Object? startedAt = null,
   }) {
-    return _then(_$RecordingSessionImpl(
-      sessionId: null == sessionId
-          ? _value.sessionId
-          : sessionId // ignore: cast_nullable_to_non_nullable
-              as String,
-      zoomFactor: null == zoomFactor
-          ? _value.zoomFactor
-          : zoomFactor // ignore: cast_nullable_to_non_nullable
-              as double,
-      startedAt: null == startedAt
-          ? _value.startedAt
-          : startedAt // ignore: cast_nullable_to_non_nullable
-              as DateTime,
-    ));
+    return _then(
+      _$RecordingSessionImpl(
+        sessionId: null == sessionId
+            ? _value.sessionId
+            : sessionId // ignore: cast_nullable_to_non_nullable
+                  as String,
+        taskId: freezed == taskId
+            ? _value.taskId
+            : taskId // ignore: cast_nullable_to_non_nullable
+                  as String?,
+        projectId: freezed == projectId
+            ? _value.projectId
+            : projectId // ignore: cast_nullable_to_non_nullable
+                  as String?,
+        zoomFactor: null == zoomFactor
+            ? _value.zoomFactor
+            : zoomFactor // ignore: cast_nullable_to_non_nullable
+                  as double,
+        startedAt: null == startedAt
+            ? _value.startedAt
+            : startedAt // ignore: cast_nullable_to_non_nullable
+                  as DateTime,
+      ),
+    );
   }
 }
 
 /// @nodoc
 
 class _$RecordingSessionImpl implements _RecordingSession {
-  const _$RecordingSessionImpl(
-      {required this.sessionId,
-      required this.zoomFactor,
-      required this.startedAt});
+  const _$RecordingSessionImpl({
+    required this.sessionId,
+    this.taskId,
+    this.projectId,
+    required this.zoomFactor,
+    required this.startedAt,
+  });
 
   /// The UUID generated once at session start (Chapter 5.14 §3).
   @override
   final String sessionId;
+
+  /// The Task this session records against, and its Project.
+  ///
+  /// Nullable because a session can be started without a selection —
+  /// `PlatformTaskContext` then reports both as `MetadataIdentity.unsourced`
+  /// and A-068's Guard 1 refuses the chunk at upload. Carried on the session
+  /// rather than read ambiently at finalization so that every chunk of one
+  /// recording is attributed to the same Task, even if the selection changes
+  /// underneath. Mission 7.4, F38.
+  @override
+  final String? taskId;
+  @override
+  final String? projectId;
 
   /// The wide-angle factor for every chunk in this session — 0.5 or 0.6.
   @override
@@ -138,7 +206,7 @@ class _$RecordingSessionImpl implements _RecordingSession {
 
   @override
   String toString() {
-    return 'RecordingSession(sessionId: $sessionId, zoomFactor: $zoomFactor, startedAt: $startedAt)';
+    return 'RecordingSession(sessionId: $sessionId, taskId: $taskId, projectId: $projectId, zoomFactor: $zoomFactor, startedAt: $startedAt)';
   }
 
   @override
@@ -148,6 +216,9 @@ class _$RecordingSessionImpl implements _RecordingSession {
             other is _$RecordingSessionImpl &&
             (identical(other.sessionId, sessionId) ||
                 other.sessionId == sessionId) &&
+            (identical(other.taskId, taskId) || other.taskId == taskId) &&
+            (identical(other.projectId, projectId) ||
+                other.projectId == projectId) &&
             (identical(other.zoomFactor, zoomFactor) ||
                 other.zoomFactor == zoomFactor) &&
             (identical(other.startedAt, startedAt) ||
@@ -155,33 +226,53 @@ class _$RecordingSessionImpl implements _RecordingSession {
   }
 
   @override
-  int get hashCode =>
-      Object.hash(runtimeType, sessionId, zoomFactor, startedAt);
+  int get hashCode => Object.hash(
+    runtimeType,
+    sessionId,
+    taskId,
+    projectId,
+    zoomFactor,
+    startedAt,
+  );
 
   @JsonKey(ignore: true)
   @override
   @pragma('vm:prefer-inline')
   _$$RecordingSessionImplCopyWith<_$RecordingSessionImpl> get copyWith =>
       __$$RecordingSessionImplCopyWithImpl<_$RecordingSessionImpl>(
-          this, _$identity);
+        this,
+        _$identity,
+      );
 }
 
 abstract class _RecordingSession implements RecordingSession {
-  const factory _RecordingSession(
-      {required final String sessionId,
-      required final double zoomFactor,
-      required final DateTime startedAt}) = _$RecordingSessionImpl;
+  const factory _RecordingSession({
+    required final String sessionId,
+    final String? taskId,
+    final String? projectId,
+    required final double zoomFactor,
+    required final DateTime startedAt,
+  }) = _$RecordingSessionImpl;
 
   @override
-
   /// The UUID generated once at session start (Chapter 5.14 §3).
   String get sessionId;
   @override
-
+  /// The Task this session records against, and its Project.
+  ///
+  /// Nullable because a session can be started without a selection —
+  /// `PlatformTaskContext` then reports both as `MetadataIdentity.unsourced`
+  /// and A-068's Guard 1 refuses the chunk at upload. Carried on the session
+  /// rather than read ambiently at finalization so that every chunk of one
+  /// recording is attributed to the same Task, even if the selection changes
+  /// underneath. Mission 7.4, F38.
+  String? get taskId;
+  @override
+  String? get projectId;
+  @override
   /// The wide-angle factor for every chunk in this session — 0.5 or 0.6.
   double get zoomFactor;
   @override
-
   /// When the Collector tapped Start.
   DateTime get startedAt;
   @override

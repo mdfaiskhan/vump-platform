@@ -27,7 +27,7 @@ const EmbeddedTimingSchema = Schema(
       id: 2,
       name: r'startedAt',
       type: IsarType.dateTime,
-    )
+    ),
   },
   estimateSize: _embeddedTimingEstimateSize,
   serialize: _embeddedTimingSerialize,
@@ -89,224 +89,221 @@ P _embeddedTimingDeserializeProp<P>(
 extension EmbeddedTimingQueryFilter
     on QueryBuilder<EmbeddedTiming, EmbeddedTiming, QFilterCondition> {
   QueryBuilder<EmbeddedTiming, EmbeddedTiming, QAfterFilterCondition>
-      endedAtIsNull() {
+  endedAtIsNull() {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(const FilterCondition.isNull(
-        property: r'endedAt',
-      ));
+      return query.addFilterCondition(
+        const FilterCondition.isNull(property: r'endedAt'),
+      );
     });
   }
 
   QueryBuilder<EmbeddedTiming, EmbeddedTiming, QAfterFilterCondition>
-      endedAtIsNotNull() {
+  endedAtIsNotNull() {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(const FilterCondition.isNotNull(
-        property: r'endedAt',
-      ));
+      return query.addFilterCondition(
+        const FilterCondition.isNotNull(property: r'endedAt'),
+      );
     });
   }
 
   QueryBuilder<EmbeddedTiming, EmbeddedTiming, QAfterFilterCondition>
-      endedAtEqualTo(DateTime? value) {
+  endedAtEqualTo(DateTime? value) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.equalTo(
-        property: r'endedAt',
-        value: value,
-      ));
+      return query.addFilterCondition(
+        FilterCondition.equalTo(property: r'endedAt', value: value),
+      );
     });
   }
 
   QueryBuilder<EmbeddedTiming, EmbeddedTiming, QAfterFilterCondition>
-      endedAtGreaterThan(
-    DateTime? value, {
-    bool include = false,
-  }) {
+  endedAtGreaterThan(DateTime? value, {bool include = false}) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.greaterThan(
-        include: include,
-        property: r'endedAt',
-        value: value,
-      ));
+      return query.addFilterCondition(
+        FilterCondition.greaterThan(
+          include: include,
+          property: r'endedAt',
+          value: value,
+        ),
+      );
     });
   }
 
   QueryBuilder<EmbeddedTiming, EmbeddedTiming, QAfterFilterCondition>
-      endedAtLessThan(
-    DateTime? value, {
-    bool include = false,
-  }) {
+  endedAtLessThan(DateTime? value, {bool include = false}) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.lessThan(
-        include: include,
-        property: r'endedAt',
-        value: value,
-      ));
+      return query.addFilterCondition(
+        FilterCondition.lessThan(
+          include: include,
+          property: r'endedAt',
+          value: value,
+        ),
+      );
     });
   }
 
   QueryBuilder<EmbeddedTiming, EmbeddedTiming, QAfterFilterCondition>
-      endedAtBetween(
+  endedAtBetween(
     DateTime? lower,
     DateTime? upper, {
     bool includeLower = true,
     bool includeUpper = true,
   }) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.between(
-        property: r'endedAt',
-        lower: lower,
-        includeLower: includeLower,
-        upper: upper,
-        includeUpper: includeUpper,
-      ));
+      return query.addFilterCondition(
+        FilterCondition.between(
+          property: r'endedAt',
+          lower: lower,
+          includeLower: includeLower,
+          upper: upper,
+          includeUpper: includeUpper,
+        ),
+      );
     });
   }
 
   QueryBuilder<EmbeddedTiming, EmbeddedTiming, QAfterFilterCondition>
-      sequenceIndexIsNull() {
+  sequenceIndexIsNull() {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(const FilterCondition.isNull(
-        property: r'sequenceIndex',
-      ));
+      return query.addFilterCondition(
+        const FilterCondition.isNull(property: r'sequenceIndex'),
+      );
     });
   }
 
   QueryBuilder<EmbeddedTiming, EmbeddedTiming, QAfterFilterCondition>
-      sequenceIndexIsNotNull() {
+  sequenceIndexIsNotNull() {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(const FilterCondition.isNotNull(
-        property: r'sequenceIndex',
-      ));
+      return query.addFilterCondition(
+        const FilterCondition.isNotNull(property: r'sequenceIndex'),
+      );
     });
   }
 
   QueryBuilder<EmbeddedTiming, EmbeddedTiming, QAfterFilterCondition>
-      sequenceIndexEqualTo(int? value) {
+  sequenceIndexEqualTo(int? value) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.equalTo(
-        property: r'sequenceIndex',
-        value: value,
-      ));
+      return query.addFilterCondition(
+        FilterCondition.equalTo(property: r'sequenceIndex', value: value),
+      );
     });
   }
 
   QueryBuilder<EmbeddedTiming, EmbeddedTiming, QAfterFilterCondition>
-      sequenceIndexGreaterThan(
-    int? value, {
-    bool include = false,
-  }) {
+  sequenceIndexGreaterThan(int? value, {bool include = false}) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.greaterThan(
-        include: include,
-        property: r'sequenceIndex',
-        value: value,
-      ));
+      return query.addFilterCondition(
+        FilterCondition.greaterThan(
+          include: include,
+          property: r'sequenceIndex',
+          value: value,
+        ),
+      );
     });
   }
 
   QueryBuilder<EmbeddedTiming, EmbeddedTiming, QAfterFilterCondition>
-      sequenceIndexLessThan(
-    int? value, {
-    bool include = false,
-  }) {
+  sequenceIndexLessThan(int? value, {bool include = false}) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.lessThan(
-        include: include,
-        property: r'sequenceIndex',
-        value: value,
-      ));
+      return query.addFilterCondition(
+        FilterCondition.lessThan(
+          include: include,
+          property: r'sequenceIndex',
+          value: value,
+        ),
+      );
     });
   }
 
   QueryBuilder<EmbeddedTiming, EmbeddedTiming, QAfterFilterCondition>
-      sequenceIndexBetween(
+  sequenceIndexBetween(
     int? lower,
     int? upper, {
     bool includeLower = true,
     bool includeUpper = true,
   }) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.between(
-        property: r'sequenceIndex',
-        lower: lower,
-        includeLower: includeLower,
-        upper: upper,
-        includeUpper: includeUpper,
-      ));
+      return query.addFilterCondition(
+        FilterCondition.between(
+          property: r'sequenceIndex',
+          lower: lower,
+          includeLower: includeLower,
+          upper: upper,
+          includeUpper: includeUpper,
+        ),
+      );
     });
   }
 
   QueryBuilder<EmbeddedTiming, EmbeddedTiming, QAfterFilterCondition>
-      startedAtIsNull() {
+  startedAtIsNull() {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(const FilterCondition.isNull(
-        property: r'startedAt',
-      ));
+      return query.addFilterCondition(
+        const FilterCondition.isNull(property: r'startedAt'),
+      );
     });
   }
 
   QueryBuilder<EmbeddedTiming, EmbeddedTiming, QAfterFilterCondition>
-      startedAtIsNotNull() {
+  startedAtIsNotNull() {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(const FilterCondition.isNotNull(
-        property: r'startedAt',
-      ));
+      return query.addFilterCondition(
+        const FilterCondition.isNotNull(property: r'startedAt'),
+      );
     });
   }
 
   QueryBuilder<EmbeddedTiming, EmbeddedTiming, QAfterFilterCondition>
-      startedAtEqualTo(DateTime? value) {
+  startedAtEqualTo(DateTime? value) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.equalTo(
-        property: r'startedAt',
-        value: value,
-      ));
+      return query.addFilterCondition(
+        FilterCondition.equalTo(property: r'startedAt', value: value),
+      );
     });
   }
 
   QueryBuilder<EmbeddedTiming, EmbeddedTiming, QAfterFilterCondition>
-      startedAtGreaterThan(
-    DateTime? value, {
-    bool include = false,
-  }) {
+  startedAtGreaterThan(DateTime? value, {bool include = false}) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.greaterThan(
-        include: include,
-        property: r'startedAt',
-        value: value,
-      ));
+      return query.addFilterCondition(
+        FilterCondition.greaterThan(
+          include: include,
+          property: r'startedAt',
+          value: value,
+        ),
+      );
     });
   }
 
   QueryBuilder<EmbeddedTiming, EmbeddedTiming, QAfterFilterCondition>
-      startedAtLessThan(
-    DateTime? value, {
-    bool include = false,
-  }) {
+  startedAtLessThan(DateTime? value, {bool include = false}) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.lessThan(
-        include: include,
-        property: r'startedAt',
-        value: value,
-      ));
+      return query.addFilterCondition(
+        FilterCondition.lessThan(
+          include: include,
+          property: r'startedAt',
+          value: value,
+        ),
+      );
     });
   }
 
   QueryBuilder<EmbeddedTiming, EmbeddedTiming, QAfterFilterCondition>
-      startedAtBetween(
+  startedAtBetween(
     DateTime? lower,
     DateTime? upper, {
     bool includeLower = true,
     bool includeUpper = true,
   }) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.between(
-        property: r'startedAt',
-        lower: lower,
-        includeLower: includeLower,
-        upper: upper,
-        includeUpper: includeUpper,
-      ));
+      return query.addFilterCondition(
+        FilterCondition.between(
+          property: r'startedAt',
+          lower: lower,
+          includeLower: includeLower,
+          upper: upper,
+          includeUpper: includeUpper,
+        ),
+      );
     });
   }
 }

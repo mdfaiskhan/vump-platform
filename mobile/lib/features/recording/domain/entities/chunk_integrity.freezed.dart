@@ -12,7 +12,8 @@ part of 'chunk_integrity.dart';
 T _$identity<T>(T value) => value;
 
 final _privateConstructorUsedError = UnsupportedError(
-    'It seems like you constructed your class using `MyClass._()`. This constructor is only meant to be used by freezed and you are not supposed to need it nor use it.\nPlease check the documentation here for more information: https://github.com/rrousselGit/freezed#adding-getters-and-methods-to-our-models');
+  'It seems like you constructed your class using `MyClass._()`. This constructor is only meant to be used by freezed and you are not supposed to need it nor use it.\nPlease check the documentation here for more information: https://github.com/rrousselGit/freezed#adding-getters-and-methods-to-our-models',
+);
 
 /// @nodoc
 mixin _$ChunkIntegrity {
@@ -30,8 +31,9 @@ mixin _$ChunkIntegrity {
 /// @nodoc
 abstract class $ChunkIntegrityCopyWith<$Res> {
   factory $ChunkIntegrityCopyWith(
-          ChunkIntegrity value, $Res Function(ChunkIntegrity) then) =
-      _$ChunkIntegrityCopyWithImpl<$Res, ChunkIntegrity>;
+    ChunkIntegrity value,
+    $Res Function(ChunkIntegrity) then,
+  ) = _$ChunkIntegrityCopyWithImpl<$Res, ChunkIntegrity>;
   @useResult
   $Res call({String checksumSha256, int byteCount});
 }
@@ -48,29 +50,30 @@ class _$ChunkIntegrityCopyWithImpl<$Res, $Val extends ChunkIntegrity>
 
   @pragma('vm:prefer-inline')
   @override
-  $Res call({
-    Object? checksumSha256 = null,
-    Object? byteCount = null,
-  }) {
-    return _then(_value.copyWith(
-      checksumSha256: null == checksumSha256
-          ? _value.checksumSha256
-          : checksumSha256 // ignore: cast_nullable_to_non_nullable
-              as String,
-      byteCount: null == byteCount
-          ? _value.byteCount
-          : byteCount // ignore: cast_nullable_to_non_nullable
-              as int,
-    ) as $Val);
+  $Res call({Object? checksumSha256 = null, Object? byteCount = null}) {
+    return _then(
+      _value.copyWith(
+            checksumSha256: null == checksumSha256
+                ? _value.checksumSha256
+                : checksumSha256 // ignore: cast_nullable_to_non_nullable
+                      as String,
+            byteCount: null == byteCount
+                ? _value.byteCount
+                : byteCount // ignore: cast_nullable_to_non_nullable
+                      as int,
+          )
+          as $Val,
+    );
   }
 }
 
 /// @nodoc
 abstract class _$$ChunkIntegrityImplCopyWith<$Res>
     implements $ChunkIntegrityCopyWith<$Res> {
-  factory _$$ChunkIntegrityImplCopyWith(_$ChunkIntegrityImpl value,
-          $Res Function(_$ChunkIntegrityImpl) then) =
-      __$$ChunkIntegrityImplCopyWithImpl<$Res>;
+  factory _$$ChunkIntegrityImplCopyWith(
+    _$ChunkIntegrityImpl value,
+    $Res Function(_$ChunkIntegrityImpl) then,
+  ) = __$$ChunkIntegrityImplCopyWithImpl<$Res>;
   @override
   @useResult
   $Res call({String checksumSha256, int byteCount});
@@ -81,34 +84,35 @@ class __$$ChunkIntegrityImplCopyWithImpl<$Res>
     extends _$ChunkIntegrityCopyWithImpl<$Res, _$ChunkIntegrityImpl>
     implements _$$ChunkIntegrityImplCopyWith<$Res> {
   __$$ChunkIntegrityImplCopyWithImpl(
-      _$ChunkIntegrityImpl _value, $Res Function(_$ChunkIntegrityImpl) _then)
-      : super(_value, _then);
+    _$ChunkIntegrityImpl _value,
+    $Res Function(_$ChunkIntegrityImpl) _then,
+  ) : super(_value, _then);
 
   @pragma('vm:prefer-inline')
   @override
-  $Res call({
-    Object? checksumSha256 = null,
-    Object? byteCount = null,
-  }) {
-    return _then(_$ChunkIntegrityImpl(
-      checksumSha256: null == checksumSha256
-          ? _value.checksumSha256
-          : checksumSha256 // ignore: cast_nullable_to_non_nullable
-              as String,
-      byteCount: null == byteCount
-          ? _value.byteCount
-          : byteCount // ignore: cast_nullable_to_non_nullable
-              as int,
-    ));
+  $Res call({Object? checksumSha256 = null, Object? byteCount = null}) {
+    return _then(
+      _$ChunkIntegrityImpl(
+        checksumSha256: null == checksumSha256
+            ? _value.checksumSha256
+            : checksumSha256 // ignore: cast_nullable_to_non_nullable
+                  as String,
+        byteCount: null == byteCount
+            ? _value.byteCount
+            : byteCount // ignore: cast_nullable_to_non_nullable
+                  as int,
+      ),
+    );
   }
 }
 
 /// @nodoc
 
 class _$ChunkIntegrityImpl extends _ChunkIntegrity {
-  const _$ChunkIntegrityImpl(
-      {required this.checksumSha256, required this.byteCount})
-      : super._();
+  const _$ChunkIntegrityImpl({
+    required this.checksumSha256,
+    required this.byteCount,
+  }) : super._();
 
   /// Lowercase hex SHA-256 of the finalized file — 64 characters.
   @override
@@ -142,21 +146,22 @@ class _$ChunkIntegrityImpl extends _ChunkIntegrity {
   @pragma('vm:prefer-inline')
   _$$ChunkIntegrityImplCopyWith<_$ChunkIntegrityImpl> get copyWith =>
       __$$ChunkIntegrityImplCopyWithImpl<_$ChunkIntegrityImpl>(
-          this, _$identity);
+        this,
+        _$identity,
+      );
 }
 
 abstract class _ChunkIntegrity extends ChunkIntegrity {
-  const factory _ChunkIntegrity(
-      {required final String checksumSha256,
-      required final int byteCount}) = _$ChunkIntegrityImpl;
+  const factory _ChunkIntegrity({
+    required final String checksumSha256,
+    required final int byteCount,
+  }) = _$ChunkIntegrityImpl;
   const _ChunkIntegrity._() : super._();
 
   @override
-
   /// Lowercase hex SHA-256 of the finalized file — 64 characters.
   String get checksumSha256;
   @override
-
   /// The finalized file's size in bytes, read from the closed handle.
   int get byteCount;
   @override

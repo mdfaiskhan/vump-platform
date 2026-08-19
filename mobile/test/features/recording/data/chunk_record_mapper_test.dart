@@ -96,13 +96,33 @@ void main() {
       );
     });
 
-    test('task_id and collector_id are null because nothing sources them', () {
-      // A-062. Null is the honest value; a placeholder would be indexed,
-      // uploaded and indistinguishable from a real id.
+    test('task_id and project_id come from the session — F38', () {
+      // This row is the DURABILITY BOUNDARY for Task context: the upload queue
+      // reads taskId from it at claim time, long after the recording ended and
+      // across any number of relaunches. If the mapper drops it, nothing else
+      // remembers.
+      final LocalSession row = ChunkRecordMapper.toLocalSession(
+        session.copyWith(taskId: 'tsk-1', projectId: 'prj-1'),
+      );
+
+      expect(row.taskId, 'tsk-1');
+      expect(row.projectId, 'prj-1');
+    });
+
+    test('a session with no Task writes nulls, not placeholders', () {
+      // A-062's argument, unchanged: null is the honest value, and a
+      // placeholder would be indexed, uploaded and indistinguishable from a
+      // real id.
       final LocalSession row = ChunkRecordMapper.toLocalSession(session);
 
       expect(row.taskId, isNull);
-      expect(row.collectorId, isNull);
+      expect(row.projectId, isNull);
+    });
+
+    test('collector_id stays null, and that is not a gap', () {
+      // The backend derives the collector from the verified token on every
+      // route (Chapter 4.8), so nothing reads this column.
+      expect(ChunkRecordMapper.toLocalSession(session).collectorId, isNull);
     });
   });
 

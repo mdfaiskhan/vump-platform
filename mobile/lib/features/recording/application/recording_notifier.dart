@@ -5,6 +5,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mobile/core/errors/app_exception.dart';
 import 'package:mobile/core/errors/error_codes.dart';
 import 'package:mobile/core/errors/failure.dart';
+import 'package:mobile/core/identity/providers/identity_ports.dart';
+import 'package:mobile/core/identity/selected_task.dart';
 import 'package:mobile/features/recording/domain/entities/chunk_boundary_reason.dart';
 import 'package:mobile/features/recording/domain/entities/chunk_processing_job.dart';
 import 'package:mobile/features/recording/domain/entities/recording_session.dart';
@@ -215,8 +217,20 @@ class RecordingNotifier extends Notifier<RecordingState> {
     required double zoomFactor,
     required DateTime now,
   }) async {
+    // Read ONCE, here, and carried on the session — F38. Reading it again at
+    // each chunk boundary would let a selection that changed mid-recording
+    // attribute two chunks of one session to two different Tasks, which is
+    // worse than an unattributed chunk: it is attributed and wrong.
+    //
+    // Null when nothing was selected. `PlatformTaskContext` then reports both
+    // ids as `MetadataIdentity.unsourced` and A-068's Guard 1 refuses the
+    // chunk at upload, which is the correct outcome rather than a guess.
+    final SelectedTask? selection = ref.read(selectedTaskProvider);
+
     final RecordingSession session = RecordingSession(
       sessionId: ref.read(sessionIdGeneratorProvider).newSessionId(),
+      taskId: selection?.taskId,
+      projectId: selection?.projectId,
       zoomFactor: zoomFactor,
       startedAt: now,
     );
@@ -403,6 +417,10 @@ class RecordingNotifier extends Notifier<RecordingState> {
     // point; `ChunkStore.markSessionComplete` is the other half.
     if (next is RecordingStateIdle) {
       await _markSessionComplete(session);
+      // The selection belonged to the session that just ended. Leaving it set
+      // would let a later recording started by a path that forgot to select
+      // inherit this Task — attributed and wrong, rather than refused.
+      ref.read(selectedTaskProvider.notifier).clear();
     }
   }
 

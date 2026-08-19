@@ -18,6 +18,7 @@ import 'package:mobile/core/firebase/providers/firebase_provider.dart';
 import 'package:mobile/core/identity/device_id_store.dart';
 import 'package:mobile/core/identity/device_model_channel.dart';
 import 'package:mobile/core/identity/providers/identity_ports.dart';
+import 'package:mobile/core/identity/selected_task.dart';
 import 'package:mobile/core/logging/app_logger.dart';
 import 'package:mobile/core/logging/providers/logger_provider.dart';
 import 'package:mobile/core/network/providers/dio_provider.dart';
@@ -49,10 +50,10 @@ import 'package:mobile/features/recording/data/free_space_channel.dart';
 import 'package:mobile/features/recording/data/isar_chunk_store.dart';
 import 'package:mobile/features/recording/data/isolate_video_processor.dart';
 import 'package:mobile/features/recording/data/platform_device_context.dart';
+import 'package:mobile/features/recording/data/platform_task_context.dart';
 import 'package:mobile/features/recording/data/random_uuid_generator.dart';
 import 'package:mobile/features/recording/data/shared_preferences_wide_angle_eligibility_cache.dart';
 import 'package:mobile/features/recording/data/unavailable_capture_conditions_reader.dart';
-import 'package:mobile/features/recording/data/unsourced_task_context.dart';
 import 'package:mobile/features/recording/domain/entities/metadata_identity.dart';
 import 'package:mobile/features/upload/application/upload_dispatcher.dart';
 import 'package:mobile/features/upload/application/upload_dispatcher_status_notifier.dart';
@@ -329,7 +330,22 @@ List<Override> recordingOverrides(
     // repository that supplies one is step 4. Until then A-068's Guard 1 still
     // refuses every chunk, which is why this step changes no end-to-end
     // behaviour on its own.
-    taskContextProvider.overrideWith((Ref ref) => const UnsourcedTaskContext()),
+    // `ref.watch`, so a Task selected on C-06 reaches the next session the
+    // Collector starts — the same reactive shape `collectorId` uses below and
+    // for the same reason. Null until they choose one, which
+    // `PlatformTaskContext.unsourced` reports as absent rather than guessing.
+    //
+    // Note this is read at chunk finalization, while `RecordingNotifier` reads
+    // `selectedTaskProvider` ONCE at session start and carries the ids on the
+    // session. Both paths exist deliberately: the session's copy is what makes
+    // every chunk of one recording agree, and this one is what the assembler
+    // consults for a chunk whose session predates the field. F38.
+    taskContextProvider.overrideWith((Ref ref) {
+      final SelectedTask? selection = ref.watch(selectedTaskProvider);
+      return selection == null
+          ? const PlatformTaskContext.unsourced()
+          : PlatformTaskContext(selection: selection);
+    }),
     deviceContextProvider.overrideWith(
       // Three of the four values are supplied here rather than read inside the
       // implementation, each for its own reason:

@@ -84,6 +84,12 @@ abstract final class ChunkRecordMapper {
   static LocalSession toLocalSession(RecordingSession session) {
     return LocalSession()
       ..sessionId = session.sessionId
+      // Both null until Mission 7.4 step 5, and both written now. This row is
+      // where Task context becomes durable — the upload queue reads `taskId`
+      // from it at claim time, long after the recording and any number of
+      // process deaths later. F38.
+      ..taskId = session.taskId
+      ..projectId = session.projectId
       ..startedAt = session.startedAt
       ..status = sessionInProgress;
   }

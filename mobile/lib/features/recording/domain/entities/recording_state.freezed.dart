@@ -12,90 +12,101 @@ part of 'recording_state.dart';
 T _$identity<T>(T value) => value;
 
 final _privateConstructorUsedError = UnsupportedError(
-    'It seems like you constructed your class using `MyClass._()`. This constructor is only meant to be used by freezed and you are not supposed to need it nor use it.\nPlease check the documentation here for more information: https://github.com/rrousselGit/freezed#adding-getters-and-methods-to-our-models');
+  'It seems like you constructed your class using `MyClass._()`. This constructor is only meant to be used by freezed and you are not supposed to need it nor use it.\nPlease check the documentation here for more information: https://github.com/rrousselGit/freezed#adding-getters-and-methods-to-our-models',
+);
 
 /// @nodoc
 mixin _$RecordingState {
   @optionalTypeArgs
   TResult when<TResult extends Object?>({
-    required TResult Function(RecordingSession? lastCompletedSession,
-            List<FailedChunk> failed, SessionEndCause? endCause)
-        idle,
+    required TResult Function(
+      RecordingSession? lastCompletedSession,
+      List<FailedChunk> failed,
+      SessionEndCause? endCause,
+    )
+    idle,
     required TResult Function(RecordingSession session) ready,
     required TResult Function(
-            RecordingSession session,
-            int sequenceIndex,
-            DateTime chunkStartedAt,
-            List<ChunkProcessingJob> processing,
-            List<FailedChunk> failed)
-        recording,
+      RecordingSession session,
+      int sequenceIndex,
+      DateTime chunkStartedAt,
+      List<ChunkProcessingJob> processing,
+      List<FailedChunk> failed,
+    )
+    recording,
     required TResult Function(
-            RecordingSession session,
-            List<ChunkProcessingJob> processing,
-            SessionEndCause endCause,
-            List<FailedChunk> failed)
-        finalizing,
-  }) =>
-      throw _privateConstructorUsedError;
+      RecordingSession session,
+      List<ChunkProcessingJob> processing,
+      SessionEndCause endCause,
+      List<FailedChunk> failed,
+    )
+    finalizing,
+  }) => throw _privateConstructorUsedError;
   @optionalTypeArgs
   TResult? whenOrNull<TResult extends Object?>({
-    TResult? Function(RecordingSession? lastCompletedSession,
-            List<FailedChunk> failed, SessionEndCause? endCause)?
-        idle,
+    TResult? Function(
+      RecordingSession? lastCompletedSession,
+      List<FailedChunk> failed,
+      SessionEndCause? endCause,
+    )?
+    idle,
     TResult? Function(RecordingSession session)? ready,
     TResult? Function(
-            RecordingSession session,
-            int sequenceIndex,
-            DateTime chunkStartedAt,
-            List<ChunkProcessingJob> processing,
-            List<FailedChunk> failed)?
-        recording,
+      RecordingSession session,
+      int sequenceIndex,
+      DateTime chunkStartedAt,
+      List<ChunkProcessingJob> processing,
+      List<FailedChunk> failed,
+    )?
+    recording,
     TResult? Function(
-            RecordingSession session,
-            List<ChunkProcessingJob> processing,
-            SessionEndCause endCause,
-            List<FailedChunk> failed)?
-        finalizing,
-  }) =>
-      throw _privateConstructorUsedError;
+      RecordingSession session,
+      List<ChunkProcessingJob> processing,
+      SessionEndCause endCause,
+      List<FailedChunk> failed,
+    )?
+    finalizing,
+  }) => throw _privateConstructorUsedError;
   @optionalTypeArgs
   TResult maybeWhen<TResult extends Object?>({
-    TResult Function(RecordingSession? lastCompletedSession,
-            List<FailedChunk> failed, SessionEndCause? endCause)?
-        idle,
+    TResult Function(
+      RecordingSession? lastCompletedSession,
+      List<FailedChunk> failed,
+      SessionEndCause? endCause,
+    )?
+    idle,
     TResult Function(RecordingSession session)? ready,
     TResult Function(
-            RecordingSession session,
-            int sequenceIndex,
-            DateTime chunkStartedAt,
-            List<ChunkProcessingJob> processing,
-            List<FailedChunk> failed)?
-        recording,
+      RecordingSession session,
+      int sequenceIndex,
+      DateTime chunkStartedAt,
+      List<ChunkProcessingJob> processing,
+      List<FailedChunk> failed,
+    )?
+    recording,
     TResult Function(
-            RecordingSession session,
-            List<ChunkProcessingJob> processing,
-            SessionEndCause endCause,
-            List<FailedChunk> failed)?
-        finalizing,
+      RecordingSession session,
+      List<ChunkProcessingJob> processing,
+      SessionEndCause endCause,
+      List<FailedChunk> failed,
+    )?
+    finalizing,
     required TResult orElse(),
-  }) =>
-      throw _privateConstructorUsedError;
+  }) => throw _privateConstructorUsedError;
   @optionalTypeArgs
   TResult map<TResult extends Object?>({
     required TResult Function(RecordingStateIdle value) idle,
     required TResult Function(RecordingStateReady value) ready,
     required TResult Function(RecordingStateRecording value) recording,
     required TResult Function(RecordingStateFinalizing value) finalizing,
-  }) =>
-      throw _privateConstructorUsedError;
+  }) => throw _privateConstructorUsedError;
   @optionalTypeArgs
   TResult? mapOrNull<TResult extends Object?>({
     TResult? Function(RecordingStateIdle value)? idle,
     TResult? Function(RecordingStateReady value)? ready,
     TResult? Function(RecordingStateRecording value)? recording,
     TResult? Function(RecordingStateFinalizing value)? finalizing,
-  }) =>
-      throw _privateConstructorUsedError;
+  }) => throw _privateConstructorUsedError;
   @optionalTypeArgs
   TResult maybeMap<TResult extends Object?>({
     TResult Function(RecordingStateIdle value)? idle,
@@ -103,15 +114,15 @@ mixin _$RecordingState {
     TResult Function(RecordingStateRecording value)? recording,
     TResult Function(RecordingStateFinalizing value)? finalizing,
     required TResult orElse(),
-  }) =>
-      throw _privateConstructorUsedError;
+  }) => throw _privateConstructorUsedError;
 }
 
 /// @nodoc
 abstract class $RecordingStateCopyWith<$Res> {
   factory $RecordingStateCopyWith(
-          RecordingState value, $Res Function(RecordingState) then) =
-      _$RecordingStateCopyWithImpl<$Res, RecordingState>;
+    RecordingState value,
+    $Res Function(RecordingState) then,
+  ) = _$RecordingStateCopyWithImpl<$Res, RecordingState>;
 }
 
 /// @nodoc
@@ -127,14 +138,16 @@ class _$RecordingStateCopyWithImpl<$Res, $Val extends RecordingState>
 
 /// @nodoc
 abstract class _$$RecordingStateIdleImplCopyWith<$Res> {
-  factory _$$RecordingStateIdleImplCopyWith(_$RecordingStateIdleImpl value,
-          $Res Function(_$RecordingStateIdleImpl) then) =
-      __$$RecordingStateIdleImplCopyWithImpl<$Res>;
+  factory _$$RecordingStateIdleImplCopyWith(
+    _$RecordingStateIdleImpl value,
+    $Res Function(_$RecordingStateIdleImpl) then,
+  ) = __$$RecordingStateIdleImplCopyWithImpl<$Res>;
   @useResult
-  $Res call(
-      {RecordingSession? lastCompletedSession,
-      List<FailedChunk> failed,
-      SessionEndCause? endCause});
+  $Res call({
+    RecordingSession? lastCompletedSession,
+    List<FailedChunk> failed,
+    SessionEndCause? endCause,
+  });
 
   $RecordingSessionCopyWith<$Res>? get lastCompletedSession;
 }
@@ -143,9 +156,10 @@ abstract class _$$RecordingStateIdleImplCopyWith<$Res> {
 class __$$RecordingStateIdleImplCopyWithImpl<$Res>
     extends _$RecordingStateCopyWithImpl<$Res, _$RecordingStateIdleImpl>
     implements _$$RecordingStateIdleImplCopyWith<$Res> {
-  __$$RecordingStateIdleImplCopyWithImpl(_$RecordingStateIdleImpl _value,
-      $Res Function(_$RecordingStateIdleImpl) _then)
-      : super(_value, _then);
+  __$$RecordingStateIdleImplCopyWithImpl(
+    _$RecordingStateIdleImpl _value,
+    $Res Function(_$RecordingStateIdleImpl) _then,
+  ) : super(_value, _then);
 
   @pragma('vm:prefer-inline')
   @override
@@ -154,20 +168,22 @@ class __$$RecordingStateIdleImplCopyWithImpl<$Res>
     Object? failed = null,
     Object? endCause = freezed,
   }) {
-    return _then(_$RecordingStateIdleImpl(
-      lastCompletedSession: freezed == lastCompletedSession
-          ? _value.lastCompletedSession
-          : lastCompletedSession // ignore: cast_nullable_to_non_nullable
-              as RecordingSession?,
-      failed: null == failed
-          ? _value._failed
-          : failed // ignore: cast_nullable_to_non_nullable
-              as List<FailedChunk>,
-      endCause: freezed == endCause
-          ? _value.endCause
-          : endCause // ignore: cast_nullable_to_non_nullable
-              as SessionEndCause?,
-    ));
+    return _then(
+      _$RecordingStateIdleImpl(
+        lastCompletedSession: freezed == lastCompletedSession
+            ? _value.lastCompletedSession
+            : lastCompletedSession // ignore: cast_nullable_to_non_nullable
+                  as RecordingSession?,
+        failed: null == failed
+            ? _value._failed
+            : failed // ignore: cast_nullable_to_non_nullable
+                  as List<FailedChunk>,
+        endCause: freezed == endCause
+            ? _value.endCause
+            : endCause // ignore: cast_nullable_to_non_nullable
+                  as SessionEndCause?,
+      ),
+    );
   }
 
   @override
@@ -177,8 +193,9 @@ class __$$RecordingStateIdleImplCopyWithImpl<$Res>
       return null;
     }
 
-    return $RecordingSessionCopyWith<$Res>(_value.lastCompletedSession!,
-        (value) {
+    return $RecordingSessionCopyWith<$Res>(_value.lastCompletedSession!, (
+      value,
+    ) {
       return _then(_value.copyWith(lastCompletedSession: value));
     });
   }
@@ -187,12 +204,12 @@ class __$$RecordingStateIdleImplCopyWithImpl<$Res>
 /// @nodoc
 
 class _$RecordingStateIdleImpl extends RecordingStateIdle {
-  const _$RecordingStateIdleImpl(
-      {this.lastCompletedSession,
-      final List<FailedChunk> failed = const <FailedChunk>[],
-      this.endCause})
-      : _failed = failed,
-        super._();
+  const _$RecordingStateIdleImpl({
+    this.lastCompletedSession,
+    final List<FailedChunk> failed = const <FailedChunk>[],
+    this.endCause,
+  }) : _failed = failed,
+       super._();
 
   @override
   final RecordingSession? lastCompletedSession;
@@ -233,36 +250,47 @@ class _$RecordingStateIdleImpl extends RecordingStateIdle {
   }
 
   @override
-  int get hashCode => Object.hash(runtimeType, lastCompletedSession,
-      const DeepCollectionEquality().hash(_failed), endCause);
+  int get hashCode => Object.hash(
+    runtimeType,
+    lastCompletedSession,
+    const DeepCollectionEquality().hash(_failed),
+    endCause,
+  );
 
   @JsonKey(ignore: true)
   @override
   @pragma('vm:prefer-inline')
   _$$RecordingStateIdleImplCopyWith<_$RecordingStateIdleImpl> get copyWith =>
       __$$RecordingStateIdleImplCopyWithImpl<_$RecordingStateIdleImpl>(
-          this, _$identity);
+        this,
+        _$identity,
+      );
 
   @override
   @optionalTypeArgs
   TResult when<TResult extends Object?>({
-    required TResult Function(RecordingSession? lastCompletedSession,
-            List<FailedChunk> failed, SessionEndCause? endCause)
-        idle,
+    required TResult Function(
+      RecordingSession? lastCompletedSession,
+      List<FailedChunk> failed,
+      SessionEndCause? endCause,
+    )
+    idle,
     required TResult Function(RecordingSession session) ready,
     required TResult Function(
-            RecordingSession session,
-            int sequenceIndex,
-            DateTime chunkStartedAt,
-            List<ChunkProcessingJob> processing,
-            List<FailedChunk> failed)
-        recording,
+      RecordingSession session,
+      int sequenceIndex,
+      DateTime chunkStartedAt,
+      List<ChunkProcessingJob> processing,
+      List<FailedChunk> failed,
+    )
+    recording,
     required TResult Function(
-            RecordingSession session,
-            List<ChunkProcessingJob> processing,
-            SessionEndCause endCause,
-            List<FailedChunk> failed)
-        finalizing,
+      RecordingSession session,
+      List<ChunkProcessingJob> processing,
+      SessionEndCause endCause,
+      List<FailedChunk> failed,
+    )
+    finalizing,
   }) {
     return idle(lastCompletedSession, failed, endCause);
   }
@@ -270,23 +298,28 @@ class _$RecordingStateIdleImpl extends RecordingStateIdle {
   @override
   @optionalTypeArgs
   TResult? whenOrNull<TResult extends Object?>({
-    TResult? Function(RecordingSession? lastCompletedSession,
-            List<FailedChunk> failed, SessionEndCause? endCause)?
-        idle,
+    TResult? Function(
+      RecordingSession? lastCompletedSession,
+      List<FailedChunk> failed,
+      SessionEndCause? endCause,
+    )?
+    idle,
     TResult? Function(RecordingSession session)? ready,
     TResult? Function(
-            RecordingSession session,
-            int sequenceIndex,
-            DateTime chunkStartedAt,
-            List<ChunkProcessingJob> processing,
-            List<FailedChunk> failed)?
-        recording,
+      RecordingSession session,
+      int sequenceIndex,
+      DateTime chunkStartedAt,
+      List<ChunkProcessingJob> processing,
+      List<FailedChunk> failed,
+    )?
+    recording,
     TResult? Function(
-            RecordingSession session,
-            List<ChunkProcessingJob> processing,
-            SessionEndCause endCause,
-            List<FailedChunk> failed)?
-        finalizing,
+      RecordingSession session,
+      List<ChunkProcessingJob> processing,
+      SessionEndCause endCause,
+      List<FailedChunk> failed,
+    )?
+    finalizing,
   }) {
     return idle?.call(lastCompletedSession, failed, endCause);
   }
@@ -294,23 +327,28 @@ class _$RecordingStateIdleImpl extends RecordingStateIdle {
   @override
   @optionalTypeArgs
   TResult maybeWhen<TResult extends Object?>({
-    TResult Function(RecordingSession? lastCompletedSession,
-            List<FailedChunk> failed, SessionEndCause? endCause)?
-        idle,
+    TResult Function(
+      RecordingSession? lastCompletedSession,
+      List<FailedChunk> failed,
+      SessionEndCause? endCause,
+    )?
+    idle,
     TResult Function(RecordingSession session)? ready,
     TResult Function(
-            RecordingSession session,
-            int sequenceIndex,
-            DateTime chunkStartedAt,
-            List<ChunkProcessingJob> processing,
-            List<FailedChunk> failed)?
-        recording,
+      RecordingSession session,
+      int sequenceIndex,
+      DateTime chunkStartedAt,
+      List<ChunkProcessingJob> processing,
+      List<FailedChunk> failed,
+    )?
+    recording,
     TResult Function(
-            RecordingSession session,
-            List<ChunkProcessingJob> processing,
-            SessionEndCause endCause,
-            List<FailedChunk> failed)?
-        finalizing,
+      RecordingSession session,
+      List<ChunkProcessingJob> processing,
+      SessionEndCause endCause,
+      List<FailedChunk> failed,
+    )?
+    finalizing,
     required TResult orElse(),
   }) {
     if (idle != null) {
@@ -358,10 +396,11 @@ class _$RecordingStateIdleImpl extends RecordingStateIdle {
 }
 
 abstract class RecordingStateIdle extends RecordingState {
-  const factory RecordingStateIdle(
-      {final RecordingSession? lastCompletedSession,
-      final List<FailedChunk> failed,
-      final SessionEndCause? endCause}) = _$RecordingStateIdleImpl;
+  const factory RecordingStateIdle({
+    final RecordingSession? lastCompletedSession,
+    final List<FailedChunk> failed,
+    final SessionEndCause? endCause,
+  }) = _$RecordingStateIdleImpl;
   const RecordingStateIdle._() : super._();
 
   RecordingSession? get lastCompletedSession;
@@ -382,9 +421,10 @@ abstract class RecordingStateIdle extends RecordingState {
 
 /// @nodoc
 abstract class _$$RecordingStateReadyImplCopyWith<$Res> {
-  factory _$$RecordingStateReadyImplCopyWith(_$RecordingStateReadyImpl value,
-          $Res Function(_$RecordingStateReadyImpl) then) =
-      __$$RecordingStateReadyImplCopyWithImpl<$Res>;
+  factory _$$RecordingStateReadyImplCopyWith(
+    _$RecordingStateReadyImpl value,
+    $Res Function(_$RecordingStateReadyImpl) then,
+  ) = __$$RecordingStateReadyImplCopyWithImpl<$Res>;
   @useResult
   $Res call({RecordingSession session});
 
@@ -395,21 +435,22 @@ abstract class _$$RecordingStateReadyImplCopyWith<$Res> {
 class __$$RecordingStateReadyImplCopyWithImpl<$Res>
     extends _$RecordingStateCopyWithImpl<$Res, _$RecordingStateReadyImpl>
     implements _$$RecordingStateReadyImplCopyWith<$Res> {
-  __$$RecordingStateReadyImplCopyWithImpl(_$RecordingStateReadyImpl _value,
-      $Res Function(_$RecordingStateReadyImpl) _then)
-      : super(_value, _then);
+  __$$RecordingStateReadyImplCopyWithImpl(
+    _$RecordingStateReadyImpl _value,
+    $Res Function(_$RecordingStateReadyImpl) _then,
+  ) : super(_value, _then);
 
   @pragma('vm:prefer-inline')
   @override
-  $Res call({
-    Object? session = null,
-  }) {
-    return _then(_$RecordingStateReadyImpl(
-      session: null == session
-          ? _value.session
-          : session // ignore: cast_nullable_to_non_nullable
-              as RecordingSession,
-    ));
+  $Res call({Object? session = null}) {
+    return _then(
+      _$RecordingStateReadyImpl(
+        session: null == session
+            ? _value.session
+            : session // ignore: cast_nullable_to_non_nullable
+                  as RecordingSession,
+      ),
+    );
   }
 
   @override
@@ -450,28 +491,35 @@ class _$RecordingStateReadyImpl extends RecordingStateReady {
   @pragma('vm:prefer-inline')
   _$$RecordingStateReadyImplCopyWith<_$RecordingStateReadyImpl> get copyWith =>
       __$$RecordingStateReadyImplCopyWithImpl<_$RecordingStateReadyImpl>(
-          this, _$identity);
+        this,
+        _$identity,
+      );
 
   @override
   @optionalTypeArgs
   TResult when<TResult extends Object?>({
-    required TResult Function(RecordingSession? lastCompletedSession,
-            List<FailedChunk> failed, SessionEndCause? endCause)
-        idle,
+    required TResult Function(
+      RecordingSession? lastCompletedSession,
+      List<FailedChunk> failed,
+      SessionEndCause? endCause,
+    )
+    idle,
     required TResult Function(RecordingSession session) ready,
     required TResult Function(
-            RecordingSession session,
-            int sequenceIndex,
-            DateTime chunkStartedAt,
-            List<ChunkProcessingJob> processing,
-            List<FailedChunk> failed)
-        recording,
+      RecordingSession session,
+      int sequenceIndex,
+      DateTime chunkStartedAt,
+      List<ChunkProcessingJob> processing,
+      List<FailedChunk> failed,
+    )
+    recording,
     required TResult Function(
-            RecordingSession session,
-            List<ChunkProcessingJob> processing,
-            SessionEndCause endCause,
-            List<FailedChunk> failed)
-        finalizing,
+      RecordingSession session,
+      List<ChunkProcessingJob> processing,
+      SessionEndCause endCause,
+      List<FailedChunk> failed,
+    )
+    finalizing,
   }) {
     return ready(session);
   }
@@ -479,23 +527,28 @@ class _$RecordingStateReadyImpl extends RecordingStateReady {
   @override
   @optionalTypeArgs
   TResult? whenOrNull<TResult extends Object?>({
-    TResult? Function(RecordingSession? lastCompletedSession,
-            List<FailedChunk> failed, SessionEndCause? endCause)?
-        idle,
+    TResult? Function(
+      RecordingSession? lastCompletedSession,
+      List<FailedChunk> failed,
+      SessionEndCause? endCause,
+    )?
+    idle,
     TResult? Function(RecordingSession session)? ready,
     TResult? Function(
-            RecordingSession session,
-            int sequenceIndex,
-            DateTime chunkStartedAt,
-            List<ChunkProcessingJob> processing,
-            List<FailedChunk> failed)?
-        recording,
+      RecordingSession session,
+      int sequenceIndex,
+      DateTime chunkStartedAt,
+      List<ChunkProcessingJob> processing,
+      List<FailedChunk> failed,
+    )?
+    recording,
     TResult? Function(
-            RecordingSession session,
-            List<ChunkProcessingJob> processing,
-            SessionEndCause endCause,
-            List<FailedChunk> failed)?
-        finalizing,
+      RecordingSession session,
+      List<ChunkProcessingJob> processing,
+      SessionEndCause endCause,
+      List<FailedChunk> failed,
+    )?
+    finalizing,
   }) {
     return ready?.call(session);
   }
@@ -503,23 +556,28 @@ class _$RecordingStateReadyImpl extends RecordingStateReady {
   @override
   @optionalTypeArgs
   TResult maybeWhen<TResult extends Object?>({
-    TResult Function(RecordingSession? lastCompletedSession,
-            List<FailedChunk> failed, SessionEndCause? endCause)?
-        idle,
+    TResult Function(
+      RecordingSession? lastCompletedSession,
+      List<FailedChunk> failed,
+      SessionEndCause? endCause,
+    )?
+    idle,
     TResult Function(RecordingSession session)? ready,
     TResult Function(
-            RecordingSession session,
-            int sequenceIndex,
-            DateTime chunkStartedAt,
-            List<ChunkProcessingJob> processing,
-            List<FailedChunk> failed)?
-        recording,
+      RecordingSession session,
+      int sequenceIndex,
+      DateTime chunkStartedAt,
+      List<ChunkProcessingJob> processing,
+      List<FailedChunk> failed,
+    )?
+    recording,
     TResult Function(
-            RecordingSession session,
-            List<ChunkProcessingJob> processing,
-            SessionEndCause endCause,
-            List<FailedChunk> failed)?
-        finalizing,
+      RecordingSession session,
+      List<ChunkProcessingJob> processing,
+      SessionEndCause endCause,
+      List<FailedChunk> failed,
+    )?
+    finalizing,
     required TResult orElse(),
   }) {
     if (ready != null) {
@@ -580,16 +638,17 @@ abstract class RecordingStateReady extends RecordingState {
 /// @nodoc
 abstract class _$$RecordingStateRecordingImplCopyWith<$Res> {
   factory _$$RecordingStateRecordingImplCopyWith(
-          _$RecordingStateRecordingImpl value,
-          $Res Function(_$RecordingStateRecordingImpl) then) =
-      __$$RecordingStateRecordingImplCopyWithImpl<$Res>;
+    _$RecordingStateRecordingImpl value,
+    $Res Function(_$RecordingStateRecordingImpl) then,
+  ) = __$$RecordingStateRecordingImplCopyWithImpl<$Res>;
   @useResult
-  $Res call(
-      {RecordingSession session,
-      int sequenceIndex,
-      DateTime chunkStartedAt,
-      List<ChunkProcessingJob> processing,
-      List<FailedChunk> failed});
+  $Res call({
+    RecordingSession session,
+    int sequenceIndex,
+    DateTime chunkStartedAt,
+    List<ChunkProcessingJob> processing,
+    List<FailedChunk> failed,
+  });
 
   $RecordingSessionCopyWith<$Res> get session;
 }
@@ -599,9 +658,9 @@ class __$$RecordingStateRecordingImplCopyWithImpl<$Res>
     extends _$RecordingStateCopyWithImpl<$Res, _$RecordingStateRecordingImpl>
     implements _$$RecordingStateRecordingImplCopyWith<$Res> {
   __$$RecordingStateRecordingImplCopyWithImpl(
-      _$RecordingStateRecordingImpl _value,
-      $Res Function(_$RecordingStateRecordingImpl) _then)
-      : super(_value, _then);
+    _$RecordingStateRecordingImpl _value,
+    $Res Function(_$RecordingStateRecordingImpl) _then,
+  ) : super(_value, _then);
 
   @pragma('vm:prefer-inline')
   @override
@@ -612,28 +671,30 @@ class __$$RecordingStateRecordingImplCopyWithImpl<$Res>
     Object? processing = null,
     Object? failed = null,
   }) {
-    return _then(_$RecordingStateRecordingImpl(
-      session: null == session
-          ? _value.session
-          : session // ignore: cast_nullable_to_non_nullable
-              as RecordingSession,
-      sequenceIndex: null == sequenceIndex
-          ? _value.sequenceIndex
-          : sequenceIndex // ignore: cast_nullable_to_non_nullable
-              as int,
-      chunkStartedAt: null == chunkStartedAt
-          ? _value.chunkStartedAt
-          : chunkStartedAt // ignore: cast_nullable_to_non_nullable
-              as DateTime,
-      processing: null == processing
-          ? _value._processing
-          : processing // ignore: cast_nullable_to_non_nullable
-              as List<ChunkProcessingJob>,
-      failed: null == failed
-          ? _value._failed
-          : failed // ignore: cast_nullable_to_non_nullable
-              as List<FailedChunk>,
-    ));
+    return _then(
+      _$RecordingStateRecordingImpl(
+        session: null == session
+            ? _value.session
+            : session // ignore: cast_nullable_to_non_nullable
+                  as RecordingSession,
+        sequenceIndex: null == sequenceIndex
+            ? _value.sequenceIndex
+            : sequenceIndex // ignore: cast_nullable_to_non_nullable
+                  as int,
+        chunkStartedAt: null == chunkStartedAt
+            ? _value.chunkStartedAt
+            : chunkStartedAt // ignore: cast_nullable_to_non_nullable
+                  as DateTime,
+        processing: null == processing
+            ? _value._processing
+            : processing // ignore: cast_nullable_to_non_nullable
+                  as List<ChunkProcessingJob>,
+        failed: null == failed
+            ? _value._failed
+            : failed // ignore: cast_nullable_to_non_nullable
+                  as List<FailedChunk>,
+      ),
+    );
   }
 
   @override
@@ -648,15 +709,15 @@ class __$$RecordingStateRecordingImplCopyWithImpl<$Res>
 /// @nodoc
 
 class _$RecordingStateRecordingImpl extends RecordingStateRecording {
-  const _$RecordingStateRecordingImpl(
-      {required this.session,
-      required this.sequenceIndex,
-      required this.chunkStartedAt,
-      final List<ChunkProcessingJob> processing = const <ChunkProcessingJob>[],
-      final List<FailedChunk> failed = const <FailedChunk>[]})
-      : _processing = processing,
-        _failed = failed,
-        super._();
+  const _$RecordingStateRecordingImpl({
+    required this.session,
+    required this.sequenceIndex,
+    required this.chunkStartedAt,
+    final List<ChunkProcessingJob> processing = const <ChunkProcessingJob>[],
+    final List<FailedChunk> failed = const <FailedChunk>[],
+  }) : _processing = processing,
+       _failed = failed,
+       super._();
 
   @override
   final RecordingSession session;
@@ -708,102 +769,137 @@ class _$RecordingStateRecordingImpl extends RecordingStateRecording {
                 other.sequenceIndex == sequenceIndex) &&
             (identical(other.chunkStartedAt, chunkStartedAt) ||
                 other.chunkStartedAt == chunkStartedAt) &&
-            const DeepCollectionEquality()
-                .equals(other._processing, _processing) &&
+            const DeepCollectionEquality().equals(
+              other._processing,
+              _processing,
+            ) &&
             const DeepCollectionEquality().equals(other._failed, _failed));
   }
 
   @override
   int get hashCode => Object.hash(
-      runtimeType,
-      session,
-      sequenceIndex,
-      chunkStartedAt,
-      const DeepCollectionEquality().hash(_processing),
-      const DeepCollectionEquality().hash(_failed));
+    runtimeType,
+    session,
+    sequenceIndex,
+    chunkStartedAt,
+    const DeepCollectionEquality().hash(_processing),
+    const DeepCollectionEquality().hash(_failed),
+  );
 
   @JsonKey(ignore: true)
   @override
   @pragma('vm:prefer-inline')
   _$$RecordingStateRecordingImplCopyWith<_$RecordingStateRecordingImpl>
-      get copyWith => __$$RecordingStateRecordingImplCopyWithImpl<
-          _$RecordingStateRecordingImpl>(this, _$identity);
+  get copyWith =>
+      __$$RecordingStateRecordingImplCopyWithImpl<
+        _$RecordingStateRecordingImpl
+      >(this, _$identity);
 
   @override
   @optionalTypeArgs
   TResult when<TResult extends Object?>({
-    required TResult Function(RecordingSession? lastCompletedSession,
-            List<FailedChunk> failed, SessionEndCause? endCause)
-        idle,
+    required TResult Function(
+      RecordingSession? lastCompletedSession,
+      List<FailedChunk> failed,
+      SessionEndCause? endCause,
+    )
+    idle,
     required TResult Function(RecordingSession session) ready,
     required TResult Function(
-            RecordingSession session,
-            int sequenceIndex,
-            DateTime chunkStartedAt,
-            List<ChunkProcessingJob> processing,
-            List<FailedChunk> failed)
-        recording,
+      RecordingSession session,
+      int sequenceIndex,
+      DateTime chunkStartedAt,
+      List<ChunkProcessingJob> processing,
+      List<FailedChunk> failed,
+    )
+    recording,
     required TResult Function(
-            RecordingSession session,
-            List<ChunkProcessingJob> processing,
-            SessionEndCause endCause,
-            List<FailedChunk> failed)
-        finalizing,
+      RecordingSession session,
+      List<ChunkProcessingJob> processing,
+      SessionEndCause endCause,
+      List<FailedChunk> failed,
+    )
+    finalizing,
   }) {
     return recording(
-        session, sequenceIndex, chunkStartedAt, processing, failed);
+      session,
+      sequenceIndex,
+      chunkStartedAt,
+      processing,
+      failed,
+    );
   }
 
   @override
   @optionalTypeArgs
   TResult? whenOrNull<TResult extends Object?>({
-    TResult? Function(RecordingSession? lastCompletedSession,
-            List<FailedChunk> failed, SessionEndCause? endCause)?
-        idle,
+    TResult? Function(
+      RecordingSession? lastCompletedSession,
+      List<FailedChunk> failed,
+      SessionEndCause? endCause,
+    )?
+    idle,
     TResult? Function(RecordingSession session)? ready,
     TResult? Function(
-            RecordingSession session,
-            int sequenceIndex,
-            DateTime chunkStartedAt,
-            List<ChunkProcessingJob> processing,
-            List<FailedChunk> failed)?
-        recording,
+      RecordingSession session,
+      int sequenceIndex,
+      DateTime chunkStartedAt,
+      List<ChunkProcessingJob> processing,
+      List<FailedChunk> failed,
+    )?
+    recording,
     TResult? Function(
-            RecordingSession session,
-            List<ChunkProcessingJob> processing,
-            SessionEndCause endCause,
-            List<FailedChunk> failed)?
-        finalizing,
+      RecordingSession session,
+      List<ChunkProcessingJob> processing,
+      SessionEndCause endCause,
+      List<FailedChunk> failed,
+    )?
+    finalizing,
   }) {
     return recording?.call(
-        session, sequenceIndex, chunkStartedAt, processing, failed);
+      session,
+      sequenceIndex,
+      chunkStartedAt,
+      processing,
+      failed,
+    );
   }
 
   @override
   @optionalTypeArgs
   TResult maybeWhen<TResult extends Object?>({
-    TResult Function(RecordingSession? lastCompletedSession,
-            List<FailedChunk> failed, SessionEndCause? endCause)?
-        idle,
+    TResult Function(
+      RecordingSession? lastCompletedSession,
+      List<FailedChunk> failed,
+      SessionEndCause? endCause,
+    )?
+    idle,
     TResult Function(RecordingSession session)? ready,
     TResult Function(
-            RecordingSession session,
-            int sequenceIndex,
-            DateTime chunkStartedAt,
-            List<ChunkProcessingJob> processing,
-            List<FailedChunk> failed)?
-        recording,
+      RecordingSession session,
+      int sequenceIndex,
+      DateTime chunkStartedAt,
+      List<ChunkProcessingJob> processing,
+      List<FailedChunk> failed,
+    )?
+    recording,
     TResult Function(
-            RecordingSession session,
-            List<ChunkProcessingJob> processing,
-            SessionEndCause endCause,
-            List<FailedChunk> failed)?
-        finalizing,
+      RecordingSession session,
+      List<ChunkProcessingJob> processing,
+      SessionEndCause endCause,
+      List<FailedChunk> failed,
+    )?
+    finalizing,
     required TResult orElse(),
   }) {
     if (recording != null) {
       return recording(
-          session, sequenceIndex, chunkStartedAt, processing, failed);
+        session,
+        sequenceIndex,
+        chunkStartedAt,
+        processing,
+        failed,
+      );
     }
     return orElse();
   }
@@ -847,12 +943,13 @@ class _$RecordingStateRecordingImpl extends RecordingStateRecording {
 }
 
 abstract class RecordingStateRecording extends RecordingState {
-  const factory RecordingStateRecording(
-      {required final RecordingSession session,
-      required final int sequenceIndex,
-      required final DateTime chunkStartedAt,
-      final List<ChunkProcessingJob> processing,
-      final List<FailedChunk> failed}) = _$RecordingStateRecordingImpl;
+  const factory RecordingStateRecording({
+    required final RecordingSession session,
+    required final int sequenceIndex,
+    required final DateTime chunkStartedAt,
+    final List<ChunkProcessingJob> processing,
+    final List<FailedChunk> failed,
+  }) = _$RecordingStateRecordingImpl;
   const RecordingStateRecording._() : super._();
 
   RecordingSession get session;
@@ -870,21 +967,22 @@ abstract class RecordingStateRecording extends RecordingState {
   List<FailedChunk> get failed;
   @JsonKey(ignore: true)
   _$$RecordingStateRecordingImplCopyWith<_$RecordingStateRecordingImpl>
-      get copyWith => throw _privateConstructorUsedError;
+  get copyWith => throw _privateConstructorUsedError;
 }
 
 /// @nodoc
 abstract class _$$RecordingStateFinalizingImplCopyWith<$Res> {
   factory _$$RecordingStateFinalizingImplCopyWith(
-          _$RecordingStateFinalizingImpl value,
-          $Res Function(_$RecordingStateFinalizingImpl) then) =
-      __$$RecordingStateFinalizingImplCopyWithImpl<$Res>;
+    _$RecordingStateFinalizingImpl value,
+    $Res Function(_$RecordingStateFinalizingImpl) then,
+  ) = __$$RecordingStateFinalizingImplCopyWithImpl<$Res>;
   @useResult
-  $Res call(
-      {RecordingSession session,
-      List<ChunkProcessingJob> processing,
-      SessionEndCause endCause,
-      List<FailedChunk> failed});
+  $Res call({
+    RecordingSession session,
+    List<ChunkProcessingJob> processing,
+    SessionEndCause endCause,
+    List<FailedChunk> failed,
+  });
 
   $RecordingSessionCopyWith<$Res> get session;
 }
@@ -894,9 +992,9 @@ class __$$RecordingStateFinalizingImplCopyWithImpl<$Res>
     extends _$RecordingStateCopyWithImpl<$Res, _$RecordingStateFinalizingImpl>
     implements _$$RecordingStateFinalizingImplCopyWith<$Res> {
   __$$RecordingStateFinalizingImplCopyWithImpl(
-      _$RecordingStateFinalizingImpl _value,
-      $Res Function(_$RecordingStateFinalizingImpl) _then)
-      : super(_value, _then);
+    _$RecordingStateFinalizingImpl _value,
+    $Res Function(_$RecordingStateFinalizingImpl) _then,
+  ) : super(_value, _then);
 
   @pragma('vm:prefer-inline')
   @override
@@ -906,24 +1004,26 @@ class __$$RecordingStateFinalizingImplCopyWithImpl<$Res>
     Object? endCause = null,
     Object? failed = null,
   }) {
-    return _then(_$RecordingStateFinalizingImpl(
-      session: null == session
-          ? _value.session
-          : session // ignore: cast_nullable_to_non_nullable
-              as RecordingSession,
-      processing: null == processing
-          ? _value._processing
-          : processing // ignore: cast_nullable_to_non_nullable
-              as List<ChunkProcessingJob>,
-      endCause: null == endCause
-          ? _value.endCause
-          : endCause // ignore: cast_nullable_to_non_nullable
-              as SessionEndCause,
-      failed: null == failed
-          ? _value._failed
-          : failed // ignore: cast_nullable_to_non_nullable
-              as List<FailedChunk>,
-    ));
+    return _then(
+      _$RecordingStateFinalizingImpl(
+        session: null == session
+            ? _value.session
+            : session // ignore: cast_nullable_to_non_nullable
+                  as RecordingSession,
+        processing: null == processing
+            ? _value._processing
+            : processing // ignore: cast_nullable_to_non_nullable
+                  as List<ChunkProcessingJob>,
+        endCause: null == endCause
+            ? _value.endCause
+            : endCause // ignore: cast_nullable_to_non_nullable
+                  as SessionEndCause,
+        failed: null == failed
+            ? _value._failed
+            : failed // ignore: cast_nullable_to_non_nullable
+                  as List<FailedChunk>,
+      ),
+    );
   }
 
   @override
@@ -938,14 +1038,14 @@ class __$$RecordingStateFinalizingImplCopyWithImpl<$Res>
 /// @nodoc
 
 class _$RecordingStateFinalizingImpl extends RecordingStateFinalizing {
-  const _$RecordingStateFinalizingImpl(
-      {required this.session,
-      required final List<ChunkProcessingJob> processing,
-      required this.endCause,
-      final List<FailedChunk> failed = const <FailedChunk>[]})
-      : _processing = processing,
-        _failed = failed,
-        super._();
+  const _$RecordingStateFinalizingImpl({
+    required this.session,
+    required final List<ChunkProcessingJob> processing,
+    required this.endCause,
+    final List<FailedChunk> failed = const <FailedChunk>[],
+  }) : _processing = processing,
+       _failed = failed,
+       super._();
 
   @override
   final RecordingSession session;
@@ -993,8 +1093,10 @@ class _$RecordingStateFinalizingImpl extends RecordingStateFinalizing {
         (other.runtimeType == runtimeType &&
             other is _$RecordingStateFinalizingImpl &&
             (identical(other.session, session) || other.session == session) &&
-            const DeepCollectionEquality()
-                .equals(other._processing, _processing) &&
+            const DeepCollectionEquality().equals(
+              other._processing,
+              _processing,
+            ) &&
             (identical(other.endCause, endCause) ||
                 other.endCause == endCause) &&
             const DeepCollectionEquality().equals(other._failed, _failed));
@@ -1002,39 +1104,47 @@ class _$RecordingStateFinalizingImpl extends RecordingStateFinalizing {
 
   @override
   int get hashCode => Object.hash(
-      runtimeType,
-      session,
-      const DeepCollectionEquality().hash(_processing),
-      endCause,
-      const DeepCollectionEquality().hash(_failed));
+    runtimeType,
+    session,
+    const DeepCollectionEquality().hash(_processing),
+    endCause,
+    const DeepCollectionEquality().hash(_failed),
+  );
 
   @JsonKey(ignore: true)
   @override
   @pragma('vm:prefer-inline')
   _$$RecordingStateFinalizingImplCopyWith<_$RecordingStateFinalizingImpl>
-      get copyWith => __$$RecordingStateFinalizingImplCopyWithImpl<
-          _$RecordingStateFinalizingImpl>(this, _$identity);
+  get copyWith =>
+      __$$RecordingStateFinalizingImplCopyWithImpl<
+        _$RecordingStateFinalizingImpl
+      >(this, _$identity);
 
   @override
   @optionalTypeArgs
   TResult when<TResult extends Object?>({
-    required TResult Function(RecordingSession? lastCompletedSession,
-            List<FailedChunk> failed, SessionEndCause? endCause)
-        idle,
+    required TResult Function(
+      RecordingSession? lastCompletedSession,
+      List<FailedChunk> failed,
+      SessionEndCause? endCause,
+    )
+    idle,
     required TResult Function(RecordingSession session) ready,
     required TResult Function(
-            RecordingSession session,
-            int sequenceIndex,
-            DateTime chunkStartedAt,
-            List<ChunkProcessingJob> processing,
-            List<FailedChunk> failed)
-        recording,
+      RecordingSession session,
+      int sequenceIndex,
+      DateTime chunkStartedAt,
+      List<ChunkProcessingJob> processing,
+      List<FailedChunk> failed,
+    )
+    recording,
     required TResult Function(
-            RecordingSession session,
-            List<ChunkProcessingJob> processing,
-            SessionEndCause endCause,
-            List<FailedChunk> failed)
-        finalizing,
+      RecordingSession session,
+      List<ChunkProcessingJob> processing,
+      SessionEndCause endCause,
+      List<FailedChunk> failed,
+    )
+    finalizing,
   }) {
     return finalizing(session, processing, endCause, failed);
   }
@@ -1042,23 +1152,28 @@ class _$RecordingStateFinalizingImpl extends RecordingStateFinalizing {
   @override
   @optionalTypeArgs
   TResult? whenOrNull<TResult extends Object?>({
-    TResult? Function(RecordingSession? lastCompletedSession,
-            List<FailedChunk> failed, SessionEndCause? endCause)?
-        idle,
+    TResult? Function(
+      RecordingSession? lastCompletedSession,
+      List<FailedChunk> failed,
+      SessionEndCause? endCause,
+    )?
+    idle,
     TResult? Function(RecordingSession session)? ready,
     TResult? Function(
-            RecordingSession session,
-            int sequenceIndex,
-            DateTime chunkStartedAt,
-            List<ChunkProcessingJob> processing,
-            List<FailedChunk> failed)?
-        recording,
+      RecordingSession session,
+      int sequenceIndex,
+      DateTime chunkStartedAt,
+      List<ChunkProcessingJob> processing,
+      List<FailedChunk> failed,
+    )?
+    recording,
     TResult? Function(
-            RecordingSession session,
-            List<ChunkProcessingJob> processing,
-            SessionEndCause endCause,
-            List<FailedChunk> failed)?
-        finalizing,
+      RecordingSession session,
+      List<ChunkProcessingJob> processing,
+      SessionEndCause endCause,
+      List<FailedChunk> failed,
+    )?
+    finalizing,
   }) {
     return finalizing?.call(session, processing, endCause, failed);
   }
@@ -1066,23 +1181,28 @@ class _$RecordingStateFinalizingImpl extends RecordingStateFinalizing {
   @override
   @optionalTypeArgs
   TResult maybeWhen<TResult extends Object?>({
-    TResult Function(RecordingSession? lastCompletedSession,
-            List<FailedChunk> failed, SessionEndCause? endCause)?
-        idle,
+    TResult Function(
+      RecordingSession? lastCompletedSession,
+      List<FailedChunk> failed,
+      SessionEndCause? endCause,
+    )?
+    idle,
     TResult Function(RecordingSession session)? ready,
     TResult Function(
-            RecordingSession session,
-            int sequenceIndex,
-            DateTime chunkStartedAt,
-            List<ChunkProcessingJob> processing,
-            List<FailedChunk> failed)?
-        recording,
+      RecordingSession session,
+      int sequenceIndex,
+      DateTime chunkStartedAt,
+      List<ChunkProcessingJob> processing,
+      List<FailedChunk> failed,
+    )?
+    recording,
     TResult Function(
-            RecordingSession session,
-            List<ChunkProcessingJob> processing,
-            SessionEndCause endCause,
-            List<FailedChunk> failed)?
-        finalizing,
+      RecordingSession session,
+      List<ChunkProcessingJob> processing,
+      SessionEndCause endCause,
+      List<FailedChunk> failed,
+    )?
+    finalizing,
     required TResult orElse(),
   }) {
     if (finalizing != null) {
@@ -1130,11 +1250,12 @@ class _$RecordingStateFinalizingImpl extends RecordingStateFinalizing {
 }
 
 abstract class RecordingStateFinalizing extends RecordingState {
-  const factory RecordingStateFinalizing(
-      {required final RecordingSession session,
-      required final List<ChunkProcessingJob> processing,
-      required final SessionEndCause endCause,
-      final List<FailedChunk> failed}) = _$RecordingStateFinalizingImpl;
+  const factory RecordingStateFinalizing({
+    required final RecordingSession session,
+    required final List<ChunkProcessingJob> processing,
+    required final SessionEndCause endCause,
+    final List<FailedChunk> failed,
+  }) = _$RecordingStateFinalizingImpl;
   const RecordingStateFinalizing._() : super._();
 
   RecordingSession get session;
@@ -1154,5 +1275,5 @@ abstract class RecordingStateFinalizing extends RecordingState {
   List<FailedChunk> get failed;
   @JsonKey(ignore: true)
   _$$RecordingStateFinalizingImplCopyWith<_$RecordingStateFinalizingImpl>
-      get copyWith => throw _privateConstructorUsedError;
+  get copyWith => throw _privateConstructorUsedError;
 }
