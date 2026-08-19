@@ -23,7 +23,6 @@ import 'package:mobile/core/logging/providers/logger_provider.dart';
 import 'package:mobile/core/network/providers/dio_provider.dart';
 import 'package:mobile/core/onboarding/providers/onboarding_ports.dart';
 import 'package:mobile/core/queue/providers/queue_ports.dart';
-import 'package:mobile/core/time/providers/clock_provider.dart';
 import 'package:mobile/core/upload/providers/upload_ports.dart';
 import 'package:mobile/features/auth/application/auth_notifier.dart';
 import 'package:mobile/features/auth/application/invite_code_notifier.dart';
@@ -32,9 +31,8 @@ import 'package:mobile/features/auth/data/invite_code_repository_impl.dart';
 import 'package:mobile/features/auth/data/repositories/auth_repository_impl.dart';
 import 'package:mobile/features/onboarding/data/shared_preferences_onboarding_seen_store.dart';
 import 'package:mobile/features/projects_tasks/application/project_task_providers.dart';
-import 'package:mobile/features/projects_tasks/data/fake_project_task_admin_repository.dart';
-import 'package:mobile/features/projects_tasks/data/fake_project_task_repository.dart';
-import 'package:mobile/features/projects_tasks/data/in_memory_project_task_store.dart';
+import 'package:mobile/features/projects_tasks/data/project_task_admin_repository_impl.dart';
+import 'package:mobile/features/projects_tasks/data/project_task_repository_impl.dart';
 import 'package:mobile/features/recording/application/checklist_notifier.dart';
 import 'package:mobile/features/recording/application/finalize_chunk_use_case.dart';
 import 'package:mobile/features/recording/application/recording_notifier.dart';
@@ -97,10 +95,6 @@ Future<void> main() async {
   // be awaited here rather than inside a widget. ADR-010 requires Firebase to
   // be initialised exactly once, off the widget tree; this is the only place
   // that satisfies both.
-  // TEMPORARY, with the fakes it backs. Retired at Mission 7's M8 gate.
-  final InMemoryProjectTaskStore fakeProjectTaskStore =
-      InMemoryProjectTaskStore();
-
   final ProviderContainer container = ProviderContainer(
     overrides: <Override>[
       databaseDirectoryProvider.overrideWithValue(documents.path),
@@ -143,36 +137,29 @@ Future<void> main() async {
         SharedPreferencesOnboardingSeenStore(preferences),
       ),
 
-      // TEMPORARY — a fake repository, deliberately bound in the build.
+      // Volume 11 Chapter 11.1's M8 gate, met — Mission 7.4 step 4.
       //
-      // REMOVAL CONDITION: deleted when a real ProjectTaskRepository calls
-      // Volume 4 Chapter 4.6 §3's endpoints. That is Mission 7, and Volume 11
-      // Chapter 11.1's M8 gate ("no fake/mock repository remains wired into a
-      // release build") is what makes removing it mandatory rather than
-      // optional.
+      // These two bound `FakeProjectTaskRepository` and
+      // `FakeProjectTaskAdminRepository` over one in-memory store from Mission
+      // 5.1.1 until now, because M8 comes after M7 and there was no deployed
+      // endpoint to read. Mission 7.3 deployed all thirteen routes, so the
+      // gate's condition — "no fake/mock repository remains wired into a
+      // release build" — is met by these lines rather than deferred by them.
       //
-      // It is bound now, rather than left throwing, because M8 comes AFTER M7
-      // — the "UI Complete" gate Mission 5 exists to reach. `backend/` is
-      // empty, no Volume 4 endpoint is deployed (M2 is not met), so C-03–C-06
-      // cannot be built against a real repository at all. Binding the fake for
-      // Mission 5 is the milestone sequence working, not a shortcut past it.
+      // The fakes are not deleted. Seven test files drive screens through them,
+      // and a double no build reaches is not what M8 forbids; their own doc
+      // comments record that, and this file no longer names either class.
       //
-      // This is the only file in `lib/` that names the class. Every consumer
-      // holds `ProjectTaskRepository`, so the removal is one line here plus
-      // one deleted file.
-      // ONE store behind the fake, so a write made through the Admin
-      // repository is visible to the Collector's reads. Two independent fakes
-      // would let a created Project vanish, which reads as a bug in whichever
-      // screen is being built rather than in either fake. Same arrangement as
-      // the single IsarChunkStore behind four contracts, below.
-      projectTaskRepositoryProvider.overrideWithValue(
-        FakeProjectTaskRepository(store: fakeProjectTaskStore),
+      // ONE `VumpApi` behind both, from `core/network/` — the duplicate
+      // declaration `features/upload/` carried is gone (F30), so every feature
+      // now reaches the backend through the same provider.
+      projectTaskRepositoryProvider.overrideWith(
+        (Ref ref) =>
+            ProjectTaskRepositoryImpl(backend: ref.watch(vumpApiProvider)),
       ),
       projectTaskAdminRepositoryProvider.overrideWith(
-        (Ref ref) => FakeProjectTaskAdminRepository(
-          store: fakeProjectTaskStore,
-          clock: ref.watch(clockProvider),
-        ),
+        (Ref ref) =>
+            ProjectTaskAdminRepositoryImpl(backend: ref.watch(vumpApiProvider)),
       ),
 
       // The recording feature's collections, contributed here rather than by

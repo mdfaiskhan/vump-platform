@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:mobile/features/projects_tasks/application/project_task_providers.dart';
 import 'package:mobile/features/projects_tasks/data/fake_project_task_repository.dart';
 import 'package:mobile/features/projects_tasks/data/in_memory_project_task_store.dart';
+import 'package:mobile/features/projects_tasks/domain/entities/paged_result.dart';
 import 'package:mobile/features/projects_tasks/domain/entities/project.dart';
 import 'package:mobile/features/projects_tasks/presentation/admin_dashboard_screen.dart';
 
@@ -223,7 +224,7 @@ class _FailingRepository extends FakeProjectTaskRepository {
     : super(store: store);
 
   @override
-  Future<List<Project>> fetchProjects() {
+  Future<PagedResult<Project>> fetchProjects({String? cursor, int? limit}) {
     throw StateError('backend unreachable');
   }
 }

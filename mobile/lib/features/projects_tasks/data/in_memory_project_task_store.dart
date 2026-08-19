@@ -24,9 +24,12 @@ import 'package:mobile/features/projects_tasks/domain/entities/task.dart';
 /// ## It is a fake's state, not a domain type
 ///
 /// Nothing outside `data/` names this class. Both repositories expose only
-/// their domain interfaces, so the shared store is invisible above this layer
-/// and disappears entirely when Mission 7 swaps in the real implementations —
-/// the M8 gate `FakeProjectTaskRepository` already documents.
+/// their domain interfaces, so the shared store is invisible above this layer.
+///
+/// Since Mission 7.4 step 4 it backs **only tests**: `main.dart` binds the real
+/// repositories, so no build reaches this store. `FakeProjectTaskRepository`
+/// carries the full account of how M8's gate was met and why the classes
+/// survive the override being deleted.
 ///
 /// ## Assignments are recorded and never read back through a repository
 ///
