@@ -6793,3 +6793,47 @@ A smaller instance, recorded for completeness rather than because it changed any
 This register exists because *"an architectural decision that is not recorded here does not exist"*, and the same standard has to apply to a decision's **rejected premises**. A-172 makes exactly this argument about a Mission 6 hand-off that compressed "a CI credential" into "a read-only CI credential": the compression was carried forward into a later trace before it was caught, and the correction was worth its own record.
 
 The pattern to keep: **a correction made in a report is not recorded.** Reports are dated artefacts and are not searched; the register is. Both of the corrections above were made promptly and visibly at the time — what failed was the step after.
+
+---
+
+### A-195 — The Fork 1 seam validated nothing, and three records said it did
+
+| | |
+|---|---|
+| **Record** | `functions/chunks-upload/src/index.ts`'s `finalizeUpload`; `modules/iam/main.tf`'s `chunks_verify_invoke_upload` comment; Mission 7.3 Parts 20 and 22 |
+| **Said** | *"The invoked function validates the chunk before acting, so this cannot create an object at an arbitrary key"* |
+| **Was** | `finalizeUpload` passed `request.key` and `request.uploadId` **straight from the invoke payload to S3**. `chunkId` appeared only in an error message. No database read, no ownership check, nothing |
+| **Class** | Security defect — a claimed control that did not exist |
+| **Status** | **Closed.** Validation added, three tests, two proved non-vacuous |
+| **Date** | 2026-08-19, Mission 7.3 security review |
+
+Found by the closing gate's security review, reading the function instead of the IAM policy.
+
+### What a compromised `chunks-verify` could actually do
+
+The seam gives that role `lambda:InvokeFunction` on one ARN, and `isFinalizeRequest` routes any payload carrying `action: 'finalize-upload'` to the finaliser. With no validation, the reachable capability was:
+
+**Finalise any in-progress multipart upload in the bucket, at any key, for any upload id it could name.** And it could name plenty: `chunks-verify` holds `SELECT` on `chunks`, which is **not org-scoped at the grant level**, so it could read the `s3_object_key` and `upload_id` of every registered chunk in the system.
+
+The concrete harm is truncation. `CompleteMultipartUpload` assembles whatever parts have arrived so far, so finalising an upload still in flight produces a **short object that S3 then treats as complete** — and the multipart upload is consumed, so the remaining parts have nowhere to go. Against footage that is mid-upload, that is silent evidence loss.
+
+### What it still could not do, which is why the choice was right
+
+Even unvalidated, the capability was narrower than `s3:PutObject` on `bucket/*` in ways that matter:
+
+- **It cannot create an object where no upload exists.** `CompleteMultipartUpload` requires a live `UploadId`, and only `chunks-upload` can call `CreateMultipartUpload`.
+- **It cannot overwrite a completed object.** A finished upload has no id left to finalise.
+- **It cannot choose content.** The bytes are whatever the device actually sent; there is no path to injecting attacker-authored footage.
+- **It cannot presign anything**, so it cannot hand a reader URL to a third party — which is the specific harm A-143 exists to prevent, and the reason `chunks-verify` must never hold `PutObject`.
+
+So Fork 1 option B remains the right call and A-143's property held throughout. **The gap was between what the code did and what three records claimed it did**, which is its own category of problem: a reviewer reading the IAM comment would have concluded the control existed and stopped looking.
+
+### The fix
+
+`finalizeUpload` now reads the chunk row and refuses unless the supplied key **and** upload id are the ones that chunk owns. It needs no new grant — `chunks-upload` already holds `SELECT` on `chunks` for registration — so the capability narrows from *"finalise anything"* to *"finalise this specific registered upload"*, which is what the comment always claimed.
+
+Three tests cover it: a foreign key, a foreign upload id, and an unknown chunk id. Two were proved non-vacuous by removing the check and watching them fail. The IAM comment is rewritten to say that the control lives in the function and to name this entry, rather than asserting a property the reader cannot verify from where it is written.
+
+### The lesson, which is not "add validation"
+
+The IAM boundary was reviewed carefully and the handler was not. A capability's real extent is the **intersection** of what IAM permits and what the invoked code does with it, and reviewing one half thoroughly reads as diligence while proving nothing about the other. This is Mission 4.9 §4's pattern again — *"reviewed carefully, read correctly, and committed without once being run where it would actually have to work"* — in the security-review medium.

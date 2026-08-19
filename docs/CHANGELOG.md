@@ -40,6 +40,16 @@ Mission 4.8's security review found it, by reading `git log` against this file r
 
 ### Added
 
+- **2026-08-19** — **All thirteen stubbed API routes are implemented.** Projects, Tasks and assignments; session registration and listing; chunk registration, status, and metadata read/write. Every `NOT_IMPLEMENTED` refusal is gone, so all fifteen of Volume 4 Chapter 4.6's endpoints now have real behaviour. Mission 7.3.
+
+  **Migration 0010 is what made eight of them possible.** Migration 0007 was written against Chapter 4.6's *route list* and not Chapter 4.8 §3's *scope filters* — and a scope filter is a join, which needs `SELECT` on every table in it. BR-19's *"Collector: only Projects with an assigned Task"* was not merely unimplemented but unimplementable, and A-119 had recorded the scope difference as *"real and untestable until Mission 7"* without knowing that. Chapter 5.14 §1's deterministic S3 key was in the same state: three of its five components were unreachable by the role Chapter 4.10 §2 assigns to compute it.
+
+  **Migration 0011** adds `chunks.upload_id`, so a retried registration resumes against the same multipart upload rather than restarting — NFR-REL-02 was unreachable without it — and `complete_session()`, because `sessions.status` permitted `'complete'` and nothing anywhere could set it (A-188).
+
+- **2026-08-19** — **Cursor pagination actually produces a cursor.** `parsePageRequest` had validated an incoming one since Mission 6.2, `EnvelopeMeta.nextCursor` was in the envelope, and `REQUEST_INVALID_CURSOR` was a published code with no producer. Keyset on `(created_at DESC, id DESC)`, opaque base64url, and no chapter specifies a sort order so choosing a total one was forced by the cursor rather than preferred (A-183). ADR-044's 1 MiB response ceiling makes this correctness rather than convenience.
+
+  **The client cannot consume it yet** and will silently render page one — recorded as A-184 and owed to Mission 7.4, because widening the page size only moves the number at which it truncates.
+
 - **2026-08-18** — **Firebase is three projects, and the build flavor picks one.** `vump-platform-f86af` (development), `vump-staging` and `vump-prod`, each with its own Firestore in `asia-south1` and delete protection on. Volume 7 Chapter 7.7 §1 asked for this so that a dev build cannot touch production data; deferred item 3 is closed.
 
   ADR-047 is new: Gradle product flavors select the environment, and `APP_ENV` is *derived* from the flavor rather than passed beside it. One flag picks the Firebase project, the application ID, the launcher name and `AppConfig.environment` together, so they cannot disagree — the defect ADR-007 rejected for the base URL, applied one level up. The application identifier is now `com.vump.humanarchive`, with `.dev` and `.staging` suffixes that let all three install side by side. Mission 6.4.
@@ -179,6 +189,20 @@ Mission 4.8's security review found it, by reading `git log` against this file r
 
 ### Security
 
+- **2026-08-19** — **The Fork 1 seam validated nothing, and three records said it did.** `chunks-verify` gains `lambda:InvokeFunction` on one ARN so it can ask `chunks-upload` to finalise a multipart upload — `CompleteMultipartUpload` needs `s3:PutObject`, and A-143 keeps that away from the role that downloads evidentiary footage. The IAM policy's own comment claimed the invoked function *"validates the chunk before acting"*. **It did not**: the key and upload id went straight from the invoke payload to S3.
+
+  A compromised `chunks-verify` could therefore have finalised any in-progress upload in the bucket — and it holds `SELECT` on `chunks`, which is not org-scoped, so it could read every registered key and upload id. Finalising an upload still in flight produces a **short object S3 then treats as complete**, with the upload consumed and the remaining parts nowhere to go: silent evidence loss.
+
+  Fixed — `finalizeUpload` now refuses unless the supplied key **and** upload id are the ones the named chunk owns, which needs no new grant. Found by the closing gate's security review, reading the function instead of the IAM policy. A-195. Mission 7.3.
+
+- **2026-08-19** — **One documented exception to Volume 8 Chapter 8.4 §1's *"no role but auth-verify touches users"***, and it is column-level: `GRANT SELECT (id, org_id, role) ON users TO vump_tasks`. Without it, `POST /v1/tasks/{taskId}/assignments` could not tell a Collector from an Admin, could not tell a real user from a guessed uuid, and — the reason it was granted — **could not stop an Admin assigning a Collector belonging to another organisation**, which was a live BR-20 tenant-isolation hole rather than a cosmetic gap.
+
+  `firebase_uid` and `email` are deliberately outside the grant; withholding the first means a compromised `tasks` function cannot correlate an Aurora row to an identity-provider account. Proved live: the three-column read succeeds and `SELECT *` on the same table is refused `42501`. Mission 7.3, A-187.
+
+- **2026-08-19** — **A resource outside the caller's organisation is reported absent, not forbidden.** Chapter 4.8 §3 requires the refusal *"regardless of guessed IDs"*, and `403` answers the question a guess is asking — it confirms the id exists. Every cross-org path returns `404`, uniformly, across projects, tasks, sessions, chunks and collector ids. The cost is stated rather than hidden: an Admin who mistypes a real id inside their own org gets the same answer, and only the log distinguishes them. A-186. Mission 7.3.
+
+- **2026-08-19** — **Both completion gates fired for the first time.** BR-21's `chunks_completion_guard_trg` has existed since Mission 6.3 and its claim that `complete_chunk()` is *"the only path"* had never met a live database; FR-SES-02's equivalent for sessions is new in 0011 and was exercised the day it landed. Both refused a direct `UPDATE` with `restrict_violation`, proved by seeding inside a transaction and rolling back — which leaves nothing to tear down and is a candidate for unblocking gap 8 (A-193). Sixteen live permission probes in total across the mission. Mission 7.3, A-192.
+
 - **2026-08-18** — **Every route but one now authenticates at the edge, not in the handler.** Chapter 4.8 §2 requires the middleware chain to attach `user`, `role` and `org_id` before any endpoint runs, and Chapter 8.4 §1 gives the `users` grant to `auth-verify` alone — so six functions were required to attach an org they were forbidden to read. ADR-048 resolves it with an API Gateway REQUEST authorizer served by `auth-verify` itself: one function reads `users`, fourteen routes receive the result in their request context, and no function gains a grant.
 
   **A failed lookup is an explicit `Deny`**, so API Gateway refuses before the target function is invoked; a handler that finds no authorizer context fails rather than falling back, so a detached authorizer cannot silently become an open endpoint. `authorizerResultTtlInSeconds = 0` — caching a policy caches an authorization decision, and a removed user would keep working for the window.
@@ -307,6 +331,12 @@ Mission 4.8's security review found it, by reading `git log` against this file r
 - **2026-08-15** — Per-device wide-angle eligibility is cached in `shared_preferences` — a tier name and two version strings. No secret, no credential, and no identifier of any person or device; ADR-008 governs secrets and this holds none. Mission 3.1, A-057. (`4c7f3d1`)
 
 ### Fixed
+
+- **2026-08-19** — **Nine applied migrations could never be re-run.** The runner hashes the bytes on disk, and `core.autocrlf` had materialised CRLF after 0001–0009 were applied from LF files — invalidating every stored checksum at once, without changing a character of SQL. `git diff` could never show it, because git compares normalised content. A `.gitattributes` entry pins `*.sql` to LF. Mission 7.3.
+
+- **2026-08-19** — **`logs:DescribeLogGroups` was granted on an ARN that can never match it.** It is a list call, so IAM evaluates it against an ARN with an empty log-group name; scoping it to `/aws/lambda/vump-dev-*` gave three principals an action none of them could use. Found when `terraform plan` was first run by hand as `terraform-apply`. Mission 7.3.
+
+- **2026-08-19** — **Lambda timeout raised from 15s to 28s**, and made per-function. Gap 9 measured Aurora's resume at 15876ms, 15889ms and 15428ms against a 15000ms ceiling. **This does not close gap 9**: AWS documents a deep-sleep resume of *"30 seconds or longer"* after 24h idle, and API Gateway's REST integration ceiling is 29s — so AWS's own recommendation is unreachable through the API, and 28s is provisional pending a quota increase. `chunks-verify` runs at 1769MB, chosen against a measured 7780ms hash of a real 633,232,477-byte chunk versus 25908ms at 512MB, for the same MB-seconds. Mission 7.3.
 
 - **2026-08-17** — **Four accessibility defects, and two more that only a physical device could find.** Against Chapter 2.10: auth error banners are now live regions so a failed sign-in is announced rather than silent on SH-02 — the first screen §8 names; C-11's upload progress exposes its percentage as a value a screen reader can read; C-09's Stop control announces *"Recording — tap to stop"* while capturing, where a constant label had said nothing about whether capture was running; and the checklist's unmeasured row says *"Checking"* where it had been silent between its pass and fail siblings.
 
