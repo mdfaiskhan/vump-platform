@@ -132,10 +132,11 @@ class FakeChunkMetadataSource implements ChunkMetadataSource {
 
 /// A registrar that answers with a fixed id, or refuses.
 ///
-/// **The only implementation of `SessionRegistrar` that exists anywhere.**
-/// Nothing in `lib/` satisfies that port: it needs a `task_id`, and
-/// `features/projects_tasks/` is unbuilt. This is what lets Chapter 5.10's
-/// pipeline be tested end to end regardless.
+/// `SessionRegistrarImpl` is the real one as of Mission 7.4 step 5. This
+/// records what the pipeline was ASKED, which the real implementation cannot:
+/// the three arguments it now takes are the whole of F32's change, and a
+/// pipeline that dropped the Task or the start time would still upload
+/// successfully against a scripted HTTP adapter.
 class FakeSessionRegistrar implements SessionRegistrar {
   /// Creates a registrar answering with [sessionId].
   FakeSessionRegistrar({this.sessionId = 'srv_sess_1'});
@@ -150,9 +151,21 @@ class FakeSessionRegistrar implements SessionRegistrar {
   /// The local session ids asked about.
   final List<String> asked = <String>[];
 
+  /// The Task ids asked with, in call order. Null is a real answer.
+  final List<String?> askedTaskIds = <String?>[];
+
+  /// The session start times asked with — F15's `started_at`.
+  final List<DateTime> askedStartedAt = <DateTime>[];
+
   @override
-  Future<String> remoteSessionId(String localSessionId) async {
+  Future<String> remoteSessionId({
+    required String localSessionId,
+    required String? taskId,
+    required DateTime startedAt,
+  }) async {
     asked.add(localSessionId);
+    askedTaskIds.add(taskId);
+    askedStartedAt.add(startedAt);
     if (hasNoTask) {
       throw const ValidationException(
         errorCode: ErrorCode.validationRequiredField,
