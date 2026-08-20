@@ -1,8 +1,9 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:mobile/features/projects_tasks/data/fake_project_task_repository.dart';
-import 'package:mobile/features/projects_tasks/data/in_memory_project_task_store.dart';
 import 'package:mobile/features/projects_tasks/domain/entities/project.dart';
 import 'package:mobile/features/projects_tasks/domain/entities/task.dart';
+
+import 'fakes/fake_project_task_repository.dart';
+import 'fakes/in_memory_project_task_store.dart';
 
 /// The fake's seed is a contract, not decoration.
 ///

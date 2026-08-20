@@ -1,12 +1,12 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mobile/core/errors/exceptions/validation_exception.dart';
-import 'package:mobile/features/projects_tasks/data/fake_project_task_admin_repository.dart';
-import 'package:mobile/features/projects_tasks/data/fake_project_task_repository.dart';
-import 'package:mobile/features/projects_tasks/data/in_memory_project_task_store.dart';
 import 'package:mobile/features/projects_tasks/domain/entities/project.dart';
 import 'package:mobile/features/projects_tasks/domain/entities/task.dart';
 
 import '../../../core/time/fakes/fake_clock.dart';
+import 'fakes/fake_project_task_admin_repository.dart';
+import 'fakes/fake_project_task_repository.dart';
+import 'fakes/in_memory_project_task_store.dart';
 
 /// The Admin write path, and the shared store that makes it visible.
 ///

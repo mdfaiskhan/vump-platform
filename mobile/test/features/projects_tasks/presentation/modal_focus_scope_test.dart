@@ -4,13 +4,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:mobile/features/projects_tasks/application/project_task_providers.dart';
-import 'package:mobile/features/projects_tasks/data/fake_project_task_admin_repository.dart';
-import 'package:mobile/features/projects_tasks/data/fake_project_task_repository.dart';
-import 'package:mobile/features/projects_tasks/data/in_memory_project_task_store.dart';
 import 'package:mobile/features/projects_tasks/presentation/admin_create_project_screen.dart';
 import 'package:mobile/features/projects_tasks/presentation/admin_projects_screen.dart';
 
 import '../../../core/time/fakes/fake_clock.dart';
+import '../data/fakes/fake_project_task_admin_repository.dart';
+import '../data/fakes/fake_project_task_repository.dart';
+import '../data/fakes/in_memory_project_task_store.dart';
 
 /// Chapter 2.10 §5's modal focus rule, and the half of it this app satisfies.
 ///

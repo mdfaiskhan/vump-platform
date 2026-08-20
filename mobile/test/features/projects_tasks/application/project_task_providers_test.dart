@@ -43,10 +43,19 @@ void main() {
               'message',
               contains('FakeProjectTaskRepository'),
             )
+            // BOTH homes, since Mission 7.7 moved the double out of lib/.
+            // A developer hitting this throw needs the production binding
+            // first and the test double second; naming only one sends half of
+            // them to the wrong place.
             .having(
               (UnimplementedError e) => e.message,
               'message',
-              contains('features/projects_tasks/data/'),
+              contains('ProjectTaskRepositoryImpl'),
+            )
+            .having(
+              (UnimplementedError e) => e.message,
+              'message',
+              contains('test/features/projects_tasks/data/fakes/'),
             )
             .having(
               (UnimplementedError e) => e.message,

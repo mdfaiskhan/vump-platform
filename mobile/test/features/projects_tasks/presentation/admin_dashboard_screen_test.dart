@@ -3,11 +3,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:mobile/features/projects_tasks/application/project_task_providers.dart';
-import 'package:mobile/features/projects_tasks/data/fake_project_task_repository.dart';
-import 'package:mobile/features/projects_tasks/data/in_memory_project_task_store.dart';
 import 'package:mobile/features/projects_tasks/domain/entities/paged_result.dart';
 import 'package:mobile/features/projects_tasks/domain/entities/project.dart';
 import 'package:mobile/features/projects_tasks/presentation/admin_dashboard_screen.dart';
+
+import '../data/fakes/fake_project_task_repository.dart';
+import '../data/fakes/in_memory_project_task_store.dart';
 
 /// A-01 — one sourced tile and Chapter 2.2 step 2's navigation duty.
 ///

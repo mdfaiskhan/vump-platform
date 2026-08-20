@@ -1,12 +1,22 @@
-import 'package:mobile/features/projects_tasks/data/in_memory_project_task_store.dart';
 import 'package:mobile/features/projects_tasks/domain/entities/paged_result.dart';
 import 'package:mobile/features/projects_tasks/domain/entities/project.dart';
 import 'package:mobile/features/projects_tasks/domain/entities/task.dart';
 import 'package:mobile/features/projects_tasks/domain/repositories/project_task_repository.dart';
 
+import 'in_memory_project_task_store.dart';
+
 /// A deterministic in-memory [ProjectTaskRepository], for tests.
 ///
 /// ## IT IS NO LONGER WIRED INTO A BUILD — Mission 7.4 step 4
+///
+/// ## AND IT NO LONGER LIVES IN `lib/` — Mission 7.7
+///
+/// The argument below was made while this file sat in `lib/features/`, and it
+/// held: M8 forbids a release path that reaches a fake, not the existence of a
+/// double. Mission 7.7 moved the file to `test/` anyway, because the argument
+/// was doing work the directory can do for itself — a double under `test/`
+/// cannot be reached by a build at all, so the property stops depending on
+/// anyone re-running the grep this comment recommends.
 ///
 /// `ProjectTaskRepositoryImpl` calls Volume 4 Chapter 4.6 §3's real endpoints,
 /// and `main.dart` binds that. The removal condition below was met and the
