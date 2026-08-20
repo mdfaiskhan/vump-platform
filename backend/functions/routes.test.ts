@@ -125,12 +125,15 @@ describe('the route inventory', () => {
         //
         // POST /v1/auth/redeem is the third case and the reason this is a
         // per-route expectation rather than one widened list. It is
-        // unauthenticated by design, so a bare request is a VALID request and
-        // it is refused on behaviour instead — 501 until Phase 4 implements it.
-        // Widening the shared list to [401, 500, 501] would let any route
-        // answer 501 and still pass, which would stop the assertion meaning
+        // unauthenticated by design, so a bare request is a VALID request that
+        // reaches the handler — and is refused on its CONTENT, at 400, because
+        // it carries no email or password. Phase 3's stub answered 501 here;
+        // Phase 4 replaced it with the real validation.
+        //
+        // Widening the shared list to [400, 401, 500] would let any route
+        // answer 400 and still pass, which would stop this assertion meaning
         // that authorized routes refuse unauthenticated callers.
-        const acceptable = name === 'redeem' ? [501] : [401, 500];
+        const acceptable = name === 'redeem' ? [400] : [401, 500];
 
         expect(response.statusCode, `${name}: ${route} should be registered`).not.toBe(404);
         expect(acceptable, `${name}: ${route} should refuse a bare request`).toContain(

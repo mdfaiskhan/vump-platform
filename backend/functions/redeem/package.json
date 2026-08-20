@@ -4,7 +4,8 @@
   "type": "module",
   "main": "./src/index.ts",
   "dependencies": {
-    "@vump/shared": "0.1.0"
+    "@vump/shared": "0.1.0",
+    "google-auth-library": "^10.9.1"
   },
   "name": "@vump/redeem",
   "description": "Invite-code redemption and account creation. ADR-015 domain: auth-verify, second role (Mission 7.6)."
