@@ -7619,3 +7619,35 @@ Each looked like verification and measured nothing. The first two produced false
 ### Why it stops here rather than continuing
 
 Two attempts, no evidence, and a third tonight would be a third attempt at the same setup by the same tired hand. A-215 already carries the honest version of this gap and needs no amendment. F4 is **attempted, not established** — which is a real result, recorded as one.
+
+---
+
+### A-219 — ADR-050's device identity proven in both directions on hardware
+
+| | |
+|---|---|
+| **Claim** | The device id is a v4 UUID, minted once, persisted, and **scoped to the install** rather than to the device |
+| **F1a** | Force-stop → relaunch → **`cda75e35-bfe9-4621-a45c-76fed6d59088`**, byte-identical |
+| **F1b** | Uninstall → reinstall → **`9a897969-fe10-43fd-b950-2529add5d48e`**, a different, well-formed v4 |
+| **Status** | **Closed** |
+| **Date** | 2026-08-20, Mission 7.5 F1 |
+
+Unit tests proved the read-before-write logic against `SharedPreferences.setMockInitialValues`. Neither half had been observed against real Android storage.
+
+### Both directions are the claim, and the second one is the harder half
+
+**Stability** is what the requirement asks for — Chapter 5.7 §2's *"cached, stable device identifier"*. F1a shows it: a real process death, and the same id read back from `/data/data/…/shared_prefs/`.
+
+**Change on reinstall is not a limitation being tolerated — it is the property being asserted**, and confirming it is what distinguishes this design from the one ADR-050 rejected. An id that *survived* a reinstall would mean the app was reading something device-scoped, which is exactly what `ANDROID_ID` was refused for:
+
+> *"it is a device-scoped identifier shared across the OS, which carries correlation surface this project has no use for."*
+
+So F1b is the privacy claim, not the cost disclaimer. A passing F1a with a failing F1b would mean the app had quietly acquired the property ADR-050 declined to take.
+
+The contrast is sharpened by what came before it in the same session: `adb install -r` **preserves** app data, and the id survived it unchanged through F2 and F3. `adb uninstall` clears the sandbox, and the id changed. Same binary, same device, same minter — the only variable was whether the app's private storage survived. That is what "install-scoped" means, demonstrated rather than asserted.
+
+### What it costs, restated because it is now observed rather than predicted
+
+Reinstalling produces a new `device_id`. Nothing in Volume 4 or 5 treats it as a key — it is a correlator for grouping and diagnosis, and a chunk's identity rests on `chunk_id`, `session_id`, `task_id` and `collector_id`, none of which are local. ADR-050 predicted this trade; F1b is the measurement that turns the prediction into a fact.
+
+One consequence worth stating for whoever reads `chunk_metadata.device_id` later: **rows from the same physical phone across a reinstall will not group.** That is correct behaviour and will look like a data defect to anyone who does not know why.
