@@ -9,7 +9,7 @@ vi.mock('./auth.js', async (importOriginal) => {
 });
 
 const { verifyToken } = await import('./auth.js');
-const { withEnvelope, withVerifiedToken, notImplementedRoute } = await import('./handler.js');
+const { withEnvelope, withVerifiedToken } = await import('./handler.js');
 const { ApiError } = await import('./errors.js');
 
 /**
@@ -184,14 +184,5 @@ describe('withVerifiedToken, the one exempt route', () => {
     // At this point the users row may not exist yet — that is the reason this
     // route is exempt from the authorizer at all.
     expect(seen[0]).toEqual(identity);
-  });
-});
-
-describe('notImplementedRoute', () => {
-  it('answers 501 with a named code, behind the authorizer', async () => {
-    const response = await notImplementedRoute('GET /v1/projects', 'Listing projects')(event());
-
-    expect(response.statusCode).toBe(501);
-    expect(JSON.parse(response.body).error.code).toBe('NOT_IMPLEMENTED');
   });
 });

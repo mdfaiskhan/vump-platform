@@ -94,7 +94,19 @@ export const ERROR_CODES = [
   // --- Server -------------------------------------------------------------
   /** An unhandled fault. Carries no detail: see `toEnvelopeError`. */
   'INTERNAL_ERROR',
-  /** The handler exists and is not implemented yet. Scaffold only. */
+  /**
+   * A route exists and its behaviour does not. **Nothing raises this today.**
+   *
+   * Every route in Chapter 4.6's catalogue was implemented by Mission 7.3, and
+   * Mission 7.7 deleted `notImplementedRoute`, the wrapper that raised it.
+   *
+   * The code stays anyway, and the asymmetry is the reason: this list is the
+   * PUBLISHED error taxonomy, so removing an entry is a contract change while
+   * adding one back is additive. A client that already maps this code keeps
+   * working; one that meets it for the first time has a name for what it got.
+   * Keeping an unused entry costs nothing a reader cannot see from this
+   * comment.
+   */
   'NOT_IMPLEMENTED',
 ] as const;
 
@@ -199,12 +211,16 @@ export class ApiError extends Error {
     return new ApiError('AUTH_INVITE_CODE_INVALID', 'This invite code is not valid.', 404);
   }
 
+  /**
+   * **No caller, deliberately** — see `NOT_IMPLEMENTED` above.
+   *
+   * Kept as the one supported way to raise the code, so a future route that
+   * genuinely lands ahead of its query has something to throw rather than
+   * inventing a second spelling. The old message named Missions 6.2 and 6.3,
+   * which have both long since happened.
+   */
   static notImplemented(what: string): ApiError {
-    return new ApiError(
-      'NOT_IMPLEMENTED',
-      `${what} is not implemented yet. Mission 6.2 provisions the route and the handler; the query behind it lands in Mission 6.3.`,
-      501,
-    );
+    return new ApiError('NOT_IMPLEMENTED', `${what} is not implemented yet.`, 501);
   }
 }
 

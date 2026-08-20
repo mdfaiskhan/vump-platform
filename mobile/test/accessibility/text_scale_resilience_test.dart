@@ -9,9 +9,6 @@ import 'package:mobile/core/queue/providers/queue_ports.dart';
 import 'package:mobile/core/queue/queued_chunk.dart';
 import 'package:mobile/features/onboarding/presentation/onboarding_carousel_screen.dart';
 import 'package:mobile/features/projects_tasks/application/project_task_providers.dart';
-import 'package:mobile/features/projects_tasks/data/fake_project_task_admin_repository.dart';
-import 'package:mobile/features/projects_tasks/data/fake_project_task_repository.dart';
-import 'package:mobile/features/projects_tasks/data/in_memory_project_task_store.dart';
 import 'package:mobile/features/projects_tasks/presentation/admin_create_project_screen.dart';
 import 'package:mobile/features/projects_tasks/presentation/admin_create_task_screen.dart';
 import 'package:mobile/features/projects_tasks/presentation/admin_dashboard_screen.dart';
@@ -23,6 +20,9 @@ import 'package:mobile/features/projects_tasks/presentation/collector_projects_s
 import 'package:mobile/features/projects_tasks/presentation/collector_task_detail_screen.dart';
 
 import '../core/time/fakes/fake_clock.dart';
+import '../features/projects_tasks/data/fakes/fake_project_task_admin_repository.dart';
+import '../features/projects_tasks/data/fakes/fake_project_task_repository.dart';
+import '../features/projects_tasks/data/fakes/in_memory_project_task_store.dart';
 
 /// Chapter 2.10 §6 at 150% and 200%, across every screen Mission 5 built.
 ///

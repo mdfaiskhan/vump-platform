@@ -37,13 +37,21 @@ part 'chunk_metadata.freezed.dart';
 /// `MetadataTiming.durationSeconds`, which is a function of two stored
 /// timestamps and cannot drift.
 ///
-/// ## This object is not yet persisted anywhere
+/// ## Persisted since Mission 3.7, and FR-META-09 is satisfied
 ///
 /// Chapter 5.7 §3 requires it be written *"to the local Drift chunk_metadata
-/// table … in the same transaction as the chunk's own local record"*. Two
-/// problems, both recorded in amendment A-062: ADR-009 chose **Isar**, not
-/// Drift; and the atomic pairing needs the storage layer Mission 3.7 owns.
-/// So FR-META-09 is not satisfied by this mission and is not pretended to be.
+/// table … in the same transaction as the chunk's own local record"*. Amendment
+/// A-062 recorded two problems: ADR-009 chose **Isar**, not Drift; and the
+/// atomic pairing needed a storage layer that did not exist.
+///
+/// **Both are discharged.** `IsarChunkStore.saveChunk` writes the chunk row and
+/// the metadata row inside one `writeTxn`, and moves the `.mp4` into place
+/// before that transaction commits — so a committed row never names a file that
+/// is not there. `LocalChunkMetadata` is the Isar collection, embedded rather
+/// than flattened so the field shape still mirrors Chapter 4.5's JSON.
+///
+/// A-062's other three sections — the unsourced fields, the permission gap and
+/// the GPS/NFR-META-01 conflict — remain open and are not touched by this.
 @freezed
 class ChunkMetadata with _$ChunkMetadata {
   /// Creates a metadata object.

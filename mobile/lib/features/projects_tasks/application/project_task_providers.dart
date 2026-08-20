@@ -26,8 +26,10 @@ final Provider<ProjectTaskRepository> projectTaskRepositoryProvider =
       (Ref ref) => throw UnimplementedError(
         'projectTaskRepositoryProvider must be overridden with a '
         'ProjectTaskRepository. features/projects_tasks/data/ provides '
-        'FakeProjectTaskRepository until Mission 7 supplies a real one; see '
-        'ADR-022 for why application/ cannot import it directly.',
+        'ProjectTaskRepositoryImpl over VumpApi, which main.dart binds; '
+        'test/features/projects_tasks/data/fakes/ provides '
+        'FakeProjectTaskRepository for tests. See ADR-022 for why '
+        'application/ cannot import either directly.',
       ),
     );
 
@@ -36,8 +38,9 @@ final Provider<ProjectTaskRepository> projectTaskRepositoryProvider =
 /// Same inversion and the same reason as [projectTaskRepositoryProvider]:
 /// `application/` may not import `data/` (ADR-022 §5.3).
 ///
-/// **Nothing reads this yet.** Mission 5.2.1 built the interface and the fake;
-/// Mission 5.2.2's Admin CRUD screens are the first consumers. It is declared
+/// Mission 5.2.1 built the interface and the fake; Mission 5.2.2's Admin CRUD
+/// screens were the first consumers, and Mission 7.4 replaced the fake with
+/// `ProjectTaskAdminRepositoryImpl` over the real API. It is declared
 /// now rather than with its first caller because A-099's whole argument for
 /// splitting read from write is that a Collector-side notifier must be unable
 /// to reach a write method — and that guarantee is only real once the two
@@ -52,7 +55,9 @@ final Provider<ProjectTaskAdminRepository> projectTaskAdminRepositoryProvider =
       (Ref ref) => throw UnimplementedError(
         'projectTaskAdminRepositoryProvider must be overridden with a '
         'ProjectTaskAdminRepository. features/projects_tasks/data/ provides '
-        'FakeProjectTaskAdminRepository until Mission 7 supplies a real one; '
-        'see ADR-022 for why application/ cannot import it directly.',
+        'ProjectTaskAdminRepositoryImpl over VumpApi, which main.dart binds; '
+        'test/features/projects_tasks/data/fakes/ provides '
+        'FakeProjectTaskAdminRepository for tests. See ADR-022 for why '
+        'application/ cannot import either directly.',
       ),
     );

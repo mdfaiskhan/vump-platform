@@ -18,6 +18,8 @@ import 'package:mobile/features/projects_tasks/domain/entities/task.dart';
 /// here and both fakes hold a reference to the same instance, introduced at
 /// the composition root exactly as the real repositories will be.
 ///
+/// **Moved to `test/` by Mission 7.7**, with the two fakes it backs.
+///
 /// This mirrors what `main.dart` already does for `IsarChunkStore`: one
 /// instance behind four contracts, so every reader sees the same rows.
 ///
