@@ -109,11 +109,6 @@ class AuthRepositoryImpl implements AuthRepository {
   /// in quick succession share one initialisation instead of racing.
   Future<void>? _googleInitialization;
 
-  /// The claim carrying the user's role, per Volume 4 Chapter 4.7 §2.
-  static const String _roleClaim = 'role';
-
-  /// The claim carrying the user's organisation.
-
   @override
   Stream<Session> get sessionChanges async* {
     // Firebase's stream has no "not yet known" event: it emits null for a
@@ -407,33 +402,30 @@ class AuthRepositoryImpl implements AuthRepository {
     );
   }
 
-  /// Reads the domain [User] out of the ID token's custom claims.
+  /// Builds the domain [User] from Firebase's identity and the backend's
+  /// session context.
+  ///
+  /// **Neither `role` nor `orgId` comes from the ID token any more.** Both are
+  /// read from `POST /v1/auth/verify`, which answers from the `users` table.
   ///
   /// Volume 4 Chapter 4.7 §2 sets the role as a Firebase custom claim *"at
   /// account provisioning time… not read from a request body — a client can
-  /// never claim its own role"*. That property is what makes this read safe:
-  /// the token is signed by Firebase, so the app is reporting a claim rather
-  /// than choosing one.
+  /// never claim its own role"*, and this file read that claim until Mission
+  /// 7.8. The claim is still what provisioning writes and still what the client
+  /// cannot forge; what changed is that it is no longer the client's SOURCE.
   ///
-  /// Throws when a claim is absent or unrecognised, rather than defaulting.
-  /// A missing role is an unprovisioned account, and guessing `collector`
-  /// would grant an identity the provisioning step never issued.
+  /// ADR-048 made this argument for `org_id` and did not extend it to `role`:
+  /// *"a claim written once goes stale the moment an account moves
+  /// organisation"*. A role is written once at provisioning too, and the
+  /// authorizer has always resolved `Caller.role` from the `users` table —
+  /// documented there as *"Authoritative role from the users table, not the
+  /// token claim"*. So the client believed the claim while the server believed
+  /// the table, and a role changed in one and not the other put the two out of
+  /// step until the next token refresh. Same argument, second field.
+  ///
+  /// Firebase still supplies what only Firebase knows: `uid`, `email`,
+  /// `emailVerified`, `displayName`.
   Future<User> _toUser(fb.User user) async {
-    final fb.IdTokenResult token = await user.getIdTokenResult();
-    final Map<String, dynamic> claims =
-        token.claims ?? const <String, dynamic>{};
-
-    final Role role = switch (claims[_roleClaim]) {
-      'collector' => Role.collector,
-      'admin' => Role.admin,
-      _ => throw const AuthenticationException(
-        errorCode: ErrorCode.authUnauthenticated,
-        message:
-            'The signed-in account carries no usable "$_roleClaim" claim, so '
-            'it has not been provisioned for this application.',
-      ),
-    };
-
     final _VerifiedSession session = await _resolveSession();
 
     return User(
@@ -443,7 +435,8 @@ class AuthRepositoryImpl implements AuthRepository {
       // document whose `collector_id` is anything else.
       backendUserId: session.userId,
       email: user.email ?? '',
-      role: role,
+      // **From the backend, not from the claim** — see `_fetchSession`.
+      role: session.role,
       orgId: session.orgId,
       emailVerified: user.emailVerified,
       displayName: user.displayName,
@@ -516,22 +509,32 @@ class AuthRepositoryImpl implements AuthRepository {
     );
     final Object? userId = data['userId'];
     final Object? orgId = data['orgId'];
+    final Role? role = switch (data['role']) {
+      'collector' => Role.collector,
+      'admin' => Role.admin,
+      _ => null,
+    };
 
-    // Both or neither. A response carrying one and not the other means the
+    // All three or none. A response carrying some and not others means the
     // route's contract changed, and continuing with a blank would put an empty
     // `collector_id` on every chunk this session records — the substitution
     // A-068's Guard 1 exists to refuse, arriving from the other end.
+    //
+    // An unrecognised `role` is refused rather than defaulted, for `org.ts`'s
+    // reason on the server side: guessing `collector` would grant an identity
+    // the backend never issued, and guessing `admin` is worse.
     if (userId is String &&
         userId.isNotEmpty &&
         orgId is String &&
-        orgId.isNotEmpty) {
-      return _VerifiedSession(userId: userId, orgId: orgId);
+        orgId.isNotEmpty &&
+        role != null) {
+      return _VerifiedSession(userId: userId, orgId: orgId, role: role);
     }
     throw const AuthenticationException(
       errorCode: ErrorCode.authUnauthenticated,
       message:
-          'The backend did not return a user and an organisation for this '
-          'account, so it has not been provisioned for this application.',
+          'The backend did not return a user, an organisation and a role for '
+          'this account, so it has not been provisioned for this application.',
     );
   }
 
@@ -625,11 +628,18 @@ class AuthRepositoryImpl implements AuthRepository {
 /// non-empty strings on the same account, and nothing but a name distinguishes
 /// them at a call site.
 class _VerifiedSession {
-  const _VerifiedSession({required this.userId, required this.orgId});
+  const _VerifiedSession({
+    required this.userId,
+    required this.orgId,
+    required this.role,
+  });
 
   /// `users.id` — the backend's identifier, never the Firebase uid.
   final String userId;
 
   /// `users.org_id`, the organisation BR-20 scopes every query by.
   final String orgId;
+
+  /// `users.role`, which the authorizer treats as authoritative.
+  final Role role;
 }

@@ -84,7 +84,13 @@ It served Mission 0.6's `HomeScreen`, and ADR-022 §2.2 marked it as leaving *"w
 
 - **Every route is protected by default.** A new route is guarded the moment it is added, and opting out means adding it to `AuthGuard.publicRoutes` — a visible, reviewable act rather than an omission.
 
-- **The role guard is a navigation correction, not a security boundary**, and must not be mistaken for one. A Collector reaching `/admin` is sent home silently; the reason that is safe is that the backend re-derives authorization on every request (Volume 4 Chapter 4.8 §1) and the Firestore rules check the admin claim (ADR-036). The guard stops confusion, not attackers.
+- **The role guard is a navigation correction, not a security boundary**, and must not be mistaken for one. A Collector reaching `/admin` is sent home silently; the reason that is safe is that the backend re-derives authorization on every request (Volume 4 Chapter 4.8 §1). The guard stops confusion, not attackers.
+
+  **Corrected 2026-08-21, Mission 7.8.** This sentence cited two mechanisms: the backend's re-derivation ~~and the Firestore rules check the admin claim (ADR-036)~~. **The second no longer exists** — Mission 7.6 superseded ADR-036, undeployed its Cloud Function and deleted `firestore.rules` along with the database's only collection (A-227).
+
+  **The claim is unchanged and the argument still holds**, because the deleted half was never load-bearing for *this* one. The Firestore rules governed who could write `org_invite_codes`; they never gated `/admin`. What makes a Collector's arrival at `/admin` harmless is, and always was, that every Chapter 4.6 route calls `requireRole` and scopes by `caller.orgId` — and `Caller.role` comes from the `users` table rather than a token claim, which Mission 7.8 made true of the client too.
+
+  Recorded rather than quietly edited: a consequence that names two supports and loses one should say so, because the next reader would otherwise have no way to tell whether the remaining support was ever enough on its own.
 
 - **`app/` now imports `features/auth/application/`**, which is new — previously only `router.dart` imported feature *presentation*. ADR-022's rule constrains `core/`, not `app/`, and its router exception already establishes that `app/` may name features. Recorded because the import matrix's shape changed even though no rule did.
 
@@ -98,7 +104,7 @@ It served Mission 0.6's `HomeScreen`, and ADR-022 §2.2 marked it as leaving *"w
 - Mission 1.3 — ADR-004's correction, which restated the guard as undecided.
 - Mission 2.4 — the imperative Role Router this replaces.
 - Mission 2.5 — session resolution before the first frame, which is what lets the guard be synchronous.
-- Mission 2.6 — ADR-036, whose sign-up flow this makes reachable.
+- Mission 2.6 — ADR-036, whose sign-up flow this makes reachable. **ADR-036 is Superseded as of Mission 7.6**; the flow it describes is now `POST /v1/auth/redeem`.
 - Mission 2.7 — Route guards, which produced this ADR.
 
 ## Implementation Status

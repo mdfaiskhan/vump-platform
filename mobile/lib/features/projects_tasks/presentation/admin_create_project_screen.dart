@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-
 import 'package:mobile/app/theme/app_sizes.dart';
 import 'package:mobile/app/theme/app_spacing.dart';
 import 'package:mobile/core/errors/failure.dart';
 import 'package:mobile/features/projects_tasks/application/admin_project_task_notifier.dart';
+import 'package:mobile/features/projects_tasks/application/write_failure.dart';
 
 /// A-04 — Create Project. **The create half only.**
 ///
@@ -238,8 +238,16 @@ class AdminCreateScaffold extends StatelessWidget {
 ///
 /// Distinct from a field error: the fields are fine and the save did not
 /// happen. Chapter 2.9 §4.3 requires *"a plain-language cause with a single,
-/// specific recovery action — never an error with no action attached"*, and
-/// the only true action here is to try again, so that is what it says.
+/// specific recovery action — never an error with no action attached"*.
+///
+/// **The cause comes from the code, never from the message** — see
+/// `ProjectTaskWriteFailure`. This rendered `failure.message` until Mission
+/// 7.8, which put a backend diagnostic on screen for anything the envelope
+/// named, including *"AUTH_FORBIDDEN — Not permitted: this endpoint requires
+/// the admin role."*
+///
+/// The two cases need different recovery actions, which is the whole reason
+/// for distinguishing them: one can be retried and the other cannot.
 class _WriteFailure extends StatelessWidget {
   const _WriteFailure({required this.failure});
 
@@ -262,19 +270,28 @@ class _WriteFailure extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
             Text(
-              "This couldn't be saved.",
+              switch (classifyWriteFailure(failure)) {
+                ProjectTaskWriteFailure.notPermitted =>
+                  "You don't have permission to do this.",
+                ProjectTaskWriteFailure.unavailable =>
+                  "This couldn't be saved.",
+              },
               style: theme.textTheme.titleSmall?.copyWith(
                 color: theme.colorScheme.onErrorContainer,
               ),
             ),
             const SizedBox(height: AppSpacing.xs),
             Text(
-              // The failure's own message when it has one --
-              // ValidationException carries which field, which is more useful
-              // than anything this widget could invent. Chapter 2.9 §2
-              // principle 1 treats a generic fallback as a defect, so the
-              // generic branch says what to DO rather than what went wrong.
-              failure.message ?? 'Check your connection and try again.',
+              switch (classifyWriteFailure(failure)) {
+                // No "try again": retrying is precisely what will not work, and
+                // Chapter 2.9 §4.3 asks for the recovery action that exists
+                // rather than the one that reads well.
+                ProjectTaskWriteFailure.notPermitted =>
+                  'Ask your organisation admin to check your role, then sign '
+                      'in again.',
+                ProjectTaskWriteFailure.unavailable =>
+                  'Check your connection and try again.',
+              },
               style: theme.textTheme.bodyMedium?.copyWith(
                 color: theme.colorScheme.onErrorContainer,
               ),
