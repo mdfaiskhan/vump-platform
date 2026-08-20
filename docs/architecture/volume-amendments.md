@@ -7577,3 +7577,45 @@ Before F28, this case rendered *"Check your connection"* — pointing a Collecto
 ### A note on evidence standards
 
 This is the first checkpoint item in the project closed on **on-screen behaviour** rather than a captured log line. That is acceptable here **because the rendering path is deterministic and single-sourced** — one string, two call sites, one of them excluded by construction. It would not be acceptable for a claim about timing, ordering, or anything the UI summarises rather than reflects. The distinction is the point: behavioural evidence is sufficient exactly when the behaviour has one possible cause.
+
+---
+
+### A-218 — F4 attempted twice and established nothing, because the capture never existed
+
+| | |
+|---|---|
+| **Goal** | Close A-215's gap: prove the foreground service survives a genuine, timestamped screen-off window |
+| **Attempts** | Two, on 2026-08-20 |
+| **Result** | **Inconclusive.** Not a negative result — no evidence was collected at all |
+| **Cause** | The streaming logcat file `vump-f4.txt` **never existed**; every `findstr` check read nothing |
+| **Status** | **Open.** A-215's qualifier stands unchanged |
+
+### What went wrong, in order
+
+**Attempt one** used `input keyevent 26` — the POWER key, which **toggles**. Every manual check of the screen state was itself an interaction, and on a toggling key each check changed the thing it measured. Readings contradicted each other: `Asleep`, then a blank `pidof`, then `Awake`, with no way to order the events. Discarded entirely rather than salvaged.
+
+**Attempt two** fixed the method — `keyevent 223`/`224` are non-toggling SLEEP and WAKEUP, `svc power stayon false` removed *Stay awake while charging* (the likely cause of the screen waking itself, since the device is USB-attached), and an on-device poller wrote wakefulness and PID into logcat every five seconds so observation cost no interaction.
+
+**And then none of it was captured.** `vump-f4.txt` was never created — *File Not Found*. The `findstr` commands that appeared to be checking results were reading a file that did not exist, and reported nothing rather than erroring in a way that stood out. The most likely mechanical cause is that `%ADB%` was unset in the window running the redirect, so the command failed and produced no file; each `cmd` window needs its own `set`.
+
+### What was informally observed, and why it does not count
+
+The upload completed successfully after the screen locked, with no visible failure on the device.
+
+**That adds nothing to what A-215 already records.** Without timestamps bracketing the `PUT` lines, there is no way to tell whether the parts transferred *before* the lock or *during* it — which is the entire question. It is the same class of evidence as A-215's *"survived an unattended run"*, and the same distance from the claim.
+
+### The third instance tonight of one shape
+
+| | The check | What it actually measured |
+|---|---|---|
+| A-205 | `flutter build apk` reported success | A stale artefact from a previous run |
+| A-214 | `git diff --numstat` showed two files | A working tree that a later step had already changed |
+| **A-218** | `findstr` over a capture file | **A file that was never created** |
+
+Each looked like verification and measured nothing. The first two produced false confidence; this one produced false *ambiguity* — hours spent interpreting readings that did not exist.
+
+**The rule this leaves, and it is cheap:** *confirm the capture exists and is growing before starting the run.* One `dir` and one repeat two seconds later, before any recording begins. Every one of tonight's attempts would have ended in the first thirty seconds.
+
+### Why it stops here rather than continuing
+
+Two attempts, no evidence, and a third tonight would be a third attempt at the same setup by the same tired hand. A-215 already carries the honest version of this gap and needs no amendment. F4 is **attempted, not established** — which is a real result, recorded as one.
