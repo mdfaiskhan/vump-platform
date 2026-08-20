@@ -35,7 +35,9 @@ void main() {
   }
 
   group('a fully provisioned account', () {
-    test('maps both claims onto the domain user', () async {
+    test('maps the backend session onto the domain user', () async {
+      // Neither role nor orgId comes from a claim since Mission 7.8. Both are
+      // read from POST /v1/auth/verify, which answers from the users table.
       final Session session = await repositoryFor(<String, dynamic>{
         'role': 'collector',
         'org_id': 'org-42',
@@ -50,24 +52,33 @@ void main() {
     });
 
     test('admin is recognised as distinct from collector', () async {
-      final Session session = await repositoryFor(<String, dynamic>{
-        'role': 'admin',
-        'org_id': 'org-42',
-      }).restoreSession();
+      final Session session = await repositoryFor(
+        <String, dynamic>{'role': 'admin', 'org_id': 'org-42'},
+        backend: FakeVumpApi(role: 'admin'),
+      ).restoreSession();
 
       expect((session as SessionAuthenticated).user.role, Role.admin);
     });
   });
 
-  group('an account the claims do not provision', () {
+  group('an account the backend does not provision', () {
     // Every one of these throws rather than defaulting. A default would hand
     // out an identity that provisioning never issued, which is the failure
     // this whole boundary exists to prevent — and it would be invisible,
     // because the person would simply be let in.
+    //
+    // **These used to be claim-based and are now backend-based**, the same
+    // move ADR-048 made for org_id and Mission 7.8 made for role. The refusal
+    // did not weaken: an account with no usable role claim is refused by
+    // `provisionCaller` on the server, so it never receives a session at all.
+    // What changed is which side says no.
 
-    test('no claims at all is refused', () async {
+    test('no role from the backend is refused', () async {
       await expectLater(
-        repositoryFor(null).restoreSession(),
+        repositoryFor(
+          null,
+          backend: FakeVumpApi(role: ''),
+        ).restoreSession(),
         throwsA(
           isA<AuthenticationException>().having(
             (AuthenticationException e) => e.errorCode,
@@ -78,9 +89,15 @@ void main() {
       );
     });
 
-    test('a missing role is refused', () async {
+    test('claims alone no longer provision anyone', () async {
+      // The inverse of the old "no claims at all is refused": a perfectly good
+      // pair of claims establishes nothing on its own, because the client no
+      // longer reads them. Only the backend's answer counts.
       await expectLater(
-        repositoryFor(<String, dynamic>{'org_id': 'org-42'}).restoreSession(),
+        repositoryFor(
+          <String, dynamic>{'role': 'admin', 'org_id': 'org-42'},
+          backend: FakeVumpApi(role: ''),
+        ).restoreSession(),
         throwsA(isA<AuthenticationException>()),
       );
     });
@@ -126,12 +143,14 @@ void main() {
     });
 
     test('an unrecognised role is refused, not defaulted', () async {
-      // The case that would be most tempting to fall through on.
+      // The case that would be most tempting to fall through on. Guessing
+      // `collector` would grant an identity the backend never issued, and
+      // guessing `admin` is worse.
       await expectLater(
-        repositoryFor(<String, dynamic>{
-          'role': 'superuser',
-          'org_id': 'org-42',
-        }).restoreSession(),
+        repositoryFor(
+          <String, dynamic>{'role': 'collector', 'org_id': 'org-42'},
+          backend: FakeVumpApi(role: 'superuser'),
+        ).restoreSession(),
         throwsA(isA<AuthenticationException>()),
       );
     });
@@ -173,12 +192,41 @@ void main() {
 
       expect((session as SessionAuthenticated).user.orgId, 'org-from-table');
     });
+
+    test('the role claim is ignored even when present and valid', () async {
+      // Mission 7.8's fix, pinned. The exact mirror of the org_id test above,
+      // and the divergence it prevents is not hypothetical: the authorizer
+      // resolves `Caller.role` from the `users` table — "Authoritative role
+      // from the users table, not the token claim" — while this client read
+      // the claim. A role changed in one and not the other left the app
+      // showing admin surfaces whose every write the backend refused.
+      //
+      // 'admin' in the claim, 'collector' from the table. The table wins.
+      final Session session = await repositoryFor(
+        <String, dynamic>{'role': 'admin', 'org_id': 'org-42'},
+        backend: FakeVumpApi(role: 'collector'),
+      ).restoreSession();
+
+      expect((session as SessionAuthenticated).user.role, Role.collector);
+    });
+
+    test('and in the other direction too', () async {
+      // Under-privileging is the safer failure and still a failure: a promoted
+      // Admin holding a stale collector claim would see no Admin surfaces
+      // while the backend granted every one of them.
+      final Session session = await repositoryFor(
+        <String, dynamic>{'role': 'collector', 'org_id': 'org-42'},
+        backend: FakeVumpApi(role: 'admin'),
+      ).restoreSession();
+
+      expect((session as SessionAuthenticated).user.role, Role.admin);
+    });
   });
 
   group('sign-in maps or converts, and never leaks', () {
     test('a successful sign-in returns the provisioned user', () async {
       final AuthRepositoryImpl repository = AuthRepositoryImpl(
-        backend: FakeVumpApi(),
+        backend: FakeVumpApi(role: 'admin'),
         logger: AppLogger(environment: AppEnvironment.production),
         firebaseAuth: _FakeFirebaseAuth(
           _FakeUser(
@@ -192,6 +240,10 @@ void main() {
         password: 'pw',
       );
 
+      // Both from the backend. The claims above are deliberately left in place
+      // and deliberately disagree on org — 'org-7' in the claim, 'org-42' from
+      // the response — so a regression that reinstated either claim read would
+      // fail here rather than pass by coincidence.
       expect(user.role, Role.admin);
       expect(user.orgId, 'org-42');
     });
