@@ -1,3 +1,5 @@
+data "aws_caller_identity" "current" {}
+
 # Development environment. ADR-014 assigns it synthetic, disposable data and
 # permits it to be broken; nothing here is shaped for production durability.
 #
@@ -71,6 +73,27 @@ module "db_credentials" {
 
   environment_slug = var.environment_slug
   function_names   = toset(local.lambda_functions)
+}
+
+# Mission 7.6 Phase 2 — cross-cloud federation into the Firebase project.
+#
+# CI's `terraform plan` cannot authenticate to GCP until the GitHub pool this
+# module creates exists, so the first plan after this block lands WILL FAIL.
+# That is expected and is not a defect: the credential CI needs is the thing
+# being created. The `ci.yml` auth step follows in a separate change once the
+# pool is live.
+module "gcp_federation" {
+  source = "../../modules/gcp-federation"
+
+  environment_slug = var.environment_slug
+  gcp_project_id   = var.firebase_project_id
+  aws_account_id   = data.aws_caller_identity.current.account_id
+  aws_region       = var.region
+
+  # By value, not by reference — see the drift warning on both sides.
+  redeem_role_name = "vump-${var.environment_slug}-redeem"
+
+  github_repository = var.github_repository
 }
 
 module "iam" {

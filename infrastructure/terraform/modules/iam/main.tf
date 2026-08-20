@@ -113,6 +113,21 @@ data "aws_iam_policy_document" "assume_role" {
 resource "aws_iam_role" "lambda" {
   for_each = local.roles
 
+  # DRIFT WARNING — this name is depended on from GCP, by value not reference.
+  #
+  # `modules/gcp-federation` trusts exactly one of these roles by ARN, in a
+  # Workload Identity Federation attribute condition, so that only the redeem
+  # Lambda may impersonate the Firebase service account. It computes that ARN
+  # from the same two inputs this line uses rather than referencing this
+  # resource, because a GCP module taking a dependency on an AWS one would
+  # couple two providers for a string both can build.
+  #
+  # **Changing this format silently breaks that condition.** Nothing fails at
+  # plan time; redemption fails at runtime with an authentication error that
+  # names neither side. If this line changes, change
+  # `modules/gcp-federation/variables.tf`'s `redeem_role_name` with it — its
+  # `redeem_role_arn_trusted` output exists so the mismatch shows up as a plan
+  # diff rather than as a production incident. Mission 7.6, Phase 2.
   name        = "vump-${var.environment_slug}-${each.key}"
   description = "Lambda execution role in the ${each.value.domain} resource domain (ADR-015)."
 
