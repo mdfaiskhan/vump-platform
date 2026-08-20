@@ -64,15 +64,22 @@ resource "google_service_account" "redeem" {
 # then have removed the KEY while keeping the CAPABILITY, satisfying half the
 # reasoning and reporting it as all of it.
 #
-# So the service account gets a custom role holding precisely the two
-# permissions the redeem route performs and nothing else. It cannot delete a
-# user, cannot list users, cannot disable an account.
+# So the service account gets a custom role holding precisely the permissions
+# the redeem route performs and nothing else. It cannot delete a user, cannot
+# read or list users, and cannot touch Firebase Auth configuration.
+#
+# **It CAN disable an account**, and that is deliberate rather than an
+# oversight in the scoping: disabling is an *update*, and Mission 7.6's
+# Blocker 2 chose `updateUser(uid, {disabled: true})` over `deleteUser` for the
+# failure compensator precisely so that no delete permission would be needed.
+# An earlier version of this comment claimed the role "cannot disable an
+# account", which was wrong the moment that compensator was written.
 resource "google_project_iam_custom_role" "redeem" {
   project = var.gcp_project_id
 
   role_id     = "vumpRedeem${title(var.environment_slug)}"
   title       = "Vump invite redemption (${var.environment_slug})"
-  description = "Create a user and set its custom claims. Nothing else. Deliberately narrower than roles/firebaseauth.admin — see Mission 7.6 Phase 2."
+  description = "Create a user, set its custom claims, disable one. Plus Google's baseline Firebase tier, which predefined roles include silently. Deliberately narrower than roles/firebaseauth.admin — no configs, no delete, no read. Mission 7.6."
 
   # `createUser` and `setCustomUserClaims`, and no third thing.
   #
@@ -85,15 +92,114 @@ resource "google_project_iam_custom_role" "redeem" {
   # so acceptance is the confirmation — there is no weaker outcome where a
   # misspelt id is silently created.
   #
-  # STILL UNPROVEN: that these two SUFFICE. No token has been exchanged and no
-  # user has been created through this identity; Phase 4 is the first time
-  # either happens. If `setCustomUserClaims` needs a third permission, ADD IT
-  # HERE EXPLICITLY — do not substitute `roles/firebaseauth.admin`, which is
-  # full read/write on Firebase Auth and would discard the whole argument
-  # above, removing the key while keeping the capability.
+  # THEY DID NOT SUFFICE, and the reason is structural rather than a missing
+  # third Auth permission. A-223.
+  #
+  # This comment previously read "STILL UNPROVEN: that these two SUFFICE … if
+  # `setCustomUserClaims` needs a third permission, ADD IT HERE EXPLICITLY".
+  # Phase 4's first live redemption answered it: `createUser` failed with
+  # `auth/insufficient-permission` against a token exchange, impersonation
+  # binding and OAuth scope each verified correct and ruled out individually
+  # first.
+  #
+  # ## Why product permissions alone are not enough
+  #
+  # Google documents a BASELINE tier — "required to use any Firebase product or
+  # service" — which is **automatically included in every Firebase PREDEFINED
+  # role and in none of the product-specific permission ids**. Granting
+  # `firebaseauth.users.create` does not imply it. A custom role has to carry
+  # it, and that requirement is invisible until a call fails.
+  #
+  # This is what "narrower than a predefined role" actually costs: predefined
+  # roles are a permission set plus an unstated floor, and building the set by
+  # hand means building the floor by hand too.
+  #
+  # ## The baseline is project METADATA, not user data
+  #
+  # Every id below is a read of the project's own shape — which Firebase
+  # products are enabled, which client apps exist, what the API quotas are.
+  # **None of them reads, writes or lists a user account**, and none returns an
+  # API key STRING (that is `apikeys.keys.getKeyString`, deliberately absent —
+  # and ADR-016 places Firebase client identifiers in the Public tier anyway).
+  #
+  # So this does not undo Phase 2's decision. The role is still materially
+  # narrower than `roles/firebaseauth.admin`: no `firebaseauth.configs.*`, no
+  # `users.delete`, no `users.get`, no `users.sendEmail`. What changed is the
+  # floor beneath the two permissions, not the two permissions.
+  #
+  # If a further permission is ever needed, ADD IT HERE EXPLICITLY — do not
+  # substitute `roles/firebaseauth.admin`, which is full read/write on Firebase
+  # Authentication and would discard the whole argument above, removing the key
+  # while keeping the capability.
   permissions = [
+    # What the route actually does: `createUser`, then `setCustomUserClaims`.
+    # `updateUser(disabled: true)` is the failure compensator and is also
+    # `users.update` — see Blocker 2.
     "firebaseauth.users.create",
     "firebaseauth.users.update",
+
+    # --- UNCONFIRMED. Bisection step 2, Mission 7.6 Phase 4 ----------------
+    #
+    # **This line is a hypothesis under test, not a finding.** Do not write it
+    # up, cite it, or copy it into another role until a live redemption has
+    # succeeded with exactly this set. If the race test still fails with
+    # `auth/insufficient-permission`, this line comes back out before the next
+    # candidate goes in.
+    #
+    # What is established: granting the full `roles/firebaseauth.admin`
+    # temporarily made `createUser` succeed — a real 201 with a real uid — and
+    # the grant was then reverted. So the failure IS a missing permission, not
+    # a project, SDK, token or binding problem. Those were each ruled out
+    # individually first.
+    #
+    # ELIMINATED, step 1: `firebaseauth.configs.get`. The hypothesis was that
+    # `createUser` reads the project's Auth configuration — password policy,
+    # enabled providers — before deciding whether a request is acceptable.
+    # Applied, waited for propagation, re-ran: identical failure. Removed
+    # rather than left in place, because a permission that fixed nothing is
+    # not one this role should keep.
+    #
+    # NOW TESTING: `users.get`. `createUser` must decide whether the address is
+    # already registered — the Admin SDK raises `auth/email-already-exists`,
+    # which it cannot know without a read. Weaker as a hypothesis than step 1
+    # was, because that read may happen inside the create call under the
+    # server's own authority rather than the caller's, which would mean this
+    # permission is not required either.
+    #
+    # ONE permission at a time, deliberately. Adding several would very likely
+    # work and would leave us unable to say which was needed, which is how a
+    # role ends up permanently wider than the evidence supports.
+    #
+    # NOT CANDIDATES AT ANY POINT: `configs.getSecret` and
+    # `configs.getHashConfig` return actual secret material — the password
+    # hashing parameters among them — so an identity holding either could
+    # verify or forge password hashes offline. They are excluded on principle
+    # rather than tried and reverted, however the bisection goes.
+    "firebaseauth.users.get",
+
+    # --- Google's baseline tier, required by every Firebase product --------
+    #
+    # `resourcemanager.projects.list` is part of the documented tier and is
+    # ABSENT ON PURPOSE: GCP refused it with "Permission
+    # resourcemanager.projects.list is not valid" at apply. It lists projects
+    # across a container, so it is only grantable at organisation or folder
+    # level, and this is a project-scoped custom role. Nothing was substituted
+    # for it — `firebase.projects.get` and `resourcemanager.projects.get` are
+    # what the SDK actually reads.
+    "firebase.clients.get",
+    "firebase.clients.list",
+    "firebase.links.list",
+    "firebase.projects.get",
+    "resourcemanager.projects.get",
+    "resourcemanager.projects.getIamPolicy",
+    "apikeys.keys.get",
+    "apikeys.keys.list",
+    "apikeys.keys.lookup",
+    "serviceusage.operations.get",
+    "serviceusage.operations.list",
+    "serviceusage.quotas.get",
+    "serviceusage.services.get",
+    "serviceusage.services.list",
   ]
 }
 
