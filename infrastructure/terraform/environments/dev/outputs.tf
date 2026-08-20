@@ -49,3 +49,60 @@ output "lambda_function_names" {
   description = "Deployed function names, keyed by ADR-015 function."
   value       = module.api_gateway.function_names
 }
+
+# ---------------------------------------------------------------------------
+# GCP federation — Mission 7.6 Phase 2
+# ---------------------------------------------------------------------------
+# Surfaced at the root because Phase 3 and Phase 4 need them and the alternative
+# is reading them out of state by hand. None is a credential: each is an
+# identifier that grants nothing without an AWS or GitHub identity satisfying
+# the pool's attribute condition. ADR-016's Public tier.
+#
+# The audiences carry the GCP project NUMBER, which is the only value in this
+# module not derivable from configuration — every other id is deterministic from
+# environment_slug and firebase_project_id.
+
+output "redeem_audience" {
+  description = "`audience` for the redeem Lambda's external-account credential configuration."
+  value       = module.gcp_federation.redeem_audience
+}
+
+output "redeem_service_account_email" {
+  description = "Firebase service account the redeem Lambda impersonates."
+  value       = module.gcp_federation.redeem_service_account_email
+}
+
+output "redeem_regional_cred_verification_url" {
+  description = "STS verification URL for the redeem credential configuration. Regional on purpose."
+  value       = module.gcp_federation.regional_cred_verification_url
+}
+
+output "redeem_role_arn_trusted" {
+  description = <<-EOT
+    The exact AWS role ARN prefix the federation trusts. Output so a drift in
+    `modules/iam`'s role naming shows up as a changed plan value rather than as
+    a runtime authentication failure that names nothing.
+  EOT
+  value       = module.gcp_federation.redeem_role_arn_trusted
+}
+
+output "redeem_custom_role_permissions" {
+  description = <<-EOT
+    The two Firebase Auth permissions the redeem service account holds.
+
+    Output so widening it is visible in a plan diff and in PR review. ADR-036's
+    objection was a credential that "can grant `admin` on any organisation";
+    this list is what keeps that from being true of the federated identity.
+  EOT
+  value       = module.gcp_federation.custom_role_permissions
+}
+
+output "ci_plan_audience" {
+  description = "Audience for CI's GitHub Actions credential configuration. Needed when `ci.yml` gains its GCP auth step."
+  value       = module.gcp_federation.ci_plan_audience
+}
+
+output "ci_plan_service_account_email" {
+  description = "Read-only service account CI impersonates so `terraform plan` can refresh the federation resources."
+  value       = module.gcp_federation.ci_plan_service_account_email
+}

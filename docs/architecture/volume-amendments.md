@@ -7665,7 +7665,7 @@ One consequence worth stating for whoever reads `chunk_metadata.device_id` later
 | **Merged** | `c437d60`, PR #15 |
 | **Deployed** | **No.** `vump-dev-chunks-upload` `LastModified` = `2026-08-19T07:18:53Z` |
 | **Found** | 2026-08-20, by an unrelated `terraform plan` for Mission 7.6's GCP work |
-| **Status** | **Open until deployed and verified** |
+| **Status** | **Deployed 2026-08-20T12:23:54Z.** Partially closed — see the resolution below |
 
 The running Lambda has been serving the vulnerable `finalizeUpload` for the whole of Mission 7.4 — including the device checkpoint, the end-to-end upload, and the 38-part scale test. Every chunk uploaded in those sessions went through the unvalidated path.
 
@@ -7699,3 +7699,70 @@ The first three were verification measuring the wrong artefact. This one is a **
 A check that the deployed `CodeSha256` of every function equals the hash Terraform would compute from the current source — the same comparison the plan performs, run deliberately rather than stumbled into. It is one command per function and it belongs in a closing gate, next to the test run.
 
 Recorded as open item 119.
+
+### Resolution — deployed 2026-08-20
+
+`chunks-upload` was rebuilt, the artefact was checked for A-195's lookup string **before** anything touched AWS, and it was applied on its own:
+
+| | |
+|---|---|
+| **Applied** | `terraform apply -target='module.api_gateway.aws_lambda_function.this["chunks-upload"]'` |
+| **Result** | 1 changed, 0 added, 0 destroyed |
+| **`LastModified`** | `2026-08-20T12:23:54Z` — was `2026-08-19T07:18:53Z` |
+| **`CodeSha256`** | Matches the `source_code_hash` Terraform computed from current source |
+
+Deployed as **its own deliberate act**, not folded into the GCP apply that found it. Bundling them would have made one apply carry two unrelated intents, and the deployment of a security fix would again have been something that happened as a side effect rather than something anyone decided to do — which is the shape of the defect, not merely its occasion.
+
+**Deployed and hash-verified is not the same as proven.** What is now true is that the running code is the code that was written and tested. What remains untested is the control itself against the deployed route: a `finalizeUpload` call carrying a forged `key` or `uploadId`, rejected by the live Lambda rather than by a unit test. That is exactly the gap between "the repository says so" and "the world does" that this amendment exists to record, and closing it with a repository-level check would repeat the error at a smaller scale.
+
+**That test is deferred to Phase 4**, which already requires a real two-caller concurrency race against a deployed route and therefore already builds the harness for calling deployed routes adversarially. A standalone probe now would be a second harness for one assertion. **A-220 does not close until that request is made and refused.**
+
+Open item 119 is unaffected by the deploy and stays open: the missing thing is not this deployment but the closing-gate check that would have caught it.
+
+
+---
+
+### A-221 — ADR-036's key objection is answered in infrastructure
+
+Mission 7.6 Phase 2. Applied to `dev` 2026-08-20: **11 added, 0 changed, 0 destroyed.**
+
+ADR-036 chose Cloud Functions for one stated reason — "running the Admin SDK outside Google means holding a service-account private key that can grant `admin` on any organisation" — and named the escape without costing it: "Workload Identity Federation from AWS to GCP is the shape that avoids one." This is that shape, built.
+
+The Lambda signs an STS `GetCallerIdentity` request with the credentials AWS already handed it; GCP verifies the signature and reads the caller's role ARN out of it. **No key exists at any point.** What the function bundles is a credential *configuration* — a JSON file naming a pool — which is inert without an AWS identity satisfying the pool's condition.
+
+#### Created resources
+
+| Resource | Identifier |
+|---|---|
+| Redeem service account | `vump-dev-redeem@vump-platform-f86af.iam.gserviceaccount.com` |
+| Custom role | `projects/vump-platform-f86af/roles/vumpRedeemDev` |
+| AWS pool | `vump-dev-aws`, provider `aws-lambda` |
+| GitHub pool | `vump-dev-github`, provider `github-actions` |
+| CI plan service account | `vump-dev-ci-plan@vump-platform-f86af.iam.gserviceaccount.com` |
+| Trusted AWS role | `arn:aws:sts::929570731524:assumed-role/vump-dev-redeem` |
+| STS verification URL | `https://sts.ap-south-1.amazonaws.com?Action=GetCallerIdentity&Version=2011-06-15` |
+
+Every id above is deterministic from `environment_slug` and `firebase_project_id`. The **audiences are not** — they carry the GCP project number — so seven root outputs were added in the same phase rather than leaving Phase 3 to read state by hand. `terraform output redeem_audience` is the value the redeem function's credential configuration needs.
+
+None of these is a secret. ADR-016 places Firebase identifiers in the Public tier, and possessing a pool path grants nothing.
+
+#### Two things the apply settled that the plan could not
+
+Both were apply-time-only unknowns, flagged before running and **both succeeded first try**:
+
+1. **The custom role's permission strings.** `firebaseauth.users.create` and `firebaseauth.users.update` were taken from a Google reference whose permission tables did not render when checked; F1 deferred exact-string confirmation to implementation deliberately. GCP rejects unknown permission ids at apply, so acceptance *is* the confirmation. The comment in `main.tf` marking them unverified is now stale and should be corrected rather than deleted — it records why they were a risk.
+2. **Both `principalSet` impersonation bindings.** A malformed principal set is accepted syntactically and fails only at runtime in some shapes; these validated.
+
+#### What was NOT proven, and it is the whole point of the phase
+
+**No token has been exchanged.** The apply proves the resources exist and are well-formed. It does not prove that a Lambda running as `vump-dev-redeem` can obtain a Google access token, nor that the two permissions suffice for `createUser` and `setCustomUserClaims`. Both are Phase 4, against a deployed route.
+
+The second is the one to watch. If `setCustomUserClaims` needs a permission beyond `firebaseauth.users.update`, the correct response is to **add that permission explicitly** — never to substitute `roles/firebaseauth.admin`, which is full read/write on Firebase Auth and can therefore grant `admin` on any organisation. Reaching for it would remove the *key* while keeping the *capability*, satisfying half of ADR-036's reasoning and reporting it as all of it.
+
+#### Why the CI half exists
+
+`ci.yml` runs `terraform plan` on every pull request. The moment this module landed, that plan either fails for want of GCP credentials or gets scoped around the gap — and a plan scoped around a gap is a green check that has silently stopped covering a security control. A-205, A-214 and A-218 are each an instance of that pattern; it is not tolerable here. `vump-dev-ci-plan` holds `roles/viewer` only, holds nothing on the redeem account, and cannot impersonate it.
+
+The pool exists; **`ci.yml` does not yet use it.** Carried as a follow-up.
+
+ADR-036 is not superseded yet. It stops being true when the Cloud Function is deleted in Phase 6, and superseding it before then would put the documentation ahead of the code.
