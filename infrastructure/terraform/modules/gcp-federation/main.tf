@@ -76,12 +76,21 @@ resource "google_project_iam_custom_role" "redeem" {
 
   # `createUser` and `setCustomUserClaims`, and no third thing.
   #
-  # UNVERIFIED AT AUTHORING TIME: these two permission ids are taken from
-  # Google's Firebase Authentication roles reference, whose permission tables
-  # did not render when checked. F1 deferred exact-string confirmation to
-  # implementation deliberately. If `setCustomUserClaims` turns out to need a
-  # third permission, ADD IT HERE EXPLICITLY — do not substitute
-  # `roles/firebaseauth.admin`, which would discard the whole argument above.
+  # These two ids were UNVERIFIED at authoring time — taken from Google's
+  # Firebase Authentication roles reference, whose permission tables did not
+  # render when checked. F1 deferred exact-string confirmation to
+  # implementation deliberately.
+  #
+  # CONFIRMED 2026-08-20 by the dev apply. GCP rejects unknown permission ids,
+  # so acceptance is the confirmation — there is no weaker outcome where a
+  # misspelt id is silently created.
+  #
+  # STILL UNPROVEN: that these two SUFFICE. No token has been exchanged and no
+  # user has been created through this identity; Phase 4 is the first time
+  # either happens. If `setCustomUserClaims` needs a third permission, ADD IT
+  # HERE EXPLICITLY — do not substitute `roles/firebaseauth.admin`, which is
+  # full read/write on Firebase Auth and would discard the whole argument
+  # above, removing the key while keeping the capability.
   permissions = [
     "firebaseauth.users.create",
     "firebaseauth.users.update",
