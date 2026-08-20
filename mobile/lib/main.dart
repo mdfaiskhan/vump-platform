@@ -26,9 +26,7 @@ import 'package:mobile/core/onboarding/providers/onboarding_ports.dart';
 import 'package:mobile/core/queue/providers/queue_ports.dart';
 import 'package:mobile/core/upload/providers/upload_ports.dart';
 import 'package:mobile/features/auth/application/auth_notifier.dart';
-import 'package:mobile/features/auth/application/invite_code_notifier.dart';
 import 'package:mobile/features/auth/data/firebase_auth_token_source.dart';
-import 'package:mobile/features/auth/data/invite_code_repository_impl.dart';
 import 'package:mobile/features/auth/data/repositories/auth_repository_impl.dart';
 import 'package:mobile/features/onboarding/data/shared_preferences_onboarding_seen_store.dart';
 import 'package:mobile/features/projects_tasks/application/project_task_providers.dart';
@@ -122,10 +120,6 @@ Future<void> main() async {
           // ADR-048: org_id comes from POST /v1/auth/verify, not the claim.
           backend: ref.watch(vumpApiProvider),
         ),
-      ),
-      // TEMPORARY, retired with ADR-036 at Mission 6/7.
-      inviteCodeRepositoryProvider.overrideWithValue(
-        InviteCodeRepositoryImpl(),
       ),
 
       // C-01's first-launch trigger. The SAME resolved SharedPreferences
