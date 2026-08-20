@@ -7991,7 +7991,9 @@ Under A-056 an absent invite code produces an account in the default org. Had `D
 
 Pointing the code at `Device Proof Org` separates them: `org_id = …d1` is producible only by reading that code's row. The assertion distinguishes *"the code was redeemed"* from *"an account was created"*, and only the first is what Phase 5 claims.
 
-This is the counterweight to the pattern the mission kept hitting — A-205, A-212, A-218, A-222 and the race harness's own overlap check were each a check that passed while measuring the wrong thing. Here the measurement was designed backwards from *what a false pass would look like*, before the run rather than after it.
+This is the counterweight to the pattern the mission kept hitting. A-205, A-212, A-222 and the race harness's own overlap check each **passed** while measuring something other than what they claimed. [[A-218]] belongs to the same family and fails differently, which is worth keeping rather than flattening: it produced **false ambiguity** rather than false confidence — hours spent interpreting readings from a capture file that never existed. Its own record draws the line, and this one should not blur it.
+
+What unites all five is not the verdict but the gap between what a check appeared to measure and what it measured. Here the measurement was designed backwards from *what a false pass would look like*, before the run rather than after it.
 
 #### Two earlier decisions confirmed by observation rather than argument
 
