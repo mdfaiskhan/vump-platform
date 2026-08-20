@@ -123,8 +123,8 @@ Every architectural invariant in force, with its authority and how it is checked
 | **I39** | `firebase_auth` only in `features/auth/data/` | ADR-034, ADR-022 §2.3 | CI `Architecture boundaries` |
 | **I40** | `google_sign_in` only in `features/auth/data/` | ADR-034, A-053 | CI `Architecture boundaries` |
 | **I41** | `core/` never imports `features/` | ADR-022 §2, ADR-035 | A grep — **checkable now** |
-| **I42** | `cloud_functions` only in `features/auth/data/` | ADR-036 | CI `Architecture boundaries` |
-| **I43** | `cloud_firestore` only in `features/auth/data/` | ADR-036 | CI `Architecture boundaries` |
+| ~~**I42**~~ | ~~`cloud_functions` only in `features/auth/data/`~~ | ADR-036 | **RETIRED** — the package left the project at Mission 7.6 Phase 6 |
+| ~~**I43**~~ | ~~`cloud_firestore` only in `features/auth/data/`~~ | ADR-036 | **RETIRED** — same |
 | **I44** | `battery_plus` only in `features/recording/data/` | FR-CHK-03, ADR-030 | CI `Architecture boundaries` |
 | **I45** | `connectivity_plus` only in `features/recording/data/` | FR-CHK-04, ADR-030 | CI `Architecture boundaries` |
 | **I46** | `core/queue/` imports no feature | ADR-040 | CI `Architecture boundaries` |
@@ -146,7 +146,9 @@ ADR-040 is what forced the issue: `features/upload/` needed rows `features/recor
 
 Both were verified by deliberately breaking them before being reported as passing, per the standard A-067 set after a rule living only in prose went unenforced for two missions.
 
-**I42 and I43 are temporary**, and are the only invariants in this register with an expiry: both packages leave the project when ADR-036's runtime is retired at Mission 6/7. They are registered anyway — an unenforced boundary is not cheaper for being short-lived, and the confinement is what keeps the retirement a deletion of one directory rather than a hunt.
+**~~I42 and I43 are temporary~~ — they expired, as written.** They were the only invariants in this register with an expiry: both packages left the project when ADR-036's runtime was retired at Mission 7.6 Phase 6. The register kept them anyway, on the reasoning that *"an unenforced boundary is not cheaper for being short-lived, and the confinement is what keeps the retirement a deletion of one directory rather than a hunt."*
+
+**That prediction was tested and held.** At retirement, `cloud_firestore` had exactly ONE consumer and `cloud_functions` had none — Phase 5 had already removed the last. Both came out of `pubspec.yaml` in a single edit with no search and nothing found in an unexpected place. A guardrail that paid off is worth recording as such, because the counterfactual — an unconfined package spread across a codebase over four missions — leaves no trace to point at afterwards. See A-227.
 
 **I47 is I46's second instance, and the check is now a loop rather than a copy.** `core/upload/` holds Chapter 5.10's three contracts — two implemented by `features/recording/`, one owed to `features/projects_tasks/` — and the same argument applies: a contract that imported either side would stop being neutral ground. Written as `for module in queue upload`, so a third contract module is one word rather than ten lines someone can forget to keep in step.
 
@@ -211,7 +213,7 @@ Verified by running each check against the working tree, not asserted. Commands 
 
 | Checked | Result |
 |---|---|
-| Package confinement (I1–I4, I39–I40, I42–I43, I48) | 13 of 13 pass — full sweep, never a subset (item 26) |
+| Package confinement (I1–I4, I39–I40, I48) | 11 of 11 pass — full sweep, never a subset (item 26). Was 13 of 13 until I42–I43 retired |
 | AWS SDK dependency, credential references, hardcoded endpoints (I5–I6) | none present |
 | Credential-bearing files, AWS keys, private keys, service-account keys (I7) | none tracked |
 | Environment sets across Dart / JSON / shell (I8) | agree — `development`/`staging`/`production` |
@@ -278,7 +280,7 @@ check() {  # check <label> <grep output>
   fi
 }
 
-# I1–I4, I39–I43 · each third-party package confined to the module that owns it
+# I1–I4, I39–I40, I48 · each third-party package confined to the module that owns it
 for p in "dio lib/core/network/" \
          "flutter_secure_storage lib/core/storage/" \
          "firebase_core lib/core/firebase/" \
