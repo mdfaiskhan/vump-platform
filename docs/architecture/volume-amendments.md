@@ -4683,6 +4683,7 @@ Every carried-forward item, in one place. Accurate as of **Mission 4.3**; origin
 | 117 | **C-05 and A-05 never re-fetch their Task list, so a Collector cannot see a Task assigned to them without restarting the app** | `tasksProvider` is a plain `AsyncNotifierProviderFamily` with **no `autoDispose` and no `keepAlive`** — nothing in the whole feature uses either — so a family member lives for the container's lifetime and `build(projectId)` runs **once per Project id, ever**. Re-navigating re-reads cached state and issues no request. That much is deliberate and documented: *"Riverpod keeps one instance per Project, so navigating back to a Project already visited does not refetch it."*<br><br>**What is not deliberate is that nothing else refreshes it either:**<br><br>| Path | Refreshes? |<br>|---|---|<br>| In-app Task creation | **Yes** — `AdminProjectTaskNotifier.createTask` calls `ref.invalidate(tasksProvider(projectId))` |<br>| Projects list, C-04 and A-03 | **Yes** — `RefreshIndicator` calls `refresh()` |<br>| **Task list, C-05 and A-05** | **No** — no `RefreshIndicator`, no pull-to-refresh, no external invalidation |<br><br>So a change made **server-side** — an Admin assigning a Collector to a new Task, which is FR-ADM-03's whole purpose — is invisible to that Collector until the app is restarted. `TasksNotifier.refresh()` exists, is implemented and is unit-tested; **it has no caller.**<br><br>**Found during Mission 7.5's F2 device session**, where 201 seeded Tasks did not appear. That turned out to be a missing `task_assignments` seed rather than the cache — but tracing it surfaced this, which is real independently.<br><br>**The fix is small**: a `RefreshIndicator` on both Task lists, matching what C-04 already does, calling the `refresh()` that is already there. Not done during a verification session, per the standing rule that Testing and Verification states the position rather than closing it. | FR-ADM-03, C-05, A-05, `tasks_notifier.dart` |
 | 118 | **Three Firebase projects exist outside Terraform entirely, created by hand** | `infrastructure/terraform/` has **no `google` provider at all** — it is AWS-only. `vump-platform-f86af`, `vump-staging` and `vump-prod` were created through the console in Mission 6.4, along with their Firestore databases, their Auth configuration and the `org_invite_codes` collection.<br><br>**ADR-043 makes infrastructure-as-code the rule** and discharges Volume 4 Ch. 4.9 §5's deferral. These three projects are infrastructure by any reading: they hold the identity provider every route authenticates against, and ADR-036 records that the Firestore **security rules** — not the UI — are what enforce who may write invite codes. A security control that exists only in a console is exactly the shape this project keeps finding defects in.<br><br>**Pre-existing, and not Mission 7.6's to fix.** 7.6 adds the `google` provider for Workload Identity Federation, which makes adopting the projects *cheaper* than it has ever been — the provider and its credentials will already be there — but importing three live projects is its own change with its own blast radius, and folding it into a port would be the scope creep this project has declined twice already.<br><br>**Recorded because ADR-036's own retirement obligation nearly evaporated the same way.** That ADR said in terms: *"It is not tracked anywhere that would prompt anyone, which is the honest weakness of writing it down."* This is the same weakness, so it is written somewhere that is read. | ADR-043, ADR-036, ADR-047, Ch. 4.9 §5 |
 | 119 | **No gate compares deployed Lambda code against the source it was built from** | A-220: A-195's security fix was written, tested, reviewed, merged and reported closed, and the running Lambda never received it — for the whole of Mission 7.4, including every chunk of the device checkpoint and the scale test.<br><br>**The gate's own ordering is what makes this structural.** Terraform applies happen during implementation; a closing-gate security review comes after. A fix authored at a closing gate therefore lands after the last apply **by construction**, and nothing downstream notices.<br><br>**The check is one command per function**: compare `aws lambda get-function-configuration --query CodeSha256` against the hash Terraform computes from the current source — which is exactly what a `plan` already does, run deliberately rather than stumbled into. It belongs in the closing gate beside the test run. | A-220, A-195, Ch. 12 |
+| 120 | **Nothing checks that a cross-system binding's two halves describe the same identity** | A-222: the AWS pool's `attribute_mapping` produced a session-suffixed ARN while the service account's `principalSet` binding named the session-less prefix. Exact-match, so impersonation was refused on every invocation — and `terraform apply` reported 11 added, 0 errors, because both resources are individually well-formed.<br><br>**A plan cannot catch this class.** It verifies existence and shape, not that two resources can address each other. The failure surfaced as `app/invalid-credential` from a third system, naming neither side.<br><br>**The check is an end-to-end call, and there is no cheaper substitute.** For this module that is one federated `getAccessToken` — which Phase 4's deployed race performed, and which is the only reason the defect was found before Phase 6 deleted the Cloud Function it replaces. | A-222, A-221, Ch. 12 |
 | 92 | **No endpoint anywhere in Chapter 4.6 returns an organisation's Collectors — a catalog-level omission that four separate specifications assume away** | **Recorded as its own row rather than inside A-06's, because it is not one screen's problem.** Chapter 4.6's complete catalog is **15 routes**, and its only user-facing one is `GET /v1/users/me` — *"Current user's profile + role"*, the caller and nobody else. **Four specifications assume a Collector directory exists and none of them can be satisfied:** FR-ADM-03 (*"assign one or more Collectors"* — an Admin must identify them); UC-07's exception flow (*"If the Admin attempts to assign a Collector who does not have an account or is deactivated, the system blocks the assignment and explains why"* — presupposes the Admin picked from something); Chapter 2.2's Admin flow step 6 (*"Collector(s) **selected** and confirmed"* — selected from what?); and Chapter 2.7's A-06, which lists Collector rows.<br><br>**The gap is total, not merely endpoint-level.** Verified at every layer this project has: Firestore holds one collection, `org_invite_codes`, with `allow read: if false` (*"Nobody reads, ever"*); `functions/src/index.ts` states in its own comment that *"no `orgs` collection exists"* and names the users table as *"Volume 4 Ch. 4.4's"*, behind the unbuilt backend; `features/auth/` yields the caller's own session and nothing else; and **no fake in `lib/` or `test/` holds a user list**. So the only user id this application can obtain is the signed-in Admin's own `uid`, which Chapter 4.4 §4's `role='collector'` annotation makes the wrong one.<br><br>**Closing it needs a route added to Chapter 4.6** — something like `GET /v1/users?role=collector`, org-scoped per BR-20 — and that is a backend/spec decision, not an engineering one. **No stand-in was invented**: seeding a roster into a fake would be inventing a domain concept this project has never modelled rather than standing in for one with a known shape, which is the line between a fake and a fabrication (A-122). | A-122, item 89, FR-ADM-03, UC-07, Ch. 2.2 step 6, Ch. 4.6 §2 |
 | 90 | **Chapter 2.9 contradicts itself about editing a Task: §2 principle 4 requires a confirmation, §4.4 forbids one** | **A PRODUCT/SPEC DECISION FOR FAISAL — a genuine authorial contradiction inside one chapter, not something derivable.** Both sentences name the same action explicitly and state opposite rules.<br><br>**§2, principle 4:** *"Admin actions that affect a Collector are never destructive-by-default. Removing a Collector from a Task, or **editing Task instructions after Collectors are already assigned, always confirms the action and states its effect in plain language before it takes effect**."*<br><br>**§4.4:** *"Reversible actions (reassigning a Collector, **editing Task instructions**) **do not require a confirmation dialog** — they save immediately and can be changed again just as easily."*<br><br>**This is unlike G3.** There the sources disagreed in emphasis and one class of them specified a mechanism, so the resolution was derivable by asking which sources were normative (A-116). Here both sentences are behavioural rules in the same chapter, at the same level of authority, naming the same action — and §2 P4 even supplies the reasoning (*"affect a Collector"*) that §4.4's *"reversible"* framing rejects. **There is no reading that satisfies both.** Mission 5.2.2 therefore held A-05's **edit** half back entirely rather than pick one: `updateTask` exists and works, and shipping either behaviour would encode an answer nobody has given into UI a Collector depends on. Settling it needs one sentence struck or amended, not an implementation judgement. | A-121, Ch. 2.9 §2 P4, Ch. 2.9 §4.4, FR-ADM-02 |
 | 91 | **Chapter 2.5's A-04 names "Project-level settings"; the phrase appears exactly once in all of Volume 2 — in that row** | **Third instance of one shape, and kept as a separate row so the family stays visible.** Ch. 2.5's A-04: *"Name, description, and **Project-level settings**."* Nothing defines them: `projects` has seven columns and none is a setting (Ch. 4.4 §2), `POST /v1/projects` carries no such field, no FR mentions one, and no other chapter uses the phrase. So A-04 renders name and description with **no settings section and no empty placeholder implying one is coming** — the treatment C-06 gave `requirements` (A-110), and a test asserts the absence.<br><br>**The family, three rows and three owners:** item 69 is FR-PT-05/A-05's `requirements` — a **Task** field named by a requirement with no column. This is A-04's **Project-level settings** — a **Project** field group named by a screen with no column. Both are *"a surface names something the schema does not have"*, and they are separate items because they have different owners, different chapters and will be answered by different decisions. Folding them would make one product answer look like it closed both. | A-110, item 69, Ch. 2.5 A-04, Ch. 4.4 §2 |
@@ -7748,6 +7749,8 @@ None of these is a secret. ADR-016 places Firebase identifiers in the Public tie
 
 #### Two things the apply settled that the plan could not
 
+**Corrected by A-222.** This section reported the phase as applied cleanly, and it was — but one of the two resources below could never address the other, and no part of the apply could have said so. Read the list that follows as what the apply established, which is narrower than it appeared at the time.
+
 Both were apply-time-only unknowns, flagged before running and **both succeeded first try**:
 
 1. **The custom role's permission strings.** `firebaseauth.users.create` and `firebaseauth.users.update` were taken from a Google reference whose permission tables did not render when checked; F1 deferred exact-string confirmation to implementation deliberately. GCP rejects unknown permission ids at apply, so acceptance *is* the confirmation. The comment in `main.tf` marking them unverified is now stale and should be corrected rather than deleted — it records why they were a risk.
@@ -7755,7 +7758,7 @@ Both were apply-time-only unknowns, flagged before running and **both succeeded 
 
 #### What was NOT proven, and it is the whole point of the phase
 
-**No token has been exchanged.** The apply proves the resources exist and are well-formed. It does not prove that a Lambda running as `vump-dev-redeem` can obtain a Google access token, nor that the two permissions suffice for `createUser` and `setCustomUserClaims`. Both are Phase 4, against a deployed route.
+**No token has been exchanged.** The apply proves the resources exist and are well-formed. **A-222 is what that gap turned out to be hiding** — the AWS pool's attribute mapping and the service account's IAM binding described two different strings, so impersonation was refused on every invocation. Well-formed and connected are different properties. It does not prove that a Lambda running as `vump-dev-redeem` can obtain a Google access token, nor that the two permissions suffice for `createUser` and `setCustomUserClaims`. Both are Phase 4, against a deployed route.
 
 The second is the one to watch. If `setCustomUserClaims` needs a permission beyond `firebaseauth.users.update`, the correct response is to **add that permission explicitly** — never to substitute `roles/firebaseauth.admin`, which is full read/write on Firebase Auth and can therefore grant `admin` on any organisation. Reaching for it would remove the *key* while keeping the *capability*, satisfying half of ADR-036's reasoning and reporting it as all of it.
 
@@ -7766,3 +7769,68 @@ The second is the one to watch. If `setCustomUserClaims` needs a permission beyo
 The pool exists; **`ci.yml` does not yet use it.** Carried as a follow-up.
 
 ADR-036 is not superseded yet. It stops being true when the Cloud Function is deleted in Phase 6, and superseding it before then would put the documentation ahead of the code.
+
+---
+
+### A-222 — the federation's attribute mapping could never match its own IAM binding
+
+Found by Mission 7.6 Phase 4's first live redemption. **This is a defect in Phase 2's module, reported at the time as applied cleanly — 11 added, 0 changed, 0 destroyed, both impersonation bindings validated first try.** Every one of those statements was true and none of them was evidence.
+
+| | |
+|---|---|
+| **Symptom** | `createUser` fails, `firebaseCode: app/invalid-credential`, 433ms, cold start |
+| **Blamed first** | The `ExternalAccountClient` adapter — F9's known-unverified piece |
+| **Actually** | `attribute_mapping` and the `principalSet` binding describe two different strings |
+
+#### The mechanism
+
+STS renders an assumed-role identity with a per-invocation session suffix:
+
+```
+arn:aws:sts::929570731524:assumed-role/vump-dev-redeem/<session>
+```
+
+The module used that raw value in two places that need **different forms of it**:
+
+| Where | Comparison | Correct with the raw ARN? |
+|---|---|---|
+| `attribute_condition` | `startsWith(prefix)` | **Yes** |
+| `principalSet://…/attribute.aws_role/{value}` | exact equality | **No** |
+
+The binding names the session-less role prefix, because that is the only stable form. The mapped attribute carried the session. They can never be equal, so impersonation was refused on every invocation without exception.
+
+The fix is Google's documented AWS mapping, which strips the session:
+
+```
+assertion.arn.contains('assumed-role')
+  ? assertion.arn.extract('{account_arn}assumed-role/') + 'assumed-role/'
+      + assertion.arn.extract('assumed-role/{role_name}/')
+  : assertion.arn
+```
+
+One expression is a **condition** and the other is a **transformation**, and writing the same string into both is the whole error.
+
+#### Why the apply reported success
+
+Nothing in the plan or the apply could have caught it. The pool accepts either mapping; the binding is syntactically valid; the token exchange with Google STS **succeeds**. Only the subsequent impersonation call is refused, and the Admin SDK reports that as `app/invalid-credential` — a code that names neither AWS, nor the role, nor the binding.
+
+**A-221 recorded exactly this as unproven and it still misled.** Its own words: *"No token has been exchanged. The apply proves the resources exist and are well-formed."* That was correct, and the phase still read as complete because eleven resources came up green. **Well-formed and connected are different properties**, and only one of them had been checked.
+
+#### The two failures of instrumentation
+
+**First, the code was logged and the message was not.** `createUser failed` carried `firebaseCode` alone, and `firebase-admin`'s wrapper quotes the underlying error in its `message` and keeps it on `cause` — the only text that distinguishes a malformed credential object from an error the credential implementation threw. Both raise the same code. Finding the difference took reading `firebase-admin`'s source to enumerate which validations can produce it, which is not a diagnostic path that should exist.
+
+**Second, the initial hypothesis was wrong and plausible.** The adapter was the piece flagged as unverified, so it was the natural suspect — and the real defect was in the component reported as working. Suspicion followed the documented uncertainty rather than the evidence.
+
+#### Where this sits in the pattern
+
+| | Reported | Actually |
+|---|---|---|
+| A-205 | the APK built | a stale artefact |
+| A-212 | 203 tests pass | no `INSERT` ever reached a database |
+| A-220 | the security fix is closed | never deployed |
+| **A-222** | **11 resources created, 0 errors** | **two of them could not address each other** |
+
+A-220 was a claim about the world made from a claim about the repository. This one is narrower and harder to see: a claim about the world made from a **real** observation of the world that did not cover the property being claimed. `terraform apply` verifies existence and shape. It cannot verify that two resources agree, and there is no plan-time check that would.
+
+**The general lesson is the one Phase 4 was designed around**: no federation, credential chain or cross-system binding is proven by its own creation. It is proven by one end successfully reaching the other. Recorded as open item 120.

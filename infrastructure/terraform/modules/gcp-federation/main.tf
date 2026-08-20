@@ -125,9 +125,30 @@ resource "google_iam_workload_identity_pool_provider" "aws" {
     account_id = var.aws_account_id
   }
 
+  # `attribute.aws_role` is the ARN with the SESSION SUFFIX REMOVED, and that
+  # is not cosmetic — mapping it to the raw `assertion.arn` is a defect that
+  # cannot work. A-222.
+  #
+  # STS renders an assumed-role identity as
+  # `arn:aws:sts::{account}:assumed-role/{role}/{session}`, and Lambda chooses
+  # the session per invocation. The `attribute_condition` below compares with
+  # `startsWith`, so the raw value is correct THERE. But the IAM binding on the
+  # service account is a `principalSet://…/attribute.aws_role/{value}`, and
+  # that is an EXACT match — a per-invocation session suffix can never equal
+  # the role prefix the binding names.
+  #
+  # The two therefore need different forms of the same identity, which is why
+  # one expression is a condition and this one is a transformation. This is
+  # Google's documented mapping for AWS, and the reason it is documented.
+  #
+  # Nothing fails at apply: the pool accepts either mapping, the token exchange
+  # succeeds, and only the impersonation call is refused — surfacing as
+  # `app/invalid-credential` from the Admin SDK, which names neither AWS nor
+  # the binding.
   attribute_mapping = {
-    "google.subject"     = "assertion.arn"
-    "attribute.aws_role" = "assertion.arn"
+    "google.subject" = "assertion.arn"
+
+    "attribute.aws_role" = "assertion.arn.contains('assumed-role') ? assertion.arn.extract('{account_arn}assumed-role/') + 'assumed-role/' + assertion.arn.extract('assumed-role/{role_name}/') : assertion.arn"
   }
 
   # THE security control in this module.

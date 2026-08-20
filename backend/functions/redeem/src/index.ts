@@ -200,7 +200,17 @@ async function createAccount(email: string, password: string): Promise<string> {
       );
     }
 
-    logger.error('createUser failed', { firebaseCode: code });
+    // **The message, not just the code.** `app/invalid-credential` is raised
+    // by firebase-admin for BOTH a malformed credential object and any error
+    // this function's own getAccessToken throws — and the wrapper quotes the
+    // original in its message and keeps it on `cause`. Logging the code alone
+    // discards the only text that tells those apart, which is what made A-222
+    // take a round of reverse-engineering to find. Server-side only; the
+    // caller still receives the generic 500 below.
+    logger.error('createUser failed', {
+      firebaseCode: code,
+      cause: thrown instanceof Error ? thrown.message : String(thrown),
+    });
     throw new ApiError('INTERNAL_ERROR', 'The account could not be created.', 500, {
       cause: thrown,
     });
