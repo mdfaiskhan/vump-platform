@@ -47,13 +47,16 @@ async function post(path, body) {
     body: JSON.stringify(body),
   });
   const text = await response.text();
+  const ended = Date.now();
   let envelope;
   try {
     envelope = JSON.parse(text);
   } catch {
     envelope = { raw: text };
   }
-  return { status: response.status, envelope, ms: Date.now() - started };
+  // Absolute timestamps, not just a duration. Overlap is a property of two
+  // INTERVALS, and a duration cannot express one — see `race`.
+  return { status: response.status, envelope, started, ended, ms: ended - started };
 }
 
 /**
@@ -82,13 +85,23 @@ async function warmUp() {
 async function race() {
   required('VUMP_TEST_CODE', CODE);
 
-  const coldMs = await warmUp();
-  const second = await warmUp();
-  console.log(`second warm-up: ${String(second)}ms (cold was ${String(coldMs)}ms)\n`);
+  // **Warmed CONCURRENTLY, and that is the whole fix.**
+  //
+  // The first version awaited two warm-ups in sequence. Both landed on the
+  // same container — the second one being fast was evidence of reuse, not of
+  // readiness — so the race then fired two simultaneous requests at a pool of
+  // exactly one warm container, and Lambda cold-started a second for the other
+  // caller. That cold start is a ~1300ms initialisation of a 2.6MB bundle
+  // through firebase-admin, and it is the entire observed spread.
+  //
+  // Concurrency is what forces Lambda to have two containers, so the warm-up
+  // has to be concurrent to warm the thing the race actually uses.
+  const warm = await Promise.all([warmUp(), warmUp()]);
+  console.log(`warm-ups: ${warm.map((ms) => `${String(ms)}ms`).join(', ')}\n`);
 
-  if (second > 3000) {
-    console.log('WARNING: the second warm-up still took over 3s. The container');
-    console.log('may not be warm, and a race fired now may not be concurrent.');
+  if (Math.max(...warm) > 3000) {
+    console.log('WARNING: a warm-up still took over 3s. Fewer than two');
+    console.log('containers may be warm, and the race may pay a cold start.');
   }
 
   const stamp = Date.now();
@@ -104,8 +117,13 @@ async function race() {
   );
 
   results.forEach((result, index) => {
+    // The address is printed because the hand-verification needs it: confirming
+    // that EXACTLY ONE Firebase account exists means knowing which one should
+    // exist and which must not. The first run omitted them and the check could
+    // not be completed from the script's own output.
     console.log(
-      `caller ${String(index)}: ${String(result.status)} in ${String(result.ms)}ms — ` +
+      `caller ${String(index)} <${callers[index].email}>: ` +
+        `${String(result.status)} in ${String(result.ms)}ms — ` +
         JSON.stringify(result.envelope),
     );
   });
@@ -117,10 +135,24 @@ async function race() {
   console.log(`\nlatency spread: ${String(spread)}ms`);
   console.log(`created: ${String(created.length)}   refused: ${String(refused.length)}`);
 
-  // The concurrency check is an assertion, not a note. If the two calls did
-  // not overlap, the counts below are satisfiable without any locking and the
+  // The concurrency check is an assertion, not a note: if the two calls did
+  // not overlap, the counts above are satisfiable without any locking and the
   // run must not be recorded as a pass.
-  const overlapped = spread < Math.min(results[0].ms, results[1].ms);
+  //
+  // **It compares INTERVALS, not durations.** The first version asserted
+  // `spread < Math.min(durationA, durationB)`, which is not a test of overlap
+  // at all — two requests dispatched in the same tick overlap however long
+  // either takes, and that expression reports `false` whenever one caller is
+  // merely slower than the other. It measured the wrong quantity and would
+  // have failed a genuinely concurrent run, which it did.
+  //
+  // Two intervals overlap iff each starts before the other ends.
+  const [a, b] = results;
+  const overlapped = a.started < b.ended && b.started < a.ended;
+  const overlapMs = Math.min(a.ended, b.ended) - Math.max(a.started, b.started);
+
+  console.log(`dispatch skew: ${String(Math.abs(a.started - b.started))}ms`);
+  console.log(`overlap window: ${String(overlapMs)}ms`);
   console.log(`overlapped: ${String(overlapped)}`);
 
   const pass = created.length === 1 && refused.length === 1 && overlapped;
