@@ -7486,3 +7486,47 @@ So the survival result reads as **"survived an unattended, un-exempted 15-minute
 ### What this entry is for
 
 So that a later reader finding *"38-part scale test passed"* does not conclude the timeout question is closed. It is not. **The chain works at full scale under warm-Aurora conditions, and the condition under which it might not has still never occurred.** Tonight moved that from "unmeasured in every term" to "measured in every term but one, composed to a 3–5 second margin" — which is real progress and is not the same as coverage.
+
+---
+
+### A-216 — A cursor was produced and consumed for the first time, closing A-199
+
+| | |
+|---|---|
+| **Was** | A-199 closed A-184 in code. `nextCursor` had **never been produced and consumed by anything real** — proven on each side separately, never across the seam |
+| **Now** | Two live requests, the second carrying the cursor the first returned |
+| **Status** | **Closed** |
+| **Date** | 2026-08-20, Mission 7.5 F2 |
+
+```
+→ GET .../v1/projects/4889ca14-.../tasks?limit=200
+← 200   meta: { nextCursor: WyIyMDI2LTA4LTIwIDA5OjIxOjUzLjc0OTU2NCIs… }
+→ GET .../v1/projects/4889ca14-.../tasks?cursor=WyIyMDI2…&limit=200
+← 200   2 rows, meta: { nextCursor: null }
+```
+
+### The cursor's contents confirm the whole design, not just the round trip
+
+Base64url-decoded, the value the client sent back is:
+
+```json
+["2026-08-20 09:21:53.749564", "01453c85-a147-41cb-b1da-71be23735f01"]
+```
+
+`cursor.ts`'s `(created_at, id)` keyset pair, verbatim, in the Data API's own timestamp format. **The client neither parsed nor modified it** — which is the property opacity exists to protect: *"callers are told nothing about the contents"*, so the sort key can change later without a `/v2` under Chapter 4.6 §1.
+
+Three further things are confirmed by the same two requests:
+
+- **The ordering is total and correct.** `created_at DESC, id DESC` put *Checkpoint walkthrough* — seeded a session earlier than everything else — on the last page. A-183 chose a total order because *"a cursor needs one or pages can overlap"*; this is that order behaving.
+- **`nextCursor: null` ends the list**, so the client stopped rather than requesting an empty third page. `pageMeta`'s fetch-one-extra design is what avoids that, and it worked.
+- **Base64url survived a query string** unmangled — the specific failure this test existed to rule out, since a `+` or `/` from standard base64 would have been corrupted in transit.
+
+### What it took to reach, which is the part worth recording
+
+Three attempts, and the first two failed for reasons that were not the client's:
+
+1. **One Project, page size 200.** No second page exists, so no *Load more* control renders — the absence of the control was the control working, and read as a missing feature.
+2. **201 Tasks seeded with no `task_assignments` rows.** `listTasks`'s Collector branch joins assignments **per Task** — Chapter 4.8 §3 scopes a Collector to *"their own `task_assignments` rows"*, not to the Projects those imply — so the server correctly returned the one assigned Task. BR-19 working, read as a caching fault.
+3. **A cached family member.** `tasksProvider` has no `autoDispose`, so re-navigating served state from the first load and issued no request. Deliberate and documented — but tracing it surfaced open item 117, which is not.
+
+**Each failure looked like a client defect and was not.** That is the shape worth carrying: at a seam this well guarded, *"the data isn't showing"* is more often the guard than the bug, and the cheapest first question is whether the row is visible to the *route's own query* rather than whether the client fetched it.
