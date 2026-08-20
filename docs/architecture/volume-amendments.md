@@ -4685,6 +4685,8 @@ Every carried-forward item, in one place. Accurate as of **Mission 4.3**; origin
 | 119 | **No gate compares deployed Lambda code against the source it was built from** | A-220: A-195's security fix was written, tested, reviewed, merged and reported closed, and the running Lambda never received it — for the whole of Mission 7.4, including every chunk of the device checkpoint and the scale test.<br><br>**The gate's own ordering is what makes this structural.** Terraform applies happen during implementation; a closing-gate security review comes after. A fix authored at a closing gate therefore lands after the last apply **by construction**, and nothing downstream notices.<br><br>**The check is one command per function**: compare `aws lambda get-function-configuration --query CodeSha256` against the hash Terraform computes from the current source — which is exactly what a `plan` already does, run deliberately rather than stumbled into. It belongs in the closing gate beside the test run. | A-220, A-195, Ch. 12 |
 | 120 | **Nothing checks that a cross-system binding's two halves describe the same identity** | A-222: the AWS pool's `attribute_mapping` produced a session-suffixed ARN while the service account's `principalSet` binding named the session-less prefix. Exact-match, so impersonation was refused on every invocation — and `terraform apply` reported 11 added, 0 errors, because both resources are individually well-formed.<br><br>**A plan cannot catch this class.** It verifies existence and shape, not that two resources can address each other. The failure surfaced as `app/invalid-credential` from a third system, naming neither side.<br><br>**The check is an end-to-end call, and there is no cheaper substitute.** For this module that is one federated `getAccessToken` — which Phase 4's deployed race performed, and which is the only reason the defect was found before Phase 6 deleted the Cloud Function it replaces. | A-222, A-221, Ch. 12 |
 | 121 | **A permission set built from the operations a caller performs is not the set those operations require** | A-223: `vumpRedeemDev` named `firebaseauth.users.create` and `users.update` — exactly what the route calls — and `createUser` refused. It needed Google's unstated baseline tier, which every PREDEFINED Firebase role includes silently and no product permission implies, plus `firebaseauth.users.get` for a read the caller never issues.<br><br>**Building a role narrower than a predefined one means rebuilding that role's invisible floor.** Nothing in the docs, the plan or the apply says which permissions an API call needs beneath the one it is named for.<br><br>**Diff against the predefined role rather than bisecting.** `gcloud iam roles describe roles/firebaseauth.admin` lists what the working ceiling holds; subtracting the custom role names the gap in one read. Mission 7.6 instead spent three applies, three propagation waits and three live redemptions guessing candidates one at a time — rigorous, and the expensive way to answer a question a single read answers. | A-223, A-222, ADR-036, Ch. 12 |
+| 122 | **Google sign-up with an invite code has never worked** | A-224: the federated path sends `password: null`, and both the Cloud Function and the route that replaced it reject that before reading the code. The doc comment above the call describes a server that only redeems and sets claims — a contract nobody built.<br><br>**A mock cannot reject.** `FakeFirebaseFunctions` accepted any payload, so the client's tests proved it sent what it meant to send and never that the server would take it. A-212's shape at a contract boundary rather than a database one.<br><br>**Not fixable as a port.** It needs a route that provisions claims for an account that ALREADY EXISTS — new behaviour, and a new authorization question, since such a route would set claims on an account the caller merely authenticated as. Needs its own trace/decide. | A-224, A-212, ADR-036 |
+| 123 | **Phase 6 deletes the only working path for ISSUING invite codes** | `InviteCodeRepositoryImpl.issue()` writes to Firestore, authorised by `firestore.rules`. Phase 6 drops `cloud_firestore` — and there is no backend route for issuing, nor can there be without a migration: 0012 deliberately grants `INSERT` on `org_invite_codes` to **no role at all**, which is why seeding a test code needs break-glass.<br><br>**Phase 6 as scoped would remove the mechanism and leave nothing behind it.** Admins could no longer mint codes by any path.<br><br>**Blocks Phase 6, not Phase 5.** The fix is its own trace/decide — a route plus a migration plus an authorization rule to replace what `firestore.rules` was enforcing — and must be decided before the Cloud Function or Firestore is deleted. | Mission 7.6 Phase 6, migration 0012, ADR-036 |
 | 92 | **No endpoint anywhere in Chapter 4.6 returns an organisation's Collectors — a catalog-level omission that four separate specifications assume away** | **Recorded as its own row rather than inside A-06's, because it is not one screen's problem.** Chapter 4.6's complete catalog is **15 routes**, and its only user-facing one is `GET /v1/users/me` — *"Current user's profile + role"*, the caller and nobody else. **Four specifications assume a Collector directory exists and none of them can be satisfied:** FR-ADM-03 (*"assign one or more Collectors"* — an Admin must identify them); UC-07's exception flow (*"If the Admin attempts to assign a Collector who does not have an account or is deactivated, the system blocks the assignment and explains why"* — presupposes the Admin picked from something); Chapter 2.2's Admin flow step 6 (*"Collector(s) **selected** and confirmed"* — selected from what?); and Chapter 2.7's A-06, which lists Collector rows.<br><br>**The gap is total, not merely endpoint-level.** Verified at every layer this project has: Firestore holds one collection, `org_invite_codes`, with `allow read: if false` (*"Nobody reads, ever"*); `functions/src/index.ts` states in its own comment that *"no `orgs` collection exists"* and names the users table as *"Volume 4 Ch. 4.4's"*, behind the unbuilt backend; `features/auth/` yields the caller's own session and nothing else; and **no fake in `lib/` or `test/` holds a user list**. So the only user id this application can obtain is the signed-in Admin's own `uid`, which Chapter 4.4 §4's `role='collector'` annotation makes the wrong one.<br><br>**Closing it needs a route added to Chapter 4.6** — something like `GET /v1/users?role=collector`, org-scoped per BR-20 — and that is a backend/spec decision, not an engineering one. **No stand-in was invented**: seeding a roster into a fake would be inventing a domain concept this project has never modelled rather than standing in for one with a known shape, which is the line between a fake and a fabrication (A-122). | A-122, item 89, FR-ADM-03, UC-07, Ch. 2.2 step 6, Ch. 4.6 §2 |
 | 90 | **Chapter 2.9 contradicts itself about editing a Task: §2 principle 4 requires a confirmation, §4.4 forbids one** | **A PRODUCT/SPEC DECISION FOR FAISAL — a genuine authorial contradiction inside one chapter, not something derivable.** Both sentences name the same action explicitly and state opposite rules.<br><br>**§2, principle 4:** *"Admin actions that affect a Collector are never destructive-by-default. Removing a Collector from a Task, or **editing Task instructions after Collectors are already assigned, always confirms the action and states its effect in plain language before it takes effect**."*<br><br>**§4.4:** *"Reversible actions (reassigning a Collector, **editing Task instructions**) **do not require a confirmation dialog** — they save immediately and can be changed again just as easily."*<br><br>**This is unlike G3.** There the sources disagreed in emphasis and one class of them specified a mechanism, so the resolution was derivable by asking which sources were normative (A-116). Here both sentences are behavioural rules in the same chapter, at the same level of authority, naming the same action — and §2 P4 even supplies the reasoning (*"affect a Collector"*) that §4.4's *"reversible"* framing rejects. **There is no reading that satisfies both.** Mission 5.2.2 therefore held A-05's **edit** half back entirely rather than pick one: `updateTask` exists and works, and shipping either behaviour would encode an answer nobody has given into UI a Collector depends on. Settling it needs one sentence struck or amended, not an implementation judgement. | A-121, Ch. 2.9 §2 P4, Ch. 2.9 §4.4, FR-ADM-02 |
 | 91 | **Chapter 2.5's A-04 names "Project-level settings"; the phrase appears exactly once in all of Volume 2 — in that row** | **Third instance of one shape, and kept as a separate row so the family stays visible.** Ch. 2.5's A-04: *"Name, description, and **Project-level settings**."* Nothing defines them: `projects` has seven columns and none is a setting (Ch. 4.4 §2), `POST /v1/projects` carries no such field, no FR mentions one, and no other chapter uses the phrase. So A-04 renders name and description with **no settings section and no empty placeholder implying one is coming** — the treatment C-06 gave `requirements` (A-110), and a test asserts the absence.<br><br>**The family, three rows and three owners:** item 69 is FR-PT-05/A-05's `requirements` — a **Task** field named by a requirement with no column. This is A-04's **Project-level settings** — a **Project** field group named by a screen with no column. Both are *"a surface names something the schema does not have"*, and they are separate items because they have different owners, different chapters and will be answered by different decisions. Folding them would make one product answer look like it closed both. | A-110, item 69, Ch. 2.5 A-04, Ch. 4.4 §2 |
@@ -7894,3 +7896,68 @@ The bisection was rigorous and the ordering well-argued. It was also the expensi
 A-222 was two resources that could not address each other. This is narrower still: a **single** resource, correctly specified against the operations it performs, and wrong because an operation needs more than it names. Both were invisible to `terraform apply`, and both surfaced only when one end of the system actually reached the other — which is open item 120's point, now with a second instance.
 
 Recorded as open item 121.
+
+---
+
+### A-224 — Google sign-up with an invite code has never worked
+
+Found while tracing Mission 7.6 Phase 5. **Pre-existing, not introduced by this mission, and carried forward deliberately.**
+
+`AuthRepositoryImpl._provisionFederated` calls redemption with no password:
+
+```dart
+await _redeemInviteCode(inviteCode: inviteCode, email: user.email ?? '', password: null);
+```
+
+The Cloud Function it called rejects that outright, before any code is read:
+
+```ts
+if (email === null || password === null || password.length === 0 || (hasCode && code === null)) {
+  throw new HttpsError('invalid-argument', …);
+}
+```
+
+So **every Google sign-up carrying an invite code fails**, on a validation branch, and has since the federated path was written. The route that replaced the function in Phase 4 has the same requirement, so the port neither introduced nor fixed it.
+
+#### The comment above it says the opposite
+
+> *"[password] is null on the federated path, where Google has already created the account and the function only redeems and sets claims."*
+
+That describes a function that does not exist. The real one always calls `createUser` and always requires a password. **The client and the server were written against different contracts**, and the doc comment recorded the intended one as though it were the built one.
+
+Nothing caught it because the seam was faked on both sides: `FakeFirebaseFunctions` accepted any payload, so the client's tests proved the client sent what it meant to send and never that the server would accept it. This is A-212's shape — *a mock cannot reject* — at a contract boundary rather than a database one.
+
+#### Why it is not fixed here
+
+Fixing it means a server capability that provisions claims for an account **that already exists**, which is new behaviour rather than a port, and it carries a new authorization question: such a route would set claims on an account the caller merely authenticated as, and the argument that self-signup can only ever produce a Collector would have to be re-made for it. Mission 7.6 retires a Cloud Function; it does not design a new endpoint.
+
+Recorded as open item 122.
+
+---
+
+### A-225 — Phase 5 closed the client's half of ADR-036's retirement
+
+Mission 7.6 Phase 5. Redemption is `POST /v1/auth/redeem` on `VumpApi`; `cloud_functions` no longer appears anywhere in `mobile/lib/`.
+
+| Change | |
+|---|---|
+| `_redeemInviteCode` | `httpsCallable('redeemInviteCode')` → `backend.post('/auth/redeem', …)` |
+| `FirebaseFunctionsErrorMapper` | deleted, with its 151-line test |
+| `AUTH_INVITE_CODE_EXPIRED` | removed from the taxonomy and from the copy |
+| `AuthRepositoryImpl` | `FirebaseFunctions` field, injection parameter and region pin all gone |
+
+**The mapper was deleted rather than ported, exactly as its own header predicted** — *"when redemption becomes a `/v1/...` route, its failures arrive as `DioException` and `ErrorInterceptor` already maps those; this file is deleted rather than ported."* It existed only because a callable reports failures as a fixed gRPC status set that says nothing about this application's taxonomy, forcing the real code to be dug out of `details.errorCode`. A route answers with the Chapter 4.6 envelope and needs no such archaeology.
+
+#### The scope as briefed named the wrong class
+
+Phase 5 was specified as *"`InviteCodeRepositoryImpl` over `VumpApi`"*. That class does not redeem anything — it **issues** codes, for admins, straight into Firestore. Redemption lived in a private method on `AuthRepositoryImpl`. Porting the named class would have touched the wrong file and left the Cloud Function still called by both sign-up paths.
+
+The trace caught it because the first step was reading the interface rather than the name. Worth recording as a shape: **a plan written from memory of a module's name can be exactly wrong about what the module does**, and the cost of checking is one file read.
+
+#### One error code, and the client no longer has a word for the other
+
+`AUTH_INVITE_CODE_EXPIRED` is gone from `error_codes.dart`. The `switch` in `auth_error_copy.dart` is exhaustive over `ErrorCode`, so removing the enum value made the stale copy a **compile error** rather than dead code — the good failure, and the reason no user-facing string could be left behind by accident.
+
+`FakeVumpApi` gained the redeem route and a `redeemThrows`, and the substitution changed what the tests can express: the fake throws an `AuthenticationException`, because by the time a failure reaches this class `ErrorInterceptor` has already turned a transport error into an application code. The old fake threw `FirebaseFunctionsException` and the class did the mapping itself — one layer of translation removed from the production path and from the test.
+
+**Not done here**, and neither belongs to Phase 5: `cloud_functions` stays in `pubspec.yaml` and `functions/` stays on disk until Phase 6, and A-224's federated-path defect is carried forward unfixed.
