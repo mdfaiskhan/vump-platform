@@ -63,10 +63,6 @@ abstract final class AuthErrorCopy {
       ErrorCode.authInviteCodeInvalid =>
         'That invite code is not valid. Check it with your organisation admin.',
 
-      ErrorCode.authInviteCodeExpired =>
-        'That invite code has expired. Ask your organisation admin for a new '
-            'one.',
-
       ErrorCode.networkUnavailable =>
         'No connection. Signing in needs the internet — reconnect and try '
             'again.',

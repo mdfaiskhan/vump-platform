@@ -12,6 +12,15 @@ terraform {
       source  = "hashicorp/archive"
       version = "~> 2.7"
     }
+    # Mission 7.6. The Firebase project itself is NOT managed here — open item
+    # 118 records that it and its two siblings were created by hand. This
+    # provider manages only the Workload Identity Federation attached to it,
+    # which ADR-036 requires so the redeem route can reach Firebase Admin
+    # without a long-lived service-account key.
+    google = {
+      source  = "hashicorp/google"
+      version = "~> 6.0"
+    }
   }
 }
 
@@ -32,4 +41,18 @@ provider "aws" {
       ManagedBy   = "terraform"
     }
   }
+}
+
+# Authenticates through Application Default Credentials — `gcloud auth
+# application-default login`, run by a human before `terraform apply`.
+#
+# **No service-account key, deliberately, and this is the same argument one
+# level up.** ADR-036 rejected the Lambda holding a key because it "can grant
+# `admin` on any organisation"; a Terraform key would be strictly worse, since
+# it can grant anything at all. A human identity with short-lived credentials
+# mirrors what already happens on the AWS side, where applies run as
+# `faisal-dev` with MFA rather than as a static credential.
+provider "google" {
+  project = var.firebase_project_id
+  region  = var.region
 }

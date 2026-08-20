@@ -1,5 +1,7 @@
 # Lambda execution roles for ADR-015's six resource domains.
 #
+# Eight roles, six domains. See `chunks-*` and `redeem` in `local.roles`.
+#
 # **A role is not a domain.** ADR-015 fixes six domains — auth-verify, projects,
 # tasks, sessions, chunks, metadata — and that decomposition is unchanged here. A
 # domain is a unit of code decomposition; a role is a unit of privilege, and
@@ -43,6 +45,26 @@ locals {
     "chunks-upload" = { domain = "chunks", transactions = true, s3_policy = "presign-upload" }
     "chunks-verify" = { domain = "chunks", transactions = true, s3_policy = "verify-object" }
     "metadata"      = { domain = "metadata", transactions = true, s3_policy = null }
+
+    # Mission 7.6. The auth-verify DOMAIN gains a second role, and no seventh
+    # domain is created — ADR-015's six stand.
+    #
+    # **The reason is A-143's, applied to a different pair of privileges.** The
+    # chunks domain has two roles because one must write and not read while the
+    # other must read and not write. Here: `auth-verify` holds SELECT on
+    # `users` and must NOT be able to create Firebase accounts; `redeem`
+    # creates Firebase accounts and must NOT be able to read `users`. A single
+    # role would hold both, and the separation would be conventional rather
+    # than real.
+    #
+    # `transactions` because spending an invite-code use must be atomic against
+    # a concurrent redemption of the last remaining use.
+    #
+    # No S3 policy, and no AWS permission for the GCP federation either: the
+    # function SigV4-signs a GetCallerIdentity request locally and hands the
+    # signed headers to Google, which makes the call. It never calls STS
+    # itself, so there is nothing to authorise.
+    "redeem" = { domain = "auth-verify", transactions = true, s3_policy = null }
   }
 
   # Roles that carry an S3 policy, keyed by role name. Built by filtering rather
@@ -113,13 +135,28 @@ data "aws_iam_policy_document" "assume_role" {
 resource "aws_iam_role" "lambda" {
   for_each = local.roles
 
+  # DRIFT WARNING — this name is depended on from GCP, by value not reference.
+  #
+  # `modules/gcp-federation` trusts exactly one of these roles by ARN, in a
+  # Workload Identity Federation attribute condition, so that only the redeem
+  # Lambda may impersonate the Firebase service account. It computes that ARN
+  # from the same two inputs this line uses rather than referencing this
+  # resource, because a GCP module taking a dependency on an AWS one would
+  # couple two providers for a string both can build.
+  #
+  # **Changing this format silently breaks that condition.** Nothing fails at
+  # plan time; redemption fails at runtime with an authentication error that
+  # names neither side. If this line changes, change
+  # `modules/gcp-federation/variables.tf`'s `redeem_role_name` with it — its
+  # `redeem_role_arn_trusted` output exists so the mismatch shows up as a plan
+  # diff rather than as a production incident. Mission 7.6, Phase 2.
   name        = "vump-${var.environment_slug}-${each.key}"
   description = "Lambda execution role in the ${each.value.domain} resource domain (ADR-015)."
 
   assume_role_policy = data.aws_iam_policy_document.assume_role.json
 
   # ADR-049, Fork A1. Every Terraform-created role carries the boundary, and
-  # these seven are no exception — terraform-apply is denied iam:CreateRole
+  # these eight are no exception — terraform-apply is denied iam:CreateRole
   # without it, so a role added later cannot quietly skip the cap.
   #
   # The cap does not narrow what these roles do today: boundary.tf allows the

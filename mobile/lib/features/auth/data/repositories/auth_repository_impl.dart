@@ -1,4 +1,3 @@
-import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart' as fb;
 import 'package:google_sign_in/google_sign_in.dart';
 
@@ -8,7 +7,6 @@ import 'package:mobile/core/errors/exceptions/authentication_exception.dart';
 import 'package:mobile/core/logging/app_logger.dart';
 import 'package:mobile/core/network/vump_api.dart';
 import 'package:mobile/features/auth/data/firebase_auth_error_mapper.dart';
-import 'package:mobile/features/auth/data/firebase_functions_error_mapper.dart';
 import 'package:mobile/features/auth/domain/entities/role.dart';
 import 'package:mobile/features/auth/domain/entities/session.dart';
 import 'package:mobile/features/auth/domain/entities/user.dart';
@@ -61,11 +59,9 @@ class AuthRepositoryImpl implements AuthRepository {
     required this.logger,
     fb.FirebaseAuth? firebaseAuth,
     GoogleSignIn? googleSignIn,
-    FirebaseFunctions? functions,
     required this.backend,
   }) : _injectedAuth = firebaseAuth,
-       _googleSignIn = googleSignIn ?? GoogleSignIn.instance,
-       _injectedFunctions = functions;
+       _googleSignIn = googleSignIn ?? GoogleSignIn.instance;
 
   /// Destination for the one diagnostic this class writes — see `_discard`.
   final AppLogger logger;
@@ -91,16 +87,6 @@ class AuthRepositoryImpl implements AuthRepository {
 
   final fb.FirebaseAuth? _injectedAuth;
   final GoogleSignIn _googleSignIn;
-  final FirebaseFunctions? _injectedFunctions;
-
-  /// Resolved lazily, and pinned to the region the function is deployed to.
-  ///
-  /// A callable defaults to `us-central1`; ADR-036 deploys to `asia-south1`
-  /// beside the Firestore database. A mismatch here fails at call time with a
-  /// not-found that looks like a missing function rather than a wrong region.
-  FirebaseFunctions get _functions =>
-      _injectedFunctions ??
-      FirebaseFunctions.instanceFor(region: 'asia-south1');
 
   /// Resolved on each use rather than in the constructor.
   ///
@@ -336,50 +322,89 @@ class AuthRepositoryImpl implements AuthRepository {
 
   /// Validates an invite code and provisions the account behind it.
   ///
-  /// **TEMPORARY — calls the Cloud Function ADR-036 retires at Mission 6/7.**
+  /// **`POST /v1/auth/redeem`, since Mission 7.6.** This called a Firebase
+  /// Cloud Function until Phase 5; ADR-036 always described that as temporary,
+  /// and the reason it existed — that running the Admin SDK outside Google
+  /// meant holding a service-account key able to grant `admin` on any
+  /// organisation — was removed rather than accepted. The Lambda reaches
+  /// Firebase through Workload Identity Federation and no key exists anywhere.
   ///
-  /// [password] is null on the federated path, where Google has already
-  /// created the account and the function only redeems and sets claims. On the
-  /// email/password path it is present, and the function creates the account
-  /// itself after the code checks out — the ordering that closes F1.
+  /// ## The route is unauthenticated, and that is not a gap
   ///
-  /// The password is sent once, over HTTPS, to a function that passes it
-  /// straight to `createUser`. It is never logged here or there.
+  /// Its caller has no account — creating one is the point — so there is no
+  /// token to verify and no `users` row to look up. It is one of exactly two
+  /// routes exempt from the REQUEST authorizer, named in an allowlist that a
+  /// Terraform `check` asserts (ADR-048's Mission 7.6 amendment).
   ///
-  /// Throws an `AuthenticationException` carrying
-  /// `AUTH_INVITE_CODE_INVALID` or `AUTH_INVITE_CODE_EXPIRED`. A registered
-  /// address is reported as the former, not as its own condition — see
-  /// ADR-036.
+  /// `AuthInterceptor` attaches a bearer token when one exists and proceeds
+  /// without one otherwise. On the email/password path nobody is signed in, so
+  /// nothing is attached. On the federated path Google has already signed the
+  /// user in, so a token *is* attached and API Gateway ignores it — harmless,
+  /// and worth knowing before someone reads the header as meaningful.
+  ///
+  /// ## No error mapping happens here any more
+  ///
+  /// `FirebaseFunctionsErrorMapper` existed because a callable reports failures
+  /// as a fixed gRPC status set that says nothing about this application's
+  /// taxonomy, so the real code had to be dug out of `details.errorCode`. A
+  /// route answers with the Chapter 4.6 envelope and `ErrorInterceptor` already
+  /// maps it. The mapper was deleted rather than ported, exactly as its own
+  /// header said it would be.
+  ///
+  /// **One code covers every rejection**: `AUTH_INVITE_CODE_INVALID`, whether
+  /// the code is missing, expired, exhausted, or the address is already
+  /// registered. `AUTH_INVITE_CODE_EXPIRED` no longer exists — distinguishing
+  /// expiry told an unauthenticated caller which guesses named a real code,
+  /// which is the enumeration oracle Mission 2.9's F1 removed from the
+  /// account-creation path. Same reasoning, second place. See A-223's mission.
+  ///
+  /// ## [password] is null on the federated path, and the server rejects that
+  ///
+  /// **Known pre-existing defect, carried forward deliberately.** The server
+  /// requires an email AND a password and always calls `createUser`; the
+  /// federated path has no password to send, because Google created the
+  /// account before any of this ran. That request is refused as a validation
+  /// failure — and was refused by the Cloud Function too, on the same
+  /// condition, so Mission 7.6 neither introduced this nor fixed it.
+  ///
+  /// Fixing it needs a server capability that provisions claims for an account
+  /// that already exists, which is new behaviour and a new authorization
+  /// question rather than a port. Out of scope for a retirement mission and
+  /// recorded as its own amendment.
+  ///
+  /// The password is sent once, over HTTPS, to a route that passes it straight
+  /// to `createUser`. It is never logged here or there.
   Future<void> _redeemInviteCode({
     required String? inviteCode,
     required String email,
     required String? password,
   }) async {
-    try {
-      // Built imperatively rather than as a literal with null-aware elements.
-      // `?value` is recent Dart syntax, and the code-generation chain runs
-      // analyzer 5.13.0 — capped below 6.0.0 by `isar_generator` (A-048) —
-      // which cannot parse it. `flutter analyze` accepts it and build_runner
-      // does not, so the literal form breaks codegen while looking clean.
-      final Map<String, Object?> payload = <String, Object?>{'email': email};
-      // Omitted when absent rather than sent empty or null: the function reads
-      // a missing code as "the default organisation" (A-056) and a missing
-      // password as "the account already exists" (the federated path).
-      if (inviteCode != null) {
-        payload['code'] = inviteCode;
-      }
-      if (password != null) {
-        payload['password'] = password;
-      }
-
-      await _functions.httpsCallable('redeemInviteCode').call<Object?>(payload);
-    } on FirebaseFunctionsException catch (error, stackTrace) {
-      throw FirebaseFunctionsErrorMapper.toAuthenticationException(
-        error,
-        stackTrace,
-        description: 'redeem the invite code',
-      );
+    // Built imperatively rather than as a literal with null-aware elements.
+    // `?value` is recent Dart syntax, and the code-generation chain runs
+    // analyzer 5.13.0 — capped below 6.0.0 by `isar_generator` (A-048) —
+    // which cannot parse it. `flutter analyze` accepts it and build_runner
+    // does not, so the literal form breaks codegen while looking clean.
+    final Map<String, Object?> payload = <String, Object?>{'email': email};
+    // Omitted when absent rather than sent empty or null: the server reads a
+    // missing code as "the default organisation" (A-056) and validates a
+    // missing password as a bad request.
+    if (inviteCode != null) {
+      payload['code'] = inviteCode;
     }
+    if (password != null) {
+      payload['password'] = password;
+    }
+
+    // The 201 body carries `{uid, orgId}` and nothing here reads it: the
+    // claims are already on the account, so the sign-in that follows receives
+    // a token that carries them. `VumpApi` unwraps the envelope, and a
+    // failure arrives as an `AppException` that `ErrorInterceptor` has already
+    // given the right code.
+    await backend.post(
+      '/auth/redeem',
+      what: 'redeem the invite code',
+      body: payload,
+    );
   }
 
   /// Reads the domain [User] out of the ID token's custom claims.

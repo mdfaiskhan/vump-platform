@@ -9,6 +9,7 @@
     { "path": "./functions/sessions" },
     { "path": "./functions/chunks-upload" },
     { "path": "./functions/chunks-verify" },
-    { "path": "./functions/metadata" }
+    { "path": "./functions/metadata" },
+    { "path": "./functions/redeem" }
   ]
 }

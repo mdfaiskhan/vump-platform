@@ -71,6 +71,26 @@ export const ERROR_CODES = [
    */
   'SESSION_ALREADY_REGISTERED',
 
+  // --- Invite codes (ADR-036's retirement, Mission 7.6) -------------------
+  /**
+   * The invite code was not accepted. **One code covers every reason.**
+   *
+   * The Cloud Function this replaces returned `AUTH_INVITE_CODE_EXPIRED` for
+   * an expired code and `AUTH_INVITE_CODE_INVALID` for a missing or exhausted
+   * one. That distinction is an enumeration oracle: only a code that EXISTS
+   * can be expired, so the pair of responses tells an unauthenticated caller
+   * which guesses were real.
+   *
+   * It is the same oracle Mission 2.9's F1 removed from the account-creation
+   * path — where a taken email address failed differently from a free one —
+   * and it is closed the same way: one answer for every rejection.
+   *
+   * **`AUTH_INVITE_CODE_EXPIRED` is deliberately not defined here.** The
+   * mobile client still declares it (`error_codes.dart`); after Mission 7.6 no
+   * server can send it, and Phase 5 removes it.
+   */
+  'AUTH_INVITE_CODE_INVALID',
+
   // --- Server -------------------------------------------------------------
   /** An unhandled fault. Carries no detail: see `toEnvelopeError`. */
   'INTERNAL_ERROR',
@@ -162,6 +182,23 @@ export class ApiError extends Error {
    * that returns invented data is indistinguishable from a working integration
    * until something depends on it.
    */
+  /**
+   * The invite code is not usable — missing, expired, or out of uses.
+   *
+   * **Also returned when the email address is already registered**, which is
+   * not a mistake. A caller who reaches account creation has already supplied
+   * an acceptable code, and answering "that address is taken" would hand back
+   * exactly the enumeration oracle F1 removed. No account is created either
+   * way, so the two cases are indistinguishable by design.
+   *
+   * 404 rather than 400: the code names nothing this server will act on, and a
+   * 400 would suggest the request was malformed when it was well-formed and
+   * refused.
+   */
+  static inviteCodeInvalid(): ApiError {
+    return new ApiError('AUTH_INVITE_CODE_INVALID', 'This invite code is not valid.', 404);
+  }
+
   static notImplemented(what: string): ApiError {
     return new ApiError(
       'NOT_IMPLEMENTED',

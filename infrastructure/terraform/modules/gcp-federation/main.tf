@@ -1,0 +1,345 @@
+# Cross-cloud federation into the Firebase project — Mission 7.6, Phase 2.
+#
+# ADR-036 put invite-code redemption in a Cloud Function for one reason, stated
+# in its own words: "running the Admin SDK outside Google means holding a
+# service-account private key that can grant `admin` on any organisation, while
+# inside Cloud Functions the runtime authenticates through the metadata server
+# and no key exists."
+#
+# Porting the function to Lambda therefore has to answer that, not sidestep it.
+# ADR-036 named the shape — "Workload Identity Federation from AWS to GCP is the
+# shape that avoids one" — and deferred the cost. This module is that answer.
+#
+# ## What replaces the key
+#
+# A key is a bearer secret: whoever holds the bytes is the service account.
+# Federation replaces it with a **verifiable claim about which AWS role is
+# calling**. The Lambda signs an AWS STS `GetCallerIdentity` request with the
+# credentials AWS already gave it; GCP verifies that signature and reads the
+# caller's role ARN out of it. Nothing here is a credential — the credential
+# configuration the function bundles names this pool and is useless without an
+# AWS identity that satisfies the condition below.
+#
+# ## Two pools, because there are two callers
+#
+# The Lambda federates from AWS. CI federates from GitHub Actions to run
+# `terraform plan`, which reads these very resources. Different issuers cannot
+# share a provider, so they cannot share a pool's trust surface meaningfully.
+#
+# CI's half exists because `ci.yml` runs `terraform plan` on every pull request,
+# and the moment this module is added a plan without GCP credentials fails —
+# or worse, is scoped around the gap and silently stops covering part of the
+# infrastructure. That is the "green check that measures nothing" pattern
+# A-205, A-214 and A-218 each record an instance of. Not tolerable for a
+# security control.
+
+locals {
+  # Deterministic from the two values `modules/iam` builds the role name from.
+  # See `redeem_role_name`'s drift warning.
+  redeem_role_arn = "arn:aws:sts::${var.aws_account_id}:assumed-role/${var.redeem_role_name}"
+}
+
+# ===========================================================================
+# The Firebase service account — what the Lambda becomes
+# ===========================================================================
+resource "google_service_account" "redeem" {
+  project = var.gcp_project_id
+
+  account_id   = "vump-${var.environment_slug}-redeem"
+  display_name = "Invite-code redemption (${var.environment_slug})"
+  description  = "Impersonated by the redeem Lambda via Workload Identity Federation. Holds a custom role with exactly two Firebase Auth permissions — never firebaseauth.admin. Mission 7.6."
+}
+
+# ===========================================================================
+# The custom role — the part that makes federation better in KIND
+# ===========================================================================
+# `roles/firebaseauth.admin` is the narrowest PREDEFINED role carrying
+# `firebaseauth.users.update`, and it is far too broad: it is full read/write
+# on Firebase Authentication, so it can delete any user, enumerate every
+# account, and rewrite anyone's claims.
+#
+# **That is very close to the capability ADR-036 rejected.** Its objection was a
+# credential that "can grant `admin` on any organisation" — and a federated
+# identity holding `firebaseauth.admin` can do exactly that. Federation would
+# then have removed the KEY while keeping the CAPABILITY, satisfying half the
+# reasoning and reporting it as all of it.
+#
+# So the service account gets a custom role holding precisely the permissions
+# the redeem route performs and nothing else. It cannot delete a user, cannot
+# read or list users, and cannot touch Firebase Auth configuration.
+#
+# **It CAN disable an account**, and that is deliberate rather than an
+# oversight in the scoping: disabling is an *update*, and Mission 7.6's
+# Blocker 2 chose `updateUser(uid, {disabled: true})` over `deleteUser` for the
+# failure compensator precisely so that no delete permission would be needed.
+# An earlier version of this comment claimed the role "cannot disable an
+# account", which was wrong the moment that compensator was written.
+resource "google_project_iam_custom_role" "redeem" {
+  project = var.gcp_project_id
+
+  role_id     = "vumpRedeem${title(var.environment_slug)}"
+  title       = "Vump invite redemption (${var.environment_slug})"
+  description = "Create a user, set its custom claims, disable one. Plus Google's baseline Firebase tier, which predefined roles include silently. Deliberately narrower than roles/firebaseauth.admin — no configs, no delete, no read. Mission 7.6."
+
+  # `createUser` and `setCustomUserClaims`, and no third thing.
+  #
+  # These two ids were UNVERIFIED at authoring time — taken from Google's
+  # Firebase Authentication roles reference, whose permission tables did not
+  # render when checked. F1 deferred exact-string confirmation to
+  # implementation deliberately.
+  #
+  # CONFIRMED 2026-08-20 by the dev apply. GCP rejects unknown permission ids,
+  # so acceptance is the confirmation — there is no weaker outcome where a
+  # misspelt id is silently created.
+  #
+  # THEY DID NOT SUFFICE, and the reason is structural rather than a missing
+  # third Auth permission. A-223.
+  #
+  # This comment previously read "STILL UNPROVEN: that these two SUFFICE … if
+  # `setCustomUserClaims` needs a third permission, ADD IT HERE EXPLICITLY".
+  # Phase 4's first live redemption answered it: `createUser` failed with
+  # `auth/insufficient-permission` against a token exchange, impersonation
+  # binding and OAuth scope each verified correct and ruled out individually
+  # first.
+  #
+  # ## Why product permissions alone are not enough
+  #
+  # Google documents a BASELINE tier — "required to use any Firebase product or
+  # service" — which is **automatically included in every Firebase PREDEFINED
+  # role and in none of the product-specific permission ids**. Granting
+  # `firebaseauth.users.create` does not imply it. A custom role has to carry
+  # it, and that requirement is invisible until a call fails.
+  #
+  # This is what "narrower than a predefined role" actually costs: predefined
+  # roles are a permission set plus an unstated floor, and building the set by
+  # hand means building the floor by hand too.
+  #
+  # ## The baseline is project METADATA, not user data
+  #
+  # Every id below is a read of the project's own shape — which Firebase
+  # products are enabled, which client apps exist, what the API quotas are.
+  # **None of them reads, writes or lists a user account**, and none returns an
+  # API key STRING (that is `apikeys.keys.getKeyString`, deliberately absent —
+  # and ADR-016 places Firebase client identifiers in the Public tier anyway).
+  #
+  # So this does not undo Phase 2's decision. The role is still materially
+  # narrower than `roles/firebaseauth.admin`: no `firebaseauth.configs.*`, no
+  # `users.delete`, no `users.get`, no `users.sendEmail`. What changed is the
+  # floor beneath the two permissions, not the two permissions.
+  #
+  # If a further permission is ever needed, ADD IT HERE EXPLICITLY — do not
+  # substitute `roles/firebaseauth.admin`, which is full read/write on Firebase
+  # Authentication and would discard the whole argument above, removing the key
+  # while keeping the capability.
+  permissions = [
+    # What the route actually does: `createUser`, then `setCustomUserClaims`.
+    # `updateUser(disabled: true)` is the failure compensator and is also
+    # `users.update` — see Blocker 2.
+    "firebaseauth.users.create",
+    "firebaseauth.users.update",
+
+    # --- UNCONFIRMED. Bisection step 2, Mission 7.6 Phase 4 ----------------
+    #
+    # **This line is a hypothesis under test, not a finding.** Do not write it
+    # up, cite it, or copy it into another role until a live redemption has
+    # succeeded with exactly this set. If the race test still fails with
+    # `auth/insufficient-permission`, this line comes back out before the next
+    # candidate goes in.
+    #
+    # What is established: granting the full `roles/firebaseauth.admin`
+    # temporarily made `createUser` succeed — a real 201 with a real uid — and
+    # the grant was then reverted. So the failure IS a missing permission, not
+    # a project, SDK, token or binding problem. Those were each ruled out
+    # individually first.
+    #
+    # ELIMINATED, step 1: `firebaseauth.configs.get`. The hypothesis was that
+    # `createUser` reads the project's Auth configuration — password policy,
+    # enabled providers — before deciding whether a request is acceptable.
+    # Applied, waited for propagation, re-ran: identical failure. Removed
+    # rather than left in place, because a permission that fixed nothing is
+    # not one this role should keep.
+    #
+    # NOW TESTING: `users.get`. `createUser` must decide whether the address is
+    # already registered — the Admin SDK raises `auth/email-already-exists`,
+    # which it cannot know without a read. Weaker as a hypothesis than step 1
+    # was, because that read may happen inside the create call under the
+    # server's own authority rather than the caller's, which would mean this
+    # permission is not required either.
+    #
+    # ONE permission at a time, deliberately. Adding several would very likely
+    # work and would leave us unable to say which was needed, which is how a
+    # role ends up permanently wider than the evidence supports.
+    #
+    # NOT CANDIDATES AT ANY POINT: `configs.getSecret` and
+    # `configs.getHashConfig` return actual secret material — the password
+    # hashing parameters among them — so an identity holding either could
+    # verify or forge password hashes offline. They are excluded on principle
+    # rather than tried and reverted, however the bisection goes.
+    "firebaseauth.users.get",
+
+    # --- Google's baseline tier, required by every Firebase product --------
+    #
+    # `resourcemanager.projects.list` is part of the documented tier and is
+    # ABSENT ON PURPOSE: GCP refused it with "Permission
+    # resourcemanager.projects.list is not valid" at apply. It lists projects
+    # across a container, so it is only grantable at organisation or folder
+    # level, and this is a project-scoped custom role. Nothing was substituted
+    # for it — `firebase.projects.get` and `resourcemanager.projects.get` are
+    # what the SDK actually reads.
+    "firebase.clients.get",
+    "firebase.clients.list",
+    "firebase.links.list",
+    "firebase.projects.get",
+    "resourcemanager.projects.get",
+    "resourcemanager.projects.getIamPolicy",
+    "apikeys.keys.get",
+    "apikeys.keys.list",
+    "apikeys.keys.lookup",
+    "serviceusage.operations.get",
+    "serviceusage.operations.list",
+    "serviceusage.quotas.get",
+    "serviceusage.services.get",
+    "serviceusage.services.list",
+  ]
+}
+
+resource "google_project_iam_member" "redeem" {
+  project = var.gcp_project_id
+  role    = google_project_iam_custom_role.redeem.name
+  member  = "serviceAccount:${google_service_account.redeem.email}"
+}
+
+# ===========================================================================
+# Pool 1 — AWS, for the redeem Lambda
+# ===========================================================================
+resource "google_iam_workload_identity_pool" "aws" {
+  project = var.gcp_project_id
+
+  workload_identity_pool_id = "vump-${var.environment_slug}-aws"
+  display_name              = "Vump AWS (${var.environment_slug})"
+  description               = "Trusts one Lambda execution role. Mission 7.6."
+}
+
+resource "google_iam_workload_identity_pool_provider" "aws" {
+  project = var.gcp_project_id
+
+  workload_identity_pool_id          = google_iam_workload_identity_pool.aws.workload_identity_pool_id
+  workload_identity_pool_provider_id = "aws-lambda"
+  display_name                       = "AWS Lambda"
+
+  aws {
+    account_id = var.aws_account_id
+  }
+
+  # `attribute.aws_role` is the ARN with the SESSION SUFFIX REMOVED, and that
+  # is not cosmetic — mapping it to the raw `assertion.arn` is a defect that
+  # cannot work. A-222.
+  #
+  # STS renders an assumed-role identity as
+  # `arn:aws:sts::{account}:assumed-role/{role}/{session}`, and Lambda chooses
+  # the session per invocation. The `attribute_condition` below compares with
+  # `startsWith`, so the raw value is correct THERE. But the IAM binding on the
+  # service account is a `principalSet://…/attribute.aws_role/{value}`, and
+  # that is an EXACT match — a per-invocation session suffix can never equal
+  # the role prefix the binding names.
+  #
+  # The two therefore need different forms of the same identity, which is why
+  # one expression is a condition and this one is a transformation. This is
+  # Google's documented mapping for AWS, and the reason it is documented.
+  #
+  # Nothing fails at apply: the pool accepts either mapping, the token exchange
+  # succeeds, and only the impersonation call is refused — surfacing as
+  # `app/invalid-credential` from the Admin SDK, which names neither AWS nor
+  # the binding.
+  attribute_mapping = {
+    "google.subject" = "assertion.arn"
+
+    "attribute.aws_role" = "assertion.arn.contains('assumed-role') ? assertion.arn.extract('{account_arn}assumed-role/') + 'assumed-role/' + assertion.arn.extract('assumed-role/{role_name}/') : assertion.arn"
+  }
+
+  # THE security control in this module.
+  #
+  # Without it, the pool trusts the AWS ACCOUNT — every role, every Lambda,
+  # every EC2 instance, anything that can call GetCallerIdentity. That would be
+  # a far wider grant than the service-account key it replaces, which is the
+  # failure mode worth naming: federation is only narrower than a key if the
+  # condition makes it so.
+  #
+  # `startsWith` rather than `==` because STS renders an assumed-role ARN as
+  # `.../assumed-role/{role}/{session}`, and the session suffix is chosen by
+  # Lambda per invocation. The prefix is the role, which is the identity.
+  attribute_condition = "assertion.arn.startsWith('${local.redeem_role_arn}')"
+}
+
+resource "google_service_account_iam_member" "aws_impersonation" {
+  service_account_id = google_service_account.redeem.name
+  role               = "roles/iam.workloadIdentityUser"
+
+  # Scoped to the mapped attribute rather than to the whole pool. `principalSet`
+  # on `*` would let any identity the pool admits impersonate this account, and
+  # the attribute condition above would be the only thing standing in the way.
+  # Two independent narrowings rather than one.
+  member = "principalSet://iam.googleapis.com/${google_iam_workload_identity_pool.aws.name}/attribute.aws_role/${local.redeem_role_arn}"
+}
+
+# ===========================================================================
+# Pool 2 — GitHub Actions, for `terraform plan` in CI
+# ===========================================================================
+# Reuses ADR-049's PATTERN, not its infrastructure. The AWS pool above cannot
+# serve GitHub: a provider trusts one issuer, and these are two.
+resource "google_iam_workload_identity_pool" "github" {
+  project = var.gcp_project_id
+
+  workload_identity_pool_id = "vump-${var.environment_slug}-github"
+  display_name              = "Vump GitHub Actions (${var.environment_slug})"
+  description               = "Read-only, for `terraform plan` on pull requests. Mission 7.6."
+}
+
+resource "google_iam_workload_identity_pool_provider" "github" {
+  project = var.gcp_project_id
+
+  workload_identity_pool_id          = google_iam_workload_identity_pool.github.workload_identity_pool_id
+  workload_identity_pool_provider_id = "github-actions"
+  display_name                       = "GitHub Actions"
+
+  oidc {
+    issuer_uri = "https://token.actions.githubusercontent.com"
+  }
+
+  attribute_mapping = {
+    "google.subject"       = "assertion.sub"
+    "attribute.repository" = "assertion.repository"
+  }
+
+  # Exact match, no wildcard — ADR-049's rule: "The repository is public, so
+  # every OIDC trust condition is an exact-match StringEquals and no wildcard
+  # appears in any of them." Same rule, this provider's syntax.
+  attribute_condition = "assertion.repository == '${var.github_repository}'"
+}
+
+resource "google_service_account" "ci_plan" {
+  project = var.gcp_project_id
+
+  account_id   = "vump-${var.environment_slug}-ci-plan"
+  display_name = "Terraform plan, CI (${var.environment_slug})"
+  description  = "Read-only. Lets `terraform plan` refresh the federation resources it manages, so a plan cannot silently stop covering them. Mission 7.6."
+}
+
+# `roles/viewer` is broad for a reader and is still the right call here: a plan
+# refreshes whatever the configuration declares, and predicting that set as a
+# permission list would break the plan every time a resource is added — which
+# is the same silent-gap failure this account exists to prevent.
+#
+# It is READ-ONLY, holds nothing on the redeem service account, and cannot
+# impersonate it. What it can do is see the shape of a project it does not own.
+resource "google_project_iam_member" "ci_plan_viewer" {
+  project = var.gcp_project_id
+  role    = "roles/viewer"
+  member  = "serviceAccount:${google_service_account.ci_plan.email}"
+}
+
+resource "google_service_account_iam_member" "github_impersonation" {
+  service_account_id = google_service_account.ci_plan.name
+  role               = "roles/iam.workloadIdentityUser"
+  member             = "principalSet://iam.googleapis.com/${google_iam_workload_identity_pool.github.name}/attribute.repository/${var.github_repository}"
+}

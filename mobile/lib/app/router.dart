@@ -8,7 +8,6 @@ import 'package:mobile/app/recording_guard.dart';
 import 'package:mobile/core/onboarding/providers/onboarding_ports.dart';
 import 'package:mobile/features/auth/application/auth_notifier.dart';
 import 'package:mobile/features/auth/application/auth_state.dart';
-import 'package:mobile/features/auth/presentation/admin_invite_codes_screen.dart';
 import 'package:mobile/features/auth/presentation/backend_profile_tile.dart';
 import 'package:mobile/features/auth/presentation/login_screen.dart';
 import 'package:mobile/features/auth/presentation/sign_out_tile.dart';
@@ -64,7 +63,7 @@ import 'package:mobile/features/upload/presentation/collector_sessions_screen.da
 /// ```text
 /// /                                             renders nothing; always redirects
 /// /login                                        shared, role-agnostic
-/// /signup                                       public; ADR-036's invite code gates it
+/// /signup                                       public; the invite code is OPTIONAL (A-056)
 ///
 /// /collector    5 tabs (Chapter 2.4 §2), stack per tab
 ///   /collector/dashboard                        C-03
@@ -82,7 +81,6 @@ import 'package:mobile/features/upload/presentation/collector_sessions_screen.da
 ///     /admin/projects/:projectId                A-03  — IS Chapter 2.4's "Task List"
 ///   /admin/sessions                             placeholder — A-07, open item 96
 ///   /admin/settings
-///   /admin/invite-codes                         TEMPORARY, ADR-036
 ///
 /// /onboarding                                   full-screen modal, C-01
 /// /admin/projects/new                           full-screen modal, A-04
@@ -100,12 +98,18 @@ import 'package:mobile/features/upload/presentation/collector_sessions_screen.da
 ///
 /// ## Four of these routes are not in Chapter 2.4's navigation model
 ///
-/// `/onboarding` (C-01), `/processing/:sessionId` (C-10), `/signup` and
-/// `/admin/invite-codes`. Chapter 2.4 names no modal, tab or stack position
-/// for any of them — verified against its full text, not assumed. The last two
-/// are not in Chapter 2.5's screen inventory either; they exist because
-/// self-signup (A-051, A-056) and ADR-036's invite codes were decided after
-/// Volume 2 was written.
+/// `/onboarding` (C-01), `/processing/:sessionId` (C-10) and `/signup`.
+/// Chapter 2.4 names no modal, tab or stack position for any of them —
+/// verified against its full text, not assumed. `/signup` is not in Chapter
+/// 2.5's screen inventory either; it exists because self-signup (A-051,
+/// A-056) was decided after Volume 2 was written.
+///
+/// **`/admin/invite-codes` was a fourth, and is gone.** Mission 7.6 Phase 6
+/// retired invite-code ISSUING rather than porting it: its only enforcement
+/// was a `firestore.rules` condition being deleted in the same phase, so
+/// leaving the screen would have presented a permission-gated-looking surface
+/// with no gate behind it. Codes are minted by an operator until an admin
+/// surface is designed against real requirements. See A-227.
 ///
 /// This is the **inverse** of open item 82, where Chapter 2.4 names screens the
 /// inventory lacks. Both directions are recorded, separately, because they
@@ -486,19 +490,6 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((Ref ref) {
             ],
           ),
         ],
-      ),
-
-      // The Admin's invite-code surface (ADR-036). Outside the shell because it
-      // is reached from Settings rather than being a tab of its own, and
-      // TEMPORARY — it is retired with the rest of ADR-036 at Mission 6/7.
-      //
-      // Unguarded, like every other /admin route here: this table still has no
-      // redirect (Mission 2.7 owns that). Reaching the screen grants nothing,
-      // because firestore.rules checks the admin claim on every write.
-      GoRoute(
-        path: '/admin/invite-codes',
-        builder: (BuildContext context, GoRouterState state) =>
-            const AdminInviteCodesScreen(),
       ),
 
       // ---------------------------------------------------------------------

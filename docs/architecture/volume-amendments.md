@@ -4595,7 +4595,7 @@ Every carried-forward item, in one place. Accurate as of **Mission 4.3**; origin
 | # | Risk | Why it is quiet | Source |
 |---|---|---|---|
 | 13 | Isar 3 is unmaintained; the project depends on an `@experimental` API for a uniqueness guarantee | The build no longer warns — ADR-038 silenced it | A-029, ADR-038 |
-| 14 | ~~`battery_plus` applies~~ **Three plugins apply** the legacy Kotlin Gradle Plugin | **Widened 2026-08-16 by Mission 4.3, from a build rather than from a reading.** `flutter build apk --debug` names `battery_plus`, `cloud_functions` **and** `flutter_foreground_task`. `cloud_functions` was already in the tree and this item never mentioned it, so the item understated the exposure before 4.3 added to it. Builds today; a future Flutter will refuse it. Mitigating: `cloud_functions` retires with ADR-036 at Mission 6/7 | A-064 §4a, ADR-042 |
+| 14 | ~~`battery_plus` applies~~ ~~**Three plugins apply**~~ **TWO plugins apply** the legacy Kotlin Gradle Plugin | **Widened 2026-08-16 by Mission 4.3, from a build rather than from a reading.** `flutter build apk --debug` names `battery_plus`, `cloud_functions` **and** `flutter_foreground_task`. `cloud_functions` was already in the tree and this item never mentioned it, so the item understated the exposure before 4.3 added to it. Builds today; a future Flutter will refuse it. **Narrowed 2026-08-21 by Mission 7.6 Phase 6, again from a build rather than a reading: TWO plugins, not three.** `cloud_functions` left the project with ADR-036's runtime, and `flutter build apk --debug --flavor dev` now names `battery_plus` and `flutter_foreground_task` only — Gradle reporting its own resolved plugin set, which is a different check from the package being absent from `pubspec.yaml`. The mitigation this item recorded has been taken; the two that remain have none. | A-064 §4a, ADR-042, A-227 |
 | 15 | Software-encoder fallback and unmeasurable flush interval | Silent by nature | A-058 |
 | 16 | An in-flight chunk is unrecoverable after a crash | Structural to the plugin; at most one chunk per crash | A-063 §3, A-064 §1 |
 | 17 | Android 16 KB page-size support unverified for Isar | Release-blocking rather than development-blocking | ADR-009 |
@@ -4681,6 +4681,13 @@ Every carried-forward item, in one place. Accurate as of **Mission 4.3**; origin
 | 115 | **Four CI corrections are queued from Mission 7.3 and were recorded nowhere until now** | **The batch existed only in conversation**, which is the failure this register exists to prevent — and the second instance of the pattern Mission 7.4 was asked to watch for at its start: *work that is supposed to be carried forward automatically, needing reconstruction from memory instead.* Written down here so the batch is a thing a later mission can pick up rather than remember.<br><br>**1. `pipefail`.** A piped step in `ci.yml` can fail silently because the shell reports only the last command's status.<br>**2. Probe cleanup.** Mission 7.3's throwaway measurement Lambda and its `probe.tf` are still in the tree; they were deliberately temporary and outlived their measurement (F4).<br>**3. `bootstrap-describe-log-groups`.** The narrow grant added to bootstrap `terraform-apply` past its own missing `logs:DescribeLogGroups` permission. It did its job and is now dead surface, along with `boundary.tf`'s withdrawn patch.<br>**4. `types: [opened, synchronize, reopened, edited]`** on the `pull_request` trigger — one line. The **Commit convention** job reads `github.event.pull_request.title` from the **event payload** and never checks out the repo, so re-running a job replays the original payload and re-validates the OLD title. `edited` is absent from the default types, so correcting a title in the UI fires nothing at all, and the only ways out are an empty commit or closing and reopening the PR. Mission 7.4 hit this on PR #1 and pushed empty commit `893b2cd` to work around it.<br><br>**5. A formatting exclusion for `*.g.dart` and `*.freezed.dart`.** `dart format lib/` sweeps generated files; CI's format job already excludes them and its drift job diffs the generator's **raw** output, so formatting them breaks the build by construction. **Three occurrences in one session** — twice caught and reverted, once committed (A-214). Discipline has been tried and has failed three times; the fix is tooling that makes the sweep impossible. Options: a `.gitattributes` marker, a repo-local format wrapper that filters the file list the way `ci.yml` already does, or a pre-commit hook. Whichever is chosen, the CI format job's existing `grep -v` list is the specification.<br><br>**Deliberately not fixed during Mission 7.4**: every one is a CI change, and 7.3's branch was under review while 7.4's checkpoint was mid-flight. They belong together, in one pass, on their own branch. | A-205, A-214, ADR-019, `ci.yml` |
 | 116 | **The free-space floor is derived from a nominal bitrate and undercounts a real chunk by ~23 MB** | `RecordingLifecycle.oneChunkBytes = 610 * 1000 * 1000`, derived in its own comment as *(8,000 kbps video + 128 kbps audio) / 8 = 1,016 kB/s, times 600 s = 609.6 MB*. **The chunk Mission 7.3's F4 actually measured on CPH2707 was 633.2 MB** — the encoder overshoots its nominal bitrate, as encoders do.<br><br>So the Pre-Recording Checklist can pass FR-CHK-02's *"sufficient free local storage for at least one full chunk"* with about **23 MB less than one full chunk**. The same constant is `_lowStorageThresholdBytes` for Chapter 5.4 §2's mid-recording backpressure, so both floors are short by the same amount — *"by construction rather than by two copies agreeing"*, which is the comment's stated virtue working against it here.<br><br>**Invisible at short durations.** Every recording before Mission 7.4's scale test was seconds long; only a full 10-minute chunk reaches the size the floor is supposed to cover.<br><br>**Not fixed during the checkpoint**, deliberately: changing a domain constant that two safety floors depend on is not a mid-run edit, and the fix is a decision rather than a number — raise it to the measured figure, derive it with a margin over nominal, or measure per device. One real measurement is not a distribution. | F4, FR-CHK-02, Ch. 5.4 §2 |
 | 117 | **C-05 and A-05 never re-fetch their Task list, so a Collector cannot see a Task assigned to them without restarting the app** | `tasksProvider` is a plain `AsyncNotifierProviderFamily` with **no `autoDispose` and no `keepAlive`** — nothing in the whole feature uses either — so a family member lives for the container's lifetime and `build(projectId)` runs **once per Project id, ever**. Re-navigating re-reads cached state and issues no request. That much is deliberate and documented: *"Riverpod keeps one instance per Project, so navigating back to a Project already visited does not refetch it."*<br><br>**What is not deliberate is that nothing else refreshes it either:**<br><br>| Path | Refreshes? |<br>|---|---|<br>| In-app Task creation | **Yes** — `AdminProjectTaskNotifier.createTask` calls `ref.invalidate(tasksProvider(projectId))` |<br>| Projects list, C-04 and A-03 | **Yes** — `RefreshIndicator` calls `refresh()` |<br>| **Task list, C-05 and A-05** | **No** — no `RefreshIndicator`, no pull-to-refresh, no external invalidation |<br><br>So a change made **server-side** — an Admin assigning a Collector to a new Task, which is FR-ADM-03's whole purpose — is invisible to that Collector until the app is restarted. `TasksNotifier.refresh()` exists, is implemented and is unit-tested; **it has no caller.**<br><br>**Found during Mission 7.5's F2 device session**, where 201 seeded Tasks did not appear. That turned out to be a missing `task_assignments` seed rather than the cache — but tracing it surfaced this, which is real independently.<br><br>**The fix is small**: a `RefreshIndicator` on both Task lists, matching what C-04 already does, calling the `refresh()` that is already there. Not done during a verification session, per the standing rule that Testing and Verification states the position rather than closing it. | FR-ADM-03, C-05, A-05, `tasks_notifier.dart` |
+| 118 | **Three Firebase projects exist outside Terraform entirely, created by hand** | `infrastructure/terraform/` has **no `google` provider at all** — it is AWS-only. `vump-platform-f86af`, `vump-staging` and `vump-prod` were created through the console in Mission 6.4, along with their Firestore databases, their Auth configuration and the `org_invite_codes` collection.<br><br>**ADR-043 makes infrastructure-as-code the rule** and discharges Volume 4 Ch. 4.9 §5's deferral. These three projects are infrastructure by any reading: they hold the identity provider every route authenticates against, and ADR-036 records that the Firestore **security rules** — not the UI — are what enforce who may write invite codes. A security control that exists only in a console is exactly the shape this project keeps finding defects in.<br><br>**Pre-existing, and not Mission 7.6's to fix.** 7.6 adds the `google` provider for Workload Identity Federation, which makes adopting the projects *cheaper* than it has ever been — the provider and its credentials will already be there — but importing three live projects is its own change with its own blast radius, and folding it into a port would be the scope creep this project has declined twice already.<br><br>**Recorded because ADR-036's own retirement obligation nearly evaporated the same way.** That ADR said in terms: *"It is not tracked anywhere that would prompt anyone, which is the honest weakness of writing it down."* This is the same weakness, so it is written somewhere that is read. | ADR-043, ADR-036, ADR-047, Ch. 4.9 §5 |
+| 119 | **No gate compares deployed Lambda code against the source it was built from** | A-220: A-195's security fix was written, tested, reviewed, merged and reported closed, and the running Lambda never received it — for the whole of Mission 7.4, including every chunk of the device checkpoint and the scale test.<br><br>**The gate's own ordering is what makes this structural.** Terraform applies happen during implementation; a closing-gate security review comes after. A fix authored at a closing gate therefore lands after the last apply **by construction**, and nothing downstream notices.<br><br>**The check is one command per function**: compare `aws lambda get-function-configuration --query CodeSha256` against the hash Terraform computes from the current source — which is exactly what a `plan` already does, run deliberately rather than stumbled into. It belongs in the closing gate beside the test run. | A-220, A-195, Ch. 12 |
+| 120 | **Nothing checks that a cross-system binding's two halves describe the same identity** | A-222: the AWS pool's `attribute_mapping` produced a session-suffixed ARN while the service account's `principalSet` binding named the session-less prefix. Exact-match, so impersonation was refused on every invocation — and `terraform apply` reported 11 added, 0 errors, because both resources are individually well-formed.<br><br>**A plan cannot catch this class.** It verifies existence and shape, not that two resources can address each other. The failure surfaced as `app/invalid-credential` from a third system, naming neither side.<br><br>**The check is an end-to-end call, and there is no cheaper substitute.** For this module that is one federated `getAccessToken` — which Phase 4's deployed race performed, and which is the only reason the defect was found before Phase 6 deleted the Cloud Function it replaces. | A-222, A-221, Ch. 12 |
+| 121 | **A permission set built from the operations a caller performs is not the set those operations require** | A-223: `vumpRedeemDev` named `firebaseauth.users.create` and `users.update` — exactly what the route calls — and `createUser` refused. It needed Google's unstated baseline tier, which every PREDEFINED Firebase role includes silently and no product permission implies, plus `firebaseauth.users.get` for a read the caller never issues.<br><br>**Building a role narrower than a predefined one means rebuilding that role's invisible floor.** Nothing in the docs, the plan or the apply says which permissions an API call needs beneath the one it is named for.<br><br>**Diff against the predefined role rather than bisecting.** `gcloud iam roles describe roles/firebaseauth.admin` lists what the working ceiling holds; subtracting the custom role names the gap in one read. Mission 7.6 instead spent three applies, three propagation waits and three live redemptions guessing candidates one at a time — rigorous, and the expensive way to answer a question a single read answers. | A-223, A-222, ADR-036, Ch. 12 |
+| 122 | **Google sign-up with an invite code has never worked** | A-224: the federated path sends `password: null`, and both the Cloud Function and the route that replaced it reject that before reading the code. The doc comment above the call describes a server that only redeems and sets claims — a contract nobody built.<br><br>**A mock cannot reject.** `FakeFirebaseFunctions` accepted any payload, so the client's tests proved it sent what it meant to send and never that the server would take it. A-212's shape at a contract boundary rather than a database one.<br><br>**Not fixable as a port.** It needs a route that provisions claims for an account that ALREADY EXISTS — new behaviour, and a new authorization question, since such a route would set claims on an account the caller merely authenticated as. Needs its own trace/decide. | A-224, A-212, ADR-036 |
+| ~~123~~ | ~~**Phase 6 deletes the only working path for ISSUING invite codes**~~ **CLOSED by A-227 — the capability was retired, not replaced** | `InviteCodeRepositoryImpl.issue()` writes to Firestore, authorised by `firestore.rules`. Phase 6 drops `cloud_firestore` — and there is no backend route for issuing, nor can there be without a migration: 0012 deliberately grants `INSERT` on `org_invite_codes` to **no role at all**, which is why seeding a test code needs break-glass.<br><br>**Phase 6 as scoped would remove the mechanism and leave nothing behind it.** Admins could no longer mint codes by any path.<br><br>**Resolved by option D**, not by building the route. Zero codes had ever been issued through the screen, A-056 already made codes optional, and its only enforcement was the `firestore.rules` condition being deleted in the same phase — so leaving it would have presented a permission-gated-looking surface with no gate. Migration 0012's "no principal may INSERT" stays correct. An admin issuing surface, if ever wanted, is a future feature designed against requirements that exist then. | Mission 7.6 Phase 6, migration 0012, ADR-036 |
+| 124 | **Nothing compares what `package.json` declares against what `package-lock.json` resolves** | A-228: `functions/redeem` was added in Phase 3 and the lock was never regenerated. `npm ci` failed in CI; four phases of green local checks could not have caught it.<br><br>**The local loop cannot cover this.** `typecheck`, `lint`, `test` and `build` all read `node_modules` and none reads the lock — they consume a resolution rather than reproduce one. Only `npm ci` builds from the lock and refuses when it disagrees with the manifests.<br><br>**`npm install` is not the check.** It repairs a stale lock silently and reports success, so running it as verification confirms nothing. The two commands look interchangeable and are opposites exactly here. A `npm ci` step belongs in the closing gate beside the test run, next to item 119. | A-228, A-220, Ch. 12 |
 | 92 | **No endpoint anywhere in Chapter 4.6 returns an organisation's Collectors — a catalog-level omission that four separate specifications assume away** | **Recorded as its own row rather than inside A-06's, because it is not one screen's problem.** Chapter 4.6's complete catalog is **15 routes**, and its only user-facing one is `GET /v1/users/me` — *"Current user's profile + role"*, the caller and nobody else. **Four specifications assume a Collector directory exists and none of them can be satisfied:** FR-ADM-03 (*"assign one or more Collectors"* — an Admin must identify them); UC-07's exception flow (*"If the Admin attempts to assign a Collector who does not have an account or is deactivated, the system blocks the assignment and explains why"* — presupposes the Admin picked from something); Chapter 2.2's Admin flow step 6 (*"Collector(s) **selected** and confirmed"* — selected from what?); and Chapter 2.7's A-06, which lists Collector rows.<br><br>**The gap is total, not merely endpoint-level.** Verified at every layer this project has: Firestore holds one collection, `org_invite_codes`, with `allow read: if false` (*"Nobody reads, ever"*); `functions/src/index.ts` states in its own comment that *"no `orgs` collection exists"* and names the users table as *"Volume 4 Ch. 4.4's"*, behind the unbuilt backend; `features/auth/` yields the caller's own session and nothing else; and **no fake in `lib/` or `test/` holds a user list**. So the only user id this application can obtain is the signed-in Admin's own `uid`, which Chapter 4.4 §4's `role='collector'` annotation makes the wrong one.<br><br>**Closing it needs a route added to Chapter 4.6** — something like `GET /v1/users?role=collector`, org-scoped per BR-20 — and that is a backend/spec decision, not an engineering one. **No stand-in was invented**: seeding a roster into a fake would be inventing a domain concept this project has never modelled rather than standing in for one with a known shape, which is the line between a fake and a fabrication (A-122). | A-122, item 89, FR-ADM-03, UC-07, Ch. 2.2 step 6, Ch. 4.6 §2 |
 | 90 | **Chapter 2.9 contradicts itself about editing a Task: §2 principle 4 requires a confirmation, §4.4 forbids one** | **A PRODUCT/SPEC DECISION FOR FAISAL — a genuine authorial contradiction inside one chapter, not something derivable.** Both sentences name the same action explicitly and state opposite rules.<br><br>**§2, principle 4:** *"Admin actions that affect a Collector are never destructive-by-default. Removing a Collector from a Task, or **editing Task instructions after Collectors are already assigned, always confirms the action and states its effect in plain language before it takes effect**."*<br><br>**§4.4:** *"Reversible actions (reassigning a Collector, **editing Task instructions**) **do not require a confirmation dialog** — they save immediately and can be changed again just as easily."*<br><br>**This is unlike G3.** There the sources disagreed in emphasis and one class of them specified a mechanism, so the resolution was derivable by asking which sources were normative (A-116). Here both sentences are behavioural rules in the same chapter, at the same level of authority, naming the same action — and §2 P4 even supplies the reasoning (*"affect a Collector"*) that §4.4's *"reversible"* framing rejects. **There is no reading that satisfies both.** Mission 5.2.2 therefore held A-05's **edit** half back entirely rather than pick one: `updateTask` exists and works, and shipping either behaviour would encode an answer nobody has given into UI a Collector depends on. Settling it needs one sentence struck or amended, not an implementation judgement. | A-121, Ch. 2.9 §2 P4, Ch. 2.9 §4.4, FR-ADM-02 |
 | 91 | **Chapter 2.5's A-04 names "Project-level settings"; the phrase appears exactly once in all of Volume 2 — in that row** | **Third instance of one shape, and kept as a separate row so the family stays visible.** Ch. 2.5's A-04: *"Name, description, and **Project-level settings**."* Nothing defines them: `projects` has seven columns and none is a setting (Ch. 4.4 §2), `POST /v1/projects` carries no such field, no FR mentions one, and no other chapter uses the phrase. So A-04 renders name and description with **no settings section and no empty placeholder implying one is coming** — the treatment C-06 gave `requirements` (A-110), and a test asserts the absence.<br><br>**The family, three rows and three owners:** item 69 is FR-PT-05/A-05's `requirements` — a **Task** field named by a requirement with no column. This is A-04's **Project-level settings** — a **Project** field group named by a screen with no column. Both are *"a surface names something the schema does not have"*, and they are separate items because they have different owners, different chapters and will be answered by different decisions. Folding them would make one product answer look like it closed both. | A-110, item 69, Ch. 2.5 A-04, Ch. 4.4 §2 |
@@ -7651,3 +7658,474 @@ The contrast is sharpened by what came before it in the same session: `adb insta
 Reinstalling produces a new `device_id`. Nothing in Volume 4 or 5 treats it as a key — it is a correlator for grouping and diagnosis, and a chunk's identity rests on `chunk_id`, `session_id`, `task_id` and `collector_id`, none of which are local. ADR-050 predicted this trade; F1b is the measurement that turns the prediction into a fact.
 
 One consequence worth stating for whoever reads `chunk_metadata.device_id` later: **rows from the same physical phone across a reinstall will not group.** That is correct behaviour and will look like a data defect to anyone who does not know why.
+
+---
+
+### A-220 — A-195's security fix was merged, reported closed, and never deployed
+
+| | |
+|---|---|
+| **Fix** | A-195 — `finalizeUpload` passed `key` and `uploadId` straight from the invoke payload to S3, with three records claiming a validation that did not exist |
+| **Written** | Mission 7.3's closing-gate security review. Three tests, two proved non-vacuous |
+| **Merged** | `c437d60`, PR #15 |
+| **Deployed** | **No.** `vump-dev-chunks-upload` `LastModified` = `2026-08-19T07:18:53Z` |
+| **Found** | 2026-08-20, by an unrelated `terraform plan` for Mission 7.6's GCP work |
+| **Status** | **Deployed 2026-08-20T12:23:54Z.** Partially closed — see the resolution below |
+
+The running Lambda has been serving the vulnerable `finalizeUpload` for the whole of Mission 7.4 — including the device checkpoint, the end-to-end upload, and the 38-part scale test. Every chunk uploaded in those sessions went through the unvalidated path.
+
+### How it was found, which is entirely by luck
+
+Mission 7.6 Phase 2 wires a GCP module into the dev root. Its `terraform plan` showed **11 to add** — the expected federation resources — **and 1 to change**: `module.api_gateway.aws_lambda_function.this["chunks-upload"]`, with `source_code_hash` moving.
+
+Nothing about that plan was looking for this. The project owner queried the unexplained line rather than accepting it, which is the only reason it surfaced. **Had the GCP work not touched this root, the gap would still be open and unknown.**
+
+### Why no other function is affected, and how that is known
+
+The instinct is to compare each deployed `LastModified` against the newest commit touching its source. **That comparison does not work here**, and the reason is worth recording: `packages/shared` is bundled into all seven functions, its newest commit is `c437d60`, and `c437d60` is the **squash-merge** of the whole Mission 7.3 PR. Its date is when the branch merged, not when the code was written — while the deploys *during* 7.3 happened from the working tree, necessarily earlier. Every function would therefore appear stale, and six of them are not.
+
+The sound check was already in the plan output. All seven bundles were rebuilt by one `npm run build` at 13:50, so every archive was regenerated. **Only one hash changed.** A rebuild that alters no content alters no hash, so six functions match their current source byte-for-byte and one does not. **The plan is the systematic check**, and it says the gap is chunks-upload alone.
+
+### The fourth instance of one shape, and the most consequential
+
+| | The claim | What was actually true |
+|---|---|---|
+| A-205 | *"the APK built"* | A stale artefact from a previous run |
+| A-212 | *"203 tests pass"* | No `INSERT` had ever reached a real database |
+| A-214 | *"only two generated files changed"* | A later step had already changed thirty |
+| **A-220** | ***"the security fix is closed"*** | **It was closed in the repository and absent from production** |
+
+The first three were verification measuring the wrong artefact. This one is a **claim about the world made from a claim about the repository** — the fix was written, tested, reviewed, committed, merged, and written up as closed, and every one of those was true. None of them is deployment.
+
+**Mission 7.3's closing gate had no deploy step**, because its Terraform applies happened during implementation and the security review came after. A fix authored at a closing gate lands after the last apply by construction, which makes this a structural hazard of the gate's own ordering rather than an oversight by anyone.
+
+### What would prevent a recurrence
+
+A check that the deployed `CodeSha256` of every function equals the hash Terraform would compute from the current source — the same comparison the plan performs, run deliberately rather than stumbled into. It is one command per function and it belongs in a closing gate, next to the test run.
+
+Recorded as open item 119.
+
+### Resolution — deployed 2026-08-20
+
+`chunks-upload` was rebuilt, the artefact was checked for A-195's lookup string **before** anything touched AWS, and it was applied on its own:
+
+| | |
+|---|---|
+| **Applied** | `terraform apply -target='module.api_gateway.aws_lambda_function.this["chunks-upload"]'` |
+| **Result** | 1 changed, 0 added, 0 destroyed |
+| **`LastModified`** | `2026-08-20T12:23:54Z` — was `2026-08-19T07:18:53Z` |
+| **`CodeSha256`** | Matches the `source_code_hash` Terraform computed from current source |
+
+Deployed as **its own deliberate act**, not folded into the GCP apply that found it. Bundling them would have made one apply carry two unrelated intents, and the deployment of a security fix would again have been something that happened as a side effect rather than something anyone decided to do — which is the shape of the defect, not merely its occasion.
+
+**Deployed and hash-verified is not the same as proven.** What is now true is that the running code is the code that was written and tested. What remains untested is the control itself against the deployed route: a `finalizeUpload` call carrying a forged `key` or `uploadId`, rejected by the live Lambda rather than by a unit test. That is exactly the gap between "the repository says so" and "the world does" that this amendment exists to record, and closing it with a repository-level check would repeat the error at a smaller scale.
+
+**That test is deferred to Phase 4**, which already requires a real two-caller concurrency race against a deployed route and therefore already builds the harness for calling deployed routes adversarially. A standalone probe now would be a second harness for one assertion. **A-220 does not close until that request is made and refused.**
+
+Open item 119 is unaffected by the deploy and stays open: the missing thing is not this deployment but the closing-gate check that would have caught it.
+
+
+---
+
+### A-221 — ADR-036's key objection is answered in infrastructure
+
+Mission 7.6 Phase 2. Applied to `dev` 2026-08-20: **11 added, 0 changed, 0 destroyed.**
+
+ADR-036 chose Cloud Functions for one stated reason — "running the Admin SDK outside Google means holding a service-account private key that can grant `admin` on any organisation" — and named the escape without costing it: "Workload Identity Federation from AWS to GCP is the shape that avoids one." This is that shape, built.
+
+The Lambda signs an STS `GetCallerIdentity` request with the credentials AWS already handed it; GCP verifies the signature and reads the caller's role ARN out of it. **No key exists at any point.** What the function bundles is a credential *configuration* — a JSON file naming a pool — which is inert without an AWS identity satisfying the pool's condition.
+
+#### Created resources
+
+| Resource | Identifier |
+|---|---|
+| Redeem service account | `vump-dev-redeem@vump-platform-f86af.iam.gserviceaccount.com` |
+| Custom role | `projects/vump-platform-f86af/roles/vumpRedeemDev` |
+| AWS pool | `vump-dev-aws`, provider `aws-lambda` |
+| GitHub pool | `vump-dev-github`, provider `github-actions` |
+| CI plan service account | `vump-dev-ci-plan@vump-platform-f86af.iam.gserviceaccount.com` |
+| Trusted AWS role | `arn:aws:sts::929570731524:assumed-role/vump-dev-redeem` |
+| STS verification URL | `https://sts.ap-south-1.amazonaws.com?Action=GetCallerIdentity&Version=2011-06-15` |
+
+Every id above is deterministic from `environment_slug` and `firebase_project_id`. The **audiences are not** — they carry the GCP project number — so seven root outputs were added in the same phase rather than leaving Phase 3 to read state by hand. `terraform output redeem_audience` is the value the redeem function's credential configuration needs.
+
+None of these is a secret. ADR-016 places Firebase identifiers in the Public tier, and possessing a pool path grants nothing.
+
+#### Two things the apply settled that the plan could not
+
+**Corrected by A-222.** This section reported the phase as applied cleanly, and it was — but one of the two resources below could never address the other, and no part of the apply could have said so. Read the list that follows as what the apply established, which is narrower than it appeared at the time.
+
+Both were apply-time-only unknowns, flagged before running and **both succeeded first try**:
+
+1. **The custom role's permission strings.** `firebaseauth.users.create` and `firebaseauth.users.update` were taken from a Google reference whose permission tables did not render when checked; F1 deferred exact-string confirmation to implementation deliberately. GCP rejects unknown permission ids at apply, so acceptance *is* the confirmation. The comment in `main.tf` marking them unverified is now stale and should be corrected rather than deleted — it records why they were a risk.
+2. **Both `principalSet` impersonation bindings.** A malformed principal set is accepted syntactically and fails only at runtime in some shapes; these validated.
+
+#### What was NOT proven, and it is the whole point of the phase
+
+**No token has been exchanged.** The apply proves the resources exist and are well-formed. **A-222 is what that gap turned out to be hiding** — the AWS pool's attribute mapping and the service account's IAM binding described two different strings, so impersonation was refused on every invocation. Well-formed and connected are different properties. It does not prove that a Lambda running as `vump-dev-redeem` can obtain a Google access token, nor that the two permissions suffice for `createUser` and `setCustomUserClaims`. Both are Phase 4, against a deployed route.
+
+The second is the one to watch. If `setCustomUserClaims` needs a permission beyond `firebaseauth.users.update`, the correct response is to **add that permission explicitly** — never to substitute `roles/firebaseauth.admin`, which is full read/write on Firebase Auth and can therefore grant `admin` on any organisation. Reaching for it would remove the *key* while keeping the *capability*, satisfying half of ADR-036's reasoning and reporting it as all of it.
+
+#### Why the CI half exists
+
+`ci.yml` runs `terraform plan` on every pull request. The moment this module landed, that plan either fails for want of GCP credentials or gets scoped around the gap — and a plan scoped around a gap is a green check that has silently stopped covering a security control. A-205, A-214 and A-218 are each an instance of that pattern; it is not tolerable here. `vump-dev-ci-plan` holds `roles/viewer` only, holds nothing on the redeem account, and cannot impersonate it.
+
+The pool exists; **`ci.yml` does not yet use it.** Carried as a follow-up.
+
+ADR-036 is not superseded yet. It stops being true when the Cloud Function is deleted in Phase 6, and superseding it before then would put the documentation ahead of the code.
+
+---
+
+### A-222 — the federation's attribute mapping could never match its own IAM binding
+
+Found by Mission 7.6 Phase 4's first live redemption. **This is a defect in Phase 2's module, reported at the time as applied cleanly — 11 added, 0 changed, 0 destroyed, both impersonation bindings validated first try.** Every one of those statements was true and none of them was evidence.
+
+| | |
+|---|---|
+| **Symptom** | `createUser` fails, `firebaseCode: app/invalid-credential`, 433ms, cold start |
+| **Blamed first** | The `ExternalAccountClient` adapter — F9's known-unverified piece |
+| **Actually** | `attribute_mapping` and the `principalSet` binding describe two different strings |
+
+#### The mechanism
+
+STS renders an assumed-role identity with a per-invocation session suffix:
+
+```
+arn:aws:sts::929570731524:assumed-role/vump-dev-redeem/<session>
+```
+
+The module used that raw value in two places that need **different forms of it**:
+
+| Where | Comparison | Correct with the raw ARN? |
+|---|---|---|
+| `attribute_condition` | `startsWith(prefix)` | **Yes** |
+| `principalSet://…/attribute.aws_role/{value}` | exact equality | **No** |
+
+The binding names the session-less role prefix, because that is the only stable form. The mapped attribute carried the session. They can never be equal, so impersonation was refused on every invocation without exception.
+
+The fix is Google's documented AWS mapping, which strips the session:
+
+```
+assertion.arn.contains('assumed-role')
+  ? assertion.arn.extract('{account_arn}assumed-role/') + 'assumed-role/'
+      + assertion.arn.extract('assumed-role/{role_name}/')
+  : assertion.arn
+```
+
+One expression is a **condition** and the other is a **transformation**, and writing the same string into both is the whole error.
+
+#### Why the apply reported success
+
+Nothing in the plan or the apply could have caught it. The pool accepts either mapping; the binding is syntactically valid; the token exchange with Google STS **succeeds**. Only the subsequent impersonation call is refused, and the Admin SDK reports that as `app/invalid-credential` — a code that names neither AWS, nor the role, nor the binding.
+
+**A-221 recorded exactly this as unproven and it still misled.** Its own words: *"No token has been exchanged. The apply proves the resources exist and are well-formed."* That was correct, and the phase still read as complete because eleven resources came up green. **Well-formed and connected are different properties**, and only one of them had been checked.
+
+#### The two failures of instrumentation
+
+**First, the code was logged and the message was not.** `createUser failed` carried `firebaseCode` alone, and `firebase-admin`'s wrapper quotes the underlying error in its `message` and keeps it on `cause` — the only text that distinguishes a malformed credential object from an error the credential implementation threw. Both raise the same code. Finding the difference took reading `firebase-admin`'s source to enumerate which validations can produce it, which is not a diagnostic path that should exist.
+
+**Second, the initial hypothesis was wrong and plausible.** The adapter was the piece flagged as unverified, so it was the natural suspect — and the real defect was in the component reported as working. Suspicion followed the documented uncertainty rather than the evidence.
+
+#### Where this sits in the pattern
+
+| | Reported | Actually |
+|---|---|---|
+| A-205 | the APK built | a stale artefact |
+| A-212 | 203 tests pass | no `INSERT` ever reached a database |
+| A-220 | the security fix is closed | never deployed |
+| **A-222** | **11 resources created, 0 errors** | **two of them could not address each other** |
+
+A-220 was a claim about the world made from a claim about the repository. This one is narrower and harder to see: a claim about the world made from a **real** observation of the world that did not cover the property being claimed. `terraform apply` verifies existence and shape. It cannot verify that two resources agree, and there is no plan-time check that would.
+
+**The general lesson is the one Phase 4 was designed around**: no federation, credential chain or cross-system binding is proven by its own creation. It is proven by one end successfully reaching the other. Recorded as open item 120.
+
+---
+
+### A-223 — a custom role narrower than a predefined one inherits none of its floor
+
+Mission 7.6 Phase 4. `createUser` failed with `auth/insufficient-permission` against a federation whose token exchange, impersonation binding and OAuth scope had each been verified correct and ruled out individually first.
+
+**Two findings, and the second is the smaller one.**
+
+#### (a) A predefined role is a permission set plus an unstated floor
+
+Phase 2 built `vumpRedeemDev` with exactly two permissions — `firebaseauth.users.create` and `firebaseauth.users.update` — because `roles/firebaseauth.admin` is full read/write on Firebase Authentication and holding it would have removed ADR-036's *key* while keeping its *capability*. That reasoning was right and still is.
+
+What it missed is that **a predefined role is not just the permissions it names.** Google documents a baseline tier *"required to use any Firebase product or service"* which is silently included in every Firebase predefined role and implied by no product-specific permission id. Granting `firebaseauth.users.create` does not carry it. A custom role has to carry it explicitly, and nothing says so until a call fails.
+
+So the real cost of "narrower than a predefined role" is: **you must rebuild the floor as well as the set**, and the floor is invisible from the permission you actually wanted.
+
+Fourteen ids were added. Every one is a read of the project's own shape — which products are enabled, which client apps exist, what the quotas are. None reads, writes or lists a user account. `apikeys.keys.getKeyString` is deliberately absent, so no API key string is readable.
+
+**One of Google's own listed baseline permissions could not be granted at all.** `resourcemanager.projects.list` was refused at apply with `Permission resourcemanager.projects.list is not valid` — it lists projects across a container, so it is only grantable at organisation or folder level, and this is a project-scoped custom role. It is recorded as absent-on-purpose in the module rather than quietly dropped, and nothing was substituted for it.
+
+#### (b) `firebaseauth.users.get` is required by `createUser`
+
+The baseline tier was necessary and **not sufficient**. With all sixteen permissions the call still failed identically.
+
+Found by bisection, using `roles/firebaseauth.admin` as a **diagnostic ceiling**: granting it temporarily made `createUser` succeed with a real uid, which established that the failure was a missing permission rather than a project, SDK, token or binding problem. The grant was reverted immediately.
+
+| Step | Candidate | Reasoning | Result |
+|---|---|---|---|
+| 1 | `firebaseauth.configs.get` | `createUser` plausibly reads auth policy and enabled providers **unconditionally** | Eliminated |
+| 2 | `firebaseauth.users.get` | the `email-already-exists` check is a read — but possibly server-side | **Confirmed** |
+
+The ordering was deliberate and the reasoning behind it was sound even though the first candidate was wrong: test the *unconditional* hypothesis before the *conditional* one, because a conditional dependency can pass for the wrong reason.
+
+**One permission per step, applied and re-run each time.** Adding several at once would very likely have worked and would have left the role permanently wider than the evidence supports — which is the failure mode this whole module exists to avoid. Each eliminated permission was removed rather than left in place.
+
+`firebaseauth.configs.getSecret` and `configs.getHashConfig` were excluded from the candidate list **on principle rather than by trial**. They return password hashing parameters, so an identity holding either could verify or forge password hashes offline. They were never tried, at any step.
+
+Final set: **17 permissions.** Still materially narrower than `roles/firebaseauth.admin` — no `firebaseauth.configs.*`, no `users.delete`, no `users.sendEmail`, no `users.createSession`.
+
+#### What this cost, and what would have avoided it
+
+Three applies, three propagation waits and three live redemptions, to identify one permission id.
+
+The cheaper path existed the whole time and was not taken: **enumerate `roles/firebaseauth.admin`'s permissions and diff them against the custom role**, rather than guessing candidates one at a time. `gcloud iam roles describe roles/firebaseauth.admin` returns the list. The ceiling experiment that proved a permission was missing could equally have named which one.
+
+The bisection was rigorous and the ordering well-argued. It was also the expensive way to answer a question a single read could have answered — rigour applied to a method that did not need to be a search.
+
+#### Where this sits in the pattern
+
+| | Reported | Actually |
+|---|---|---|
+| A-220 | the security fix is closed | never deployed |
+| A-222 | 11 resources created, 0 errors | two of them could not address each other |
+| **A-223** | **the role holds what the route needs** | **it held what the route CALLS, not what the call REQUIRES** |
+
+A-222 was two resources that could not address each other. This is narrower still: a **single** resource, correctly specified against the operations it performs, and wrong because an operation needs more than it names. Both were invisible to `terraform apply`, and both surfaced only when one end of the system actually reached the other — which is open item 120's point, now with a second instance.
+
+Recorded as open item 121.
+
+---
+
+### A-224 — Google sign-up with an invite code has never worked
+
+Found while tracing Mission 7.6 Phase 5. **Pre-existing, not introduced by this mission, and carried forward deliberately.**
+
+`AuthRepositoryImpl._provisionFederated` calls redemption with no password:
+
+```dart
+await _redeemInviteCode(inviteCode: inviteCode, email: user.email ?? '', password: null);
+```
+
+The Cloud Function it called rejects that outright, before any code is read:
+
+```ts
+if (email === null || password === null || password.length === 0 || (hasCode && code === null)) {
+  throw new HttpsError('invalid-argument', …);
+}
+```
+
+So **every Google sign-up carrying an invite code fails**, on a validation branch, and has since the federated path was written. The route that replaced the function in Phase 4 has the same requirement, so the port neither introduced nor fixed it.
+
+#### The comment above it says the opposite
+
+> *"[password] is null on the federated path, where Google has already created the account and the function only redeems and sets claims."*
+
+That describes a function that does not exist. The real one always calls `createUser` and always requires a password. **The client and the server were written against different contracts**, and the doc comment recorded the intended one as though it were the built one.
+
+Nothing caught it because the seam was faked on both sides: `FakeFirebaseFunctions` accepted any payload, so the client's tests proved the client sent what it meant to send and never that the server would accept it. This is A-212's shape — *a mock cannot reject* — at a contract boundary rather than a database one.
+
+#### Why it is not fixed here
+
+Fixing it means a server capability that provisions claims for an account **that already exists**, which is new behaviour rather than a port, and it carries a new authorization question: such a route would set claims on an account the caller merely authenticated as, and the argument that self-signup can only ever produce a Collector would have to be re-made for it. Mission 7.6 retires a Cloud Function; it does not design a new endpoint.
+
+Recorded as open item 122.
+
+---
+
+### A-225 — Phase 5 closed the client's half of ADR-036's retirement
+
+Mission 7.6 Phase 5. Redemption is `POST /v1/auth/redeem` on `VumpApi`; `cloud_functions` no longer appears anywhere in `mobile/lib/`.
+
+| Change | |
+|---|---|
+| `_redeemInviteCode` | `httpsCallable('redeemInviteCode')` → `backend.post('/auth/redeem', …)` |
+| `FirebaseFunctionsErrorMapper` | deleted, with its 151-line test |
+| `AUTH_INVITE_CODE_EXPIRED` | removed from the taxonomy and from the copy |
+| `AuthRepositoryImpl` | `FirebaseFunctions` field, injection parameter and region pin all gone |
+
+**The mapper was deleted rather than ported, exactly as its own header predicted** — *"when redemption becomes a `/v1/...` route, its failures arrive as `DioException` and `ErrorInterceptor` already maps those; this file is deleted rather than ported."* It existed only because a callable reports failures as a fixed gRPC status set that says nothing about this application's taxonomy, forcing the real code to be dug out of `details.errorCode`. A route answers with the Chapter 4.6 envelope and needs no such archaeology.
+
+#### The scope as briefed named the wrong class
+
+Phase 5 was specified as *"`InviteCodeRepositoryImpl` over `VumpApi`"*. That class does not redeem anything — it **issues** codes, for admins, straight into Firestore. Redemption lived in a private method on `AuthRepositoryImpl`. Porting the named class would have touched the wrong file and left the Cloud Function still called by both sign-up paths.
+
+The trace caught it because the first step was reading the interface rather than the name. Worth recording as a shape: **a plan written from memory of a module's name can be exactly wrong about what the module does**, and the cost of checking is one file read.
+
+#### One error code, and the client no longer has a word for the other
+
+`AUTH_INVITE_CODE_EXPIRED` is gone from `error_codes.dart`. The `switch` in `auth_error_copy.dart` is exhaustive over `ErrorCode`, so removing the enum value made the stale copy a **compile error** rather than dead code — the good failure, and the reason no user-facing string could be left behind by accident.
+
+`FakeVumpApi` gained the redeem route and a `redeemThrows`, and the substitution changed what the tests can express: the fake throws an `AuthenticationException`, because by the time a failure reaches this class `ErrorInterceptor` has already turned a transport error into an application code. The old fake threw `FirebaseFunctionsException` and the class did the mapping itself — one layer of translation removed from the production path and from the test.
+
+**Not done here**, and neither belongs to Phase 5: `cloud_functions` stays in `pubspec.yaml` and `functions/` stays on disk until Phase 6, and A-224's federated-path defect is carried forward unfixed.
+
+**No device proof.** The route works (Phase 4) and the client calling it is proven only by unit tests against a fake. [[A-226]] closes this, run retroactively before Phase 6.
+
+---
+
+### A-226 — invite-code redemption proven on hardware, end to end
+
+Mission 7.6 Phase 5's device proof, run retroactively. Closes the gap [[A-225]]'s report declared rather than glossed: *"nothing has run on a device… the client calling it is proven only by unit tests against a fake."*
+
+**Device:** CPH2707 (`f389ad31`). **Code:** `DEVICE01`, one use, pointing at a purpose-made organisation.
+
+| Link | Confirmed by |
+|---|---|
+| App → API Gateway → `POST /v1/auth/redeem` | sign-up completed on screen |
+| Lambda → Google, via Workload Identity Federation | a Firebase account exists |
+| `createUser` + `setCustomUserClaims` | `role = collector` |
+| Postgres atomic decrement | `remaining_uses = 0` |
+| Sign-in → `POST /v1/auth/verify` → `provisionCaller` | a `users` row exists |
+| **The invite code's organisation reached that row** | **`org_id = …0000000000d1`** |
+
+Nine components, five of them written this mission, in one uninterrupted path from a physical device to two databases.
+
+#### The seed was designed so that passing means something
+
+The code pointed at a **second organisation**, not the default one.
+
+Under A-056 an absent invite code produces an account in the default org. Had `DEVICE01` also pointed there, a defect that ignored the code entirely — never read it, never decremented it, fell through to the default — would have produced the expected `org_id` and the run would have been recorded as a pass. **The two hypotheses would have been indistinguishable in the evidence.**
+
+Pointing the code at `Device Proof Org` separates them: `org_id = …d1` is producible only by reading that code's row. The assertion distinguishes *"the code was redeemed"* from *"an account was created"*, and only the first is what Phase 5 claims.
+
+This is the counterweight to the pattern the mission kept hitting. A-205, A-212, A-222 and the race harness's own overlap check each **passed** while measuring something other than what they claimed. [[A-218]] belongs to the same family and fails differently, which is worth keeping rather than flattening: it produced **false ambiguity** rather than false confidence — hours spent interpreting readings from a capture file that never existed. Its own record draws the line, and this one should not blur it.
+
+What unites all five is not the verdict but the gap between what a check appeared to measure and what it measured. Here the measurement was designed backwards from *what a false pass would look like*, before the run rather than after it.
+
+#### Two earlier decisions confirmed by observation rather than argument
+
+**F8 was right, and this is the first evidence of it.** Phase 3 decided the redeem route would not write to `users`, on the reading that `provisionCaller` already does so at first `/auth/verify`, and migration 0013 revoked the `INSERT` grant on that basis. A `users` row now exists for an account redeem never inserted — so the reasoning held in fact and not only on paper, and the revoked privilege is confirmed unnecessary rather than merely unused.
+
+**`resolveOrgId` passes a real uuid straight through**, which Phase 3 traced and nothing had exercised. A non-default organisation id survived Firebase custom claim → ID token → authorizer → `users.org_id` intact. Had it not, the account would have landed in the wrong tenant with no error anywhere — the silent BR-20 failure `org.ts` refuses unrecognised values to prevent.
+
+#### What this run does NOT establish
+
+- **The no-code path.** A-056's default-organisation behaviour was not exercised. Deliberately out of scope.
+- **Google sign-up.** Expected to fail by [[A-224]] and not re-confirmed.
+- **The 201 body.** Nothing on the client reads `{uid, orgId}`; the claims arrive on the token instead. Untested because unused.
+
+Phase 5 is closed, device verification included.
+
+---
+
+### A-227 — ADR-036's runtime is retired, and its Admin surface is retired rather than ported
+
+Mission 7.6 Phase 6. The Cloud Function is undeployed and deleted, both Firebase packages are gone, and ADR-036 is marked Superseded. `mobile/lib`, `mobile/test`, `.github` and `backend/` source contain **no** reference to `cloud_functions`, `cloud_firestore`, `redeemInviteCode`, `InviteCodeRepository` or `firestore.rules`.
+
+#### Undeploy came before delete, and the order is the finding
+
+`redeemInviteCode` was **deployed** to `vump-platform-f86af`. Deleting `functions/` would have removed the ability to redeploy it and nothing else — the function would have stayed callable by anyone holding the project's public config, which ADR-016 places in the Public tier.
+
+This is A-220's shape one last time: **a claim about the repository is not a claim about the world.** The sequence was therefore inverted from the tidy one — delete the deployment first, because deleting the source removes the supported path to do so.
+
+Verified two ways rather than one:
+
+```
+firebase functions:list  →  "No functions found in project vump-platform-f86af"
+curl POST <recorded uri> →  404
+```
+
+The URI was **recorded before the deletion**, from `functions:list`, because a behavioural check afterwards is impossible without it. `404` rather than `400`/`401` is the load-bearing detail: a still-deployed function rejecting a malformed call also fails, and the listing alone cannot tell the two apart.
+
+#### Option D — the Admin issuing surface was deleted, not rebuilt
+
+The trace found the briefed Phase 6 scope would have removed the **only working path for issuing** invite codes: `InviteCodeRepositoryImpl.issue()` wrote to Firestore under `firestore.rules`, and Phase 6 drops `cloud_firestore`. There is no backend route for issuing and there cannot be one without a migration — 0012 grants `INSERT` on `org_invite_codes` to **no role at all**.
+
+Two options. **B:** build it — a ninth Lambda, a database role, a secret, a bootstrap entry, a migration, a route, a client rewrite. **D:** retire the capability.
+
+**D was chosen, and the reasoning matters more than the outcome:**
+
+1. **Zero observed usage.** Every invite code that has ever existed in this system was created by an operator — Mission 7.6's own `RACE001` and `DEVICE01` by SQL, and the Firestore collection the screen wrote to was found **empty**.
+2. **ADR-036 never implied an in-app issuing UI.** Its distribution model is *"informal APK sharing among a trusted group."*
+3. **A-056 already made codes optional.** Self-signup works without one and produces a Collector in the default org. Nothing is blocked by having no code.
+4. **Decisive: leaving the screen would have been actively unsafe, not neutral.** Its only enforcement was the `firestore.rules` condition being deleted in the same phase. `router.dart`'s own comment said *"Reaching the screen grants nothing, because firestore.rules checks the admin claim on every write"* — **a sentence that stops being true the moment Firestore goes.** The screen would have presented a permission-gated-looking surface with no gate behind it.
+
+Point 4 is the one that converts this from a scope question into a correctness one. B and D are both defensible; **doing nothing was not**, and doing nothing is what "just delete the packages" would have amounted to.
+
+**No new function, role, secret, or migration.** Migration 0012's *"no principal may INSERT"* stays exactly as written and stays correct. Codes are minted by an operator via SQL until — and only if — an admin surface is designed against real requirements. That is noted as a possibility, not a promise.
+
+Eleven files: the impl, the interface, the entity and its generated pair, the notifier, the screen, two tests, plus edits to `router.dart`, `admin_settings_screen.dart` and `main.dart`.
+
+**The domain interface went with the rest.** Keeping it as a placeholder for a future admin surface was considered and rejected: an interface with no implementation is structure ahead of need, and a future surface should be designed against requirements that exist then rather than against today's stub.
+
+#### The Firestore collection needed no deletion, and that is evidence
+
+Step 2 was to delete the `org_invite_codes` collection. Reading it first returned `{}` — **empty**. A collection in Firestore has no existence apart from its documents, so the goal state was already true and **no delete command was run**. The step closed as *observed*-complete rather than *action*-complete, which is worth distinguishing in a record that a later reader will use to reason about what was destroyed.
+
+A wider check then returned no collections at all in the database, confirming `firestore.rules`' claim that `org_invite_codes` was the only one — a comment, checked, because comments are where this mission repeatedly found stale claims.
+
+**What the emptiness supports, at its real strength:**
+
+- It **corroborates** option D's premise. D rested on *"zero observed usage"* — an argument from what had not been seen. This was a positive check on the artefact that screen wrote to, and it came back empty. Corroboration, not proof: emptiness now is not emptiness always, since a document could have been created and later deleted.
+- It **retroactively vindicates Phase 1's no-data-migration ruling.** Phase 1 chose option (b) — do not migrate existing Firestore codes into Postgres. Had the collection held live codes, that choice would have silently orphaned them. It did not, because there was nothing to migrate. **That decision was right; it was not shown to be right at the time.** It is recorded here as a correct outcome from an unverified assumption, because it could have gone the other way and the register should not read as though the check had been done.
+
+#### A guardrail that paid off, recorded because such things leave no evidence
+
+`architecture-guardrails.md` registered I42 and I43 — `cloud_functions` and `cloud_firestore` each confined to `features/auth/data/` — and said so knowing they would expire: *"an unenforced boundary is not cheaper for being short-lived, and the confinement is what keeps the retirement a deletion of one directory rather than a hunt."*
+
+**Tested and held.** At retirement `cloud_firestore` had exactly one consumer and `cloud_functions` had none, Phase 5 having removed the last. Both left `pubspec.yaml` in a single edit, with no search and nothing found anywhere unexpected.
+
+Both invariants are retired by **strikethrough rather than deletion**, so the ids still resolve for a reader who meets `I42` in an older document. The Android build corroborates at a different level from the YAML: its KGP warning named `battery_plus, cloud_functions, flutter_foreground_task` before and names two after — Gradle reporting on its own resolved plugin set, not a line removed from a file.
+
+#### What Phase 6 deliberately did not do
+
+- **The Firestore database is not deleted.** Only the collection was in scope, and the database may be provisioned for reasons outside this trace. Collection-level action matched the decision precisely.
+- **`.firebaserc` stays.** `firebase_auth` is live and the aliases are how a CLI operation names an environment — its own comment records that having no default is deliberate.
+- **`firestore.rules`' deletion removes the source, not the deployed rules.** Whatever was last deployed remains in force. Harmless: it governs a database with no collections.
+- **[[A-224]] is not fixed.** Google sign-up with an invite code still fails, carried forward as open item 122.
+
+---
+
+### A-228 — the pattern this mission catalogued, surviving inside it, in the dependency lock
+
+`npm ci` failed in CI: `package-lock.json` out of sync, **missing `@vump/redeem@0.1.0` entirely.** Phase 3 added the eighth workspace and never regenerated the lock, which was last committed in `c437d60` — two missions earlier.
+
+The fix is trivial and additive: 12 lines, the workspace entry and its symlink, no version changed anywhere. `google-auth-library` needed no new resolution, since `10.9.1` was already locked at top level as a `firebase-admin` transitive and `^10.9.1` is what `redeem` declares.
+
+**The fix is not the finding.** The finding is that it survived four phases of green verification, in the mission whose subject was checks that measure the wrong artefact.
+
+#### Why every sweep missed it, by construction
+
+`npm install` ran once in Phase 3 and populated `node_modules` with the new workspace. Everything afterwards read that directory:
+
+| Command | What it reads |
+|---|---|
+| `npm run typecheck` | `node_modules` |
+| `npm run lint` | `node_modules` |
+| `npm test` | `node_modules` |
+| `npm run build` | `node_modules` |
+
+Four commands, four phases, every run genuinely green — and **not one of them consults `package-lock.json` at all.** They consume a resolution; they do not reproduce one. No sequence of them, however many times repeated, could have detected a lock that cannot produce the tree they were running against.
+
+`npm ci` is the only command that reproduces the resolution, because it builds `node_modules` **from the lock** and refuses when the lock and the manifests disagree. It is therefore the only local command capable of failing here, and it was never run — the local loop has no reason to use it, since it is slower and destroys the working tree.
+
+**So this is not an oversight in the verification sweep. It is a hole the sweep could not have covered**, and the shape of the hole is the same one this mission kept finding.
+
+#### Where it sits in the family
+
+| | The check | What it measured |
+|---|---|---|
+| A-205 | `flutter build apk` reported success | a stale artefact |
+| A-214 | `git diff --numstat` showed two files | a tree a later step had changed |
+| A-218 | `findstr` over a capture file | a file that never existed |
+| A-220 | the fix is merged | the repository, not the deployment |
+| A-222 | `terraform apply`: 11 added, 0 errors | existence, not whether two resources could address each other |
+| **A-228** | **`typecheck`/`lint`/`test`/`build` all green** | **an installed tree, not the lock that must be able to produce it** |
+
+A-220's is closest and still distinct. There the gap was between the **repository and the world**. Here both sides are in the repository: `package.json` declares and `package-lock.json` resolves, and **nothing in the local loop compares them.** The gap is between two files that must agree and that no routine command cross-checks.
+
+It is also the first of the family caught by **CI rather than by a person** — which is the argument for CI stated as a fact rather than a principle. A clean-environment build is not a slower copy of the local one; it exercises a step the local one skips entirely.
+
+#### What would prevent a recurrence
+
+Adding a workspace, or changing any `package.json`, must be followed by `npm install` **and the resulting lock committed** — and the check that proves it is `npm ci`, not `npm install`. `npm install` is permissive: it *repairs* a stale lock silently and reports success, which is why running it as verification confirms nothing. The two commands look interchangeable and are opposites in exactly the way that matters here.
+
+Recorded as open item 124.
+
+#### One honest note about when it was found
+
+This was found **after** Mission 7.6 was reported complete, verified and merge-ready, and after its handoff document listed the verification standing at close. That report was accurate about what had been run and wrong about what that established. The mission's own closing gate — open item 119's *"compare the deployed artefact against its source"* — names the general class and would not have caught this either, because it is scoped to Lambda code rather than to any artefact-versus-source pair.

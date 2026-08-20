@@ -1,4 +1,4 @@
-# API Gateway and the seven Lambda functions behind it.
+# API Gateway and the eight Lambda functions behind it.
 #
 # Volume 4, Chapter 4.9 §1 puts API Gateway in front of "one function per
 # resource domain", and §2 makes it "the only public entry point; every Lambda
@@ -21,7 +21,7 @@
 #
 # ## The API is declared as OpenAPI rather than as a resource tree
 #
-# Fifteen routes over a nested path tree would be roughly twenty
+# Sixteen routes over a nested path tree would be roughly twenty
 # `aws_api_gateway_resource` blocks whose parents reference each other.
 # Terraform forbids a resource referencing itself under `for_each`, so that
 # shape cannot be generated from a list — it has to be hand-nested and
@@ -41,6 +41,13 @@ locals {
   routes = [
     { method = "POST", path = "/v1/auth/verify", function = "auth-verify", authorizer = false },
     { method = "GET", path = "/v1/users/me", function = "auth-verify", authorizer = true },
+
+    # Not in Chapter 4.6's catalogue. Mission 7.6 retires ADR-036's Cloud
+    # Function into this route; the catalogue predates the retirement and is
+    # unchanged by it. Exempt from the authorizer because its caller has no
+    # Firebase account yet — this route is what creates one. See ADR-048's
+    # Mission 7.6 amendment.
+    { method = "POST", path = "/v1/auth/redeem", function = "redeem", authorizer = false },
 
     { method = "GET", path = "/v1/projects", function = "projects", authorizer = true },
     { method = "POST", path = "/v1/projects", function = "projects", authorizer = true },
@@ -68,8 +75,17 @@ locals {
   # is the only principal holding `SELECT` on `users` (migration 0007).
   authorizer_name = "vump-${var.environment_slug}-caller"
 
-  # Every route NOT behind the authorizer. Asserted below to be exactly one.
+  # Every route NOT behind the authorizer, and the only two permitted to be.
+  #
+  # Both are unauthenticated by construction rather than by choice: redeem's
+  # caller has no Firebase account, and verify's has a token but no `users`
+  # row. The authorizer would refuse every legitimate caller of either.
   authorizer_exempt = sort([for r in local.routes : "${r.method} ${r.path}" if !r.authorizer])
+
+  authorizer_exempt_allowlist = [
+    "POST /v1/auth/verify",
+    "POST /v1/auth/redeem",
+  ]
 
   # OpenAPI paths, grouped by path with one operation per method.
   openapi_paths = {
@@ -148,7 +164,10 @@ resource "aws_lambda_function" "this" {
   memory_size = local.lambda_sizing[each.key].memory_mb
 
   environment {
-    variables = merge(var.lambda_environment, {
+    # Shared first, then this function's own. The per-function map wins on a
+    # key collision, which is the only ordering that lets an override mean
+    # anything — see `lambda_extra_environment`.
+    variables = merge(var.lambda_environment, lookup(var.lambda_extra_environment, each.key, {}), {
       APP_ENV = local.app_env
       # Its OWN credential, never the shared master. The IAM policy for this
       # role allows exactly this secret, so naming any other one produces an
@@ -291,22 +310,34 @@ resource "aws_api_gateway_stage" "this" {
   }
 }
 
-# The exemption is one route, and this is what keeps it that way.
+# The exempt routes are a NAMED LIST, and this is what keeps it that way.
 #
-# ADR-048's whole safety argument rests on exactly one route bypassing
-# authentication at the edge. A second exemption — added by copying a line, or
-# by a pattern that matches more than intended — would open an endpoint with no
-# authorizer in front of it and nothing would report it. A `check` runs on
-# every plan and apply, so this fails before it reaches AWS.
-check "authorizer_exemption_is_exactly_one_route" {
+# ADR-048's safety argument rests on which routes bypass authentication at the
+# edge. An exemption added by copying a line, or by a pattern matching more
+# than intended, would open an endpoint with no authorizer in front of it and
+# nothing would report it. A `check` runs on every plan and apply.
+#
+# **Mission 7.6 changed this from "exactly one" to a two-element allowlist**,
+# and the shape of the test changed with it. The original read `== 1 &&
+# one(...) == "POST /v1/auth/verify"`; the obvious edit was to relax the count
+# to 2. That would be a materially weaker check: an exempt set of
+# ["POST /v1/auth/redeem", "GET /v1/projects"] satisfies a count of two, which
+# is exactly the failure this exists to prevent. So both halves are asserted —
+# the size AND that nothing outside the allowlist appears.
+#
+# The membership half is `setsubtract`, not `==`. `sort()` yields list(string)
+# and a literal `[...]` is a tuple, so `==` is false even when the contents
+# match; the first version of this check failed on exactly that and reported
+# the correct exemption as wrong.
+check "authorizer_exemptions_are_the_named_routes" {
   assert {
-    # Compared by length and by element rather than by collection equality:
-    # `sort()` yields list(string) and a literal `[...]` is a tuple, so `==`
-    # is false even when the contents match. The first version of this check
-    # failed on exactly that and reported the correct exemption as wrong.
-    condition = length(local.authorizer_exempt) == 1 && one(local.authorizer_exempt) == "POST /v1/auth/verify"
+    condition = length(local.authorizer_exempt) == 2 && length(setsubtract(
+      toset(local.authorizer_exempt),
+      toset(local.authorizer_exempt_allowlist),
+    )) == 0
     error_message = format(
-      "Exactly one route may bypass the REQUEST authorizer, and it must be POST /v1/auth/verify (ADR-048). Currently exempt: %s.",
+      "Only %s may bypass the REQUEST authorizer (ADR-048, Mission 7.6 amendment). Currently exempt: %s.",
+      join(" and ", local.authorizer_exempt_allowlist),
       join(", ", local.authorizer_exempt)
     )
   }

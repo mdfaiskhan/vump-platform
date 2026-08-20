@@ -65,16 +65,6 @@ dependencies:
   # `firebase_auth`.
   google_sign_in: ^7.2.0
 
-  # Reaches the temporary invite-code redemption function (ADR-036).
-  # Both of these are retired with it at Mission 6/7, when redemption becomes
-  # a /v1/... route on the AWS backend and Dio carries the call instead.
-  # Confined to `features/auth/data/` with the other Firebase products.
-  cloud_functions: ^6.3.6
-
-  # The Admin's invite-code generation surface writes org_invite_codes
-  # directly; Firestore security rules are the enforcement, not the UI.
-  cloud_firestore: ^6.8.0
-
   # Camera capture. Volume 3 Chapter 3.1 names this package by name —
   # "Flutter's official camera plugin, with a platform-channel extension for
   # ultra-wide lens selection" — so the choice is recorded, not taken here.

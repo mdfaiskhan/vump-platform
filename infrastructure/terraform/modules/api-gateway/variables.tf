@@ -178,6 +178,31 @@ variable "lambda_memory_mb" {
   default     = 512
 }
 
+variable "lambda_extra_environment" {
+  description = <<-EOT
+    Extra environment variables for ONE function, keyed by function name and
+    merged over `lambda_environment`. Absent keys get nothing extra.
+
+    **The seam `lambda_environment`'s own comment predicted.** That variable is
+    shared by every function, and its Fork 1 note records the consequence: a
+    value only one function needs is handed to all of them, "given to all seven
+    rather than one", because a per-function variable "would need the same seam
+    in the module that DATABASE_CREDENTIALS_SECRET_ARN already has". This is
+    that seam.
+
+    Mission 7.6 is what forces it. The redeem function needs three GCP
+    federation identifiers, and putting them in the shared map would tell all
+    eight functions where the Firebase pool is — harmless in itself, since none
+    is a credential, and still the wrong shape: a reader cannot then tell which
+    function a variable is for.
+
+    **Non-secret values only**, exactly as for `lambda_environment`. Anything
+    secret belongs in Secrets Manager and is reached by ARN.
+  EOT
+  type        = map(map(string))
+  default     = {}
+}
+
 variable "lambda_overrides" {
   description = <<-EOT
     Per-function timeout and memory, keyed by function name. Absent keys and

@@ -259,12 +259,10 @@ jobs:
           #   firebase_core          → core/firebase           (ADR-010)
           #   firebase_auth          → features/auth/data      (ADR-034)
           #   google_sign_in         → features/auth/data      (ADR-034)
-          #   cloud_functions        → features/auth/data      (ADR-036)
           #   camera                 → features/recording/data (V3 Ch. 3.1)
           #   shared_preferences     → features/recording/data
           #                            + main.dart              (A-057, A-067)
           #   crypto                 → features/recording/data (V5 Ch. 5.5)
-          #   cloud_firestore        → features/auth/data      (ADR-036)
           #   battery_plus           → features/recording/data (FR-CHK-03)
           #   connectivity_plus      → features/recording/data (FR-CHK-04)
           #                            + main.dart              (V5 Ch. 5.12 §2)
@@ -333,8 +331,6 @@ jobs:
           check firebase_core          lib/core/firebase/
           check firebase_auth          lib/features/auth/data/
           check google_sign_in         lib/features/auth/data/
-          check cloud_functions        lib/features/auth/data/
-          check cloud_firestore        lib/features/auth/data/
           check camera                 lib/features/recording/data/
           # main_cleanup_probe.dart joins main.dart as an owner for the same
           # A-067 reason, not a weaker one: it is a second composition root.

@@ -19,11 +19,18 @@
  *     so that a first-time caller has one door that is not locked against
  *     them.
  *
- * Applying "reject" uniformly would deadlock the platform: four live Firebase
- * accounts exist and `users` is empty, nothing else writes to it, and
- * `redeemInviteCode` creates Firebase accounts without an Aurora row. Every
- * account — existing and future — would be refused at every door including the
- * one meant to let them in. A-166.
+ * Applying "reject" uniformly would have deadlocked the platform: four live
+ * Firebase accounts existed, `users` was empty, nothing else wrote to it, and
+ * `redeemInviteCode` created Firebase accounts without an Aurora row. Every
+ * account — existing and future — would have been refused at every door
+ * including the one meant to let them in. A-166.
+ *
+ * **The function is gone since Mission 7.6 and the argument is unchanged.**
+ * `POST /v1/auth/redeem` likewise creates a Firebase account without an Aurora
+ * row — deliberately, because `provisionCaller` below is what writes that row
+ * on first sign-in (A-226 proved the sequence on a device). The deadlock this
+ * paragraph describes is therefore still the one being avoided; only the
+ * runtime creating the accounts has changed.
  */
 import { execute } from './data-api.js';
 import { ApiError } from './errors.js';

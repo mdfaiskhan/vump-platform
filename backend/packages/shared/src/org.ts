@@ -3,9 +3,18 @@
  *
  * ## The problem this exists for
  *
- * `redeemInviteCode` writes `org_id` as a **literal string** — `"vump-default"`
- * — and has since Mission 2.9, when there was no organisation model to point
- * at. Mission 6.3 gave `users.org_id` the type `uuid NOT NULL REFERENCES
+ * ADR-036's `redeemInviteCode` **wrote** `org_id` as a **literal string** —
+ * `"vump-default"` — from Mission 2.9, when there was no organisation model to
+ * point at. That function is gone: Mission 7.6 replaced it with
+ * `POST /v1/auth/redeem`, which writes a real `orgs.id`.
+ *
+ * **This module is still needed, and the reason is the accounts, not the
+ * writer.** Four live Firebase accounts minted by the old function still carry
+ * the literal in their claims, and nothing rewrites it — gap-register item 5.
+ * Every token they present has to be resolved, so the mapping outlives the
+ * thing that created the need for it.
+ *
+ * Mission 6.3 gave `users.org_id` the type `uuid NOT NULL REFERENCES
  * orgs(id)`, and a literal satisfies neither half of that. Deferred item 12.
  *
  * Migration `0009` inserts the row the literal was always standing in for.
