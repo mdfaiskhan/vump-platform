@@ -4680,6 +4680,7 @@ Every carried-forward item, in one place. Accurate as of **Mission 4.3**; origin
 | 114 | **`numericParam` and `nullableNumeric` are private to `functions/metadata/` while every other parameter helper lives in `packages/shared/src/row.ts`** | `uuidParam`, `jsonParam`, `textParam`, `longParam` and `optionalTextParam` are all in `row.ts`; the two numeric ones are not, and they are the two that omitted the type hint A-212 fixed. `row.ts` is where the next person looks and where a fourth numeric column would go wrong again.<br><br>Not moved during Mission 7.4's device checkpoint — relocating a shared helper under a run in flight is its own risk. | A-212 |
 | 115 | **Four CI corrections are queued from Mission 7.3 and were recorded nowhere until now** | **The batch existed only in conversation**, which is the failure this register exists to prevent — and the second instance of the pattern Mission 7.4 was asked to watch for at its start: *work that is supposed to be carried forward automatically, needing reconstruction from memory instead.* Written down here so the batch is a thing a later mission can pick up rather than remember.<br><br>**1. `pipefail`.** A piped step in `ci.yml` can fail silently because the shell reports only the last command's status.<br>**2. Probe cleanup.** Mission 7.3's throwaway measurement Lambda and its `probe.tf` are still in the tree; they were deliberately temporary and outlived their measurement (F4).<br>**3. `bootstrap-describe-log-groups`.** The narrow grant added to bootstrap `terraform-apply` past its own missing `logs:DescribeLogGroups` permission. It did its job and is now dead surface, along with `boundary.tf`'s withdrawn patch.<br>**4. `types: [opened, synchronize, reopened, edited]`** on the `pull_request` trigger — one line. The **Commit convention** job reads `github.event.pull_request.title` from the **event payload** and never checks out the repo, so re-running a job replays the original payload and re-validates the OLD title. `edited` is absent from the default types, so correcting a title in the UI fires nothing at all, and the only ways out are an empty commit or closing and reopening the PR. Mission 7.4 hit this on PR #1 and pushed empty commit `893b2cd` to work around it.<br><br>**5. A formatting exclusion for `*.g.dart` and `*.freezed.dart`.** `dart format lib/` sweeps generated files; CI's format job already excludes them and its drift job diffs the generator's **raw** output, so formatting them breaks the build by construction. **Three occurrences in one session** — twice caught and reverted, once committed (A-214). Discipline has been tried and has failed three times; the fix is tooling that makes the sweep impossible. Options: a `.gitattributes` marker, a repo-local format wrapper that filters the file list the way `ci.yml` already does, or a pre-commit hook. Whichever is chosen, the CI format job's existing `grep -v` list is the specification.<br><br>**Deliberately not fixed during Mission 7.4**: every one is a CI change, and 7.3's branch was under review while 7.4's checkpoint was mid-flight. They belong together, in one pass, on their own branch. | A-205, A-214, ADR-019, `ci.yml` |
 | 116 | **The free-space floor is derived from a nominal bitrate and undercounts a real chunk by ~23 MB** | `RecordingLifecycle.oneChunkBytes = 610 * 1000 * 1000`, derived in its own comment as *(8,000 kbps video + 128 kbps audio) / 8 = 1,016 kB/s, times 600 s = 609.6 MB*. **The chunk Mission 7.3's F4 actually measured on CPH2707 was 633.2 MB** — the encoder overshoots its nominal bitrate, as encoders do.<br><br>So the Pre-Recording Checklist can pass FR-CHK-02's *"sufficient free local storage for at least one full chunk"* with about **23 MB less than one full chunk**. The same constant is `_lowStorageThresholdBytes` for Chapter 5.4 §2's mid-recording backpressure, so both floors are short by the same amount — *"by construction rather than by two copies agreeing"*, which is the comment's stated virtue working against it here.<br><br>**Invisible at short durations.** Every recording before Mission 7.4's scale test was seconds long; only a full 10-minute chunk reaches the size the floor is supposed to cover.<br><br>**Not fixed during the checkpoint**, deliberately: changing a domain constant that two safety floors depend on is not a mid-run edit, and the fix is a decision rather than a number — raise it to the measured figure, derive it with a margin over nominal, or measure per device. One real measurement is not a distribution. | F4, FR-CHK-02, Ch. 5.4 §2 |
+| 117 | **C-05 and A-05 never re-fetch their Task list, so a Collector cannot see a Task assigned to them without restarting the app** | `tasksProvider` is a plain `AsyncNotifierProviderFamily` with **no `autoDispose` and no `keepAlive`** — nothing in the whole feature uses either — so a family member lives for the container's lifetime and `build(projectId)` runs **once per Project id, ever**. Re-navigating re-reads cached state and issues no request. That much is deliberate and documented: *"Riverpod keeps one instance per Project, so navigating back to a Project already visited does not refetch it."*<br><br>**What is not deliberate is that nothing else refreshes it either:**<br><br>| Path | Refreshes? |<br>|---|---|<br>| In-app Task creation | **Yes** — `AdminProjectTaskNotifier.createTask` calls `ref.invalidate(tasksProvider(projectId))` |<br>| Projects list, C-04 and A-03 | **Yes** — `RefreshIndicator` calls `refresh()` |<br>| **Task list, C-05 and A-05** | **No** — no `RefreshIndicator`, no pull-to-refresh, no external invalidation |<br><br>So a change made **server-side** — an Admin assigning a Collector to a new Task, which is FR-ADM-03's whole purpose — is invisible to that Collector until the app is restarted. `TasksNotifier.refresh()` exists, is implemented and is unit-tested; **it has no caller.**<br><br>**Found during Mission 7.5's F2 device session**, where 201 seeded Tasks did not appear. That turned out to be a missing `task_assignments` seed rather than the cache — but tracing it surfaced this, which is real independently.<br><br>**The fix is small**: a `RefreshIndicator` on both Task lists, matching what C-04 already does, calling the `refresh()` that is already there. Not done during a verification session, per the standing rule that Testing and Verification states the position rather than closing it. | FR-ADM-03, C-05, A-05, `tasks_notifier.dart` |
 | 92 | **No endpoint anywhere in Chapter 4.6 returns an organisation's Collectors — a catalog-level omission that four separate specifications assume away** | **Recorded as its own row rather than inside A-06's, because it is not one screen's problem.** Chapter 4.6's complete catalog is **15 routes**, and its only user-facing one is `GET /v1/users/me` — *"Current user's profile + role"*, the caller and nobody else. **Four specifications assume a Collector directory exists and none of them can be satisfied:** FR-ADM-03 (*"assign one or more Collectors"* — an Admin must identify them); UC-07's exception flow (*"If the Admin attempts to assign a Collector who does not have an account or is deactivated, the system blocks the assignment and explains why"* — presupposes the Admin picked from something); Chapter 2.2's Admin flow step 6 (*"Collector(s) **selected** and confirmed"* — selected from what?); and Chapter 2.7's A-06, which lists Collector rows.<br><br>**The gap is total, not merely endpoint-level.** Verified at every layer this project has: Firestore holds one collection, `org_invite_codes`, with `allow read: if false` (*"Nobody reads, ever"*); `functions/src/index.ts` states in its own comment that *"no `orgs` collection exists"* and names the users table as *"Volume 4 Ch. 4.4's"*, behind the unbuilt backend; `features/auth/` yields the caller's own session and nothing else; and **no fake in `lib/` or `test/` holds a user list**. So the only user id this application can obtain is the signed-in Admin's own `uid`, which Chapter 4.4 §4's `role='collector'` annotation makes the wrong one.<br><br>**Closing it needs a route added to Chapter 4.6** — something like `GET /v1/users?role=collector`, org-scoped per BR-20 — and that is a backend/spec decision, not an engineering one. **No stand-in was invented**: seeding a roster into a fake would be inventing a domain concept this project has never modelled rather than standing in for one with a known shape, which is the line between a fake and a fabrication (A-122). | A-122, item 89, FR-ADM-03, UC-07, Ch. 2.2 step 6, Ch. 4.6 §2 |
 | 90 | **Chapter 2.9 contradicts itself about editing a Task: §2 principle 4 requires a confirmation, §4.4 forbids one** | **A PRODUCT/SPEC DECISION FOR FAISAL — a genuine authorial contradiction inside one chapter, not something derivable.** Both sentences name the same action explicitly and state opposite rules.<br><br>**§2, principle 4:** *"Admin actions that affect a Collector are never destructive-by-default. Removing a Collector from a Task, or **editing Task instructions after Collectors are already assigned, always confirms the action and states its effect in plain language before it takes effect**."*<br><br>**§4.4:** *"Reversible actions (reassigning a Collector, **editing Task instructions**) **do not require a confirmation dialog** — they save immediately and can be changed again just as easily."*<br><br>**This is unlike G3.** There the sources disagreed in emphasis and one class of them specified a mechanism, so the resolution was derivable by asking which sources were normative (A-116). Here both sentences are behavioural rules in the same chapter, at the same level of authority, naming the same action — and §2 P4 even supplies the reasoning (*"affect a Collector"*) that §4.4's *"reversible"* framing rejects. **There is no reading that satisfies both.** Mission 5.2.2 therefore held A-05's **edit** half back entirely rather than pick one: `updateTask` exists and works, and shipping either behaviour would encode an answer nobody has given into UI a Collector depends on. Settling it needs one sentence struck or amended, not an implementation judgement. | A-121, Ch. 2.9 §2 P4, Ch. 2.9 §4.4, FR-ADM-02 |
 | 91 | **Chapter 2.5's A-04 names "Project-level settings"; the phrase appears exactly once in all of Volume 2 — in that row** | **Third instance of one shape, and kept as a separate row so the family stays visible.** Ch. 2.5's A-04: *"Name, description, and **Project-level settings**."* Nothing defines them: `projects` has seven columns and none is a setting (Ch. 4.4 §2), `POST /v1/projects` carries no such field, no FR mentions one, and no other chapter uses the phrase. So A-04 renders name and description with **no settings section and no empty placeholder implying one is coming** — the treatment C-06 gave `requirements` (A-110), and a test asserts the absence.<br><br>**The family, three rows and three owners:** item 69 is FR-PT-05/A-05's `requirements` — a **Task** field named by a requirement with no column. This is A-04's **Project-level settings** — a **Project** field group named by a screen with no column. Both are *"a surface names something the schema does not have"*, and they are separate items because they have different owners, different chapters and will be answered by different decisions. Folding them would make one product answer look like it closed both. | A-110, item 69, Ch. 2.5 A-04, Ch. 4.4 §2 |
@@ -7485,3 +7486,168 @@ So the survival result reads as **"survived an unattended, un-exempted 15-minute
 ### What this entry is for
 
 So that a later reader finding *"38-part scale test passed"* does not conclude the timeout question is closed. It is not. **The chain works at full scale under warm-Aurora conditions, and the condition under which it might not has still never occurred.** Tonight moved that from "unmeasured in every term" to "measured in every term but one, composed to a 3–5 second margin" — which is real progress and is not the same as coverage.
+
+---
+
+### A-216 — A cursor was produced and consumed for the first time, closing A-199
+
+| | |
+|---|---|
+| **Was** | A-199 closed A-184 in code. `nextCursor` had **never been produced and consumed by anything real** — proven on each side separately, never across the seam |
+| **Now** | Two live requests, the second carrying the cursor the first returned |
+| **Status** | **Closed** |
+| **Date** | 2026-08-20, Mission 7.5 F2 |
+
+```
+→ GET .../v1/projects/4889ca14-.../tasks?limit=200
+← 200   meta: { nextCursor: WyIyMDI2LTA4LTIwIDA5OjIxOjUzLjc0OTU2NCIs… }
+→ GET .../v1/projects/4889ca14-.../tasks?cursor=WyIyMDI2…&limit=200
+← 200   2 rows, meta: { nextCursor: null }
+```
+
+### The cursor's contents confirm the whole design, not just the round trip
+
+Base64url-decoded, the value the client sent back is:
+
+```json
+["2026-08-20 09:21:53.749564", "01453c85-a147-41cb-b1da-71be23735f01"]
+```
+
+`cursor.ts`'s `(created_at, id)` keyset pair, verbatim, in the Data API's own timestamp format. **The client neither parsed nor modified it** — which is the property opacity exists to protect: *"callers are told nothing about the contents"*, so the sort key can change later without a `/v2` under Chapter 4.6 §1.
+
+Three further things are confirmed by the same two requests:
+
+- **The ordering is total and correct.** `created_at DESC, id DESC` put *Checkpoint walkthrough* — seeded a session earlier than everything else — on the last page. A-183 chose a total order because *"a cursor needs one or pages can overlap"*; this is that order behaving.
+- **`nextCursor: null` ends the list**, so the client stopped rather than requesting an empty third page. `pageMeta`'s fetch-one-extra design is what avoids that, and it worked.
+- **Base64url survived a query string** unmangled — the specific failure this test existed to rule out, since a `+` or `/` from standard base64 would have been corrupted in transit.
+
+### What it took to reach, which is the part worth recording
+
+Three attempts, and the first two failed for reasons that were not the client's:
+
+1. **One Project, page size 200.** No second page exists, so no *Load more* control renders — the absence of the control was the control working, and read as a missing feature.
+2. **201 Tasks seeded with no `task_assignments` rows.** `listTasks`'s Collector branch joins assignments **per Task** — Chapter 4.8 §3 scopes a Collector to *"their own `task_assignments` rows"*, not to the Projects those imply — so the server correctly returned the one assigned Task. BR-19 working, read as a caching fault.
+3. **A cached family member.** `tasksProvider` has no `autoDispose`, so re-navigating served state from the first load and issued no request. Deliberate and documented — but tracing it surfaced open item 117, which is not.
+
+**Each failure looked like a client defect and was not.** That is the shape worth carrying: at a seam this well guarded, *"the data isn't showing"* is more often the guard than the bug, and the cheapest first question is whether the row is visible to the *route's own query* rather than whether the client fetched it.
+
+---
+
+### A-217 — A-186's 404 drove its copy on a device, and the screen is sufficient evidence
+
+| | |
+|---|---|
+| **Was** | The 404 → copy path added by F28/F29 after A-207. Unit-tested on both sides; the deployed backend had never driven it |
+| **Now** | C-05 rendered *"This Project isn't available to you."* against a live `RESOURCE_NOT_FOUND` |
+| **Method** | A temporary probe pointing `tasksProvider` at `00000000-0000-4000-8000-000000000000` — well-formed, so it passes `pathUuid` and fails `assertProjectVisible` |
+| **Status** | **Closed** |
+| **Date** | 2026-08-20, Mission 7.5 F3 |
+
+The log capture was lost to buffer rotation. **The on-screen result is still conclusive**, and the reason is worth writing down rather than asserting.
+
+### Why the copy entails the backend's answer
+
+That sentence is reachable from exactly two places in `collector_project_detail_screen.dart`:
+
+1. **Line 73** — the `AsyncError` branch, when `classifyReadFailure(error)` returns `notVisible`.
+2. **Line 105** — inside `_TaskList`, when `project == null`.
+
+Path 2 is excluded twice over: `_TaskList` builds only on `AsyncData`, and the probe changed only the `tasksProvider` **argument**, leaving the widget's own `projectId` intact — with Checkpoint Project confirmed present on C-04, `project` was non-null.
+
+So path 1 fired, and it is a chain of implications rather than an inference:
+
+```
+copy rendered
+  → classifyReadFailure(error) == notVisible
+  → error.backendCode == 'RESOURCE_NOT_FOUND'
+  → the response carried an envelope error with that code
+  → ApiError.notFound(), which is status 404
+```
+
+`backendCode` is populated only from an envelope's `error.code` (F29), and `RESOURCE_NOT_FOUND` is emitted only by `ApiError.notFound`. **Nothing else in the codebase can put that string on that screen.**
+
+**What was not directly observed** is the HTTP status line itself. It is entailed by the above rather than read, and that distinction is recorded rather than glossed — the four failure signatures were all absent, which is corroboration, not proof.
+
+### What it closes
+
+The last of A-186's chain to reach a device. The backend's decision to report a resource outside the caller's reach as **absent rather than forbidden** — because *"403 confirms the id exists, which is precisely what a guessed id is asking"* — now has a client that renders it correctly, in copy that claims neither *"not assigned"* nor *"does not exist"*, as BR-19 requires.
+
+Before F28, this case rendered *"Check your connection"* — pointing a Collector at a working network over a stale link. That regression would have been the most valuable thing this test could find, and it did not occur.
+
+### A note on evidence standards
+
+This is the first checkpoint item in the project closed on **on-screen behaviour** rather than a captured log line. That is acceptable here **because the rendering path is deterministic and single-sourced** — one string, two call sites, one of them excluded by construction. It would not be acceptable for a claim about timing, ordering, or anything the UI summarises rather than reflects. The distinction is the point: behavioural evidence is sufficient exactly when the behaviour has one possible cause.
+
+---
+
+### A-218 — F4 attempted twice and established nothing, because the capture never existed
+
+| | |
+|---|---|
+| **Goal** | Close A-215's gap: prove the foreground service survives a genuine, timestamped screen-off window |
+| **Attempts** | Two, on 2026-08-20 |
+| **Result** | **Inconclusive.** Not a negative result — no evidence was collected at all |
+| **Cause** | The streaming logcat file `vump-f4.txt` **never existed**; every `findstr` check read nothing |
+| **Status** | **Open.** A-215's qualifier stands unchanged |
+
+### What went wrong, in order
+
+**Attempt one** used `input keyevent 26` — the POWER key, which **toggles**. Every manual check of the screen state was itself an interaction, and on a toggling key each check changed the thing it measured. Readings contradicted each other: `Asleep`, then a blank `pidof`, then `Awake`, with no way to order the events. Discarded entirely rather than salvaged.
+
+**Attempt two** fixed the method — `keyevent 223`/`224` are non-toggling SLEEP and WAKEUP, `svc power stayon false` removed *Stay awake while charging* (the likely cause of the screen waking itself, since the device is USB-attached), and an on-device poller wrote wakefulness and PID into logcat every five seconds so observation cost no interaction.
+
+**And then none of it was captured.** `vump-f4.txt` was never created — *File Not Found*. The `findstr` commands that appeared to be checking results were reading a file that did not exist, and reported nothing rather than erroring in a way that stood out. The most likely mechanical cause is that `%ADB%` was unset in the window running the redirect, so the command failed and produced no file; each `cmd` window needs its own `set`.
+
+### What was informally observed, and why it does not count
+
+The upload completed successfully after the screen locked, with no visible failure on the device.
+
+**That adds nothing to what A-215 already records.** Without timestamps bracketing the `PUT` lines, there is no way to tell whether the parts transferred *before* the lock or *during* it — which is the entire question. It is the same class of evidence as A-215's *"survived an unattended run"*, and the same distance from the claim.
+
+### The third instance tonight of one shape
+
+| | The check | What it actually measured |
+|---|---|---|
+| A-205 | `flutter build apk` reported success | A stale artefact from a previous run |
+| A-214 | `git diff --numstat` showed two files | A working tree that a later step had already changed |
+| **A-218** | `findstr` over a capture file | **A file that was never created** |
+
+Each looked like verification and measured nothing. The first two produced false confidence; this one produced false *ambiguity* — hours spent interpreting readings that did not exist.
+
+**The rule this leaves, and it is cheap:** *confirm the capture exists and is growing before starting the run.* One `dir` and one repeat two seconds later, before any recording begins. Every one of tonight's attempts would have ended in the first thirty seconds.
+
+### Why it stops here rather than continuing
+
+Two attempts, no evidence, and a third tonight would be a third attempt at the same setup by the same tired hand. A-215 already carries the honest version of this gap and needs no amendment. F4 is **attempted, not established** — which is a real result, recorded as one.
+
+---
+
+### A-219 — ADR-050's device identity proven in both directions on hardware
+
+| | |
+|---|---|
+| **Claim** | The device id is a v4 UUID, minted once, persisted, and **scoped to the install** rather than to the device |
+| **F1a** | Force-stop → relaunch → **`cda75e35-bfe9-4621-a45c-76fed6d59088`**, byte-identical |
+| **F1b** | Uninstall → reinstall → **`9a897969-fe10-43fd-b950-2529add5d48e`**, a different, well-formed v4 |
+| **Status** | **Closed** |
+| **Date** | 2026-08-20, Mission 7.5 F1 |
+
+Unit tests proved the read-before-write logic against `SharedPreferences.setMockInitialValues`. Neither half had been observed against real Android storage.
+
+### Both directions are the claim, and the second one is the harder half
+
+**Stability** is what the requirement asks for — Chapter 5.7 §2's *"cached, stable device identifier"*. F1a shows it: a real process death, and the same id read back from `/data/data/…/shared_prefs/`.
+
+**Change on reinstall is not a limitation being tolerated — it is the property being asserted**, and confirming it is what distinguishes this design from the one ADR-050 rejected. An id that *survived* a reinstall would mean the app was reading something device-scoped, which is exactly what `ANDROID_ID` was refused for:
+
+> *"it is a device-scoped identifier shared across the OS, which carries correlation surface this project has no use for."*
+
+So F1b is the privacy claim, not the cost disclaimer. A passing F1a with a failing F1b would mean the app had quietly acquired the property ADR-050 declined to take.
+
+The contrast is sharpened by what came before it in the same session: `adb install -r` **preserves** app data, and the id survived it unchanged through F2 and F3. `adb uninstall` clears the sandbox, and the id changed. Same binary, same device, same minter — the only variable was whether the app's private storage survived. That is what "install-scoped" means, demonstrated rather than asserted.
+
+### What it costs, restated because it is now observed rather than predicted
+
+Reinstalling produces a new `device_id`. Nothing in Volume 4 or 5 treats it as a key — it is a correlator for grouping and diagnosis, and a chunk's identity rests on `chunk_id`, `session_id`, `task_id` and `collector_id`, none of which are local. ADR-050 predicted this trade; F1b is the measurement that turns the prediction into a fact.
+
+One consequence worth stating for whoever reads `chunk_metadata.device_id` later: **rows from the same physical phone across a reinstall will not group.** That is correct behaviour and will look like a data defect to anyone who does not know why.
