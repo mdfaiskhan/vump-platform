@@ -86,6 +86,11 @@ The risk in choosing it was `aws-sdk-client-mock`, which is Jest-shaped by reput
 
 ### Coverage: measured, not gated — and deliberately not Volume 9's numbers
 
+> **Superseded by Mission 7.9 (2026-08-21). Coverage is now gated**, at 70%
+> repository-wide and 50% per file, by `backend/scripts/check-coverage.mjs`.
+> This section is kept because its reasoning was right and its condition was
+> explicit — see the amendment at the end of it.
+
 Coverage is reported by `vitest run --coverage` and **no threshold is enforced**.
 
 Volume 9, Chapter 9.5 §2's targets — `domain` 90%+, `data` 80%+ — are expressed against the four-layer feature structure ADR-001 gives the Flutter app. **A Lambda handler has no `domain/` or `data/` layer**, so those numbers have nothing to attach to here, and inventing a single backend percentage to look like compliance would be a gate nobody chose.
@@ -98,6 +103,23 @@ What is adopted is Volume 9's *intent*: a thing is not "verified" until it is me
 
 A numeric gate becomes reasonable when 6.3 gives the handlers real behaviour to cover. It is not set now because it would be met by the tests that already exist and would prove nothing.
 
+#### Amendment — Mission 7.9 (2026-08-21): the condition was met, and the gate exists
+
+**The condition above is the reason this section is amended rather than overturned.** It named what would make a gate meaningful, 6.3 and 7.3 both delivered it, and the gate was then deferred through 6.3, 6.4, 6.5, 6.6 and 6.7 — five missions — as gap register item 15. A deferral with a stated trigger is a commitment; five deferrals past the trigger is a commitment nobody was tracking.
+
+**Volume 9's Dart percentages are still not adopted, and the reasoning above still holds.** `domain 90% / data 80%` describes ADR-001's four-layer feature structure, which a Lambda handler does not have. What is adopted instead is two numbers chosen against a measurement:
+
+| | | |
+|---|---|---|
+| Repository | **70%** lines | Measured at 82.94% when set — a floor that ratchets, not a target to reach |
+| Every file | **50%** lines | Four named exemptions, each with a target and a reason |
+
+**The gate is a script, not `coverage.thresholds`, and that was measured rather than assumed.** Vitest carries one number: a repository total, or — with `perFile` — a uniform per-file floor, never both. Its glob entries appear to be the escape hatch and are not: a glob at `lines: 50` over `packages/shared/src/**.ts` **passed** while `caller.ts` sat at 0% and `authorizer.ts` at 9%, because a glob threshold is checked against the aggregate of the files it matches. Glob entries also cannot carry `perFile`.
+
+**Coverage had never been measured even once before this mission.** `vitest.config.ts` named `provider: 'v8'` from Mission 6.2 onward while `@vitest/coverage-v8` was never in `devDependencies`, so `vitest run --coverage` answered `MISSING DEPENDENCY`. The configuration this section describes as *"reported"* was unusable from the day it was written.
+
+**And the first measurement was wrong.** `@vump/shared` resolves through `./dist/index.js`, so every function test exercised the shared package as compiled JavaScript while coverage watched `src/**/*.ts` — 66.33% reported against 75.02% real, with six files reading 0% that were executing on every run. See [[A-231]].
+
 ## Alternatives Considered
 
 - **One npm package per function, no shared package** — rejected, and it is the serious alternative. It gives the tightest possible bundles and per-function dependency isolation. It requires either duplicating the token-verification middleware seven times or publishing it to a registry, and the first is a security risk while the second is heavy machinery for one consumer.
@@ -105,7 +127,7 @@ A numeric gate becomes reasonable when 6.3 gives the handlers real behaviour to 
 - **Jest** — rejected, narrowly. Larger ecosystem and the assumed default for `aws-sdk-client-mock`. Rejected on the transform step for TypeScript ESM, after confirming the compatibility concern was not real.
 - **Node 22, following `functions/`** — rejected on the deprecation date above.
 - **Node 26** — rejected. AWS documents preview runtimes as *"not covered by the Lambda SLA or Technical Support"*.
-- **A backend coverage threshold now** — rejected as theatre, per the reasoning above.
+- **A backend coverage threshold now** — rejected as theatre, per the reasoning above. **Taken at Mission 7.9**, once the condition this ADR set for it was met.
 - **Adopting Volume 9's Dart percentages verbatim** — rejected. They describe a structure the backend does not have.
 - **`npm audit` as a CI gate in this mission** — deferred, not rejected. V8.3 §4 requires it; the backend has no CI job yet, and adding one is its own piece of work.
 
@@ -141,4 +163,4 @@ A numeric gate becomes reasonable when 6.3 gives the handlers real behaviour to 
 | `npm audit` in CI | V8.3 §4 | ✅ Gates the `Backend` job, at `high` |
 | Backend CI job | lint, type-check, test, audit, build | ✅ Twelfth job |
 | Node major checked across its four sites | A-151's named risk | ✅ `Environment consistency`, proven non-vacuous |
-| Coverage gate | Deliberately absent | ⬜ Revisit at 6.3 |
+| ~~Coverage gate~~ **Coverage gate** | ~~Deliberately absent~~ **70% global, 50% per file** | ✅ **Mission 7.9** — `scripts/check-coverage.mjs`, gating the `Backend` job. Gap 15 closed |

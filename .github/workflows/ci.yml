@@ -1377,7 +1377,14 @@ jobs:
         run: npm run lint
 
       - name: Test
-        run: npm run test
+        # `test:coverage`, not `test`: it runs the suite once with coverage and
+        # then applies the gate. Two steps would run the suite twice.
+        #
+        # This is Gap 15, open since ADR-045 recorded a coverage gate as
+        # "deliberately absent — revisit at 6.3" and deferred through 6.3-6.7.
+        # ADR-045's own condition for revisiting was "when 6.3 gives the
+        # handlers real behaviour to cover", which 6.3 and 7.3 both met.
+        run: npm run test:coverage
 
       - name: Audit
         # Volume 8, Chapter 8.3 §4 names the tool and the threshold: "an
