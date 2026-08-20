@@ -5,6 +5,19 @@
  * implements: fifteen endpoints, distributed across seven functions by resource
  * type rather than by URL nesting (the Mission 6.2.1 decision), with the chunks
  * domain split across two functions because it holds two roles (A-143).
+ *
+ * ## Sixteen routes, fifteen of them Chapter 4.6's
+ *
+ * Mission 7.6 adds `POST /v1/auth/redeem`, and it is kept in its own constant
+ * rather than folded into `CATALOGUE`. **Chapter 4.6 still specifies fifteen
+ * endpoints** — the retirement of ADR-036's Cloud Function did not change the
+ * volumes, and a catalogue that quietly grew to sixteen would stop being a
+ * transcription of anything.
+ *
+ * So the two are asserted separately: the catalogue against the specification
+ * it copies, and the addition against the decision that introduced it. A future
+ * route added to the wrong constant is then a visible category error rather
+ * than an off-by-one in a count.
  */
 import { describe, it, expect } from 'vitest';
 
@@ -15,6 +28,7 @@ import { handler as sessions } from './sessions/src/index.js';
 import { handler as chunksUpload } from './chunks-upload/src/index.js';
 import { handler as chunksVerify } from './chunks-verify/src/index.js';
 import { handler as metadata } from './metadata/src/index.js';
+import { handler as redeem } from './redeem/src/index.js';
 
 /** Chapter 4.6 §§2–4, transcribed. */
 const CATALOGUE: Record<string, string[]> = {
@@ -33,6 +47,21 @@ const CATALOGUE: Record<string, string[]> = {
   metadata: ['POST /v1/chunks/{chunkId}/metadata', 'GET /v1/chunks/{chunkId}/metadata'],
 };
 
+/**
+ * Routes this backend serves that Chapter 4.6 does not specify.
+ *
+ * One entry, and it needs a decision behind it to be here: ADR-036 put
+ * invite-code redemption in a Cloud Function and called the arrangement
+ * temporary; Mission 7.6 retires it into a route, and ADR-048's Mission 7.6
+ * amendment exempts that route from the REQUEST authorizer.
+ */
+const BEYOND_THE_CATALOGUE: Record<string, string[]> = {
+  redeem: ['POST /v1/auth/redeem'],
+};
+
+/** Everything the API actually serves. */
+const ALL_ROUTES: Record<string, string[]> = { ...CATALOGUE, ...BEYOND_THE_CATALOGUE };
+
 const HANDLERS = {
   'auth-verify': authVerify,
   projects,
@@ -41,6 +70,7 @@ const HANDLERS = {
   'chunks-upload': chunksUpload,
   'chunks-verify': chunksVerify,
   metadata,
+  redeem,
 };
 
 describe('the route inventory', () => {
@@ -48,12 +78,22 @@ describe('the route inventory', () => {
     expect(Object.values(CATALOGUE).flat()).toHaveLength(15);
   });
 
-  it('has one function per ADR-015 domain, with chunks split in two', () => {
-    // Seven functions across six domains. The chunks domain deploys two
-    // because a Lambda has exactly one execution role and A-143 gave the
-    // domain two — one that can write and not read, one the reverse.
-    expect(Object.keys(HANDLERS)).toHaveLength(7);
-    expect(Object.keys(HANDLERS)).toEqual(Object.keys(CATALOGUE));
+  it('serves sixteen routes, the fifteenth-plus-one being redeem', () => {
+    // Sixteen served, fifteen specified. The extra one is named rather than
+    // counted, so adding another without a decision fails here.
+    expect(Object.values(ALL_ROUTES).flat()).toHaveLength(16);
+    expect(Object.values(BEYOND_THE_CATALOGUE).flat()).toEqual(['POST /v1/auth/redeem']);
+  });
+
+  it('has one function per ADR-015 domain, with two domains split in two', () => {
+    // Eight functions across six domains. A Lambda has exactly one execution
+    // role, so a domain needing two roles deploys two functions: chunks,
+    // because one must write and not read while the other must read and not
+    // write (A-143); and auth-verify, because one holds SELECT on `users` and
+    // must not create Firebase accounts while the other does the reverse
+    // (Mission 7.6).
+    expect(Object.keys(HANDLERS)).toHaveLength(8);
+    expect(Object.keys(HANDLERS)).toEqual(Object.keys(ALL_ROUTES));
   });
 
   it('exports a callable handler for every function', () => {
@@ -65,7 +105,7 @@ describe('the route inventory', () => {
   it('registers exactly the catalogued routes and no others', async () => {
     // Probed rather than introspected: an unregistered route returns a 404
     // envelope naming the key, and a registered one gets as far as auth.
-    for (const [name, routes] of Object.entries(CATALOGUE)) {
+    for (const [name, routes] of Object.entries(ALL_ROUTES)) {
       const handler = HANDLERS[name as keyof typeof HANDLERS];
 
       for (const route of routes) {
@@ -82,8 +122,18 @@ describe('the route inventory', () => {
         // AUTH_TOKEN_MISSING; every other route expects an authorizer context
         // that only API Gateway can supply, so a hand-made event without one
         // is a configuration error rather than an unauthenticated caller.
+        //
+        // POST /v1/auth/redeem is the third case and the reason this is a
+        // per-route expectation rather than one widened list. It is
+        // unauthenticated by design, so a bare request is a VALID request and
+        // it is refused on behaviour instead — 501 until Phase 4 implements it.
+        // Widening the shared list to [401, 500, 501] would let any route
+        // answer 501 and still pass, which would stop the assertion meaning
+        // that authorized routes refuse unauthenticated callers.
+        const acceptable = name === 'redeem' ? [501] : [401, 500];
+
         expect(response.statusCode, `${name}: ${route} should be registered`).not.toBe(404);
-        expect([401, 500], `${name}: ${route} should refuse a bare request`).toContain(
+        expect(acceptable, `${name}: ${route} should refuse a bare request`).toContain(
           response.statusCode,
         );
       }

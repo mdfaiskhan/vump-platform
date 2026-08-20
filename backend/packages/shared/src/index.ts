@@ -32,6 +32,7 @@ export { ApiError, ERROR_CODES, toEnvelopeError, type ErrorCode } from './errors
 export {
   withEnvelope,
   withVerifiedToken,
+  withoutAuthentication,
   notImplementedRoute,
   requireRole,
   type Caller,

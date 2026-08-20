@@ -230,6 +230,61 @@ export function withVerifiedToken<T>(
 }
 
 /**
+ * Wraps a handler for a route with **no authentication at all** — ADR-048's
+ * Mission 7.6 amendment.
+ *
+ * Exactly one route uses this: `POST /v1/auth/redeem`, the second exempt
+ * route. It differs from {@link withVerifiedToken} in the thing that matters:
+ * that wrapper's caller has a token and no `users` row, while this one's has
+ * neither. There is no identity to verify because this route is what creates
+ * it.
+ *
+ * **So the handler receives the event and nothing else.** There is deliberately
+ * no optional-identity parameter: a handler that could sometimes see a caller
+ * would invite a branch on whether one is present, and every such branch is a
+ * chance to treat an unauthenticated request as authenticated. The type makes
+ * that unrepresentable.
+ *
+ * **What limits exposure here is not authentication.** A-056 made the invite
+ * code optional, so the code gates nothing; what bounds this route is that
+ * self-signup can only ever produce a Collector in an organisation with no
+ * Tasks assigned to it. That property lives in the handler, and this wrapper
+ * neither provides nor checks it.
+ *
+ * No `firebaseUid` is logged on success, because at request time there is no
+ * caller to name — the handler logs what it created instead.
+ */
+export function withoutAuthentication<T>(
+  name: string,
+  handler: (event: APIGatewayProxyEvent) => Promise<HandlerResult<T>>,
+) {
+  return async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+    const started = Date.now();
+    try {
+      const result = await handler(event);
+
+      logger.info('request completed', {
+        route: name,
+        status: result.status ?? 200,
+        durationMs: Date.now() - started,
+      });
+
+      return respond(result.status ?? 200, success(result.data, result.meta));
+    } catch (thrown) {
+      const { code, message, status } = toEnvelopeError(thrown);
+      logger.error('request failed', {
+        route: name,
+        code,
+        status,
+        durationMs: Date.now() - started,
+        cause: thrown instanceof Error ? thrown.message : String(thrown),
+      });
+      return respond(status, failure(code, message));
+    }
+  };
+}
+
+/**
  * A handler for a route that is provisioned but not implemented.
  *
  * Mission 6.2 provisions fifteen routes and implements none of their queries.
