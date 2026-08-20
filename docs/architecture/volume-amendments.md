@@ -7464,13 +7464,17 @@ init 383 ms + warm work 8,681 ms + resume  →  22,941 – 24,953 ms
 
 **Why the margin cannot simply be widened:** the Lambda timeout is 28 s because API Gateway's REST integration timeout is 29 s. Raising one without the other achieves nothing, and raising the quota is the request already queued from Mission 7.3.
 
-### The foreground service survived, un-exempted
+### The foreground service survived an unattended, un-exempted run
 
 **Exactly one `starting —` line in the entire 15-minute capture** — the initial launch. No relaunch during recording or during the 38-part upload, with the app **not** exempted from battery optimisation on a OnePlus running OxygenOS, whose battery management is among the more aggressive.
 
-That was the deliberate choice: test *"works as shipped"* rather than *"works when the OS cooperates."* It held.
+That was the deliberate choice: test *"works as shipped"* rather than *"works when the OS cooperates."* It held for this run.
 
-**One qualification, and it materially changes what this proves: whether the screen was off for the upload is not recorded here.** An idle, screen-off device is the condition Android's battery management actually targets; a screen-on device gives the OS little reason to intervene. Until that is stated, this is evidence the service survives a long foreground run, and weaker evidence about the background case Chapter 5.11 exists for.
+**The screen state is genuinely unknown, and the result must be read accordingly.** Screen state during the run was **not actively monitored**. The device was not touched during recording, which makes an idle/screen-off period likely at some point in a 15-minute run — but this was not confirmed, and the timing is unknown.
+
+So the survival result reads as **"survived an unattended, un-exempted 15-minute run"**: evidence in the right direction, and *not* a confirmed test of the specific screen-off case Chapter 5.11 targets. An idle, screen-off device is what Android's battery management actually goes after, and whether the device reached that state — or for how long — is not in evidence.
+
+**A future run with an explicit, timestamped screen-off/screen-on log line would close this precisely.** Until then the distinction is not pedantry: the un-exempted choice was made specifically to test the harder condition, and an unattended run may or may not have reached it.
 
 ### Everything else held, and two of them were never in doubt
 
