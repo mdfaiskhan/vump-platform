@@ -99,7 +99,15 @@ export default tseslint.config(
     // whole job is to print what it built.
     files: ['scripts/**/*.mjs'],
     languageOptions: {
-      globals: { console: 'readonly', process: 'readonly' },
+      // `fetch` and `Buffer` are Node 24 globals, added for the deployed-route
+      // tests — one calls the live API over HTTP, the other reads an
+      // `aws lambda invoke` response payload.
+      globals: {
+        console: 'readonly',
+        process: 'readonly',
+        fetch: 'readonly',
+        Buffer: 'readonly',
+      },
     },
     rules: { 'no-console': 'off' },
   },
