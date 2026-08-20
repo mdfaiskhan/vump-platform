@@ -42,10 +42,15 @@ final Provider<FirebaseInitializer> firebaseInitializerProvider =
 /// frame, and an initialisation failure surfaces before any UI exists to be
 /// confused by it.
 ///
-/// **This wiring is not yet in place.** `lib/main.dart` was outside the
-/// allowed paths of Mission 0.15, so nothing currently awaits this provider.
-/// Until it is wired, Firebase initialises lazily on first read — which is
-/// exactly the widget-triggered initialisation requirement 5 rules out.
+/// **This wiring is in place.** `main.dart` awaits `_initializeFirebase`
+/// before `runApp`, so nothing reaches a widget before the platform is up.
+///
+/// It was not, for a long time: `lib/main.dart` sat outside Mission 0.15's
+/// allowed paths, so this comment recorded that Firebase initialised lazily on
+/// first read — the widget-triggered initialisation requirement 5 rules out.
+/// That gap is closed, and the sentence is kept in the past tense rather than
+/// deleted, because the failure it describes is the one this provider exists
+/// to prevent and a reader should know it was once real.
 ///
 /// ## Adding a Firebase product
 ///

@@ -36,8 +36,14 @@ class PreRecordingChecklistScreen extends ConsumerStatefulWidget {
 
   /// Identifier supplied by the route path.
   ///
-  /// Carried and shown, not yet used to fetch anything —
-  /// `features/projects_tasks/` is unbuilt, so there is no Task to load.
+  /// Carried and shown, still not used to fetch anything.
+  ///
+  /// The reason has changed and the behaviour has not. This once read
+  /// *"`features/projects_tasks/` is unbuilt, so there is no Task to load"* —
+  /// that feature has existed since Mission 5.1 and reads real Tasks from the
+  /// API since 7.4. The screen simply has no requirement to load one: it
+  /// renders Chapter 2.6's fixed checklist, and the id is passed through to
+  /// the recording it starts.
   final String taskId;
 
   @override
