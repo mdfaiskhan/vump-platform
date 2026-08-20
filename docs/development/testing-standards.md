@@ -371,6 +371,54 @@ Recorded rather than fixed — this was a documentation and governance mission.
 | `features/auth/application` | — | **93.8%** |
 | `features/auth/presentation` | — | **96.2%** |
 
+**Re-measured in Mission 7.7 (2026-08-21), twelve missions later.** The 2026-08-13 rows above are kept rather than overwritten — this file corrects in place and keeps the trail, and a dated measurement is evidence rather than a claim that went stale. What changed between the two dates is visible only because both are here.
+
+| Layer | 2026-08-13 | 2026-08-21 |
+|---|---|---|
+| `features/auth/domain` | no instrumented lines | **still none** |
+| `features/auth/data` | 99.4% | **100.0%** |
+| `features/auth/application` | 93.8% | **85.2%** — down 8.6, see open item 125 |
+| `features/auth/presentation` | 96.2% | **95.2%** |
+
+**And the whole repository for the first time**, since Volume 9 §9.5 §2 asks for per-layer figures and only the auth tree had ever been computed. 4,052 instrumented lines, 3,343 hit, **82.5% overall**.
+
+| Layer | Lines | Hit | % |
+|---|---|---|---|
+| `app` | 264 | 181 | 68.6% |
+| `core/connectivity` | 4 | 1 | 25.0% |
+| `core/environment` | 12 | 10 | 83.3% |
+| `core/errors` | 34 | 19 | 55.9% |
+| `core/firebase` | 75 | 25 | 33.3% |
+| `core/identity` | 43 | 31 | 72.1% |
+| `core/logging` | 56 | 51 | 91.1% |
+| `core/network` | 334 | 315 | 94.3% |
+| `core/onboarding` | 3 | 2 | 66.7% |
+| `core/queue` | 37 | 37 | 100.0% |
+| `core/time` | 10 | 2 | 20.0% |
+| `core/upload` | 136 | 127 | 93.4% |
+| `features/auth/application` | 81 | 69 | 85.2% |
+| `features/auth/data` | 158 | 158 | 100.0% |
+| `features/auth/presentation` | 249 | 237 | 95.2% |
+| `features/onboarding/data` | 5 | 5 | 100.0% |
+| `features/onboarding/presentation` | 57 | 57 | 100.0% |
+| `features/projects_tasks/application` | 101 | 96 | 95.0% |
+| `features/projects_tasks/data` | 77 | 77 | 100.0% |
+| `features/projects_tasks/domain` | 3 | 3 | 100.0% |
+| `features/projects_tasks/presentation` | 446 | 394 | 88.3% |
+| `features/recording/application` | 249 | 217 | 87.1% |
+| `features/recording/data` | 521 | 284 | 54.5% |
+| `features/recording/domain` | 164 | 163 | 99.4% |
+| `features/recording/presentation` | 266 | 190 | 71.4% |
+| `features/settings/presentation` | 32 | 32 | 100.0% |
+| `features/upload/application` | 294 | 236 | 80.3% |
+| `features/upload/data` | 67 | 61 | 91.0% |
+| `features/upload/domain` | 69 | 67 | 97.1% |
+| `features/upload/presentation` | 205 | 196 | 95.6% |
+
+**`features/projects_tasks/data` reads 100% of 77 lines, and Mission 7.7 is why the denominator is that small.** It moved `FakeProjectTaskRepository`, `FakeProjectTaskAdminRepository` and `InMemoryProjectTaskStore` — 483 lines — out of `lib/` and into `test/`. Those were well covered by their own tests, so the percentage barely moved; what moved is what the figure is *about*. It now measures the production repositories rather than the doubles beside them.
+
+**Three layers are conspicuously low and none is a surprise.** `core/time` (20%) and `core/connectivity` (25%) are thin wrappers over platform clocks and streams. `core/firebase` (33.3%) is the platform bootstrap, which needs a real Firebase to exercise. `features/recording/data` (54.5%) is the largest layer in the project at 521 lines and holds `IsarChunkStore`, whose file operations need a native Isar the test host does not have — the same limitation A-062's discharge notes and Mission 4.5's on-device probe exists for.
+
 | Gap | Evidence | Disposition |
 |---|---|---|
 | ~~`features/auth/data` is 65.9% against an 80% target~~ | ~~Entirely one file: `auth_repository_impl.dart` at 47.5%~~ | **Closed, Mission 2.9.** The hand-rolled fakes were written rather than reopening **A-028**: `test/features/auth/data/fakes/google_sign_in_fakes.dart` models the Google and Cloud Functions surfaces by behaviour, not canned values. `auth_repository_impl.dart` went 47.5% → 99.0%, the layer 65.9% → **99.4%**. One line remains — the lazy `FirebaseFunctions.instanceFor` default, unreachable when an instance is injected |
