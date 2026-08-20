@@ -7961,3 +7961,48 @@ The trace caught it because the first step was reading the interface rather than
 `FakeVumpApi` gained the redeem route and a `redeemThrows`, and the substitution changed what the tests can express: the fake throws an `AuthenticationException`, because by the time a failure reaches this class `ErrorInterceptor` has already turned a transport error into an application code. The old fake threw `FirebaseFunctionsException` and the class did the mapping itself — one layer of translation removed from the production path and from the test.
 
 **Not done here**, and neither belongs to Phase 5: `cloud_functions` stays in `pubspec.yaml` and `functions/` stays on disk until Phase 6, and A-224's federated-path defect is carried forward unfixed.
+
+**No device proof.** The route works (Phase 4) and the client calling it is proven only by unit tests against a fake. [[A-226]] closes this, run retroactively before Phase 6.
+
+---
+
+### A-226 — invite-code redemption proven on hardware, end to end
+
+Mission 7.6 Phase 5's device proof, run retroactively. Closes the gap [[A-225]]'s report declared rather than glossed: *"nothing has run on a device… the client calling it is proven only by unit tests against a fake."*
+
+**Device:** CPH2707 (`f389ad31`). **Code:** `DEVICE01`, one use, pointing at a purpose-made organisation.
+
+| Link | Confirmed by |
+|---|---|
+| App → API Gateway → `POST /v1/auth/redeem` | sign-up completed on screen |
+| Lambda → Google, via Workload Identity Federation | a Firebase account exists |
+| `createUser` + `setCustomUserClaims` | `role = collector` |
+| Postgres atomic decrement | `remaining_uses = 0` |
+| Sign-in → `POST /v1/auth/verify` → `provisionCaller` | a `users` row exists |
+| **The invite code's organisation reached that row** | **`org_id = …0000000000d1`** |
+
+Nine components, five of them written this mission, in one uninterrupted path from a physical device to two databases.
+
+#### The seed was designed so that passing means something
+
+The code pointed at a **second organisation**, not the default one.
+
+Under A-056 an absent invite code produces an account in the default org. Had `DEVICE01` also pointed there, a defect that ignored the code entirely — never read it, never decremented it, fell through to the default — would have produced the expected `org_id` and the run would have been recorded as a pass. **The two hypotheses would have been indistinguishable in the evidence.**
+
+Pointing the code at `Device Proof Org` separates them: `org_id = …d1` is producible only by reading that code's row. The assertion distinguishes *"the code was redeemed"* from *"an account was created"*, and only the first is what Phase 5 claims.
+
+This is the counterweight to the pattern the mission kept hitting — A-205, A-212, A-218, A-222 and the race harness's own overlap check were each a check that passed while measuring the wrong thing. Here the measurement was designed backwards from *what a false pass would look like*, before the run rather than after it.
+
+#### Two earlier decisions confirmed by observation rather than argument
+
+**F8 was right, and this is the first evidence of it.** Phase 3 decided the redeem route would not write to `users`, on the reading that `provisionCaller` already does so at first `/auth/verify`, and migration 0013 revoked the `INSERT` grant on that basis. A `users` row now exists for an account redeem never inserted — so the reasoning held in fact and not only on paper, and the revoked privilege is confirmed unnecessary rather than merely unused.
+
+**`resolveOrgId` passes a real uuid straight through**, which Phase 3 traced and nothing had exercised. A non-default organisation id survived Firebase custom claim → ID token → authorizer → `users.org_id` intact. Had it not, the account would have landed in the wrong tenant with no error anywhere — the silent BR-20 failure `org.ts` refuses unrecognised values to prevent.
+
+#### What this run does NOT establish
+
+- **The no-code path.** A-056's default-organisation behaviour was not exercised. Deliberately out of scope.
+- **Google sign-up.** Expected to fail by [[A-224]] and not re-confirmed.
+- **The 201 body.** Nothing on the client reads `{uid, orgId}`; the claims arrive on the token instead. Untested because unused.
+
+Phase 5 is closed, device verification included.
