@@ -106,6 +106,10 @@ export default tseslint.config(
         console: 'readonly',
         process: 'readonly',
         fetch: 'readonly',
+        // Node 24 global. `check-coverage.mjs` resolves the repository root
+        // from `import.meta.url`, which is the only way an ESM script can
+        // locate a sibling file without assuming the caller's cwd.
+        URL: 'readonly',
         Buffer: 'readonly',
       },
     },
