@@ -7422,3 +7422,62 @@ The first two were caught because the check ran **last**. The third was not, bec
 No content was lost or altered. The two states differ **only** in whitespace, confirmed by formatting the regenerated output and observing a zero diff before deciding what to commit — and the entire history is recoverable either way, since both forms are generated from the same sources by the same pinned toolchain.
 
 What it cost was not correctness but **trust in a green check**: PR #17's drift failure was read first as a version-pinning problem, then as a `develop` condition, before it was read as what it was.
+
+---
+
+### A-215 — The upload chain at full 38-part scale, and the case it still does not cover
+
+| | |
+|---|---|
+| **What** | A 15-minute recording on CPH2707 → two chunks → S3 → Aurora, all complete |
+| **Chunk 1** | 38 parts, ~633 MB, `chunks-verify` **Duration 8,681 ms**, `Init Duration` **383 ms** |
+| **Chunk 2** | 19 parts, ~305 MB, **Duration 4,596 ms**, fully warm |
+| **Aurora** | **Warm on both.** No resume in either measurement |
+| **Ceiling** | 28,000 ms Lambda timeout, API Gateway 29 s behind it |
+| **Date** | 2026-08-20, Mission 7.4 scale checkpoint |
+
+A-213 recorded the first end-to-end upload, at three parts. This is the same chain at the size it was designed for. Both chunks show `status = complete` with `chunk_metadata.verified_at` populated, and the session `complete` — confirmed in the database, not inferred from a log.
+
+### What two chunk sizes bought that one could not
+
+Two measurements of the same code path at different sizes is a fit, and it answers the variable Mission 7.3's F4 could not measure — `CompleteMultipartUpload` on a real 38-part object, which F4 had timed only against a small one:
+
+| | |
+|---|---|
+| **Hash throughput** | **77–81 MB/s** (chunk 2's size is inferred from its part count, hence the range) |
+| **Fixed overhead** | **~450–870 ms** — S3 assembly, `complete_chunk()` and `complete_session()` combined |
+
+**F4 independently measured 81.4 MB/s** at 1769 MB against a seeded object. Two unrelated measurements of the same operation, agreeing — which is worth more than either alone, and retires the worry that assembling 38 parts might cost seconds. It does not: the hash dominates and everything else is under a second.
+
+### The stacked worst case is still unobserved, and tonight makes it *more* interesting rather than less
+
+Aurora was warm both times. **Gap 9's resume is the largest single term in the stack and it did not occur.** So the numbers above are the floor of the distribution, not its tail.
+
+Composing tonight's real figures with Gap 9's four measured resumes (13,877 / 15,428 / 15,889 ms, plus the 14,457 ms whole-request figure from A-213):
+
+```
+init 383 ms + warm work 8,681 ms + resume  →  22,941 – 24,953 ms
+                                   margin  →   5,059 –  3,047 ms
+```
+
+**Three to five seconds of margin against a 28-second ceiling.** That is an arithmetic composition of observed parts, not an observation — nothing has yet run cold-Aurora *and* full-size in one invocation. It is the closest thing this project has to a prediction of the case that fails, and it is thin enough that a slower-than-measured resume, a colder start, or a larger chunk would cross it.
+
+**Why the margin cannot simply be widened:** the Lambda timeout is 28 s because API Gateway's REST integration timeout is 29 s. Raising one without the other achieves nothing, and raising the quota is the request already queued from Mission 7.3.
+
+### The foreground service survived, un-exempted
+
+**Exactly one `starting —` line in the entire 15-minute capture** — the initial launch. No relaunch during recording or during the 38-part upload, with the app **not** exempted from battery optimisation on a OnePlus running OxygenOS, whose battery management is among the more aggressive.
+
+That was the deliberate choice: test *"works as shipped"* rather than *"works when the OS cooperates."* It held.
+
+**One qualification, and it materially changes what this proves: whether the screen was off for the upload is not recorded here.** An idle, screen-off device is the condition Android's battery management actually targets; a screen-on device gives the OS little reason to intervene. Until that is stated, this is evidence the service survives a long foreground run, and weaker evidence about the background case Chapter 5.11 exists for.
+
+### Everything else held, and two of them were never in doubt
+
+- **Presigned URLs** — 57 parts, no `403 SignatureDoesNotMatch`, nowhere near the 3,600 s window. The floor required to fit 608 MiB is ~1.4 Mbit/s sustained; a normal connection uses under a tenth of the budget. This was arithmetic before it was a test.
+- **Part sequencing** — 38 then 19, no gaps and no retries, confirmed against the S3 key sequence numbers `0000` and `0001`.
+- **`complete_session()` across two chunks** — the session completed only after both, which is FR-SES-02 working over a multi-chunk session rather than the single-chunk case A-213 covered.
+
+### What this entry is for
+
+So that a later reader finding *"38-part scale test passed"* does not conclude the timeout question is closed. It is not. **The chain works at full scale under warm-Aurora conditions, and the condition under which it might not has still never occurred.** Tonight moved that from "unmeasured in every term" to "measured in every term but one, composed to a 3–5 second margin" — which is real progress and is not the same as coverage.
