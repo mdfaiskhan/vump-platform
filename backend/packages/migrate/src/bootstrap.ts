@@ -37,7 +37,21 @@ import {
 import { execute, type StatementTarget } from '@vump/shared';
 import { roleFor, secretNameFor } from './naming.js';
 
-/** ADR-015's six domains, with chunks split per A-143. */
+/**
+ * ADR-015's six domains, with chunks split per A-143 and auth-verify split per
+ * Mission 7.6.
+ *
+ * **Eight entries, six domains.** A domain is a unit of code decomposition and
+ * a role is a unit of privilege; the two are not one-to-one. `redeem` shares
+ * the auth-verify domain and holds the opposite privileges — it creates
+ * Firebase accounts and cannot read `users`, where auth-verify reads `users`
+ * and cannot create accounts.
+ *
+ * **This list must match `local.lambda_functions` in the Terraform**, which
+ * creates the secret containers this command fills. Nothing checks that they
+ * agree; a name here with no container fails loudly on the `DescribeSecret`
+ * below, which is the safe direction — the reverse leaves an empty secret.
+ */
 const FUNCTIONS = [
   'auth-verify',
   'projects',
@@ -46,6 +60,7 @@ const FUNCTIONS = [
   'chunks-upload',
   'chunks-verify',
   'metadata',
+  'redeem',
 ] as const;
 
 /**

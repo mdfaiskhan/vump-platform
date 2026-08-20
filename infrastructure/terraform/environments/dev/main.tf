@@ -7,9 +7,10 @@ data "aws_caller_identity" "current" {}
 # execution roles. No Lambda function, no API Gateway, no schema, no Firebase.
 
 locals {
-  # The seven functions, named once. ADR-015's six domains with chunks split in
-  # two (A-143). The api-gateway module derives the same list from its route
-  # table; this is the copy the credential and IAM modules share.
+  # The eight functions, named once. ADR-015's six domains, with chunks split
+  # in two (A-143) and auth-verify split in two (Mission 7.6). The api-gateway
+  # module derives the same list from its route table; this is the copy the
+  # credential and IAM modules share.
   lambda_functions = [
     "auth-verify",
     "projects",
@@ -18,6 +19,12 @@ locals {
     "chunks-upload",
     "chunks-verify",
     "metadata",
+
+    # Mission 7.6. The eighth function and the second role in the auth-verify
+    # domain — see `local.roles` in modules/iam. Its database role is
+    # `vump_redeem`, created NOLOGIN by migration 0012; adding it here creates
+    # the secret container that `npm run db:bootstrap` then fills.
+    "redeem",
   ]
 
   # The .tmpl files in infrastructure/aws/iam/ are rendered here rather than
@@ -163,6 +170,26 @@ module "api_gateway" {
     UPLOAD_FUNCTION_NAME = "vump-${var.environment_slug}-chunks-upload"
   }
 
+  # Mission 7.6. The redeem function's GCP federation identifiers, and only
+  # the redeem function's — this is the per-function seam `UPLOAD_FUNCTION_NAME`
+  # above notes the absence of.
+  #
+  # **None of these is a credential.** The audience names a workload identity
+  # pool, the email names a service account, and the URL is a public STS
+  # endpoint. Possessing all three grants nothing without an AWS identity whose
+  # role ARN satisfies the pool's attribute condition, which is the whole point
+  # of federation over a service-account key (ADR-036, A-221).
+  #
+  # Read from the module rather than restated, so the project number the
+  # audience carries has one source.
+  lambda_extra_environment = {
+    redeem = {
+      GCP_AUDIENCE              = module.gcp_federation.redeem_audience
+      GCP_SERVICE_ACCOUNT_EMAIL = module.gcp_federation.redeem_service_account_email
+      GCP_STS_VERIFICATION_URL  = module.gcp_federation.regional_cred_verification_url
+    }
+  }
+
   # DATABASE_CREDENTIALS_SECRET_ARN is per-function, not shared, so it is
   # supplied separately and merged inside the module.
   #
@@ -201,5 +228,31 @@ module "api_gateway" {
   # vCPU, and network scales on the same curve.
   lambda_overrides = {
     "chunks-verify" = { memory_mb = 1769 }
+
+    # Mission 7.6. **Redeem gets no override, and that is a finding rather
+    # than an omission.**
+    #
+    # `lambda_timeout_seconds` traces the stacking risk and concludes it lives
+    # in `auth-verify`, because the REQUEST authorizer runs before every
+    # authorized route and therefore "the authorizer pays the resume" —
+    # by the time a target function runs, Aurora is awake.
+    #
+    # **That trace does not cover redeem.** ADR-048's Mission 7.6 amendment
+    # exempts this route from the authorizer, so nothing precedes it and its
+    # first Data API call is the one that wakes the cluster. Its worst case is
+    # therefore a deep-sleep resume ("30 seconds or longer", AWS) PLUS a
+    # Workload Identity Federation token exchange PLUS createUser PLUS
+    # setCustomUserClaims — the only place in this backend where the network
+    # cost and the resume cost land in one invocation.
+    #
+    # 28 seconds cannot cover that, and no override can: API Gateway refuses at
+    # 29 whatever this says, and the module's validation rejects anything
+    # higher for exactly that reason. **A number here would be theatre.** The
+    # real fixes are the ones gap 9 already names — raise the integration
+    # quota, or stop `min_capacity` being 0 — plus caching the federated token
+    # across invocations, which is Phase 4's to measure.
+    #
+    # Left at the 28s default deliberately, with the exposure recorded rather
+    # than papered over.
   }
 }
