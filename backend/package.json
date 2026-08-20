@@ -20,8 +20,9 @@
     "format:fix": "prettier --write .",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage && node scripts/check-coverage.mjs",
     "audit": "npm audit --audit-level=high",
-    "verify": "npm run format && npm run typecheck && npm run lint && npm run test && npm run audit",
+    "verify": "npm run format && npm run typecheck && npm run lint && npm run test:coverage && npm run audit",
     "db:migrate": "node packages/migrate/dist/cli.js",
     "db:migrate:dry": "node packages/migrate/dist/cli.js --dry-run",
     "db:bootstrap": "node packages/migrate/dist/bootstrap.js"
@@ -30,6 +31,7 @@
     "@eslint/js": "^9.39.1",
     "@types/aws-lambda": "^8.10.156",
     "@types/node": "^24.10.1",
+    "@vitest/coverage-v8": "^4.1.11",
     "aws-sdk-client-mock": "^4.1.0",
     "esbuild": "^0.25.12",
     "eslint": "^9.39.1",
