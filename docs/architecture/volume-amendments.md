@@ -7530,3 +7530,50 @@ Three attempts, and the first two failed for reasons that were not the client's:
 3. **A cached family member.** `tasksProvider` has no `autoDispose`, so re-navigating served state from the first load and issued no request. Deliberate and documented — but tracing it surfaced open item 117, which is not.
 
 **Each failure looked like a client defect and was not.** That is the shape worth carrying: at a seam this well guarded, *"the data isn't showing"* is more often the guard than the bug, and the cheapest first question is whether the row is visible to the *route's own query* rather than whether the client fetched it.
+
+---
+
+### A-217 — A-186's 404 drove its copy on a device, and the screen is sufficient evidence
+
+| | |
+|---|---|
+| **Was** | The 404 → copy path added by F28/F29 after A-207. Unit-tested on both sides; the deployed backend had never driven it |
+| **Now** | C-05 rendered *"This Project isn't available to you."* against a live `RESOURCE_NOT_FOUND` |
+| **Method** | A temporary probe pointing `tasksProvider` at `00000000-0000-4000-8000-000000000000` — well-formed, so it passes `pathUuid` and fails `assertProjectVisible` |
+| **Status** | **Closed** |
+| **Date** | 2026-08-20, Mission 7.5 F3 |
+
+The log capture was lost to buffer rotation. **The on-screen result is still conclusive**, and the reason is worth writing down rather than asserting.
+
+### Why the copy entails the backend's answer
+
+That sentence is reachable from exactly two places in `collector_project_detail_screen.dart`:
+
+1. **Line 73** — the `AsyncError` branch, when `classifyReadFailure(error)` returns `notVisible`.
+2. **Line 105** — inside `_TaskList`, when `project == null`.
+
+Path 2 is excluded twice over: `_TaskList` builds only on `AsyncData`, and the probe changed only the `tasksProvider` **argument**, leaving the widget's own `projectId` intact — with Checkpoint Project confirmed present on C-04, `project` was non-null.
+
+So path 1 fired, and it is a chain of implications rather than an inference:
+
+```
+copy rendered
+  → classifyReadFailure(error) == notVisible
+  → error.backendCode == 'RESOURCE_NOT_FOUND'
+  → the response carried an envelope error with that code
+  → ApiError.notFound(), which is status 404
+```
+
+`backendCode` is populated only from an envelope's `error.code` (F29), and `RESOURCE_NOT_FOUND` is emitted only by `ApiError.notFound`. **Nothing else in the codebase can put that string on that screen.**
+
+**What was not directly observed** is the HTTP status line itself. It is entailed by the above rather than read, and that distinction is recorded rather than glossed — the four failure signatures were all absent, which is corroboration, not proof.
+
+### What it closes
+
+The last of A-186's chain to reach a device. The backend's decision to report a resource outside the caller's reach as **absent rather than forbidden** — because *"403 confirms the id exists, which is precisely what a guessed id is asking"* — now has a client that renders it correctly, in copy that claims neither *"not assigned"* nor *"does not exist"*, as BR-19 requires.
+
+Before F28, this case rendered *"Check your connection"* — pointing a Collector at a working network over a stale link. That regression would have been the most valuable thing this test could find, and it did not occur.
+
+### A note on evidence standards
+
+This is the first checkpoint item in the project closed on **on-screen behaviour** rather than a captured log line. That is acceptable here **because the rendering path is deterministic and single-sourced** — one string, two call sites, one of them excluded by construction. It would not be acceptable for a claim about timing, ordering, or anything the UI summarises rather than reflects. The distinction is the point: behavioural evidence is sufficient exactly when the behaviour has one possible cause.
