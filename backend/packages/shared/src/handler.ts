@@ -283,17 +283,3 @@ export function withoutAuthentication<T>(
     }
   };
 }
-
-/**
- * A handler for a route that is provisioned but not implemented.
- *
- * Mission 6.2 provisions fifteen routes and implements none of their queries.
- * Each one answers with a named `NOT_IMPLEMENTED` refusal in a real envelope
- * rather than a fabricated success — a stub that returns invented data is
- * indistinguishable from a working integration until something depends on it.
- */
-export function notImplementedRoute(name: string, what: string) {
-  return withEnvelope(name, (): Promise<HandlerResult<never>> => {
-    throw ApiError.notImplemented(what);
-  });
-}

@@ -33,7 +33,6 @@ export {
   withEnvelope,
   withVerifiedToken,
   withoutAuthentication,
-  notImplementedRoute,
   requireRole,
   type Caller,
   type CallerRole,
