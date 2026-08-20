@@ -40,9 +40,15 @@ Mission 4.8's security review found it, by reading `git log` against this file r
 
 ### Added
 
+- **2026-08-20** — **The upload chain runs at full scale: a 38-part chunk, and a session completing across two chunks.** A 15-minute recording produced a 38-part chunk (~633 MB) and a 19-part remainder; both verified, `complete_session()` waiting for both. `chunks-verify` took **8,681 ms** (with a 383 ms cold start) and **4,596 ms**, against a 28,000 ms ceiling. Two sizes through one path give a fit: hash throughput **77–81 MB/s**, independently agreeing with Mission 7.3's F4 measurement of 81.4 MB/s, and fixed overhead of **~450–870 ms** for S3 assembly plus `complete_chunk()` plus `complete_session()` — which retires the unmeasured question of what assembling 38 real parts costs. Presigned URLs were nowhere near their 3,600 s window; parts sequenced `0000` and `0001` with no gaps and no retries. A-215.
+
+  **Aurora was warm for both, so the stacked worst case is still unobserved.** Composing these figures with Gap 9's measured resumes puts it at **22,941–24,953 ms — three to five seconds of margin.** That is arithmetic over observed parts, not an observation.
+
+  The foreground service survived the full run **un-exempted from battery optimisation** on a OnePlus — one launch line in the whole capture. But **screen state was not monitored**: the device was unattended, which makes an idle period likely and confirms nothing about timing. Read as *survived an unattended, un-exempted 15-minute run*, not as the screen-off case Chapter 5.11 targets.
+
 - **2026-08-20** — **A chunk was recorded, uploaded and verified end to end for the first time.** CPH2707 → S3 → Aurora: session registered, chunk registered, three parts transferred, metadata accepted, status completed. Confirmed in the database rather than in a log — `sessions.status = complete`, `chunks.status = complete`, and `chunk_metadata.verified_at` populated, which means `chunks-verify` recomputed the hash, matched it, and both `complete_chunk()` and `complete_session()` ran. **Before tonight no chunk had ever reached `uploading` on a device, and no metadata POST had ever succeeded by any client in any environment.** A-213.
 
-  **The 38-part case is not proven.** Tonight's chunk was short — three parts. Part count, presigned-URL expiry across a long transfer, the foreground service with the screen off, and `chunks-verify` hashing a 633 MB object inside its timeout are all still untouched.
+  **The 38-part case was not proven by this run** — the chunk was three parts. It was proven the following day; see the scale-test entry above for what that did and did not cover.
 
   Three checklist items were deferred by decision once the core proof was in hand: `deviceId` persistence across relaunch and reinstall, a second page via a small `?limit=`, and a real 404. So **`nextCursor` has still never been produced and consumed by anything real** — A-199 is code-complete and device-unconfirmed.
 
@@ -213,6 +219,18 @@ Mission 4.8's security review found it, by reading `git log` against this file r
 
 ### Security
 
+- **2026-08-20** — **Every metadata write had been failing against a real database since migration `0004`, and no test could have seen it.** `numericParam` bound `numeric` columns as a bare `stringValue` with no `typeHint`, so Postgres inferred `text` and refused: *column "zoom_factor" is of type numeric but expression is of type text* (SQLState 42804). Every other non-text parameter in the project already carried a hint — `uuidParam` sends `'UUID'`, `jsonParam` sends `'JSON'`.
+
+  It survived four missions because **every backend test uses `aws-sdk-client-mock`**: a mock asserts what was *sent*, never what Postgres would *accept*, and no `INSERT` in this project had reached a real database until the device checkpoint. Fixed at the helper rather than with a cast in one statement, then swept by reading the schema — three `numeric` columns exist in total, all in `chunk_metadata`, all through these two helpers. A partial remedy is now in place: the tests assert the type hints, which is checkable under the mock. A-212.
+
+- **2026-08-20** — **Every metadata POST would have been refused, for two independent reasons.** `functions/metadata/` resolves a chunk's true identity from a database join and rejects a document that disagrees with it. The client disagreed twice.
+
+  `identity.collector_id` was the **Firebase uid**; the backend joins `sessions.collector_id`, which is `users.id`. `POST /v1/auth/verify` has always returned both and the client read `orgId` and discarded `userId`. A-206.
+
+  `identity.session_id` was the **local** session UUID; the backend joins its own `sessions.id`. That one is not a slip — the document is assembled at chunk finalization, possibly offline, when no backend session exists — so the pipeline now rewrites that one field at the POST, where both ids are in hand, and the stored row keeps the local id every device-side lookup joins on. A-207.
+
+  Both were found by reading the backend's join rather than by running anything, and **neither was visible to any test on either side**: each half was internally consistent, and the metadata POST had no reachable caller because the session registrar threw. One pipeline test had been asserting the document was *"posted unchanged"* — encoding the second defect as intended behaviour, and it would have kept passing all the way to the device.
+
 - **2026-08-19** — **The device identifier is install-scoped and self-minted, and `ANDROID_ID` was rejected.** A v4 UUID generated on first launch and persisted, rather than the OS identifier the platform offers. Two grounds: `ANDROID_ID` resets on factory reset, so it does not provide the stability Volume 5 Chapter 5.7 §2 asks for, and it is an OS-scoped identifier that outlives the app, carrying correlation surface this project has no use for. The app needs to answer one question — *"did these chunks come from the same install?"* — and a self-minted UUID answers exactly that and nothing else.
 
   **It is stored in `shared_preferences`, not the Keychain**, and that is deliberate rather than an oversight. ADR-008 scopes `flutter_secure_storage` to secrets; a device id travels in plaintext metadata to an unencrypted column, so secure storage would imply a confidentiality property the value does not have anywhere else in its life. The stated cost: a reinstall mints a new id. Nothing treats `device_id` as a key. ADR-050, A-196. Mission 7.4 step 3.
@@ -359,14 +377,6 @@ Mission 4.8's security review found it, by reading `git log` against this file r
 - **2026-08-15** — Per-device wide-angle eligibility is cached in `shared_preferences` — a tier name and two version strings. No secret, no credential, and no identifier of any person or device; ADR-008 governs secrets and this holds none. Mission 3.1, A-057. (`4c7f3d1`)
 
 ### Fixed
-
-- **2026-08-20** — **Every metadata POST would have been refused, for two independent reasons.** `functions/metadata/` resolves a chunk's true identity from a database join and rejects a document that disagrees with it. The client disagreed twice.
-
-  `identity.collector_id` was the **Firebase uid**; the backend joins `sessions.collector_id`, which is `users.id`. `POST /v1/auth/verify` has always returned both and the client read `orgId` and discarded `userId`. A-206.
-
-  `identity.session_id` was the **local** session UUID; the backend joins its own `sessions.id`. That one is not a slip — the document is assembled at chunk finalization, possibly offline, when no backend session exists — so the pipeline now rewrites that one field at the POST, where both ids are in hand, and the stored row keeps the local id every device-side lookup joins on. A-207.
-
-  Both were found by reading the backend's join rather than by running anything, and **neither was visible to any test on either side**: each half was internally consistent, and the metadata POST had no reachable caller because the session registrar threw. One pipeline test had been asserting the document was *"posted unchanged"* — encoding the second defect as intended behaviour, and it would have kept passing all the way to the device.
 
 - **2026-08-20** — **A syntax `flutter analyze` accepts and the code generator cannot parse.** Null-aware collection elements (`{'k': ?value}`) entered `lib/` in Mission 7.4 step 4 and passed a full green verification — analyzer, 1123 tests, five boundary checks — because none of that runs a code generator. `build_runner` bundles its own, older analyzer; meeting one it reports the file as broken and **every** generator refuses to run, against files unrelated to the syntax. The lint that asks for it is now silenced project-wide, the two uses are rewritten, and the rule is invariant **I49** — the only one in the register imposed by a tool rather than a decision, and the only one whose violation is silent until an unrelated action. A-208.
 
