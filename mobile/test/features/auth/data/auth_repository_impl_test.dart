@@ -52,10 +52,10 @@ void main() {
     });
 
     test('admin is recognised as distinct from collector', () async {
-      final Session session = await repositoryFor(
-        <String, dynamic>{'role': 'admin', 'org_id': 'org-42'},
-        backend: FakeVumpApi(role: 'admin'),
-      ).restoreSession();
+      final Session session = await repositoryFor(<String, dynamic>{
+        'role': 'admin',
+        'org_id': 'org-42',
+      }, backend: FakeVumpApi(role: 'admin')).restoreSession();
 
       expect((session as SessionAuthenticated).user.role, Role.admin);
     });
@@ -75,10 +75,7 @@ void main() {
 
     test('no role from the backend is refused', () async {
       await expectLater(
-        repositoryFor(
-          null,
-          backend: FakeVumpApi(role: ''),
-        ).restoreSession(),
+        repositoryFor(null, backend: FakeVumpApi(role: '')).restoreSession(),
         throwsA(
           isA<AuthenticationException>().having(
             (AuthenticationException e) => e.errorCode,
@@ -94,10 +91,10 @@ void main() {
       // pair of claims establishes nothing on its own, because the client no
       // longer reads them. Only the backend's answer counts.
       await expectLater(
-        repositoryFor(
-          <String, dynamic>{'role': 'admin', 'org_id': 'org-42'},
-          backend: FakeVumpApi(role: ''),
-        ).restoreSession(),
+        repositoryFor(<String, dynamic>{
+          'role': 'admin',
+          'org_id': 'org-42',
+        }, backend: FakeVumpApi(role: '')).restoreSession(),
         throwsA(isA<AuthenticationException>()),
       );
     });
@@ -147,10 +144,10 @@ void main() {
       // `collector` would grant an identity the backend never issued, and
       // guessing `admin` is worse.
       await expectLater(
-        repositoryFor(
-          <String, dynamic>{'role': 'collector', 'org_id': 'org-42'},
-          backend: FakeVumpApi(role: 'superuser'),
-        ).restoreSession(),
+        repositoryFor(<String, dynamic>{
+          'role': 'collector',
+          'org_id': 'org-42',
+        }, backend: FakeVumpApi(role: 'superuser')).restoreSession(),
         throwsA(isA<AuthenticationException>()),
       );
     });
@@ -202,10 +199,10 @@ void main() {
       // showing admin surfaces whose every write the backend refused.
       //
       // 'admin' in the claim, 'collector' from the table. The table wins.
-      final Session session = await repositoryFor(
-        <String, dynamic>{'role': 'admin', 'org_id': 'org-42'},
-        backend: FakeVumpApi(role: 'collector'),
-      ).restoreSession();
+      final Session session = await repositoryFor(<String, dynamic>{
+        'role': 'admin',
+        'org_id': 'org-42',
+      }, backend: FakeVumpApi(role: 'collector')).restoreSession();
 
       expect((session as SessionAuthenticated).user.role, Role.collector);
     });
@@ -214,10 +211,10 @@ void main() {
       // Under-privileging is the safer failure and still a failure: a promoted
       // Admin holding a stale collector claim would see no Admin surfaces
       // while the backend granted every one of them.
-      final Session session = await repositoryFor(
-        <String, dynamic>{'role': 'collector', 'org_id': 'org-42'},
-        backend: FakeVumpApi(role: 'admin'),
-      ).restoreSession();
+      final Session session = await repositoryFor(<String, dynamic>{
+        'role': 'collector',
+        'org_id': 'org-42',
+      }, backend: FakeVumpApi(role: 'admin')).restoreSession();
 
       expect((session as SessionAuthenticated).user.role, Role.admin);
     });
