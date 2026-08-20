@@ -1,9 +1,37 @@
 # Mission 7.6 — Retire the Invite-Code Cloud Function
 
-**Handoff, written 2026-08-20 at the close of Phase 5.**
+**Written 2026-08-20 at the close of Phase 5. Updated 2026-08-21: Phase 6 is
+done and the mission is complete.**
 
-Branch `mission/7.6-retire-invite-function`, 24 commits, pushed, no PR.
-Head `5e0f4cc`. Phases 1–5 done. **Phase 6 not started.**
+Branch `mission/7.6-retire-invite-function`. **All six phases done.** No PR
+opened yet.
+
+> **Everything below the horizontal rule is the Phase-5 handoff as written**,
+> including its section on Phase 6 as remaining work. It is kept because it
+> records what was known and blocked at the time. Where it says "Phase 6 not
+> started", read the summary here instead.
+>
+> **What Phase 6 did:** undeployed `redeemInviteCode` from Firebase (verified
+> by a `404`, not by a listing), deleted `functions/`, the root
+> `firebase.json`, `firestore.rules` and `firestore.indexes.json`, dropped
+> `cloud_functions` and `cloud_firestore`, removed four CI confinement lines,
+> retired invariants I42/I43 by strikethrough, and marked ADR-036
+> **Superseded**. A-227 is the record.
+>
+> **Open item 123 — the blocker this document leads with — was resolved by
+> RETIRING the capability, not by building the route.** Invite-code *issuing*
+> is gone: the repository, its interface, the entity, the notifier, the screen,
+> its route and the Settings link. Nobody had ever issued a code through it,
+> A-056 already made codes optional, and its only enforcement was the
+> `firestore.rules` condition being deleted in the same phase — so leaving it
+> would have presented a permission-gated-looking surface with no gate behind
+> it. Migration 0012's "no principal may INSERT" stays correct. Codes are
+> minted by an operator via SQL until, and only if, an admin surface is
+> designed against requirements that exist then.
+>
+> **Still open:** items 119, 120, 121 and **122** (A-224 — Google sign-up with
+> an invite code has never worked; needs its own trace/decide). Item 123 is
+> closed.
 
 ---
 

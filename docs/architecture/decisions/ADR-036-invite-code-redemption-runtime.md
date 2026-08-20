@@ -1,8 +1,32 @@
 # ADR-036 — Invite-Code Redemption Runtime
 
-- **Status:** Accepted
+- **Status:** **Superseded** — 2026-08-21, by Mission 7.6.
 - **Date:** 2026-08-13
-- **Supersedes:** none. Adds a **temporary** second backend runtime alongside ADR-015, retired at Mission 6/7. Unblocks A-051.
+- **Supersedes:** none. Added a **temporary** second backend runtime alongside ADR-015, retired at Mission 7.6. Unblocked A-051.
+- **Superseded by:** no new ADR. **ADR-015 was always the decision**; this record was an exception to it, and Mission 7.6 removed the exception. See A-221 through A-227, and ADR-048's Mission 7.6 amendment for the route's authorizer exemption.
+
+> **This record is history and is kept unedited below.** It explains why a
+> Firebase Cloud Function existed in a repository whose accepted runtime
+> decision says AWS Lambda — which is exactly what a reader finding traces of
+> it in the migrations, the ADRs or the git log will need. Nothing below has
+> been rewritten to agree with the present.
+>
+> **What actually happened, against what this record predicted:**
+>
+> | This ADR said | Outcome |
+> |---|---|
+> | *"`redeemInviteCode` becomes a `/v1/...` route beside the others"* | Done. `POST /v1/auth/redeem`, Mission 7.6 Phase 4 |
+> | *"this function is deleted"* | Done — **and undeployed first**, which this record did not distinguish. Deleting the source would have left it callable |
+> | *"Workload Identity Federation… is the shape that avoids one [a key]"* | **Correct, and it worked.** No service-account key exists anywhere. A-221 |
+> | *"it is not free to set up"* | It is free in money. It cost three applies, a bisection and two live failures — A-222, A-223 |
+> | *"the ported endpoint needs a key that verification never did"* | **Wrong, and usefully so.** The ported endpoint needs no key either; federation removes the asymmetry rather than preserving it |
+> | *"The retirement obligation… is not tracked anywhere that would prompt anyone"* | True, and it did not need to be — the missions were sequenced deliberately. The weakness was real; it just never bit |
+>
+> **One decision here was retired rather than ported.** This ADR names *"an
+> Admin surface that issues codes"* as one of three things sign-up was blocked
+> on. That surface was deleted, not rebuilt: its only enforcement was the
+> `firestore.rules` condition being deleted in the same phase, and no code had
+> ever been issued through it. A-227 records why.
 
 ## Context
 
