@@ -87,10 +87,66 @@ Caching a policy caches an authorization decision. A user removed from an org, o
 | REQUEST authorizer | Required | ✅ `vump-dev-caller`, identity source `Authorization` |
 | Served by `auth-verify` | Required | ✅ one function, discriminated by event shape |
 | 14 routes behind it | Required | ✅ **verified against live AWS**, per-method |
-| Exactly one exempt | Required | ✅ `POST /v1/auth/verify` — verified live, per-method |
-| The exemption enforced by CI | Intended | ❌ **No.** A `check` warns during `plan`; CI runs no `plan`. Gap 16 |
+| ~~Exactly one exempt~~ **Two named routes exempt** | Required | ✅ `POST /v1/auth/verify` verified live. `POST /v1/auth/redeem` added by the amendment below |
+| The exemption enforced by CI | Intended | ❌ **No.** A `check` warns during `plan`; CI runs no `plan`. Gap 16 — **unchanged by the amendment** |
 | Zero new secrets | Required | ✅ 8 before, 8 after |
 | `org_id` no longer a claim | Supersedes A-159 | ✅ read from `users` |
 | Deny is explicit | Required | ✅ 403 with an explicit-deny body |
 | Live round-trip | — | ✅ 403 → 200 (row created) → 200 |
 | Called by the mobile app | — | ⬜ **Not wired.** No app code calls either route yet |
+
+---
+
+## Amendment — Mission 7.6: the exemption becomes a two-route allowlist
+
+**Status: Accepted. Supersedes this record's "Exactly one route is exempt" section.**
+
+### What changed
+
+`POST /v1/auth/redeem` is exempt from the REQUEST authorizer. The exempt set is now:
+
+```
+POST /v1/auth/verify
+POST /v1/auth/redeem
+```
+
+### Why the original reasoning requires it rather than merely permits it
+
+ADR-036 put invite-code redemption in a Cloud Function and recorded that the arrangement was temporary. Mission 7.6 retires it into `POST /v1/auth/redeem`, and that route **creates the Firebase account**. Its caller therefore has no token, no `users` row, and no Firebase identity of any kind.
+
+This is the same condition that produced the first exemption, one step earlier in the same sequence:
+
+| Route | The caller has | The route produces |
+|---|---|---|
+| `POST /v1/auth/redeem` | nothing | a Firebase account with claims |
+| `POST /v1/auth/verify` | a token, no `users` row | the `users` row |
+| everything else | both | — |
+
+The authorizer refuses a caller with no `users` row. Putting redeem behind it would make the route unreachable by exactly the callers it exists for — verbatim the argument A-166 records for `/auth/verify`, and it holds here a fortiori: a redeem caller does not even have a token to present.
+
+**So the count was never the property.** "Exactly one" was true of the system as it stood, and this record mistook a fact about the route inventory for a rule about authentication. The real rule is that a route may bypass the authorizer **only if the authorizer would refuse every legitimate caller of it**, and that is a statement about two routes now.
+
+### The check is a set match, not a relaxed count
+
+```hcl
+condition = length(local.authorizer_exempt) == 2 && length(setsubtract(
+  toset(local.authorizer_exempt),
+  toset(["POST /v1/auth/verify", "POST /v1/auth/redeem"]),
+)) == 0
+```
+
+**Deliberately not `length(...) <= 2`.** A count-based check lets a third exemption pass by deleting one of the two — it would be satisfied by an exempt set of `["POST /v1/auth/redeem", "GET /v1/projects"]`, which is precisely the failure it exists to prevent. The property worth guarding is *these named routes and no others*; the number is a consequence of the list, not the test.
+
+Widening this list is a security decision that requires an ADR change, and the two-sided condition is what makes an edit that skips one show up as a plan failure rather than as a route quietly opening.
+
+### What did not change
+
+- **Fourteen routes remain behind the authorizer.** The API serves sixteen routes now; the authorizer count is unchanged because both exemptions are unauthenticated by construction.
+- **Gap 16 is unchanged and remains open.** The check still runs only at `plan`, a failed `check` is still a warning rather than an error, and CI still runs no `plan`. Adding a second exemption does not weaken that further, but it does raise what the gap is worth: the allowlist now has two entries, and an unreviewed third would be the first one nobody had to argue for.
+- **`withVerifiedToken` still serves exactly one route.** Redeem verifies nothing, so it needs a third wrapper rather than that one — see Mission 7.6 Phase 3.
+
+### Related
+
+- ADR-036 — the decision this retires, and the reason redeem exists as a route at all.
+- A-166 — the deadlock that produced the first exemption.
+
