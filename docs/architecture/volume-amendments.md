@@ -8130,3 +8130,51 @@ Recorded as open item 124.
 #### One honest note about when it was found
 
 This was found **after** Mission 7.6 was reported complete, verified and merge-ready, and after its handoff document listed the verification standing at close. That report was accurate about what had been run and wrong about what that established. The mission's own closing gate — open item 119's *"compare the deployed artefact against its source"* — names the general class and would not have caught this either, because it is scoped to Lambda code rather than to any artefact-versus-source pair.
+
+---
+
+### A-229 — the placeholders were already gone; the comments describing them were not
+
+Mission 7.7, scoped as *"delete every remaining mock/seed data path — none may remain wired into a release build."* The trace found that condition **already met**, by Missions 7.3–7.6 incrementally. No mock data path remained wired into anything.
+
+Two findings are worth keeping.
+
+#### Compliance moved from argued to structural
+
+`FakeProjectTaskRepository`, `FakeProjectTaskAdminRepository` and `InMemoryProjectTaskStore` lived in `lib/features/projects_tasks/data/` and were used only by tests. Mission 7.4 unbound them from `main.dart`, which is what M8's gate — *"no fake/mock repository remains wired into a release build"* — actually requires, and their doc comments argued the point carefully:
+
+> *"a fake that no build depends on is not what M8 forbids… `main.dart` and `main_cleanup_probe.dart` are the only composition roots, and neither names this type any more. **That is checkable in one `grep`.**"*
+
+The argument was correct. It was also **doing work the directory can do for itself.** A double under `test/` cannot be reached by a build at all, so the property stops depending on anyone re-running that grep, or on the next author reading the paragraph before adding a binding.
+
+**The distinction is the same one this project keeps meeting, applied to code organisation rather than deployment**: a property that holds *because someone checked* versus one that holds *because it cannot fail*. Moving the three files — 483 lines out of `lib/` — changed no behaviour and no compliance verdict. It changed what the verdict rests on.
+
+#### Two comments described a state several missions gone, and one was safety-relevant
+
+Item 4 was a sweep for stale *"until Mission 7"* prose. Every instance of that literal phrase turned out to be **accurate past tense** and none changed. Sweeping past the phrase found three false claims, two of which matter:
+
+**`firebase_provider.dart` described a safety property as absent.**
+
+> *"**This wiring is not yet in place.** … Firebase initialises lazily on first read — which is exactly the widget-triggered initialisation requirement 5 rules out."*
+
+`main.dart` awaits `_initializeFirebase` before `runApp`, and has for many missions. A reader checking whether that guard existed would have concluded it did not — and the natural response to "the guard is missing" is to add a second one.
+
+**`chunk_metadata.dart` contradicted the register.**
+
+> *"This object is **not yet persisted anywhere** … FR-META-09 is not satisfied by this mission and is not pretended to be."*
+
+`IsarChunkStore.saveChunk` has written the chunk row and the metadata row inside one `writeTxn` since **Mission 3.7**, and [[A-062]]'s own entry says *"FR-META-09 **is satisfied**"*. The code and the amendment that governs it disagreed for four missions, and the amendment was the correct one.
+
+**The shape:** a stale comment is not merely untidy when it states a requirement's status. Both of these would have been believed — they are specific, they cite chapter and requirement numbers, and they sit in the file a reader would check. **CLAUDE.md's rule is that where code and an accepted record disagree, the record governs and the code is a defect.** These were the inverse case: prose *inside* the code disagreeing with the register, where nothing enforces precedence and nothing was checking.
+
+All three were corrected in the past tense rather than deleted. Each describes a real failure — a lazily initialised platform, an unpersisted metadata document, an unbuilt feature — and a reader who meets only the fixed state learns less than one who sees what it was fixed from.
+
+#### Also done
+
+`notImplementedRoute` deleted — no route has used it since Mission 7.3 implemented Chapter 4.6's catalogue. `NOT_IMPLEMENTED` and `ApiError.notImplemented` **kept**, because `ERROR_CODES` is the published taxonomy and removing an entry is a contract change while adding one back is additive. Both now carry that reasoning in place, since an unexplained unused entry is what the next cleanup deletes.
+
+Coverage re-measured for the whole repository for the first time — 4,052 lines, **82.5%** — beside Mission 2.8's auth-only figures rather than replacing them. That comparison is what surfaced open item 125.
+
+#### Not done, deliberately
+
+The `chunk-hash-probe` Lambdas and `probe.tf` remain deployed in `dev`, marked *DELETE AFTER F4 IS DECIDED*. They are gated on F4's undecided status ([[A-218]]), not on this mission. Removing them would settle a question by deleting the instrument built to answer it.
