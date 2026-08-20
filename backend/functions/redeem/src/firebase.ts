@@ -74,8 +74,14 @@ function requireEnv(name: string): string {
  * **Nothing here is a credential.** The audience names a workload identity
  * pool and the email names a service account; both are inert without an AWS
  * identity whose role ARN satisfies the pool's attribute condition.
+ *
+ * **Exported for its test, and that is the point rather than a concession.**
+ * Every field below is one whose wrongness fails at runtime as a 403 naming
+ * neither side — the shape A-222 and A-223 cost a bisection each to find. This
+ * is the only part of this module testable without a live token exchange, so
+ * it is the only part where a wrong value can be caught before deployment.
  */
-function externalAccountOptions() {
+export function externalAccountOptions() {
   const audience = requireEnv('GCP_AUDIENCE');
   const serviceAccount = requireEnv('GCP_SERVICE_ACCOUNT_EMAIL');
   const verificationUrl = requireEnv('GCP_STS_VERIFICATION_URL');
