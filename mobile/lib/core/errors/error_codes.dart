@@ -75,11 +75,15 @@ enum ErrorCode {
   /// The account exists but is disabled or suspended.
   authAccountDisabled('AUTH_ACCOUNT_DISABLED'),
 
-  /// The organisation invite code does not exist, or has already been redeemed.
+  /// The organisation invite code was not accepted. **One code, every reason.**
+  ///
+  /// Missing, expired, out of uses, or the address is already registered — all
+  /// four answer identically. Mission 7.6's F16 collapsed
+  /// `AUTH_INVITE_CODE_EXPIRED` into this: only a code that EXISTS can be
+  /// expired, so a distinct answer told an unauthenticated caller which
+  /// guesses named a real code. That is the enumeration oracle Mission 2.9's
+  /// F1 removed from the account-creation path, in a second place.
   authInviteCodeInvalid('AUTH_INVITE_CODE_INVALID'),
-
-  /// The organisation invite code exists but is past its expiry.
-  authInviteCodeExpired('AUTH_INVITE_CODE_EXPIRED'),
 
   /// Sign-up was attempted with an email address that is already registered.
   authEmailAlreadyInUse('AUTH_EMAIL_ALREADY_IN_USE'),

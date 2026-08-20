@@ -1,4 +1,3 @@
-import 'package:cloud_functions/cloud_functions.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 
 /// Hand-rolled fakes for the Google and Cloud Functions surfaces.
@@ -152,63 +151,6 @@ class FakeGoogleSignInAccount implements GoogleSignInAccount {
   @override
   int get hashCode => idToken.hashCode;
 
-  @override
-  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
-}
-
-/// A `FirebaseFunctions` whose callables play out a scripted result.
-///
-/// Only the sign-up path reaches this. Mission 2.7's tests fake the whole
-/// `AuthRepository`, so they never touch it; this is the layer beneath, which
-/// is what makes the redemption call itself observable.
-class FakeFirebaseFunctions implements FirebaseFunctions {
-  FakeFirebaseFunctions({this.throwsOnCall});
-
-  /// Raised by the callable, or null for success.
-  ///
-  /// Typed as `Exception` rather than `Object`: `only_throw_errors` is an
-  /// analyzer error under ADR-021, and a callable cannot raise anything else.
-  final Exception? throwsOnCall;
-
-  /// Names of the callables that were invoked, in order.
-  final List<String> calledNames = <String>[];
-
-  /// Payloads passed to them, in order.
-  final List<Object?> calledWith = <Object?>[];
-
-  @override
-  HttpsCallable httpsCallable(String name, {HttpsCallableOptions? options}) {
-    return _FakeHttpsCallable(this, name);
-  }
-
-  @override
-  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
-}
-
-class _FakeHttpsCallable implements HttpsCallable {
-  _FakeHttpsCallable(this._functions, this._name);
-
-  final FakeFirebaseFunctions _functions;
-  final String _name;
-
-  @override
-  Future<HttpsCallableResult<T>> call<T>([dynamic parameters]) async {
-    _functions.calledNames.add(_name);
-    _functions.calledWith.add(parameters);
-
-    final Exception? failure = _functions.throwsOnCall;
-    if (failure != null) {
-      throw failure;
-    }
-    return _FakeHttpsCallableResult<T>();
-  }
-
-  @override
-  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
-}
-
-/// The repository ignores the result body, so this carries nothing.
-class _FakeHttpsCallableResult<T> implements HttpsCallableResult<T> {
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }

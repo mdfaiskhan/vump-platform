@@ -19,7 +19,22 @@ class FakeVumpApi implements VumpApi {
     this.userId = 'user-1',
     this.orgId = 'org-42',
     this.role = 'collector',
+    this.redeemThrows,
   });
+
+  /// Thrown from `POST /auth/redeem` when set, in place of a success.
+  ///
+  /// An `AppException`, not a `DioException`: by the time a failure reaches
+  /// `AuthRepositoryImpl` it has already been through `ErrorInterceptor`,
+  /// which is where a transport error becomes an application error code. A
+  /// fake that threw `DioException` would be modelling a layer this class
+  /// does not sit next to. Mission 7.6 Phase 5 — before it, redemption failed
+  /// as `FirebaseFunctionsException` and a dedicated mapper turned it into
+  /// this; the mapper is gone because the interceptor already does it.
+  ///
+  /// Typed `Exception` rather than `Object` because `only_throw_errors` is an
+  /// analyzer error under ADR-021.
+  final Exception? redeemThrows;
 
   /// `users.id`, as `POST /auth/verify` reports it.
   ///
@@ -41,6 +56,14 @@ class FakeVumpApi implements VumpApi {
   /// and which.
   final List<String> postedPaths = <String>[];
 
+  /// Every body posted to `/auth/redeem`, in order.
+  ///
+  /// The payload is asserted rather than assumed: A-056 makes an absent invite
+  /// code mean "the default organisation", which is expressed by OMITTING the
+  /// field. A body carrying `code: null` would read as a different request,
+  /// and only inspecting it can tell the two apart.
+  final List<Object?> redeemBodies = <Object?>[];
+
   /// Every path fetched, in order.
   final List<String> fetchedPaths = <String>[];
 
@@ -57,6 +80,16 @@ class FakeVumpApi implements VumpApi {
     postedPaths.add(path);
     if (path == '/auth/verify') {
       return <String, Object?>{'userId': userId, 'orgId': orgId, 'role': role};
+    }
+    if (path == '/auth/redeem') {
+      redeemBodies.add(body);
+      if (redeemThrows != null) {
+        throw redeemThrows!;
+      }
+      // The 201 body. Nothing reads it — the claims are already on the
+      // account — and it is returned in full so a test that starts reading it
+      // sees the real shape.
+      return <String, Object?>{'uid': 'firebase-uid', 'orgId': orgId};
     }
     return <String, Object?>{};
   }

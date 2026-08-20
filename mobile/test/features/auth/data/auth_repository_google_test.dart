@@ -1,4 +1,3 @@
-import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart' as fb;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:google_sign_in/google_sign_in.dart';
@@ -42,16 +41,35 @@ void main() {
     Map<String, dynamic>? claims = goodClaims,
     Exception? redemptionThrows,
     FakeGoogleSignIn? google,
-    FakeFirebaseFunctions? functions,
+    FakeVumpApi? backend,
     _FakeAuth? auth,
   }) {
     return AuthRepositoryImpl(
-      backend: FakeVumpApi(orgId: 'org-1'),
+      // Since Mission 7.6 Phase 5, redemption is `POST /v1/auth/redeem` on the
+      // same `VumpApi` that performs the token exchange, so one fake observes
+      // both. It used to be a Cloud Function reached through a separate
+      // `FirebaseFunctions` seam, which is why these tests once needed two.
+      backend:
+          backend ??
+          FakeVumpApi(orgId: 'org-1', redeemThrows: redemptionThrows),
       logger: AppLogger(environment: AppEnvironment.development, output: log),
       firebaseAuth: auth ?? _FakeAuth(_FakeUser(claims: claims)),
       googleSignIn: google ?? FakeGoogleSignIn(outcome: outcome),
-      functions:
-          functions ?? FakeFirebaseFunctions(throwsOnCall: redemptionThrows),
+    );
+  }
+
+  /// The failure the server now returns for every rejected code.
+  ///
+  /// **One code for all of them** — missing, expired, exhausted, or the
+  /// address already registered. Mission 7.6's F16 collapsed
+  /// `AUTH_INVITE_CODE_EXPIRED` into this, because only a code that EXISTS can
+  /// be expired and answering differently told an unauthenticated caller which
+  /// guesses were real. Same enumeration oracle Mission 2.9's F1 removed from
+  /// the account-creation path.
+  AuthenticationException rejected([String message = 'no such code']) {
+    return AuthenticationException(
+      errorCode: ErrorCode.authInviteCodeInvalid,
+      message: message,
     );
   }
 
@@ -151,14 +169,14 @@ void main() {
 
   group('signUpWithGoogle', () {
     test('redeems the code, then returns the provisioned user', () async {
-      final FakeFirebaseFunctions functions = FakeFirebaseFunctions();
+      final FakeVumpApi api = FakeVumpApi(orgId: 'org-1');
 
       final domain.User user = await build(
-        functions: functions,
+        backend: api,
       ).signUpWithGoogle(inviteCode: 'ABCDEFGHJK');
 
-      expect(functions.calledNames, <String>['redeemInviteCode']);
-      expect(functions.calledWith.single, <String, Object?>{
+      expect(api.postedPaths, contains('/auth/redeem'));
+      expect(api.redeemBodies.single, <String, Object?>{
         'code': 'ABCDEFGHJK',
         'email': 'someone@example.com',
       });
@@ -179,12 +197,12 @@ void main() {
     test('a cancelled picker never reaches redemption', () async {
       // Ordering matters: a use must not be consumed for someone who backed
       // out before an account existed.
-      final FakeFirebaseFunctions functions = FakeFirebaseFunctions();
+      final FakeVumpApi api = FakeVumpApi(orgId: 'org-1');
 
       await expectLater(
         build(
           outcome: GoogleOutcome.cancelled,
-          functions: functions,
+          backend: api,
         ).signUpWithGoogle(inviteCode: 'CODE'),
         throwsA(
           isA<AuthenticationException>().having(
@@ -194,19 +212,13 @@ void main() {
           ),
         ),
       );
-      expect(functions.calledNames, isEmpty);
+      expect(api.postedPaths, isNot(contains('/auth/redeem')));
     });
 
-    test('a rejected code maps through the functions mapper', () async {
+    test('a rejected code arrives already mapped by the interceptor', () async {
       await expectLater(
         build(
-          redemptionThrows: FirebaseFunctionsException(
-            code: 'not-found',
-            message: 'no such code',
-            details: const <Object?, Object?>{
-              'errorCode': 'AUTH_INVITE_CODE_INVALID',
-            },
-          ),
+          redemptionThrows: rejected('no such code'),
         ).signUpWithGoogle(inviteCode: 'BADCODE'),
         throwsA(
           isA<AuthenticationException>().having(
@@ -226,13 +238,7 @@ void main() {
       await expectLater(
         build(
           auth: _FakeAuth(user),
-          redemptionThrows: FirebaseFunctionsException(
-            code: 'not-found',
-            message: 'no such code',
-            details: const <Object?, Object?>{
-              'errorCode': 'AUTH_INVITE_CODE_INVALID',
-            },
-          ),
+          redemptionThrows: rejected('no such code'),
         ).signUpWithGoogle(inviteCode: 'BADCODE'),
         throwsA(isA<AuthenticationException>()),
       );
@@ -247,19 +253,13 @@ void main() {
       await expectLater(
         build(
           auth: _FakeAuth(user),
-          redemptionThrows: FirebaseFunctionsException(
-            code: 'failed-precondition',
-            message: 'expired',
-            details: const <Object?, Object?>{
-              'errorCode': 'AUTH_INVITE_CODE_EXPIRED',
-            },
-          ),
+          redemptionThrows: rejected('expired'),
         ).signUpWithGoogle(inviteCode: 'OLDCODE'),
         throwsA(
           isA<AuthenticationException>().having(
             (AuthenticationException e) => e.errorCode,
             'errorCode',
-            ErrorCode.authInviteCodeExpired,
+            ErrorCode.authInviteCodeInvalid,
           ),
         ),
       );
@@ -278,17 +278,17 @@ void main() {
     // and first now, so the client attempts no local creation at all.
 
     test('redemption happens server-side, then the caller signs in', () async {
-      final FakeFirebaseFunctions functions = FakeFirebaseFunctions();
+      final FakeVumpApi api = FakeVumpApi(orgId: 'org-1');
       final _FakeAuth auth = _FakeAuth(_FakeUser(claims: goodClaims));
 
-      final domain.User user = await build(functions: functions, auth: auth)
+      final domain.User user = await build(backend: api, auth: auth)
           .signUpWithEmailPassword(
             email: 'new@example.com',
             password: 'pw1234',
             inviteCode: 'ABCDEFGHJK',
           );
 
-      expect(functions.calledWith.single, <String, Object?>{
+      expect(api.redeemBodies.single, <String, Object?>{
         'code': 'ABCDEFGHJK',
         'email': 'new@example.com',
         'password': 'pw1234',
@@ -312,13 +312,7 @@ void main() {
       await expectLater(
         build(
           auth: auth,
-          redemptionThrows: FirebaseFunctionsException(
-            code: 'not-found',
-            message: 'no',
-            details: const <Object?, Object?>{
-              'errorCode': 'AUTH_INVITE_CODE_INVALID',
-            },
-          ),
+          redemptionThrows: rejected('no'),
         ).signUpWithEmailPassword(
           email: 'target@example.com',
           password: 'pw1234',
@@ -336,15 +330,15 @@ void main() {
       // A-056: an absent code means the default organisation. The field is
       // omitted rather than sent empty, so the function reads the intent
       // rather than inferring it from a blank string.
-      final FakeFirebaseFunctions functions = FakeFirebaseFunctions();
+      final FakeVumpApi api = FakeVumpApi(orgId: 'org-1');
       final _FakeAuth auth = _FakeAuth(_FakeUser(claims: goodClaims));
 
       await build(
-        functions: functions,
+        backend: api,
         auth: auth,
       ).signUpWithEmailPassword(email: 'new@example.com', password: 'pw1234');
 
-      expect(functions.calledWith.single, <String, Object?>{
+      expect(api.redeemBodies.single, <String, Object?>{
         'email': 'new@example.com',
         'password': 'pw1234',
       });
@@ -352,16 +346,16 @@ void main() {
     });
 
     test('a supplied code is still sent, unchanged by A-056', () async {
-      final FakeFirebaseFunctions functions = FakeFirebaseFunctions();
+      final FakeVumpApi api = FakeVumpApi(orgId: 'org-1');
 
-      await build(functions: functions).signUpWithEmailPassword(
+      await build(backend: api).signUpWithEmailPassword(
         email: 'new@example.com',
         password: 'pw1234',
         inviteCode: 'ABCDEFGHJK',
       );
 
       expect(
-        (functions.calledWith.single! as Map<String, Object?>)['code'],
+        (api.redeemBodies.single! as Map<String, Object?>)['code'],
         'ABCDEFGHJK',
       );
     });
@@ -388,13 +382,7 @@ void main() {
       await expectLater(
         build(
           auth: auth,
-          redemptionThrows: FirebaseFunctionsException(
-            code: 'not-found',
-            message: 'address already registered',
-            details: const <Object?, Object?>{
-              'errorCode': 'AUTH_INVITE_CODE_INVALID',
-            },
-          ),
+          redemptionThrows: rejected('address already registered'),
         ).signUpWithEmailPassword(
           email: 'registered@example.com',
           password: 'pw1234',
