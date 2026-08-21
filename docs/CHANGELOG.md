@@ -40,6 +40,12 @@ Mission 4.8's security review found it, by reading `git log` against this file r
 
 ### Added
 
+- **2026-08-21** — **CI builds the APK on every push, from a clean checkout.** Thirteen jobs and `flutter build` in none of them: every mission from 7.1 onward closed by building the APK once, locally, on a machine with a warm Gradle cache — and A-205 is a defect in precisely that command, where `flutter build apk --debug` reported success while reading a stale artefact because only `flutter-apk/` had been emptied and never `apk/`. **A local build cannot distinguish "compiled" from "found something already there."** A clean checkout can. It is its own job rather than a step inside `Test`, for A-095's reason: a build failure and a test failure must be reported by different checks or the reader goes looking for the wrong kind of problem.
+
+- **2026-08-21** — **The backend has a coverage gate, closing gap register item 15**, open since ADR-045 recorded one as *"deliberately absent — revisit at 6.3"* and deferred it through five missions. 70% for the repository, 50% per file, four exemptions each carrying a target and a reason printed on every run. **An exemption is a floor of its own**: a file that rises above its target fails the gate until its entry is removed, so the list cannot silently become permanent.
+
+  Vitest cannot express both thresholds, which was established by running it rather than by reading the types: a glob threshold is checked against the **aggregate** of the files it matches, so `packages/shared/src/**.ts` at 50 passed while `caller.ts` sat at 0% and `authorizer.ts` at 9%. A-231.
+
 - **2026-08-20** — **The upload chain runs at full scale: a 38-part chunk, and a session completing across two chunks.** A 15-minute recording produced a 38-part chunk (~633 MB) and a 19-part remainder; both verified, `complete_session()` waiting for both. `chunks-verify` took **8,681 ms** (with a 383 ms cold start) and **4,596 ms**, against a 28,000 ms ceiling. Two sizes through one path give a fit: hash throughput **77–81 MB/s**, independently agreeing with Mission 7.3's F4 measurement of 81.4 MB/s, and fixed overhead of **~450–870 ms** for S3 assembly plus `complete_chunk()` plus `complete_session()` — which retires the unmeasured question of what assembling 38 real parts costs. Presigned URLs were nowhere near their 3,600 s window; parts sequenced `0000` and `0001` with no gaps and no retries. A-215.
 
   **Aurora was warm for both, so the stacked worst case is still unobserved.** Composing these figures with Gap 9's measured resumes puts it at **22,941–24,953 ms — three to five seconds of margin.** That is arithmetic over observed parts, not an observation.
@@ -218,6 +224,14 @@ Mission 4.8's security review found it, by reading `git log` against this file r
 - **2026-08-15** — Camera module, capability ladder and fixed capture specification (BR-01/BR-02). Mission 3.1. (`4c7f3d1`)
 
 ### Security
+
+- **2026-08-21** — **A live Google OAuth access token sat at the repository root, and nothing in this repository would have stopped it being committed.** It was never tracked, so nothing was disclosed — but the outcome was produced by a person noticing in the moment rather than by any control. The secret-scan job carried five patterns and **none matched `ya29.`**; `.gitignore` covered `.env` and key files and **did not cover `token.txt`**.
+
+  Both halves are closed. The job gains issuer-stamped prefixes, a stray-`AIza` check scoped around the generated Firebase client config, a vendor-agnostic check for an opaque literal assigned to a secret-shaped name, and a widened filename list; `.gitignore` gains the matching names.
+
+  **Proven rather than asserted**: the job's `run` block, extracted from the workflow file rather than hand-copied, was executed against a fixture holding a shape-equivalent token committed as `token.txt`. The old patterns exit 0 on it. The new ones exit 1, failing on the name and the content independently, and exit 0 against this repository.
+
+  **Raw entropy scanning was measured and rejected** — it flags 3,762 strings here, and a gate reporting 3,762 candidates reports nothing. A-233.
 
 - **2026-08-21** — **Nothing had ever exercised the backend's token verification, and the uncovered half of `auth.ts` was the security-relevant half.** `handler.test.ts` mocks `./auth.js` wholesale, so `verifyToken`, the role-claim narrowing and the memoised Admin app were executed by no test anywhere — 38.88% of the module, now 100%.
 
@@ -402,6 +416,18 @@ Mission 4.8's security review found it, by reading `git log` against this file r
 
 ### Fixed
 
+- **2026-08-21** — **Two comments asserting a precondition the code no longer had, both on the line a reader reaches first.** `AuthRepositoryImpl` still said *"`role` is unaffected and still comes from the claim"* while the class doc fifty-seven lines above correctly said the opposite — two comments in one file disagreeing, with the wrong one attached to the method that does the work. `createAccount` still said *"a caller who reaches here already supplied an acceptable code"*, which A-056 falsified by making the invite code optional. **Neither behaviour was wrong; only the stated reason was.**
+
+  The invite-code wording in that error is deliberately unchanged and now says why: making the message accurate for the no-code path means making a taken address distinguishable from a free one, which is the oracle the validation-first ordering exists to remove.
+
+- **2026-08-21** — **The pull request title check never re-ran when the title changed.** ADR-019 makes the title the squash-merge commit message, so it has been validated since the check was written — on the wrong events. `ci.yml`'s `pull_request:` trigger carried no `types:`, so GitHub applied the default `[opened, synchronize, reopened]`, and **`edited` is absent while renaming a pull request fires exactly that event.** A corrected title was never re-examined, so the run a reviewer saw still reported the original.
+
+  **The check's own failure message asked the author to fix the title, and the obvious way to comply did nothing**, silently — worse than no control, because the author believes they acted. Split into its own workflow rather than adding `edited` to `ci.yml`, which fires on every description edit and would re-run every job including the APK build. The validator moved byte-for-byte and the job name is unchanged, so the status check keeps its context.
+
+- **2026-08-21** — **Two tests that passed while proving less than their names claimed.** Twenty tests were mutated, chosen from the thinnest-history end of both trees and excluding everything Missions 7.6–7.9 wrote; **eighteen mutations were killed and two survived.** `free_space_channel` declared its own `MethodChannel` and injected it everywhere, so the production default was never exercised and its name never checked — a coverage gap rather than vacuity. `pagination` asserted `parsePageRequest(null)` equals `DEFAULT_LIMIT` **imported from the module under test**, so the module agreed with itself and any value survived.
+
+  A control makes the second precise: mutating `MAX_LIMIT` in the same file **was** killed, because a sibling test hard-codes 200 in an expected error string. One constant was pinned and the other borrowed, an asymmetry that arrived by accident. Both fixed and re-verified by re-running the original mutation. A-232.
+
 - **2026-08-20** — **A syntax `flutter analyze` accepts and the code generator cannot parse.** Null-aware collection elements (`{'k': ?value}`) entered `lib/` in Mission 7.4 step 4 and passed a full green verification — analyzer, 1123 tests, five boundary checks — because none of that runs a code generator. `build_runner` bundles its own, older analyzer; meeting one it reports the file as broken and **every** generator refuses to run, against files unrelated to the syntax. The lint that asks for it is now silenced project-wide, the two uses are rewritten, and the rule is invariant **I49** — the only one in the register imposed by a tool rather than a decision, and the only one whose violation is silent until an unrelated action. A-208.
 
 - **2026-08-19** — **The app could have told a Collector they lack access to their own assigned Task.** C-06 Task Detail selects its Task out of the Project's list, because Chapter 4.6 §3 has no `GET /v1/tasks/{id}`, and renders *"This Task isn't available to you"* when it is absent — copy written to mean BR-19. Pagination at the backend's default page size of 50 would have produced that message for the 51st Task in a Project: **a false statement about authorization, not a truncated list.** Fixed by requesting the backend's `MAX_LIMIT` of 200. The residual gap above 200 is A-201, with a revisit trigger rather than a date. Mission 7.4 step 4.
@@ -438,6 +464,12 @@ Mission 4.8's security review found it, by reading `git log` against this file r
 - **2026-08-15** — Android build failure: `concurrent-futures` was missing from `camera_android_camerax`'s compile classpath. Mission 3.1.4. (`11d3ef4`)
 
 ### Changed
+
+- **2026-08-21** — **The project-task fakes moved out of `lib/` into `test/`, and what changed is the basis of a property rather than the property.** `FakeProjectTaskRepository`, `FakeProjectTaskAdminRepository` and `InMemoryProjectTaskStore` now sit in `test/features/projects_tasks/data/fakes/`, matching the six `test/**/fakes/` directories that already hold every other double. **483 lines leave `lib/`.**
+
+  They were never placeholders and are not deleted — ten test files name them, and M8's gate, *"no fake/mock repository remains wired into a release build"*, was already met when `main.dart` stopped binding them. Their doc comments argued that a fake in `lib/` is permissible because no release path reaches one, and offered a grep as the check. **The argument held; the directory does the same work without anyone re-running the grep**, because a double under `test/` cannot be reached by a build at all.
+
+  Two provider messages moved with them and could not be split from the move: they promised a real implementation *"until Mission 7 supplies a real one"*, and Mission 7.4 supplied both.
 
 - **2026-08-16** — **Thirty-eight raw spacing, radius, icon and colour values across eight files now read from `lib/app/theme/`**, and a CI step keeps them there. Six further values are exempted **in place, each with its reason**, because no token carries their value — recorded as open item 98 rather than rounded to the nearest token, since every substitution would change rendered pixels and two are covered by committed golden baselines.
 

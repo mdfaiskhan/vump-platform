@@ -603,14 +603,20 @@ Future<void> _restoreSession(
 /// uploading. Awaiting a drain here would hold the splash screen for the
 /// length of a video upload.
 ///
-/// ## Nothing uploads today, and it fails visibly rather than silently
+/// ## Uploads work, and this section said the opposite until Mission 7.12
 ///
-/// `sessionRegistrarProvider` throws until `features/projects_tasks/` exists
-/// (open item 36), so the first claimed chunk ends in `UploadDispatcher`
-/// logging a wiring fault and stopping. That is the honest state of the
-/// feature: A-068's Guard 1 would refuse every chunk on a real device anyway,
-/// because four of `MetadataIdentity`'s five fields still carry the unsourced
-/// sentinel (open item 37).
+/// `sessionRegistrarProvider` threw until `features/projects_tasks/` existed
+/// (open item 36), and A-068's Guard 1 would have refused every chunk on a
+/// real device because four of `MetadataIdentity`'s five fields carried the
+/// unsourced sentinel (open item 37). **Both closed at Mission 7.4** and both
+/// were still recorded as open until 7.12 went looking: `SessionRegistrarImpl`
+/// posts to a deployed route, every identity field has a source, and a chunk
+/// recorded on a CPH2707 reached real S3 and real Aurora.
+///
+/// The sentinel is still reachable and still correct. It now means *no Task is
+/// selected* rather than *this field has no source*, and Guard 1 refusing an
+/// unattributed chunk is what keeps an unattributable recording out of the
+/// bucket — see `PlatformTaskContext.unsourced`.
 ///
 /// Starting it regardless is deliberate. A dispatcher wired but never started
 /// would be verified only by its own tests, and Mission 3.8.1 is the standing
