@@ -8492,3 +8492,13 @@ So the verification intended to replace an assumption with evidence **produced i
 **Four controls, four routes, one shape.** A scan whose patterns never covered the class that arrived. Two comments describing a state the code no longer had. A changelog rule nobody applied for six merges. A check whose prescribed remedy was inert. None was detectable by reading the thing itself — each required running it, or comparing it against what it claimed.
 
 ADR-016 already said it: *"Nothing here prevents a determined person from pasting a secret into a file. CI scanning narrows the window; it does not close it."* That sentence was correct, and Mission 7.11 is what it looks like when it comes true. The ADR now cites the case, and the scan carries a vendor-agnostic tier **because the next class of secret is the one nobody enumerated.**
+
+#### Correction — PR #25's body states a backend test count that is wrong
+
+**PR #25's description says "272 backend tests". The real figure is 251**, measured at Mission 7.12 with `npx vitest run`: 22 test files, 251 tests, all passing. Mission 7.10's baseline recorded 250; nothing between them added twenty-two tests.
+
+The number appears **only** in the pull request body. No commit message, amendment, tracker row or changelog entry carries it — checked rather than assumed. But under ADR-019 the title becomes the squash commit and the body is its companion record, so it is what a reader of `develop`'s history finds.
+
+It is recorded here rather than quietly corrected elsewhere, for two reasons. **A merged artefact cannot be edited into correctness** — the original stands in the pull request history whatever is written afterwards — so the only honest remedy is a trail that says which number was wrong and what the right one is. And the mission that produced it spent itself on controls that reported something other than what was true; a wrong figure in its own closing summary is the same defect at a smaller scale, and exempting it because it is small is how the pattern survives.
+
+The correct figure appears in the Feature Tracker and in Mission 7's status report.
