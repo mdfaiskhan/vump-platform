@@ -4567,7 +4567,7 @@ Every carried-forward item, in one place. Accurate as of **Mission 4.3**; origin
 
 | # | Item | Owner | Source |
 |---|---|---|---|
-| 1 | `project_id`, `task_id` unsourced — stored as `MetadataIdentity.unsourced` | `features/projects_tasks/` (unbuilt) | A-062 §1, A-064 §3 |
+| ~~1~~ | ~~**`project_id`, `task_id` unsourced — stored as `MetadataIdentity.unsourced`**~~ **CLOSED, 2026-08-21.** Verified individually rather than by association with item 37. `PlatformTaskContext` reads both from a `SelectedTask`: `projectId => _selection?.projectId`, `taskId => _selection?.taskId`, and `main.dart` overrides `taskContextProvider` from `selectedTaskProvider`. **This row's own recommendation cell — `features/projects_tasks/` (unbuilt) — is the part that dates it:** that feature was built at Mission 5.1 and has supplied the selection since. The sentinel remains reachable and now means *no Task is selected* rather than *this field has no source*. | | `features/projects_tasks/` (unbuilt) | A-062 §1, A-064 §3 |
 | 2 | `local_task_cache` table not implemented | `features/projects_tasks/` | A-063 §2, ADR-039 §3 |
 | 3 | ~~`s3_object_key` stored null — key needs `org_id`/`project_id`/`task_id`~~ **Premise corrected 2026-08-15 (Mission 4.2): the client never composes the key — the Lambda does and returns it (V4 Ch. 4.10 §2). The column is null because registration has not happened.** The real blocker is one level up: Ch. 5.10 §1 step 1's URL needs a **backend session id** from `POST /v1/tasks/{id}/sessions`, which needs a `task_id`. `SessionRegistrar` names the port; nothing implements it. | `features/projects_tasks/` (unbuilt) | A-063 §5, A-071 |
 
@@ -4576,7 +4576,7 @@ Every carried-forward item, in one place. Accurate as of **Mission 4.3**; origin
 | # | Item | What must be decided | Source |
 |---|---|---|---|
 | 4 | GPS at finalization vs NFR-META-01's 500 ms budget | Await, cache, or drop from the hot path | A-062 §3 |
-| 5 | `device_id` — *"cached, stable device identifier"* | Install id, hardware id, or derived | A-062 §1 |
+| ~~5~~ | ~~**`device_id` — "cached, stable device identifier"**~~ **CLOSED, 2026-08-21.** Verified individually. `DeviceIdStore` persists a generated UUID v4 as an install id and `main.dart` resolves it at startup — the read is async and the contract's getters are not — then passes it into `PlatformDeviceContext(deviceId: deviceId, …)`. The recommendation offered *"install id, hardware id, or derived"*; the install id is the option taken. | | Install id, hardware id, or derived | A-062 §1 |
 | 6 | Minimum-duration threshold — Ch. 5.3 §5 vs Ch. 5.6 §3 | Which clause governs; no number stated anywhere | A-063 §4 |
 | 7 | `oneChunkBytes` is ~4% below a measured chunk (610 MB vs 633 MB) | A safety factor, or accept the derivation | A-064 §4b |
 | 8 | FR-REC-03's live preview not rendered | The seam by which the pipeline exposes a preview without exposing capture control | A-064 §5 |
@@ -4587,7 +4587,7 @@ Every carried-forward item, in one place. Accurate as of **Mission 4.3**; origin
 
 | # | Item | Why it is cheap | Source |
 |---|---|---|---|
-| 11 | `collector_id` unsourced | `features/auth/` already knows it; needs only the ADR-022 R3 inversion — a `DeviceContext` supplied at the composition root | A-064 §3 |
+| ~~11~~ | ~~**`collector_id` unsourced**~~ **CLOSED, 2026-08-21.** Verified individually, and closed by exactly the resolution this row prescribed. `main.dart` supplies it at the composition root — *"ADR-022 R3 forbids `features/recording/` from importing it in either direction. R3's first resolution puts the contract in `core/` and the composition root supplies the value"* — with `ref.watch` rather than `read`, so signing in and out changes the identifier a subsequent chunk carries (Mission 7.4, F21). It supplies `backendUserId`, **not** Firebase's `uid`: the metadata route joins `sessions.collector_id`, which is `users.id`, and refuses a document that disagrees ([[A-206]]). | | `features/auth/` already knows it; needs only the ADR-022 R3 inversion — a `DeviceContext` supplied at the composition root | A-064 §3 |
 | 12 | `local_sessions.status` → `complete` | **CLOSED** by Mission 3.8 (`83d2a48`), verified on device by 3.8.1 and again by 3.12-PRE-5 (`09f40ac`) — `SESSION-COMPLETE status=complete` read back from Isar | A-063 §5 (corrected) |
 
 ### Risks named and not resolved
