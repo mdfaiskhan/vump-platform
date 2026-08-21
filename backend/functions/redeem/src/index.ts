@@ -187,9 +187,25 @@ async function createAccount(email: string, password: string): Promise<string> {
     const code = (thrown as { code?: string } | null)?.code ?? 'unknown';
 
     if (code === 'auth/email-already-exists') {
-      // F1's fix, restated: a caller who reaches here already supplied an
-      // acceptable code, and "that address is taken" is the oracle the
-      // validation-first ordering exists to remove.
+      // F1's fix, restated: *"that address is taken"* is the oracle the
+      // validation-first ordering exists to remove, so a taken address is
+      // refused with the same code and status as a bad one.
+      //
+      // **F1's precondition no longer holds, and this comment used to assert
+      // it.** F1 was written when a code was required, so "a caller who
+      // reaches here already supplied an acceptable code" was true. A-056
+      // made the code optional: with none supplied, `orgId` is DEFAULT_ORG_ID
+      // and nothing was validated before this line. The response is
+      // deliberately identical on both paths anyway — that is the point of
+      // F1 — but the reason is now the ordering alone and not the code.
+      //
+      // What an open signup cannot hide is that a free address yields 201 and
+      // a taken one does not. A-056 accepted that when it made the code
+      // optional; it is a property of open signup, not of this branch. The
+      // message still names an invite code on a path where none was supplied
+      // — deliberately not changed here, because making it accurate for that
+      // path means making the two cases distinguishable, which is the oracle
+      // itself. F-6, Mission 7.11.
       throw ApiError.inviteCodeInvalid();
     }
     if (code === 'auth/invalid-email' || code === 'auth/invalid-password') {
