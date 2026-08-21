@@ -8395,3 +8395,100 @@ Both are fixed rather than registered, and both fixes were verified by re-runnin
 **Narrowed, not closed.** At the thinnest-history end of both trees, 90% of mutations were caught — a genuinely reassuring result, and the opposite would have been reported just as plainly.
 
 But **neither survivor would have been found by reading.** Both read as careful and one of them *is* careful. The mechanism that hid them is A-212's and A-224's: **an assertion compared against something that moves with the code.** Twenty samples found two; the remaining ~1,370 tests are unexamined, and a full mutation sweep is the only thing that answers them. Item 129 stands.
+
+---
+
+### A-233 — the security review, and four controls that documented an intention rather than a behaviour
+
+Mission 7.11 is Mission 7's security gate: no committed secrets, no plaintext tokens outside `SecureStorageService`, network calls to approved hosts only, layer boundaries respected, and a Changelog **Security** entry for anything touching auth, storage or data handling. Four items were given fresh eyes on top of that, the first being a live `ya29.` Google OAuth access token that sat at the repository root during Mission 7.6.
+
+#### What the sweep found, which was nothing
+
+Stated first, because a review that reports only its findings misrepresents its own scope.
+
+**No credential material exists in any commit on any branch.** All **313 reachable commits** were swept for seven pattern classes — `ya29.`, `gh[pousr]_`, `xox[abprs]-`, `glpat-`, `"private_key":`, `sk-`, and JWT headers. Every one returned **zero**. `token.txt` and `org_invite_codes-final.json` have no add-commit anywhere: `git log --all --diff-filter=A` is empty for both.
+
+Two hits for `AKIA` and `ya29.` turned out to be **the pattern strings themselves**, inside the table in this file describing the secret-scan job.
+
+The remaining volume is explained and legitimate. **2,555 `AIza` matches resolve to nine files** — the generated Firebase client config — holding **six distinct keys**, so per-environment separation is intact and a leaked development key does not touch production. **557 password-shaped literals resolve to two test files**, `hunter22` and `correct-horse-a`, against `a@b.com` and `example.com`.
+
+Nothing persists a token outside `SecureStorageService`: `SharedPreferences` holds the device id and the onboarding flag, and `refresh_token` is a *key* in secure storage rather than a value in a plain one. **No token reaches any logger in either tree.** Three approved hosts. No layer-boundary violation — the single `package:flutter/` hit under `domain/` is a string inside a doc comment.
+
+#### The token was never committed, and nothing would have stopped it
+
+That is the finding. **The outcome was produced by a person noticing in the moment, not by any control**, and the two controls that should have held both missed:
+
+- the secret-scan job carried five patterns — AWS access key ids, private key blocks, AWS secret keys, service-account JSON, and a narrow filename list. **None matches `ya29.`. None matches `token.txt`.**
+- `.gitignore` covered `.env`, `*.pem`, `*.key` and service-account JSON. It did not cover `token.txt`, `creds.json` or `secret.json`.
+
+*"Secret scanning protects us"* was never true for this class of secret, and the belief survived because the class had never arrived before.
+
+**This was proven rather than argued.** A fixture repository was built holding a shape-equivalent `ya29.` token committed as `token.txt`, and the job's `run` block — **extracted from the workflow file, not hand-copied** — was executed against it. The old patterns exit **0**: fully green, with a live-shaped access token at the repository root. The new ones exit **1**, failing on the name and on the content independently. Against the real repository the same block exits **0** across all eight checks.
+
+Testing a hand-written copy of the block would have verified a stand-in rather than the thing itself, which is [[A-231]]'s shape reproduced inside the fix for it.
+
+#### The fix had to be measured before it could be designed
+
+The instruction was to cover generic high-entropy tokens rather than vendor-specific signatures. **Taken literally, that produces a control nobody keeps.** Raw entropy over every long string flags **3,762 strings in this repository** — Isar type ids, migration checksums, base64 fixtures — and a gate reporting 3,762 candidates reports nothing.
+
+So the number was measured first and the design followed it. **Two tiers, both high-confidence:** issuer-stamped prefixes, where a match is a credential or it is nothing; and a *context-anchored* generic check — an opaque literal of 24 characters or more assigned to a name that declares itself a secret. The second is vendor-agnostic without being entropy-driven, which is what the instruction was actually asking for.
+
+The tuning is visible in what it does **not** fire on: `hunter22` and `correct-horse-a` are under the threshold and stay quiet, because a fixture is not a credential. The Firebase Web API keys are excluded by **path**, not by name — so the same string outside the generated config is still flagged, which the fixture demonstrated by accident when its root-level `firebase_options_dev.dart` failed the check correctly.
+
+An early attempt widened `.env` to `.env.*` and swallowed three tracked `.env.example` files. The test caught it; templates are now subtracted afterwards, so an exception reads as an exception.
+
+**The untracked half cannot be a CI control at all.** A CI checkout has no untracked files, so `git ls-files` is necessarily the right scope there. What would actually have stopped `token.txt` is `.gitignore`, and the fix has two halves for that reason.
+
+#### Two comments the code had already falsified
+
+Both assert a precondition a later mission removed, and **both sit on the line a reader reaches first.**
+
+`AuthRepositoryImpl` still said *"`role` is unaffected and still comes from the claim"*. Mission 7.8 moved it to the backend response, and the class doc **fifty-seven lines above** says so correctly. Two comments in one file disagreed and **the wrong one was the more specific** — attached to the method that does the work, where the correct one was general.
+
+`createAccount` said *"a caller who reaches here already supplied an acceptable code"*. True when F1 was written and a code was required; A-056 made the code optional, so the line is also reached with nothing validated ahead of it. **The behaviour is correct and unchanged** — both paths return the same code and status, which is F1's entire point. Only the stated reason was wrong.
+
+The invite-code wording in that error is **deliberately left alone**, and now says why: making the message accurate for the no-code path means making a taken address distinguishable from a free one, which is the oracle F1 exists to remove. What an open signup cannot hide is that a free address yields 201 and a taken one does not — A-056 accepted that, and it is a property of open signup rather than of this branch.
+
+#### Six pull requests owed a Security entry and none wrote one
+
+The changelog's last entry was Mission 7.4's close, `aa7f958`. **PRs #19 through #24 merged after it and none touched the file.** The words *"redeem"* and *"workload identity"* appear **zero times** in it.
+
+So Mission 7.6 — an unauthenticated route that provisions Firebase accounts, a cross-cloud federated identity, a custom GCP role holding user create and update, and a migration revoking an unused INSERT — has no Security entry. Neither does Mission 7.8, which changed where a user's role comes from. **Both were required to have one by a rule in force the whole time.**
+
+**Three entries were written, not six.** #19, #21 and #24 touch no auth, storage or IAM file — checked against each commit's file list rather than assumed. Padding a security section with changes that are not security changes is worse than leaving it short, because it teaches the reader that the section is decorative.
+
+#### A control whose own error message prescribed a remedy that did nothing
+
+Found last, and it is the cleanest instance of the family.
+
+ADR-019 makes the pull request title the squash-merge commit message, so `ci.yml` has validated it since it was written — **on the wrong events.** Its `pull_request:` trigger carries no `types:`, so GitHub applies the default `[opened, synchronize, reopened]`. **`edited` is absent, and renaming a pull request fires exactly that event.**
+
+A title corrected in response to the check was therefore never re-examined. The run a reviewer sees is still the one from `opened`, still reporting the original title — which reads exactly like a check that refuses to accept the fix.
+
+**The check's failure message asks the author to fix the title and names the consequence.** The obvious way to comply did nothing, silently. That is worse than no control at all, because the author believes they acted, and it was found only after several renames on PR #25 appeared to be ignored.
+
+Split into its own workflow rather than adding `edited` to `ci.yml`, which fires on every description edit too and would re-run fourteen jobs including an APK build for no benefit. The job id and name are unchanged, so the status check keeps the `Commit convention` context branch protection already names, and **the validator body was moved byte-for-byte — 1,968 bytes before and after, verified rather than asserted.**
+
+The relocated check was then exercised on three titles, which surfaced a second fact: **PR #25's title was failing on the header shape, not on length.** The over-long replacement being prepared for it would have swapped one failure for another.
+
+#### The closing sweep verified the wrong thing once, and it is worth recording
+
+`prettier --check` reported 86 files locally. The standing explanation was Windows CRLF, invisible to CI. To prove it rather than repeat it, HEAD was exported with `git archive` and re-checked — **86 again**, and the explanation was declared wrong.
+
+It was not wrong. **`git archive` applies the same line-ending filter**, so the "clean LF export" was CRLF throughout. Converted genuinely to LF, prettier passes: *"All matched files use Prettier code style!"*
+
+So the verification intended to replace an assumption with evidence **produced its evidence from a stand-in** — the same mechanism as [[A-222]], [[A-231]] and the hand-copied scan block avoided earlier in this same mission. It was caught because the result was surprising and got a second look, which is not a control either.
+
+#### What was registered rather than fixed
+
+**Open item 132** — `firebaseauth.users.get` is a user-enumeration capability held by an identity an unauthenticated route reaches. It is required: [[A-223]] proved by bisection that `createUser` fails without it. The handler does not surface it, so the oracle F1 removed **stays removed in behaviour**. What changed is the *kind* of defence — *"the handler does not expose it"* rather than *"the identity cannot do it"*, a structural control replaced by a conventional one.
+
+**Open item 133** — `resourcemanager.projects.getIamPolicy` lets that identity read who holds what on the Firebase project. Present because Google's baseline requires it, and that baseline was established against a live 403 naming neither side, twice. Removing it is an experiment needing a deployed-route test.
+
+**Open item 134** — the scan reads HEAD only, while the job's own comment explains that deleting a credential later does not remove it from history. The sweep is cheap; **what a hit would MEAN is the obstacle**, since ADR-016 requires rotation rather than rewriting and a historical hit would be permanently red. A gate that cannot be made green is a gate somebody disables.
+
+#### What this settles
+
+**Four controls, four routes, one shape.** A scan whose patterns never covered the class that arrived. Two comments describing a state the code no longer had. A changelog rule nobody applied for six merges. A check whose prescribed remedy was inert. None was detectable by reading the thing itself — each required running it, or comparing it against what it claimed.
+
+ADR-016 already said it: *"Nothing here prevents a determined person from pasting a secret into a file. CI scanning narrows the window; it does not close it."* That sentence was correct, and Mission 7.11 is what it looks like when it comes true. The ADR now cites the case, and the scan carries a vendor-agnostic tier **because the next class of secret is the one nobody enumerated.**
