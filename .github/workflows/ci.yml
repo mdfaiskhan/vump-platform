@@ -194,6 +194,50 @@ jobs:
             echo "coverage: no instrumented lines"
           fi
 
+  android-build:
+    name: Android build
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Build
+        # **The only command in this project's mission gate that CI did not
+        # run**, until Mission 7.10. Every mission from 7.1 onward closed by
+        # building the APK once, locally, on one machine with a warm Gradle
+        # cache — and A-205 is a defect in exactly that command: `flutter build
+        # apk --debug` reported success while reading a stale artifact from a
+        # previous run, because only `flutter-apk/` had been emptied and never
+        # `apk/`. A local build cannot distinguish "compiled" from "found
+        # something already there"; a clean checkout can, and does so on every
+        # push rather than once per mission.
+        #
+        # `--flavor dev` is not optional and is the same A-205 lesson: the
+        # flavourless invocation writes and reads a different path. The dev
+        # flavor's google-services.json is committed, so this needs no secret.
+        #
+        # Debug rather than release, deliberately. Debug is what the mission
+        # gate actually runs, so this asserts the same thing on a clean
+        # machine. A release build would additionally exercise R8 and signing,
+        # which is worth having and is a different check needing a signing
+        # config this repository does not carry.
+        #
+        # Its own job rather than a step in `Test`, for A-095's reason: a build
+        # failure and a test failure must be reported by different checks, or
+        # whoever reads the result goes looking for the wrong kind of problem.
+        run: flutter build apk --debug --flavor dev
+
   codegen-drift:
     name: Generated code drift
     runs-on: ubuntu-latest

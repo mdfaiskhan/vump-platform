@@ -2,8 +2,28 @@ import { describe, it, expect } from 'vitest';
 import { parsePageRequest, DEFAULT_LIMIT, MAX_LIMIT } from './pagination.js';
 
 describe('cursor pagination', () => {
+  it('pins the two published limits to their values', () => {
+    // **Literals, not the constants themselves.** Until Mission 7.10 the test
+    // below asserted `limit: DEFAULT_LIMIT`, importing the constant from the
+    // module under test — so it asserted that the module agreed with itself
+    // and any value survived. The sweep changed 50 to 25 and every test here
+    // still passed.
+    //
+    // MAX_LIMIT was already pinned, by accident rather than design: a sibling
+    // test asserts the error text /between 1 and 200/ and hard-codes the
+    // number. That asymmetry is the whole lesson — an assertion that NAMES a
+    // value holds it, one that BORROWS the value cannot.
+    //
+    // Both are client-visible. Chapter 4.6 §1 puts pagination in the response
+    // envelope, and A-184 records what a silently changed page size costs: an
+    // org with 51 Projects rendered 50, with nothing on either side reporting
+    // a truncation.
+    expect(DEFAULT_LIMIT).toBe(50);
+    expect(MAX_LIMIT).toBe(200);
+  });
+
   it('defaults the limit when no query string is present at all', () => {
-    expect(parsePageRequest(null)).toEqual({ cursor: undefined, limit: DEFAULT_LIMIT });
+    expect(parsePageRequest(null)).toEqual({ cursor: undefined, limit: 50 });
   });
 
   it('reads a cursor and a limit', () => {

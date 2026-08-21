@@ -30,6 +30,33 @@ void main() {
         .setMockMethodCallHandler(channel, null);
   });
 
+  group('the channel name', () {
+    test(
+      'the default constructor talks to the channel this test names',
+      () async {
+        // **Deliberately the DEFAULT constructor.** Every other test here
+        // injects `channel`, so the production `_defaultChannel` is never
+        // exercised and its name is never checked — Mission 7.10's mutation
+        // sweep renamed it and all ten tests still passed.
+        //
+        // `_defaultChannel` is private and cannot be read from here. It can be
+        // EXERCISED: a mock handler is registered against a channel's NAME, so
+        // if the production default stops matching the literal at the top of
+        // this file, this call reaches no handler, raises a
+        // MissingPluginException and converts to StorageException. The two
+        // literals are tied by
+        // behaviour rather than by comparison.
+        //
+        // The name is a contract with native code that cannot be exercised from
+        // `flutter test` at all — Android is verified on hardware (A-058), iOS
+        // has never run — so this is the only side of it a test can hold.
+        respond((MethodCall call) => 4096);
+
+        expect(await const FreeSpaceChannel().availableBytes('/docs'), 4096);
+      },
+    );
+  });
+
   group('the request', () {
     test('sends the path the caller asked about', () async {
       respond((_) => 1234);
