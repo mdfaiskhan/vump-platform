@@ -1057,15 +1057,47 @@ jobs:
           # later commit does not remove it from history. ADR-016 requires
           # rotation as the first response, not history rewriting.
           #
-          # Deliberately narrow: high-confidence patterns only, so a failure
-          # here always means something real. GitHub secret scanning with push
-          # protection is the broader net and should also be enabled — see
-          # docs/development/secrets-management.md.
+          # Two tiers, both high-confidence, because a gate that cries wolf
+          # is a gate somebody turns off:
+          #
+          #   1. FIXED PREFIX — `ya29.`, `ghp_`, `xox…`. The issuer stamps the
+          #      string, so a match is a credential or it is nothing. Zero
+          #      false positives by construction rather than by tuning.
+          #   2. CONTEXT-ANCHORED — an opaque literal assigned to a
+          #      secret-shaped NAME. Vendor-agnostic, so it reaches issuers
+          #      nobody thought to enumerate.
+          #
+          # A third tier — raw entropy over every long string — was measured
+          # and rejected. It flags 3,762 strings in this repository: Isar type
+          # ids, migration checksums, base64 fixtures. A gate that reports
+          # 3,762 candidates reports nothing.
+          #
+          # Mission 7.11 widened this. Until then it held five AWS- and
+          # Firebase-specific patterns, and during Mission 7.6 a live `ya29.`
+          # Google OAuth access token sat at the repository root. It was never
+          # tracked, so nothing was disclosed — but nothing HERE would have
+          # stopped it either, and the only control that held was a person
+          # noticing in the moment. Both halves are covered now: the filename
+          # check below, and `.gitignore`'s matching entry so the file cannot
+          # be staged locally in the first place.
+          #
+          # Proven rather than assumed: this list was run against a fixture
+          # holding a shape-equivalent `ya29.` token committed as `token.txt`.
+          # The old patterns exited 0 on it. These exit 1, failing twice over
+          # — once on the name, once on the content. F-1.
+          #
+          # GitHub secret scanning with push protection is the broader net and
+          # should also be enabled — see docs/development/secrets-management.md.
 
           status=0
           fail() { echo "::error::$1"; echo "$2" | sed 's/^/  /'; status=1; }
 
-          hits=$(git ls-files | grep -Ei '(^|/)\.env$|\.(pem|key|p12|pfx|keystore|jks)$|service-account.*\.json$|firebase-adminsdk.*\.json$' || true)
+          # `.env.example` and its siblings are tracked on purpose, so templates
+          # are subtracted afterwards rather than carved into the pattern — an
+          # exception that reads as an exception.
+          hits=$(git ls-files \
+            | grep -Ei '(^|/)(\.env(\..*)?|\.netrc|\.npmrc|\.pypirc|id_(rsa|dsa|ecdsa|ed25519)|authorized_keys|application_default_credentials\.json)$|(^|/)[^/]*(token|secret|credential|creds)[^/]*\.(txt|json|ya?ml|cfg|ini)$|\.(pem|key|p12|pfx|keystore|jks|p8|ppk|asc|gpg)$|service-account.*\.json$|firebase-adminsdk.*\.json$' \
+            | grep -Eiv '\.(example|sample|template)$' || true)
           [ -n "$hits" ] \
             && fail "A credential-bearing file is tracked by git. Rotate the credential first, then remove it from history." "$hits" \
             || echo "ok  no credential-bearing filenames tracked"
@@ -1089,6 +1121,38 @@ jobs:
           [ -n "$hits" ] \
             && fail "A Google service-account key is committed. Rotate it in the Firebase console immediately." "$hits" \
             || echo "ok  no service-account keys"
+
+          # Tier 1. Every alternative below is an issuer-stamped prefix, so a
+          # match is a credential or it is nothing.
+          hits=$(git grep -nIE 'ya29\.[A-Za-z0-9._-]{20,}|gh[pousr]_[A-Za-z0-9]{36}|github_pat_[A-Za-z0-9_]{20,}|xox[abprs]-[A-Za-z0-9-]{10,}|glpat-[A-Za-z0-9_-]{20,}|sk-(ant-)?[A-Za-z0-9_-]{32,}|npm_[A-Za-z0-9]{36}|eyJhbGciOi[A-Za-z0-9_-]{10,}' -- . || true)
+          [ -n "$hits" ] \
+            && fail "An access token or API key is committed. Revoke it at the issuer now — it is disclosed permanently." "$hits" \
+            || echo "ok  no vendor-prefixed access tokens"
+
+          # A Google API key OUTSIDE the generated client config. The files
+          # excluded here carry Firebase Web API keys, which are public client
+          # identifiers rather than secrets — `.gitignore` says the same in its
+          # "NOT ignored, deliberately" note. The same string anywhere else is
+          # not explained by that.
+          hits=$(git grep -nIE 'AIza[A-Za-z0-9_-]{35}' -- . \
+            ':(exclude)mobile/android/app/src/*/google-services.json' \
+            ':(exclude)mobile/ios/config/*/GoogleService-Info.plist' \
+            ':(exclude)mobile/lib/core/firebase/firebase_options_*.dart' || true)
+          [ -n "$hits" ] \
+            && fail "A Google API key appears outside the generated Firebase client config." "$hits" \
+            || echo "ok  no stray Google API keys"
+
+          # Tier 2. Not "a long string" but a long OPAQUE string assigned to a
+          # name that declares itself a secret. `hunter22` and `correct-horse-a`
+          # in the redeem tests are under 24 characters and stay quiet, which is
+          # the intended outcome: a fixture is not a credential.
+          hits=$(git grep -nIiE '(secret|token|passwd|password|api[_-]?key|access[_-]?key|credential|bearer)[a-z0-9_]*["'"'"']?[[:space:]]*[:=][[:space:]]*["'"'"'][A-Za-z0-9+/_=-]{24,}["'"'"']' -- . \
+            ':(exclude)mobile/android/app/src/*/google-services.json' \
+            ':(exclude)mobile/ios/config/*/GoogleService-Info.plist' \
+            ':(exclude)mobile/lib/core/firebase/firebase_options_*.dart' || true)
+          [ -n "$hits" ] \
+            && fail "An opaque literal is assigned to a secret-shaped name. If it is a credential, rotate it; if it is a fixture, shorten it or rename it." "$hits" \
+            || echo "ok  no hardcoded opaque secrets"
 
           exit $status
 

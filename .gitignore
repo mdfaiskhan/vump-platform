@@ -34,6 +34,29 @@ firebase-adminsdk*.json
 aws-credentials*
 *.credentials
 
+# Ad-hoc credential dumps — the shapes that arrive during debugging and were
+# never meant to be kept. During Mission 7.6 a live `ya29.` Google OAuth access
+# token sat at the repository root as `token.txt`. Nothing here matched it and
+# nothing in the secret-scan job matched it; the only control that held was a
+# person noticing. F-1, Mission 7.11.
+*token.txt
+*tokens.txt
+*token*.json
+*secret*.json
+creds*
+*-creds.json
+credentials*.json
+application_default_credentials.json
+.netrc
+.npmrc
+.pypirc
+id_rsa
+id_dsa
+id_ecdsa
+id_ed25519
+*.p8
+*.ppk
+
 # Signing configuration
 key.properties
 android/key.properties
