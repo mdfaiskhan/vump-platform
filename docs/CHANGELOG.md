@@ -219,6 +219,30 @@ Mission 4.8's security review found it, by reading `git log` against this file r
 
 ### Security
 
+- **2026-08-21** — **Nothing had ever exercised the backend's token verification, and the uncovered half of `auth.ts` was the security-relevant half.** `handler.test.ts` mocks `./auth.js` wholesale, so `verifyToken`, the role-claim narrowing and the memoised Admin app were executed by no test anywhere — 38.88% of the module, now 100%.
+
+  **The role claim is attacker-adjacent**: it arrives inside a token, and a number or an object reaching `provisionCaller` as a role would be a type nothing checks again. That the narrowing is correct was, until Mission 7.9, an unverified belief.
+
+  The same measurement established that the backend's coverage had **never been measured at all**. `@vitest/coverage-v8` was never in `devDependencies`, so ADR-045's *"coverage is reported by `vitest run --coverage`"* was unusable from the day it was written and stayed that way through six missions in which the sentence was read and believed.
+
+- **2026-08-21** — **The client believed the token claim while the server believed the table.** A user's `role` now comes from `POST /v1/auth/verify`'s response rather than the Firebase ID token's custom claim.
+
+  ADR-048 made exactly this argument for `org_id` and did not extend it to `role`. The authorizer has always resolved `Caller.role` from the `users` table — documented there as *"Authoritative role from the users table, not the token claim"* — so a role changed in the table and not in the claim left client and server disagreeing until the next token refresh. A role is written once at provisioning, and a claim written once goes stale.
+
+  **An unrecognised role is refused rather than defaulted**, the rule `org.ts` already applied to `org_id`: the session fails closed instead of admitting an account whose privilege nothing could name. The route guard is unchanged and remains a navigation correction rather than a security boundary, per ADR-037.
+
+- **2026-08-21** — **Invite-code redemption left Google Cloud Functions for AWS, and no static credential exists anywhere on the new path.** ADR-036 is superseded. `POST /v1/auth/redeem` is unauthenticated by design and is the second entry in ADR-048's exempt allowlist.
+
+  **A service-account key was considered and rejected on asymmetry, not on storage.** A leaked key would not merely abuse this feature; it would grant administrative control over any user in the project. Holding it in Secrets Manager with a narrow IAM read narrows *who can fetch it* and does nothing about *what it can do* once a Lambda holds it in memory. The Lambda reaches Firebase through Workload Identity Federation instead, so there is no key to leak, rotate or misplace.
+
+  **The trust path is narrowed twice, independently.** The identity pool admits only the redeem Lambda's role ARN, and service-account impersonation is bound to the mapped `aws_role` attribute rather than to the pool as a whole. Either narrowing alone would be sufficient; both are present because the failure mode of getting one wrong is a 403 naming neither side.
+
+  **The custom role is built by enumeration, not by convenience.** `vumpRedeemDev` carries `firebaseauth.users.create` and `users.update` and **not** `users.delete`: a provisioning failure compensates with `updateUser(uid, { disabled: true })`, so nothing on this path can destroy an account. `users.get` and Google's fourteen baseline Firebase permissions are present because a live 403 proved them necessary, established by bisection over two separate rounds. `resourcemanager.projects.list` is absent because GCP refuses it on a project-scoped role.
+
+  Migration `0013` revokes the redeem role's `users` INSERT, which provisioning turned out not to need. Seeding invite codes still requires the break-glass administrator — `0012` grants the role no INSERT on `org_invite_codes`, which is the intended shape rather than an omission.
+
+  **Redemption spends the code's use before it creates the account**, so a taken address and an invalid code are indistinguishable in both the response code and the status. That ordering is the whole defence, and it is now the only one: the invite code is optional, so the path is also reached with nothing validated ahead of it.
+
 - **2026-08-20** — **Every metadata write had been failing against a real database since migration `0004`, and no test could have seen it.** `numericParam` bound `numeric` columns as a bare `stringValue` with no `typeHint`, so Postgres inferred `text` and refused: *column "zoom_factor" is of type numeric but expression is of type text* (SQLState 42804). Every other non-text parameter in the project already carried a hint — `uuidParam` sends `'UUID'`, `jsonParam` sends `'JSON'`.
 
   It survived four missions because **every backend test uses `aws-sdk-client-mock`**: a mock asserts what was *sent*, never what Postgres would *accept*, and no `INSERT` in this project had reached a real database until the device checkpoint. Fixed at the helper rather than with a cast in one statement, then swept by reading the schema — three `numeric` columns exist in total, all in `chunk_metadata`, all through these two helpers. A partial remedy is now in place: the tests assert the type hints, which is checkable under the mock. A-212.

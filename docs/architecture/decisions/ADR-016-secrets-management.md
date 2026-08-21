@@ -83,6 +83,7 @@ A committed secret is disclosed permanently. Deleting it in a later commit does 
 - **`flutter_dotenv` loading a runtime `.env` asset** — rejected, and V7.10 §4 already rejected it: compile-time values cannot be swapped by a config file that shipped in the bundle by mistake.
 - **Committing `mobile/.env.*` since they hold no secret** — tempting and defensible, rejected. The files are per-developer, and a committed one invites a future secret.
 - **A hosted secret-scanning service on the repository** — not rejected, deferred. GitHub secret scanning and push protection should be enabled; that is an account setting rather than an architecture decision.
+- **Raw entropy scanning over every long string** — measured and rejected at Mission 7.11. It flags 3,762 strings in this repository: Isar type ids, migration checksums, base64 fixtures. A gate reporting 3,762 candidates reports nothing, and a gate nobody reads is a gate somebody switches off. The generic tier is context-anchored instead — an opaque literal assigned to a name that declares itself a secret — which is vendor-agnostic without being entropy-driven.
 
 ## Consequences
 
@@ -94,6 +95,7 @@ A committed secret is disclosed permanently. Deleting it in a later commit does 
 - V7.10 §2's variable table is now wrong in the repository's view. The amendment register records it.
 - The backend does not exist yet, so its half of this decision is a contract rather than a verified implementation.
 - Nothing here prevents a determined person from pasting a secret into a file. CI scanning narrows the window; it does not close it.
+- **Mission 7.11 confirmed that sentence the expensive way.** A live `ya29.` Google OAuth access token sat at the repository root during Mission 7.6, matched by no `.gitignore` pattern and by none of the scan's then-five patterns. Nothing was disclosed, because a person noticed — which is not a control. Both gaps are closed and the sentence still stands, because the next class of secret is the one nobody enumerated. That is why the scan now carries a vendor-agnostic tier beside the vendor-specific ones.
 
 ## Related Missions
 
@@ -112,8 +114,8 @@ A committed secret is disclosed permanently. Deleting it in a later commit does 
 | Backend uses IAM roles | Required | ✅ Seven Lambda execution roles live; each reads exactly one credential, proven by `iam simulate-principal-policy` (A-160) |
 | Secrets Manager for values | Required | ✅ **8 secrets live**, counted against the account — the RDS-managed master plus seven per-function credentials from `npm run db:bootstrap`. No Firebase key exists, and Mission 6.5 decided none is needed |
 | `backend/.env.example` | Contract documented | ✅ Created |
-| `.gitignore` blocks secrets | Required | ✅ Verified against 9 patterns |
-| CI secret scanning | Required | ✅ Implemented |
+| `.gitignore` blocks secrets | Required | ✅ **Widened at Mission 7.11.** The original 9 patterns plus the ad-hoc credential dumps that arrive during debugging — `token.txt`, `creds*`, `*secret*.json`, `.netrc`, ssh private keys, gcloud ADC. Verified that no tracked file is shadowed by the additions. |
+| CI secret scanning | Required | ✅ **Two tiers since Mission 7.11.** Issuer-stamped prefixes (`ya29.`, `ghp_`, `xox…`, `glpat-`, `sk-`, `npm_`, JWT) and one context-anchored generic check, beside the original AWS and Firebase patterns and a widened filename list. Proven against a fixture the previous list passed. Reads HEAD only — open item 134. |
 
 The `--dart-define` mechanism this ADR depends on was implemented in Mission 0.17.17 and superseded as the environment selector by ADR-047. The backend-side items closed in Mission 6.3.2: the seven per-function database credentials are live, generated outside both git and Terraform state, and each Lambda role can read only its own (A-160).
 

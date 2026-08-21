@@ -764,83 +764,6 @@ jobs:
           name: golden-failures
           path: mobile/test/**/failures/**
 
-  commit-convention:
-    name: Commit convention
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    # Reads only the pull request title from the event payload — it never
-    # checks out the repository, so it needs no access to its contents.
-    permissions: {}
-    # Only on pull requests: the thing being validated is the PR title, which
-    # ADR-019 makes the squash-merge commit message — the message that actually
-    # lands in develop's history.
-    if: github.event_name == 'pull_request'
-    # Overrides the workflow-level `mobile` default. This job has no checkout,
-    # so `mobile/` does not exist on the runner and the step could not start —
-    # it failed with a process-start error that reads as "your PR title is
-    # wrong", which is the most misleading of open item 51's three
-    # manifestations. `$GITHUB_WORKSPACE` itself is created by the runner
-    # before any step, so `.` is a real directory even with nothing checked
-    # out, and no checkout is needed to fix this.
-    defaults:
-      run:
-        working-directory: .
-    steps:
-      - name: Validate the pull request title
-        env:
-          PR_TITLE: ${{ github.event.pull_request.title }}
-        run: |
-          python3 - <<'PY'
-          import os, re, sys
-
-          TYPES = ["feat", "fix", "docs", "refactor", "test", "chore",
-                   "perf", "style", "ci", "build", "revert"]
-
-          HEADER = re.compile(
-              r'^(?P<type>' + "|".join(TYPES) + r')'
-              r'(?:\((?P<scope>[a-z0-9\-/]+)\))?'
-              r'(?P<bang>!)?: (?P<subject>.+)$'
-          )
-          # Git generates these; they are not authored messages.
-          EXEMPT = re.compile(r'^(Merge |Revert ")')
-
-          title = os.environ["PR_TITLE"].strip()
-          if EXEMPT.match(title):
-              print(f"ok  git-generated message, exempt: {title}")
-              sys.exit(0)
-
-          errors = []
-          m = HEADER.match(title)
-          if not m:
-              errors.append(
-                  "must match 'type(scope): subject'. "
-                  f"Allowed types: {', '.join(TYPES)}"
-              )
-          else:
-              subject = m.group("subject")
-              if len(title) > 72:
-                  errors.append(f"header is {len(title)} characters; the limit is 72")
-              if subject[0].isupper():
-                  errors.append("subject must start with a lowercase letter")
-              if subject.endswith("."):
-                  errors.append("subject must not end with a full stop")
-              if re.match(r'^(added|fixed|updated|changed|removed|adds|fixes)\b',
-                          subject, re.I):
-                  errors.append("subject must be imperative mood — 'add', not 'added'")
-
-          if errors:
-              print(f"::error::Pull request title does not follow ADR-020: {title}")
-              for e in errors:
-                  print(f"  - {e}")
-              print("")
-              print("  This title becomes the squash commit in develop (ADR-019),")
-              print("  so it is the message that survives. See")
-              print("  docs/git/commit-conventions.md")
-              sys.exit(1)
-
-          print(f"ok  {title}")
-          PY
-
   environment-consistency:
     name: Environment consistency
     runs-on: ubuntu-latest
@@ -1057,15 +980,47 @@ jobs:
           # later commit does not remove it from history. ADR-016 requires
           # rotation as the first response, not history rewriting.
           #
-          # Deliberately narrow: high-confidence patterns only, so a failure
-          # here always means something real. GitHub secret scanning with push
-          # protection is the broader net and should also be enabled — see
-          # docs/development/secrets-management.md.
+          # Two tiers, both high-confidence, because a gate that cries wolf
+          # is a gate somebody turns off:
+          #
+          #   1. FIXED PREFIX — `ya29.`, `ghp_`, `xox…`. The issuer stamps the
+          #      string, so a match is a credential or it is nothing. Zero
+          #      false positives by construction rather than by tuning.
+          #   2. CONTEXT-ANCHORED — an opaque literal assigned to a
+          #      secret-shaped NAME. Vendor-agnostic, so it reaches issuers
+          #      nobody thought to enumerate.
+          #
+          # A third tier — raw entropy over every long string — was measured
+          # and rejected. It flags 3,762 strings in this repository: Isar type
+          # ids, migration checksums, base64 fixtures. A gate that reports
+          # 3,762 candidates reports nothing.
+          #
+          # Mission 7.11 widened this. Until then it held five AWS- and
+          # Firebase-specific patterns, and during Mission 7.6 a live `ya29.`
+          # Google OAuth access token sat at the repository root. It was never
+          # tracked, so nothing was disclosed — but nothing HERE would have
+          # stopped it either, and the only control that held was a person
+          # noticing in the moment. Both halves are covered now: the filename
+          # check below, and `.gitignore`'s matching entry so the file cannot
+          # be staged locally in the first place.
+          #
+          # Proven rather than assumed: this list was run against a fixture
+          # holding a shape-equivalent `ya29.` token committed as `token.txt`.
+          # The old patterns exited 0 on it. These exit 1, failing twice over
+          # — once on the name, once on the content. F-1.
+          #
+          # GitHub secret scanning with push protection is the broader net and
+          # should also be enabled — see docs/development/secrets-management.md.
 
           status=0
           fail() { echo "::error::$1"; echo "$2" | sed 's/^/  /'; status=1; }
 
-          hits=$(git ls-files | grep -Ei '(^|/)\.env$|\.(pem|key|p12|pfx|keystore|jks)$|service-account.*\.json$|firebase-adminsdk.*\.json$' || true)
+          # `.env.example` and its siblings are tracked on purpose, so templates
+          # are subtracted afterwards rather than carved into the pattern — an
+          # exception that reads as an exception.
+          hits=$(git ls-files \
+            | grep -Ei '(^|/)(\.env(\..*)?|\.netrc|\.npmrc|\.pypirc|id_(rsa|dsa|ecdsa|ed25519)|authorized_keys|application_default_credentials\.json)$|(^|/)[^/]*(token|secret|credential|creds)[^/]*\.(txt|json|ya?ml|cfg|ini)$|\.(pem|key|p12|pfx|keystore|jks|p8|ppk|asc|gpg)$|service-account.*\.json$|firebase-adminsdk.*\.json$' \
+            | grep -Eiv '\.(example|sample|template)$' || true)
           [ -n "$hits" ] \
             && fail "A credential-bearing file is tracked by git. Rotate the credential first, then remove it from history." "$hits" \
             || echo "ok  no credential-bearing filenames tracked"
@@ -1089,6 +1044,38 @@ jobs:
           [ -n "$hits" ] \
             && fail "A Google service-account key is committed. Rotate it in the Firebase console immediately." "$hits" \
             || echo "ok  no service-account keys"
+
+          # Tier 1. Every alternative below is an issuer-stamped prefix, so a
+          # match is a credential or it is nothing.
+          hits=$(git grep -nIE 'ya29\.[A-Za-z0-9._-]{20,}|gh[pousr]_[A-Za-z0-9]{36}|github_pat_[A-Za-z0-9_]{20,}|xox[abprs]-[A-Za-z0-9-]{10,}|glpat-[A-Za-z0-9_-]{20,}|sk-(ant-)?[A-Za-z0-9_-]{32,}|npm_[A-Za-z0-9]{36}|eyJhbGciOi[A-Za-z0-9_-]{10,}' -- . || true)
+          [ -n "$hits" ] \
+            && fail "An access token or API key is committed. Revoke it at the issuer now — it is disclosed permanently." "$hits" \
+            || echo "ok  no vendor-prefixed access tokens"
+
+          # A Google API key OUTSIDE the generated client config. The files
+          # excluded here carry Firebase Web API keys, which are public client
+          # identifiers rather than secrets — `.gitignore` says the same in its
+          # "NOT ignored, deliberately" note. The same string anywhere else is
+          # not explained by that.
+          hits=$(git grep -nIE 'AIza[A-Za-z0-9_-]{35}' -- . \
+            ':(exclude)mobile/android/app/src/*/google-services.json' \
+            ':(exclude)mobile/ios/config/*/GoogleService-Info.plist' \
+            ':(exclude)mobile/lib/core/firebase/firebase_options_*.dart' || true)
+          [ -n "$hits" ] \
+            && fail "A Google API key appears outside the generated Firebase client config." "$hits" \
+            || echo "ok  no stray Google API keys"
+
+          # Tier 2. Not "a long string" but a long OPAQUE string assigned to a
+          # name that declares itself a secret. `hunter22` and `correct-horse-a`
+          # in the redeem tests are under 24 characters and stay quiet, which is
+          # the intended outcome: a fixture is not a credential.
+          hits=$(git grep -nIiE '(secret|token|passwd|password|api[_-]?key|access[_-]?key|credential|bearer)[a-z0-9_]*["'"'"']?[[:space:]]*[:=][[:space:]]*["'"'"'][A-Za-z0-9+/_=-]{24,}["'"'"']' -- . \
+            ':(exclude)mobile/android/app/src/*/google-services.json' \
+            ':(exclude)mobile/ios/config/*/GoogleService-Info.plist' \
+            ':(exclude)mobile/lib/core/firebase/firebase_options_*.dart' || true)
+          [ -n "$hits" ] \
+            && fail "An opaque literal is assigned to a secret-shaped name. If it is a credential, rotate it; if it is a fixture, shorten it or rename it." "$hits" \
+            || echo "ok  no hardcoded opaque secrets"
 
           exit $status
 

@@ -462,8 +462,11 @@ class AuthRepositoryImpl implements AuthRepository {
   /// A-159's design in which the claim was authoritative: Chapter 4.7 §2 says
   /// the `users` table is the source *"if the claim and the table ever
   /// disagree"*, and a claim written once goes stale the moment an account
-  /// moves organisation. `role` is unaffected and still comes from the claim,
-  /// which Chapter 4.7 §2 specifies.
+  /// moves organisation. **Mission 7.8 extended that argument to `role`**, for
+  /// the reason set out on [_toUser]: the authorizer has always resolved
+  /// `Caller.role` from the `users` table, so a client reading the claim
+  /// believed a different source than the server. Both fields now come from
+  /// this response.
   ///
   /// There is no claim fallback. It existed while [backend] was nullable and
   /// was removed in Mission 7.2 — see the field's documentation.
