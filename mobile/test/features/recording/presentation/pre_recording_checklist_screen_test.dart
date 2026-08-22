@@ -4,31 +4,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
-import 'package:mobile/core/errors/error_codes.dart';
-import 'package:mobile/core/errors/exceptions/device_exception.dart';
 import 'package:mobile/features/recording/application/checklist_notifier.dart';
 import 'package:mobile/features/recording/application/recording_notifier.dart';
-import 'package:mobile/features/recording/domain/entities/camera_capability.dart';
-import 'package:mobile/features/recording/domain/entities/chunk_metadata.dart';
-import 'package:mobile/features/recording/domain/entities/chunk_processing_job.dart';
-import 'package:mobile/features/recording/domain/entities/cleanable_chunk.dart';
-import 'package:mobile/features/recording/domain/entities/device_fingerprint.dart';
-import 'package:mobile/features/recording/domain/entities/network_type.dart';
-import 'package:mobile/features/recording/domain/entities/recording_session.dart';
 import 'package:mobile/features/recording/domain/entities/recording_state.dart';
-import 'package:mobile/features/recording/domain/entities/wide_angle_tier.dart';
-import 'package:mobile/features/recording/domain/repositories/battery_reader.dart';
-import 'package:mobile/features/recording/domain/repositories/camera_capability_probe.dart';
-import 'package:mobile/features/recording/domain/repositories/camera_permission_probe.dart';
-import 'package:mobile/features/recording/domain/repositories/chunk_finalizer.dart';
-import 'package:mobile/features/recording/domain/repositories/chunk_id_generator.dart';
-import 'package:mobile/features/recording/domain/repositories/chunk_store.dart';
-import 'package:mobile/features/recording/domain/repositories/free_space_reader.dart';
-import 'package:mobile/features/recording/domain/repositories/network_reader.dart';
-import 'package:mobile/features/recording/domain/repositories/recording_pipeline.dart';
-import 'package:mobile/features/recording/domain/repositories/session_id_generator.dart';
-import 'package:mobile/features/recording/domain/repositories/wide_angle_eligibility_cache.dart';
 import 'package:mobile/features/recording/presentation/pre_recording_checklist_screen.dart';
+
+import '../fakes/checklist_fakes.dart';
 
 /// The Checklist screen's Start action, driven through a real tap.
 ///
@@ -72,35 +53,33 @@ void main() {
     );
   }
 
-  ProviderContainer build({_FakePipeline? pipeline, Completer<void>? gate}) {
+  ProviderContainer build({FakePipeline? pipeline, Completer<void>? gate}) {
     final ProviderContainer container = ProviderContainer(
       overrides: <Override>[
         cameraPermissionProbeProvider.overrideWithValue(
-          _FakePermissionProbe(gate),
+          FakePermissionProbe(gate),
         ),
-        freeSpaceReaderProvider.overrideWithValue(const _FakeFreeSpace()),
+        freeSpaceReaderProvider.overrideWithValue(const FakeFreeSpace()),
         recordingsDirectoryProvider.overrideWithValue('/files'),
-        batteryReaderProvider.overrideWithValue(const _FakeBattery()),
-        networkReaderProvider.overrideWithValue(const _FakeNetwork()),
-        wideAngleEligibilityCacheProvider.overrideWithValue(const _FakeCache()),
-        cameraCapabilityProbeProvider.overrideWithValue(const _FakeProbe()),
-        recordingPipelineProvider.overrideWithValue(
-          pipeline ?? _FakePipeline(),
-        ),
-        sessionIdGeneratorProvider.overrideWithValue(const _FixedIds()),
-        chunkIdGeneratorProvider.overrideWithValue(const _FixedIds()),
-        chunkFinalizerProvider.overrideWithValue(const _FakeFinalizer()),
-        chunkStoreProvider.overrideWithValue(const _FakeStore()),
+        batteryReaderProvider.overrideWithValue(const FakeBattery()),
+        networkReaderProvider.overrideWithValue(const FakeNetwork()),
+        wideAngleEligibilityCacheProvider.overrideWithValue(const FakeCache()),
+        cameraCapabilityProbeProvider.overrideWithValue(const FakeProbe()),
+        recordingPipelineProvider.overrideWithValue(pipeline ?? FakePipeline()),
+        sessionIdGeneratorProvider.overrideWithValue(const FixedIds()),
+        chunkIdGeneratorProvider.overrideWithValue(const FixedIds()),
+        chunkFinalizerProvider.overrideWithValue(const FakeFinalizer()),
+        chunkStoreProvider.overrideWithValue(const FakeStore()),
 
         // A successful start arms BR-06's ten-minute boundary, which the test
         // binding then reports as a pending timer after the tree is disposed.
         // Mission 3.2 declared these factories as an injection seam for
         // exactly this; nothing here needs the boundary to fire.
         boundaryTimerFactoryProvider.overrideWithValue(
-          (Duration duration, void Function() callback) => _NoopTimer(),
+          (Duration duration, void Function() callback) => NoopTimer(),
         ),
         storageTimerFactoryProvider.overrideWithValue(
-          (Duration interval, void Function(Timer) callback) => _NoopTimer(),
+          (Duration interval, void Function(Timer) callback) => NoopTimer(),
         ),
       ],
     );
@@ -176,7 +155,7 @@ void main() {
   ) async {
     // isCapturing could be satisfied by a state change alone. This pins that
     // the camera was told to record, in order, after the session opened.
-    final _FakePipeline pipeline = _FakePipeline();
+    final FakePipeline pipeline = FakePipeline();
     final ProviderContainer c = build(pipeline: pipeline);
     await tester.pumpWidget(harness(c));
     await settleChecklist(tester);
@@ -208,7 +187,7 @@ void main() {
     // recording that never started is what produced the original defect's
     // symptom, so this asserts the opposite.
     final ProviderContainer c = build(
-      pipeline: _FakePipeline(failStartChunk: true),
+      pipeline: FakePipeline(failStartChunk: true),
     );
     await tester.pumpWidget(harness(c));
     await settleChecklist(tester);
@@ -245,144 +224,4 @@ void main() {
     await settleChecklist(tester);
     expect(tester.widget<FilledButton>(button).onPressed, isNotNull);
   });
-}
-
-/// A timer that never schedules anything.
-class _NoopTimer implements Timer {
-  @override
-  void cancel() {}
-
-  @override
-  bool get isActive => false;
-
-  @override
-  int get tick => 0;
-}
-
-class _FakePermissionProbe implements CameraPermissionProbe {
-  const _FakePermissionProbe([this._gate]);
-
-  final Completer<void>? _gate;
-
-  @override
-  Future<void> verify() async {
-    if (_gate != null) {
-      await _gate.future;
-    }
-  }
-}
-
-class _FakeFreeSpace implements FreeSpaceReader {
-  const _FakeFreeSpace();
-  @override
-  Future<int> availableBytes(String path) async => 50 * 1000 * 1000 * 1000;
-}
-
-class _FakeBattery implements BatteryReader {
-  const _FakeBattery();
-  @override
-  Future<int> percent() async => 90;
-}
-
-class _FakeNetwork implements NetworkReader {
-  const _FakeNetwork();
-  @override
-  Future<NetworkType> current() async => NetworkType.wifi;
-}
-
-class _FakeCache implements WideAngleEligibilityCache {
-  const _FakeCache();
-  @override
-  Future<WideAngleTier?> read(DeviceFingerprint fingerprint) async => null;
-  @override
-  Future<void> write({
-    required WideAngleTier tier,
-    required DeviceFingerprint fingerprint,
-  }) async {}
-  @override
-  Future<void> clear() async {}
-}
-
-class _FakeProbe implements CameraCapabilityProbe {
-  const _FakeProbe();
-  @override
-  Future<CameraCapability> probe() async => const CameraCapability(
-    hasRearCamera: true,
-    hasDedicatedUltraWide: null,
-    minimumZoomFactor: 0.6,
-  );
-}
-
-/// Records the order the pipeline is driven in.
-class _FakePipeline implements RecordingPipeline {
-  _FakePipeline({this.failStartChunk = false});
-
-  final bool failStartChunk;
-  final List<String> calls = <String>[];
-
-  @override
-  String? get outputDirectory => null;
-
-  @override
-  Future<void> openSession({required double zoomFactor}) async {
-    calls.add('openSession');
-  }
-
-  @override
-  Future<void> startChunk() async {
-    calls.add('startChunk');
-    if (failStartChunk) {
-      throw const DeviceException(
-        errorCode: ErrorCode.deviceCameraUnavailable,
-        message: 'capture could not begin',
-      );
-    }
-  }
-
-  @override
-  Future<String> stopChunk() async => '/chunk.mp4';
-
-  @override
-  Future<void> closeSession() async {}
-}
-
-class _FixedIds implements SessionIdGenerator, ChunkIdGenerator {
-  const _FixedIds();
-  @override
-  String newSessionId() => 'sess_widget_1';
-  @override
-  String newChunkId() => 'chk_widget_1';
-}
-
-class _FakeFinalizer implements ChunkFinalizer {
-  const _FakeFinalizer();
-  @override
-  Future<void> finalizeChunk({
-    required RecordingSession session,
-    required ChunkProcessingJob job,
-    required DateTime chunkStartedAt,
-  }) async {}
-}
-
-class _FakeStore implements ChunkStore {
-  const _FakeStore();
-  @override
-  Future<void> saveChunk({
-    required RecordingSession session,
-    required ChunkProcessingJob job,
-    required ChunkMetadata metadata,
-  }) async {}
-  @override
-  Future<void> markSessionComplete(String sessionId) async {}
-  @override
-  Future<List<String>> recoverableChunkIds() async => <String>[];
-  @override
-  Future<List<String>> orphanedChunkIds() async => <String>[];
-
-  @override
-  Future<List<CleanableChunk>> cleanableChunks({required int limit}) async =>
-      <CleanableChunk>[];
-
-  @override
-  Future<bool> deleteChunkFile(String chunkId) async => false;
 }
