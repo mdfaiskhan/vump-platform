@@ -8664,11 +8664,19 @@ Measuring it properly means running all 1,189 tests per mutant rather than one f
 
 **What blocks closure is tooling, not effort.** Dart has no mature mutation framework; this project wrote its own because the alternative was hand-mutating 207 tests, which is neither reproducible nor reviewable. Closure needs either that tool grown to whole-suite runs with incremental selection, or a real Dart mutation framework coming to exist.
 
-#### One recommendation this census produced, deliberately not acted on
+#### One recommendation this census produced — and the correction it needed
 
-`retry_schedule.dart` carries **no BR tag in source or test**, and its tests do pin a real rule: the six-attempt budget, the doubling sequence and the five-minute cap. Its three survivors are equivalent mutants rather than gaps, which is evidence the rule is genuinely covered and only the tag is missing.
+This census established that `retry_schedule.dart`'s tests pin a real rule: the six-attempt budget, the doubling sequence and the five-minute cap. Its three survivors are equivalent mutants rather than gaps, which is evidence the rule is genuinely covered.
 
-**Recommended: `retry_schedule.dart` should carry a BR tag for the six-attempt backoff.** Not applied — that is the project owner's call with the register open.
+**The recommendation this amendment first carried was that the file should gain a BR tag. That was wrong about the kind of identifier, and is corrected here rather than left standing.**
+
+**There is no BR for the six-attempt backoff.** Volume 1's upload rules cover deletion (BR-08), the default upload mode (BR-09), recording while uploading (BR-10), retry idempotence (BR-11) and session completion (BR-12). None concerns a schedule or an attempt budget — BR-11 is the closest and is about a retry never duplicating an object in S3, which is a different property.
+
+**The rule is `FR-UPL-06`** — *"the system shall retry failed uploads automatically using a defined backoff strategy (Volume 5.13 — Retry Strategy)"*, Must Have. The mapping was confirmed against the repository rather than by reading a PDF column: the file already cited `FR-UPL-07` for manual retry, which is the adjacent row.
+
+**And the file was never untagged.** It opened with *"Volume 5 Chapter 5.13 §2's automatic backoff"* and cited `FR-UPL-07` for the manual counterpart. The one thing missing was the requirement id for the automatic half, now added.
+
+The original phrasing — *"carries no BR tag in source or test"* — was literally true and implied a missing tag where the accurate statement is that **this rule is not a BR at all**. A citation invented to satisfy a recommendation would have been worse than the gap it closed.
 
 ---
 

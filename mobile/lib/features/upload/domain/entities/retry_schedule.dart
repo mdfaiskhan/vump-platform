@@ -1,6 +1,18 @@
 import 'dart:math';
 
-/// Volume 5 Chapter 5.13 §2's automatic backoff.
+/// Volume 5 Chapter 5.13 §2's automatic backoff — **FR-UPL-06**, *"the
+/// system shall retry failed uploads automatically using a defined backoff
+/// strategy"*.
+///
+/// The identifier was added at Mission 8.1. This file already cited the
+/// chapter and FR-UPL-07 for the manual counterpart, so the automatic half
+/// was the one requirement in the pair with no requirement id on it.
+///
+/// **There is no BR for this rule and one should not be invented.** Volume 1's
+/// upload rules cover deletion (BR-08), the default mode (BR-09), recording
+/// while uploading (BR-10) and retry idempotence (BR-11) — none concerns a
+/// schedule or an attempt budget. A-237 recommended a BR tag and was wrong
+/// about the kind of identifier; the correction is recorded there.
 ///
 /// Every number here is transcribed from the chapter, not chosen:
 ///
