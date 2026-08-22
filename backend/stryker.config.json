@@ -1,0 +1,21 @@
+{
+  "$schema": "./node_modules/@stryker-mutator/core/schema/stryker-schema.json",
+  "_comment": "Mutation testing for open item 129 — nothing detects a test that passes while asserting nothing. Exhaustive over backend source at Mission 8.1; the mobile side has no comparable tool and is sampled by hand instead.",
+  "packageManager": "npm",
+  "testRunner": "vitest",
+  "reporters": ["html", "clear-text", "progress", "json"],
+  "coverageAnalysis": "perTest",
+  "mutate": [
+    "packages/*/src/**/*.ts",
+    "functions/*/src/**/*.ts",
+    "!**/*.test.ts",
+    "!packages/migrate/src/bootstrap.ts",
+    "!packages/migrate/src/cli.ts"
+  ],
+  "ignoreStatic": true,
+  "thresholds": { "high": 90, "low": 70, "break": null },
+  "htmlReporter": { "fileName": "reports/mutation/index.html" },
+  "jsonReporter": { "fileName": "reports/mutation/mutation.json" },
+  "timeoutMS": 20000,
+  "disableTypeChecks": true
+}

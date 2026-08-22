@@ -107,7 +107,14 @@ def sweep(sources, tag, budget_seconds=1500):
         if tp is None:
             results['no_test'].append(src)
             continue
-        original = io.open(src, encoding='utf-8').read()
+        # Read as BYTES so the revert restores the file exactly. Writing text
+        # with a forced LF newline silently converted 42 CRLF files during the
+        # Mission 8.1 sweep. No content changed, and `git status` still showed
+        # 42 modified files afterwards — a tool that leaves the tree dirty gets
+        # its noise committed by someone eventually.
+        original_bytes = io.open(src, 'rb').read()
+        crlf = (chr(13) + chr(10)).encode() in original_bytes
+        original = original_bytes.decode('utf-8')
         lines, muts = mutants_for(src)
         # Baseline must be green or the file's results mean nothing.
         if not run(tp):
@@ -119,13 +126,16 @@ def sweep(sources, tag, budget_seconds=1500):
                 continue
             mutated = list(lines)
             mutated[i] = line[:a] + rep + line[b:]
-            io.open(src, 'w', encoding='utf-8', newline='\n').write('\n'.join(mutated))
+            text = chr(10).join(mutated)
+            if crlf:
+                text = text.replace(chr(10), chr(13) + chr(10))
+            io.open(src, 'wb').write(text.encode('utf-8'))
             try:
                 passed = run(tp)
             except subprocess.TimeoutExpired:
                 passed = False
             finally:
-                io.open(src, 'w', encoding='utf-8', newline='\n').write(original)
+                io.open(src, 'wb').write(original_bytes)
             results['total_run'] += 1
             if passed:
                 results['survived'].append({
