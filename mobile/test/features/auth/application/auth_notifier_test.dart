@@ -280,7 +280,7 @@ void main() {
       );
     });
 
-    test('a sign-out the user asked for is not reported as an expiry', () async {
+    test('a sign-out the user asked for is not an expiry', () async {
       // The `_signingOut` re-entrancy guard, and the first test of one in this
       // file. Mission 8.1's mutation sweep flipped `_signingOut = true` to
       // false and every test still passed — fourteen survivors in this file
@@ -292,7 +292,7 @@ void main() {
       // flag, pressing Sign Out tells the Collector their session expired —
       // an error message for something they chose.
       final _FakeAuthRepository repository = _FakeAuthRepository(
-        restored: Session.authenticated(collector),
+        restored: const Session.authenticated(collector),
       )..emitOnSignOut = true;
       final ProviderContainer container = containerWith(repository);
       await container.read(authNotifierProvider.future);
