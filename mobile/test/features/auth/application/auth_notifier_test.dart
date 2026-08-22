@@ -279,6 +279,31 @@ void main() {
         completion(isA<Failure>()),
       );
     });
+
+    test('a sign-out the user asked for is not reported as an expiry', () async {
+      // The `_signingOut` re-entrancy guard, and the first test of one in this
+      // file. Mission 8.1's mutation sweep flipped `_signingOut = true` to
+      // false and every test still passed — fourteen survivors in this file
+      // share that shape, all of them a private flag whose GUARD nothing
+      // exercises while its visible outcome is asserted elsewhere.
+      //
+      // What the flag decides: `_classify` treats a session ending as `expired`
+      // when the user was authenticated and did not ask to leave. Without the
+      // flag, pressing Sign Out tells the Collector their session expired —
+      // an error message for something they chose.
+      final _FakeAuthRepository repository = _FakeAuthRepository(
+        restored: Session.authenticated(collector),
+      )..emitOnSignOut = true;
+      final ProviderContainer container = containerWith(repository);
+      await container.read(authNotifierProvider.future);
+
+      await container.read(authNotifierProvider.notifier).signOut();
+      await Future<void>.delayed(Duration.zero);
+
+      final AuthState after = container.read(authNotifierProvider).value!;
+      expect(after, isA<AuthStateUnauthenticated>());
+      expect(after, isNot(isA<AuthStateExpired>()));
+    });
   });
   group('a transient backend failure does not destroy the session', () {
     // F5, A-178. Reproduced on CPH2707: two 502s from POST /v1/auth/verify
@@ -411,9 +436,17 @@ class _FakeAuthRepository implements AuthRepository {
   /// How many times the notifier discarded the session — F5's evidence.
   int signOutCalls = 0;
 
+  /// Emit `unauthenticated` from inside `signOut`, as the real repository
+  /// does: Firebase reports the session ending while the call is still in
+  /// flight. Opt-in and default off, so no existing test changes behaviour.
+  bool emitOnSignOut = false;
+
   @override
   Future<void> signOut() async {
     signOutCalls += 1;
+    if (emitOnSignOut) {
+      emit(const Session.unauthenticated());
+    }
     final AuthenticationException? failure = signInThrows;
     if (failure != null) {
       throw failure;
