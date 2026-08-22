@@ -1752,6 +1752,14 @@ The Recording Screen shows the recording indicator, the elapsed timer and the St
 
 Closing it needs a deliberate seam: the pipeline exposing a preview widget, or a `Listenable` the screen can build a `CameraPreview` from, without exposing capture control. That is a design decision about the boundary Mission 3.3 drew, and it is recorded here rather than taken by breaking the boundary from the UI side.
 
+**Confirmed on hardware at Mission 8.2, 2026-08-23 — first real-device evidence.** On a CPH2707 the project owner reported, unprompted and without knowing this gap existed: *"recording is going on and even getting stored in s3 but while recording i cannot see what i'm recording — other than that it's visible."*
+
+That is this gap exactly, and nothing more: **black only during active capture**, with the pre-recording screen, the controls, the capture itself, local storage and the upload all working normally. The description matches the implementation line for line — `recording_screen.dart` renders `Positioned.fill(child: ColoredBox(color: Colors.black))`, and **`CameraPreview` appears zero times anywhere in `lib/`**.
+
+**Recorded here rather than as a new open item.** Mission 8.2 traced it as a suspected defect and found it already written down; opening a second row would split one gap across two records. What the field evidence adds is that the gap is **user-visible and self-reporting** — a Collector meets it on their first recording and describes it accurately without any prompting — which the written gap did not establish and which bears on how urgently the seam gets built.
+
+**It also cost the mission a step.** Scenario 1's field-of-view check was first scoped around "look at the live preview", which does not exist. The check was re-scoped to judge the recorded file instead — the right substrate anyway, since Chapter 9.8 asks about the captured field of view rather than the viewfinder.
+
 ### 6. Two seams that were wrong until this mission composed them
 
 **`ChunkFinalizer.finalizeChunk` had no way to know when a chunk started.** `ChunkProcessingJob.startedAt` is the instant capture *ended* — Mission 3.4.5 named it for when processing became possible — and Chapter 5.7 §2's `timing.started_at` needs the other end of the interval. An implementation given only the job would have set `started_at` equal to `ended_at` and reported **every chunk as zero seconds long**, in the field Chapter 4.5 derives `duration_seconds` from. `chunkStartedAt` is now a parameter, passed from `RecordingStateRecording`.
