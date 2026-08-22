@@ -4698,6 +4698,8 @@ Every carried-forward item, in one place. Accurate as of **Mission 4.3**; origin
 | 132 | **`firebaseauth.users.get` is a user-enumeration capability held by an identity an unauthenticated route can reach** | Mission 7.6's bisection added it because `createUser` fails without it — [[A-223]] establishes that empirically, so it is not removable on a snap call. It permits reading any account by uid or email.<br><br>**The route that reaches it is `withoutAuthentication`.** The handler does not surface the answer: a taken address and a bad code both return `AUTH_INVITE_CODE_INVALID`, so the oracle F1 removed stays removed **in behaviour**.<br><br>**What changed is the KIND of defence.** It is now *"the handler does not expose it"* rather than *"the identity cannot do it"* — a structural control replaced by a conventional one, which is the distinction Mission 7.7 spent itself on. Nothing is wrong today and nothing enforces that it stays right.<br><br>**Wants its own trace/decide**, asking whether the create path can be separated from a read-capable identity, or whether the conventional control should be pinned by a test that fails if the two responses ever diverge. F-2, Mission 7.11. | A-223, F1, ADR-048, Mission 7.6 |
 | 133 | **`resourcemanager.projects.getIamPolicy` lets the redeem identity read who holds what on the Firebase project** | One of the fourteen baseline permissions Google documents for Firebase, and the most sensitive of them: it permits enumerating every principal and role on the project. The identity holding it is reachable from an unauthenticated route.<br><br>**It is present because the baseline requires it, not because it was chosen.** The whole baseline was established by bisection against a live 403 — [[A-223]] — after [[A-222]] cost a separate one. Both failures name neither side.<br><br>**So removing it is an experiment, not a cleanup.** The cost of guessing wrong is a 403 that says nothing, on a route that provisions accounts. It needs a trace/decide and a deployed-route test proving redemption still works without it, which is a mission-shaped piece of work rather than an end-of-session edit. F-3, Mission 7.11. | A-223, A-222, Mission 7.6 |
 | 134 | **The secret scan reads HEAD only, and the job's own opening comment says why that is not enough** | The comment states that a committed credential is disclosed permanently and that deleting it in a later commit does not remove it from history. The job then scans `git grep -- .`, which is HEAD. **A credential committed and later deleted is invisible to it — precisely the case the comment describes.**<br><br>**Cost is not the obstacle.** Mission 7.11 swept seven pattern classes across all 313 reachable commits in seconds.<br><br>**What a hit would MEAN is the obstacle.** ADR-016 requires rotation as the first response and does not treat history rewriting as the reflex, so a historical hit produces a permanently red build that no permitted action clears. A gate that cannot be made green is a gate somebody disables — the same failure the two-tier pattern design in that job exists to avoid.<br><br>**So the open question is not whether to scan history but what a hit should DO**: report without failing, fail once against an allowlist keyed by commit, or stay at HEAD and rely on GitHub push protection for the history case. A design decision, not an implementation. F-1, Mission 7.11. | F-1, ADR-016, Mission 7.11 |
+| 135 | **Re-entrancy guards are untested across `application/`** | **25 of the 69 survivors in Mission 8.1's track (a) sample are one shape**: a private boolean whose visible outcome is asserted somewhere and whose GUARD is exercised nowhere.<br><br>`features/auth/application/auth_notifier.dart` — **14** (`_signingOut`, `_wasAuthenticated`, `_discardingSession`)<br>`features/upload/application/upload_dispatcher.dart` — **5** (`_sawQueued`, `_sawUploading`)<br>`features/recording/application/recording_notifier.dart` — **3** (`_endingChunk`)<br>`features/projects_tasks/application/projects_notifier.dart` — **2** (`_loadingMore`)<br>`features/auth/presentation/login_screen.dart` — **1** (`_busy`)<br><br>**Separate from item 129, not a subset of it.** Item 129 is about tests that assert nothing. These tests assert plenty — they assert the outcome. The flag exists for the second concurrent call, the interleaved stream event, the re-entrant tap, and no test creates one.<br><br>**One was fixed at Mission 8.1 to prove the class is real**, by ruling rather than as a sweep. `_signingOut` decides whether `_classify` reports a session ending as `unauthenticated` or `expired`; flipped, the suite stayed green and a Collector pressing Sign Out is told their session expired — an error message for something they chose.<br><br>**Cheapest first**: `_loadingMore` and `_endingChunk` guard idempotence and are small. `auth_notifier.dart`'s fourteen are the prize and the most work. | A-237, Mission 8.1 |
+| 136 | **The backend asserts that a call happened, not what it carried** | **389 of the 804 survivors (48%) in Mission 8.1's exhaustive Stryker census are unasserted object or query payloads.** Blanking a `SELECT` to `""` or an object literal to `{}` leaves the suite green.<br><br>**The mechanism is `aws-sdk-client-mock`.** [[A-212]] recorded its shape — *"a mock asserts what was sent, never what Postgres would accept"* — and this is the layer beneath that finding: many tests do not assert what was sent either. They assert that a call occurred.<br><br>**From this mission's own work**: `caller.test.ts` asserts the `orgId` INSERT parameter and not `email`, `uid` or `role`, so mutating those three parameter NAMES survives. Written the same day as the census and invisible to reading.<br><br>**Sibling to item 135, deliberately not folded into it.** Different language, different mechanism, different fix: 135 needs concurrency tests for Dart control flow, this needs assertions on arguments the mocks already capture.<br><br>**Two adjacent clusters from the same census**: `ConditionalExpression` at 251 survivors (67% killed), and `OptionalChaining` at **19% killed** — 38 of 47 `?.` guards survive, meaning almost nothing passes the missing value the guard exists for. | A-237, A-212, Mission 8.1 |
 | 92 | **No endpoint anywhere in Chapter 4.6 returns an organisation's Collectors — a catalog-level omission that four separate specifications assume away** | **Recorded as its own row rather than inside A-06's, because it is not one screen's problem.** Chapter 4.6's complete catalog is **15 routes**, and its only user-facing one is `GET /v1/users/me` — *"Current user's profile + role"*, the caller and nobody else. **Four specifications assume a Collector directory exists and none of them can be satisfied:** FR-ADM-03 (*"assign one or more Collectors"* — an Admin must identify them); UC-07's exception flow (*"If the Admin attempts to assign a Collector who does not have an account or is deactivated, the system blocks the assignment and explains why"* — presupposes the Admin picked from something); Chapter 2.2's Admin flow step 6 (*"Collector(s) **selected** and confirmed"* — selected from what?); and Chapter 2.7's A-06, which lists Collector rows.<br><br>**The gap is total, not merely endpoint-level.** Verified at every layer this project has: Firestore holds one collection, `org_invite_codes`, with `allow read: if false` (*"Nobody reads, ever"*); `functions/src/index.ts` states in its own comment that *"no `orgs` collection exists"* and names the users table as *"Volume 4 Ch. 4.4's"*, behind the unbuilt backend; `features/auth/` yields the caller's own session and nothing else; and **no fake in `lib/` or `test/` holds a user list**. So the only user id this application can obtain is the signed-in Admin's own `uid`, which Chapter 4.4 §4's `role='collector'` annotation makes the wrong one.<br><br>**Closing it needs a route added to Chapter 4.6** — something like `GET /v1/users?role=collector`, org-scoped per BR-20 — and that is a backend/spec decision, not an engineering one. **No stand-in was invented**: seeding a roster into a fake would be inventing a domain concept this project has never modelled rather than standing in for one with a known shape, which is the line between a fake and a fabrication (A-122). | A-122, item 89, FR-ADM-03, UC-07, Ch. 2.2 step 6, Ch. 4.6 §2 |
 | 90 | **Chapter 2.9 contradicts itself about editing a Task: §2 principle 4 requires a confirmation, §4.4 forbids one** | **A PRODUCT/SPEC DECISION FOR FAISAL — a genuine authorial contradiction inside one chapter, not something derivable.** Both sentences name the same action explicitly and state opposite rules.<br><br>**§2, principle 4:** *"Admin actions that affect a Collector are never destructive-by-default. Removing a Collector from a Task, or **editing Task instructions after Collectors are already assigned, always confirms the action and states its effect in plain language before it takes effect**."*<br><br>**§4.4:** *"Reversible actions (reassigning a Collector, **editing Task instructions**) **do not require a confirmation dialog** — they save immediately and can be changed again just as easily."*<br><br>**This is unlike G3.** There the sources disagreed in emphasis and one class of them specified a mechanism, so the resolution was derivable by asking which sources were normative (A-116). Here both sentences are behavioural rules in the same chapter, at the same level of authority, naming the same action — and §2 P4 even supplies the reasoning (*"affect a Collector"*) that §4.4's *"reversible"* framing rejects. **There is no reading that satisfies both.** Mission 5.2.2 therefore held A-05's **edit** half back entirely rather than pick one: `updateTask` exists and works, and shipping either behaviour would encode an answer nobody has given into UI a Collector depends on. Settling it needs one sentence struck or amended, not an implementation judgement. | A-121, Ch. 2.9 §2 P4, Ch. 2.9 §4.4, FR-ADM-02 |
 | 91 | **Chapter 2.5's A-04 names "Project-level settings"; the phrase appears exactly once in all of Volume 2 — in that row** | **Third instance of one shape, and kept as a separate row so the family stays visible.** Ch. 2.5's A-04: *"Name, description, and **Project-level settings**."* Nothing defines them: `projects` has seven columns and none is a setting (Ch. 4.4 §2), `POST /v1/projects` carries no such field, no FR mentions one, and no other chapter uses the phrase. So A-04 renders name and description with **no settings section and no empty placeholder implying one is coming** — the treatment C-06 gave `requirements` (A-110), and a test asserts the absence.<br><br>**The family, three rows and three owners:** item 69 is FR-PT-05/A-05's `requirements` — a **Task** field named by a requirement with no column. This is A-04's **Project-level settings** — a **Project** field group named by a screen with no column. Both are *"a surface names something the schema does not have"*, and they are separate items because they have different owners, different chapters and will be answered by different decisions. Folding them would make one product answer look like it closed both. | A-110, item 69, Ch. 2.5 A-04, Ch. 4.4 §2 |
@@ -8584,3 +8586,104 @@ It is [[A-231]]'s shape once more, and closer to it than [[A-235]] is. A-231 rec
 **An exemption may record effort, or it may record a ceiling, and only the first should be taken on trust.** A ceiling belongs in the list only once a test has been attempted against the specific lines it claims are unreachable, with the attempt recorded — not inferred from the presence of an unreachable call somewhere in the file.
 
 `check-coverage.mjs`'s `EXEMPT` is empty as of Mission 8.1, so nothing carries a ceiling today. The mechanism stays: an exemption is a floor of its own, and a file that rises above its target fails the gate until its entry is removed. That is what caught all four here, including this one.
+
+---
+
+### A-237 — open item 129 answered on two surfaces of three
+
+**Date: 2026-08-22, Mission 8.1.**
+
+Open item 129 says nothing detects a test that passes while asserting nothing. Three censuses ran against it. **Two close it. The third narrows it and names what blocks closure.**
+
+#### Backend — CLOSED
+
+An exhaustive Stryker census over every backend source but the two entry-point scripts that cannot be imported: **2,453 mutants in 7 minutes 41 seconds.**
+
+| | |
+|---|---|
+| Killed | 1,313 |
+| **Survived** | **804** |
+| No coverage | 173 |
+| Ignored | 133 |
+| Timeout | 30 |
+| **Score on code a test actually runs** | **62.6%** (1,343 of 2,147) |
+
+**Closed does not mean good. It means measured, exhaustively, with nothing sampled.** Item 129 was about the absence of detection; detection now exists, runs from a committed config, and reports a number. The 804 survivors are registered as accepted debt in open item 136 — a known quantity, not an unknown one.
+
+**The most useful finding is about this mission's own work.** The four files Mission 8.1 took to 100% line coverage score, by mutation:
+
+| File | Line | Mutation |
+|---|---|---|
+| `functions/redeem/src/firebase.ts` | 100% | **97%** |
+| `packages/shared/src/caller.ts` | 100% | **81%** |
+| `packages/shared/src/authorizer.ts` | 100% | **79%** |
+| `packages/migrate/src/runner.ts` | 98% | **71%** |
+
+Line coverage said done. This is [[A-236]] arriving from the opposite direction: there, a ceiling estimated from outside a file was sixty points low; here, a number that reads as completion is three to twenty-nine points high. **Both are numbers that stop being questioned once they look finished.**
+
+#### Mobile domain — CLOSED
+
+A full manual census of every domain source with a test: **73 mutants, 68 killed, 5 survived, 93.2%.**
+
+**Four of the five survivors are provably equivalent mutants**, established by hand rather than filed by pattern:
+
+- `retry_schedule.dart:82` — `scaled >= maxDelay` to `>`. `maxDelay` is 300000 ms and `baseDelay` 5000; 300000/5000 = 60, which is not a power of two, so `scaled == maxDelay` is unreachable.
+- `retry_schedule.dart:72` — `doublings <= 0` to `<`. At zero the fall-through computes the same value and returns it.
+- `retry_schedule.dart:78` — `doublings >= 32` to `>`. At 32 the fall-through exceeds the cap and returns `maxDelay` anyway.
+- `wide_angle_ladder.dart:116` — `<= zoomFactorOptical` to `<`. At exactly 0.5 the distance tie-break returns optical either way.
+
+**Excluding them the domain suite is 68 of 69 — 98.6%.**
+
+The single real gap is fixed: `recording_lifecycle.dart:148`, where `atCapacity && reason == automaticBoundary` could be flipped to `||` with the suite still green. Exactly one combination discriminates them — a Collector stopping while three chunks process — and under the mutant that Collector is told the device ran out of capacity. The file's own comment says why it matters: *"one they asked for, and one the device imposed on them."*
+
+**Equivalent mutants are why a raw mutation score understates quality**, in the same way line coverage overstates it. Neither number means anything until you know which mutants could have been killed at all.
+
+#### Mobile non-domain — NARROWED, NOT CLOSED
+
+A stratified sample: **seed 20260822**, n=12 per stratum, equal allocation, random within stratum, drawn and recorded **before any mutation ran**. Eight files written by Mission 8.1 itself were excluded, following Mission 7.10's precedent, leaving a population of 897 test cases.
+
+**273 mutants, 204 killed, 69 survived, 74.7%.**
+
+| Stratum | Run | Killed | Survived | Rate |
+|---|---|---|---|---|
+| `core/` | 50 | 48 | 2 | **96.0%** |
+| `app/` | 15 | 12 | 3 | 80.0% |
+| `application/` | 109 | 80 | 29 | 73.4% |
+| `data/` | 74 | 48 | 26 | 64.9% — **87.3%** excluding `isar_chunk_store.dart` ([[A-238]]) |
+| `presentation/` | 25 | 16 | 9 | **64.0%** |
+
+Equal allocation was chosen over proportional for this table's sake: a single global figure would be dominated by `data/` and would not say which layer is weak. 25 of the 69 survivors are a single systemic shape, registered as open item 135.
+
+##### Methodological note — 74.7% is a floor, not an estimate
+
+**`dartmutate.py` runs only the test file co-located with the mutated source.** A survivor therefore means *"not caught by the test beside it"* — not *"not caught by the suite"*.
+
+That was calibrated rather than assumed. Mutating `auth_guard.dart`'s `user.role == Role.collector` to `!=` **passes `auth_guard_test.dart` and fails the full suite with four failures.** Every rate in the table above is a lower bound, and the true suite-wide rate is higher by an amount nobody has measured.
+
+Measuring it properly means running all 1,189 tests per mutant rather than one file — roughly a hundredfold cost, which is why the tool does not do it.
+
+**What blocks closure is tooling, not effort.** Dart has no mature mutation framework; this project wrote its own because the alternative was hand-mutating 207 tests, which is neither reproducible nor reviewable. Closure needs either that tool grown to whole-suite runs with incremental selection, or a real Dart mutation framework coming to exist.
+
+#### One recommendation this census produced, deliberately not acted on
+
+`retry_schedule.dart` carries **no BR tag in source or test**, and its tests do pin a real rule: the six-attempt budget, the doubling sequence and the five-minute cap. Its three survivors are equivalent mutants rather than gaps, which is evidence the rule is genuinely covered and only the tag is missing.
+
+**Recommended: `retry_schedule.dart` should carry a BR tag for the six-attempt backoff.** Not applied — that is the project owner's call with the register open.
+
+---
+
+### A-238 — what A-096's trade costs, measured for the first time
+
+**Date: 2026-08-22, Mission 8.1. A measurement attached to [[A-096]] and [[A-234]], not a reopening of either.**
+
+A-096 declared `isar_chunk_store.dart` device-verified rather than unit-tested, and [[A-234]] reaffirmed it after testing all three of the conditions A-096 set for reopening itself. Both describe the cost qualitatively: *"the number stays missed, and a regression in that file will be caught by a device pass rather than by CI."*
+
+**Mission 8.1's mutation sweep puts a number on it: 19 surviving mutants in that one file.**
+
+That is **19 of the `data` stratum's 26 survivors**. Excluding it, `data` scores **87.3%** rather than 64.9% — second-best of five strata rather than worst. The file was making the entire layer look weak, in the same way it makes the layer's line coverage look weak ([[A-235]]).
+
+**Nothing here changes the trade.** The 19 are unreachable for A-096's stated reason: `flutter test` cannot load `isar_flutter_libs`' native binaries, and the only mechanism — `Isar.initializeIsarCore(download: true)` — remains declined for the reasons A-096 gave and A-234 re-tested.
+
+What changes is that *"a regression will be caught by a device pass"* now has a magnitude. **Nineteen specific behaviour changes are invisible to CI**, including `existing == null`, `row.localDeletedAt == null`, and the status filters deciding which chunks are eligible for cleanup — the deletion path Chapter 5.15 added.
+
+**This does not meet A-096's second reopening condition.** That condition is *"a defect escaping to a device that a unit test would have caught."* No defect escaped. This sizes the exposure the condition is waiting on, which is a different thing and is recorded as such.
