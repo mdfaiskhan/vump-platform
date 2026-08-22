@@ -150,6 +150,40 @@ void main() {
       );
     });
 
+    test('a Collector stopping AT capacity is still their stop, not one the '
+        'device imposed', () {
+      // The one case that discriminates `atCapacity && reason == automatic`
+      // from `atCapacity || reason == automatic`, found by mutating that line
+      // at Mission 8.1: the operator could be flipped and every test still
+      // passed. The other three combinations either agree or never reach the
+      // branch, because `continues` short-circuits them.
+      //
+      // It is not a corner case. It is a Collector pressing stop at the moment
+      // three chunks happen to be processing, and the source comment says why
+      // it matters: "one they asked for, and one the device imposed on them."
+      // Reporting the wrong one tells the Collector their device gave up.
+      final RecordingState? next = RecordingLifecycle.onCaptureStopped(
+        recordingAt(
+          2,
+          t0,
+          processing: <ChunkProcessingJob>[jobFor(0), jobFor(1)],
+        ),
+        ChunkBoundaryReason.collectorStop,
+        jobFor(2),
+        t1,
+      );
+
+      expect(
+        (next! as RecordingStateFinalizing).endCause,
+        SessionEndCause.collectorStop,
+      );
+      // The premise the assertion above depends on: this really is capacity.
+      expect(
+        (next as RecordingStateFinalizing).processing.length,
+        RecordingLifecycle.maximumConcurrentProcessing,
+      );
+    });
+
     test('earlier jobs are preserved, not replaced', () {
       final RecordingState? next = RecordingLifecycle.onCaptureStopped(
         recordingAt(1, t0, processing: <ChunkProcessingJob>[jobFor(0)]),
