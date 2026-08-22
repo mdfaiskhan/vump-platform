@@ -37,4 +37,28 @@ void main() {
     expect(context.deviceModel, MetadataIdentity.unsourced);
     expect(context.appVersion, '1.0.0+1');
   });
+
+  test('built at runtime from resolved values, as the composition root builds '
+      'it', () {
+    // The two tests above construct with `const`, which Dart evaluates at
+    // compile time — so the constructor body never runs and coverage records
+    // the declaration as unexecuted. That is a measurement artefact rather
+    // than a missing assertion: they already prove the field wiring.
+    //
+    // This one exists because `main.dart` does NOT construct it with `const`.
+    // It cannot: `collectorId` comes from `ref.watch(authNotifierProvider)`,
+    // so the real call site is a runtime construction from values that are not
+    // compile-time constants. Mirroring that is the honest way to reach the
+    // path production actually takes.
+    final String collectorId = <String>['collector', '1'].join('-');
+    final PlatformDeviceContext context = PlatformDeviceContext(
+      collectorId: collectorId,
+      deviceId: 'device-1',
+      deviceModel: 'OnePlus CPH2707',
+      appVersion: '1.0.0+1',
+    );
+
+    expect(context.collectorId, 'collector-1');
+    expect(context.deviceId, 'device-1');
+  });
 }

@@ -1,9 +1,20 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mobile/core/errors/error_codes.dart';
+import 'package:mobile/core/errors/exceptions/storage_exception.dart';
 import 'package:mobile/features/recording/data/shared_preferences_wide_angle_eligibility_cache.dart';
 import 'package:mobile/features/recording/domain/entities/device_fingerprint.dart';
 import 'package:mobile/features/recording/domain/entities/wide_angle_tier.dart';
+import 'package:mocktail/mocktail.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+/// A `SharedPreferences` whose writes fail.
+///
+/// `SharedPreferences.setMockInitialValues` gives a real instance backed by an
+/// in-memory map, which is what every other test here wants and is exactly why
+/// the error paths were unreachable: that instance does not fail. Mission 8.1
+/// installed `mocktail` for this — Volume 3 §3.1 named it and the project had
+/// been hand-rolling doubles instead.
+class _FailingPreferences extends Mock implements SharedPreferences {}
 
 /// The cache Volume 5.2 §2 requires, and its invalidation rule.
 ///
@@ -210,5 +221,98 @@ void main() {
       expect(ErrorCode.storageWriteFailed.code, 'STORAGE_WRITE_FAILED');
       expect(ErrorCode.storageDeleteFailed.code, 'STORAGE_DELETE_FAILED');
     });
+  });
+
+  /// The paths that run when the platform refuses.
+  ///
+  /// testing-standards.md:239 records that Chapter 9.5 §2's data-layer target
+  /// is *"focused on error-path coverage … not just the happy path"*, so a
+  /// repository at 80% covering only success does not meet it. These four
+  /// lines were the whole of this file's shortfall and all four are failures.
+  group('when the platform refuses', () {
+    late _FailingPreferences preferences;
+    late SharedPreferencesWideAngleEligibilityCache cache;
+
+    setUp(() {
+      preferences = _FailingPreferences();
+      cache = SharedPreferencesWideAngleEligibilityCache(preferences);
+    });
+
+    test(
+      'a failed write raises storageWriteFailed, not the platform error',
+      () async {
+        final Exception cause = Exception('the platform store is unavailable');
+        when(() => preferences.setString(any(), any())).thenThrow(cause);
+
+        await expectLater(
+          () => cache.write(
+            tier: WideAngleTier.primarySensorZoom,
+            fingerprint: v1,
+          ),
+          throwsA(
+            isA<StorageException>()
+                .having(
+                  (StorageException e) => e.errorCode,
+                  'errorCode',
+                  ErrorCode.storageWriteFailed,
+                )
+                // The cause is kept, not discarded: ADR-025 §7 converts
+                // a third-party failure at the module that owns it, and a
+                // conversion dropping the original leaves nothing to
+                // diagnose.
+                .having((StorageException e) => e.cause, 'cause', cause),
+          ),
+        );
+      },
+    );
+
+    test(
+      'a failed clear raises storageDeleteFailed, a distinct code',
+      () async {
+        when(() => preferences.remove(any())).thenThrow(Exception('locked'));
+
+        await expectLater(
+          cache.clear,
+          throwsA(
+            isA<StorageException>().having(
+              (StorageException e) => e.errorCode,
+              'errorCode',
+              ErrorCode.storageDeleteFailed,
+            ),
+          ),
+        );
+      },
+    );
+
+    test(
+      'the failure message names the verdict, not the storage key',
+      () async {
+        // The message reaches a person. A key name would tell them nothing.
+        when(
+          () => preferences.setString(any(), any()),
+        ).thenThrow(Exception('x'));
+
+        try {
+          await cache.write(
+            tier: WideAngleTier.primarySensorZoom,
+            fingerprint: v1,
+          );
+          fail('write should have thrown');
+        } on StorageException catch (error) {
+          expect(error.message, contains('wide-angle eligibility verdict'));
+          expect(error.message, isNot(contains('_tier')));
+        }
+      },
+    );
+  });
+
+  test('currentOsVersion reads the platform rather than a stored value', () {
+    // Volume 3 §3.8's minimal-surface principle is why this is `dart:io` and
+    // not `device_info_plus`; the assertion is only that it is sourced at all,
+    // because the value itself is whatever host the suite runs on.
+    expect(
+      SharedPreferencesWideAngleEligibilityCache.currentOsVersion,
+      isNotEmpty,
+    );
   });
 }
