@@ -63,6 +63,21 @@ Volume 3 §3.8 §2 fixes this and states the trade: *"Chapter 3.5's module bound
 | `isar_generator` | `^3.1.0+1` | Dev | — | **A-048** |
 | `json_serializable` | `^6.8.0` | Dev | — | — |
 | `flutter_lints` | `^6.0.0` | Dev | — | ADR-021 |
+| `mocktail` | `^1.0.5` | Dev | — | **Mission 8.1** |
+| `integration_test` | `sdk: flutter` | Dev | — | **Mission 8.1** |
+
+**Added at Mission 8.1, and both fulfil a tier Volume 3 §3.1 already named** rather than introducing a pattern. `testing-standards.md` recorded the unit tier as *"`flutter_test` only"* and the integration tier as *"Neither"*; the first gap is why every double in this project was hand-rolled, and the second is why Chapter 9.7's ~20% band had no tooling at all. `golden_toolkit` was considered with them and **declined** — the existing raw `matchesGoldenFile` pattern works and no observed friction justified a third package.
+
+`integration_test` ships with the pinned Flutter SDK, so it carries `sdk: flutter` rather than a version constraint. That is the correct form for an SDK package and not an exception to §3.8 §4 item 6.
+
+### Backend
+
+| Package | Constraint | Tier | Governed by |
+|---|---|---|---|
+| `@stryker-mutator/core` | `^10.0.0` | Dev | **Mission 8.1** |
+| `@stryker-mutator/vitest-runner` | `^10.0.0` | Dev | **Mission 8.1** |
+
+Mutation testing, for open item 129 — *"nothing detects a test that passes while asserting nothing"*. Approved without an ADR: it runs in a developer's or CI's hands and no production code imports it. Apache-2.0, published 2026-08-14, `engines: node >=22.0.0` against this project's `>=24 <25`.
 
 **Every non-SDK dependency carries an explicit caret constraint.** Verified: no bare, unconstrained dependency exists, which satisfies §3.8 §4 item 6.
 

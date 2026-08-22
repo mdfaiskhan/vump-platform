@@ -139,6 +139,15 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
 
+  # Volume 3 §3.1 names `mocktail` for unit testing and `integration_test` for
+  # Chapter 9.7's tier; testing-standards.md recorded both as absent. Mission
+  # 8.1 installs them to fulfil tiers this project already accepted rather than
+  # to introduce a pattern. `golden_toolkit` stays declined — the existing raw
+  # `matchesGoldenFile` pattern works and no friction justifies a third package.
+  mocktail: ^1.0.5
+  integration_test:
+    sdk: flutter
+
   # Code generation
   build_runner: ^2.4.13
   freezed: ^2.5.2
