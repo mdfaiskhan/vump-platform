@@ -48,33 +48,29 @@ const NOT_MEASURABLE = ['packages/migrate/src/bootstrap.ts', 'packages/migrate/s
 /**
  * Files below the per-file floor, each with the reason and its real target.
  *
- * **This list is meant to shrink.** Open item 127 tracks it. An entry here is a
- * commitment, not a dispensation — the alternative considered and rejected was
- * a floor low enough that everything passed, which is the "gate nobody chose"
- * ADR-045 warned about, arriving by a different route.
+ * **Empty as of Mission 8.1, and open item 127 is closed with it.** The list
+ * held four entries when Mission 7.9 created it, every one of them testable
+ * and exempt only because that mission chose not to take the work on in one
+ * session. It said so at the time, and the entries carried targets rather than
+ * waivers so the debt stayed legible.
  *
- * Every one of these is TESTABLE. None is exempt because it cannot be tested;
- * they are exempt because Mission 7.9 chose not to take on the work in one
- * session, and said so.
+ * All four cleared their targets at Mission 8.1: `authorizer.ts` and
+ * `caller.ts` to 100%, `runner.ts` to 98.21% against 70%, and `firebase.ts` to
+ * 100% against 40%.
+ *
+ * **`firebase.ts` is the one worth reading twice.** Its target was 40% rather
+ * than 50% because *"the ceiling here is real, not a matter of effort"* — the
+ * remainder being a live token exchange no unit test can reach. That was half
+ * right. The exchange is still unreachable; the code AROUND it was not, and it
+ * was reached without exporting anything, by capturing the credential object
+ * `initializeApp` receives and driving it directly. A ceiling estimated from
+ * outside a file is a guess, and this one was 60 points low.
+ *
+ * Keep the mechanism below even while this is empty: an exemption is a floor
+ * of its own, so anything added here fails the gate the moment it clears its
+ * own target, and the list cannot quietly become permanent.
  */
-const EXEMPT = {
-  'packages/migrate/src/runner.ts': {
-    target: 70,
-    why: 'The migration runner: 251 lines, checksums and forward-only ordering. Needs Data API fixtures. The largest single piece of work on this list.',
-  },
-  'packages/shared/src/caller.ts': {
-    target: 80,
-    why: 'lookupCaller and provisionCaller. Data API, mockable — the pattern exists in six other test files. Chapter 4.7 §1 step 4 lives here, so the target is high.',
-  },
-  'packages/shared/src/authorizer.ts': {
-    target: 80,
-    why: 'ADR-048s REQUEST authorizer. Builds an IAM policy and returns an explicit Deny; both branches are testable and neither is tested.',
-  },
-  'functions/redeem/src/firebase.ts': {
-    target: 40,
-    why: 'Mission 7.9 tested the pure half (6.5% to 33%). The remainder is the live token exchange, which no unit test can reach — 40 rather than 50 because the ceiling here is real, not a matter of effort.',
-  },
-};
+const EXEMPT = {};
 
 const summary = JSON.parse(
   readFileSync(new URL('../coverage/coverage-summary.json', import.meta.url), 'utf8'),
