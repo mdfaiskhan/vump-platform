@@ -116,6 +116,23 @@ void main() {
       expect(find.byKey(const Key('login.submit')), findsOneWidget);
     });
 
+    testWidgets('the password field is obscured', (WidgetTester tester) async {
+      // Mutating `obscureText: true` to false at Mission 8.1 changed nothing
+      // any test could see: the field's presence was asserted, its behaviour
+      // was not. A regression here shows the password in plain text on a
+      // device someone else can see, and every test would stay green.
+      await pumpLogin(tester, _FakeAuthRepository());
+
+      final TextField password = tester.widget<TextField>(
+        find.descendant(
+          of: find.byKey(const Key('login.password')),
+          matching: find.byType(TextField),
+        ),
+      );
+
+      expect(password.obscureText, isTrue);
+    });
+
     testWidgets('a Create an account link, per A-056', (
       WidgetTester tester,
     ) async {
