@@ -102,7 +102,6 @@ class FakeProbe implements CameraCapabilityProbe {
 
 /// Records the order the pipeline is driven in.
 class FakePipeline implements RecordingPipeline {
-
   FakePipeline({this.failStartChunk = false});
 
   /// ADR-053's seam. Tests that care drive it with [emitPreview]; the rest

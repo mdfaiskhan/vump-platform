@@ -667,7 +667,6 @@ class _FakeStore implements ChunkStore {
 
 /// Stands in for the capture pipeline; only its output directory is read here.
 class _FakePipeline implements RecordingPipeline {
-
   _FakePipeline(this._outputDirectory);
 
   /// ADR-053's seam. Tests that care drive it with [emitPreview]; the rest

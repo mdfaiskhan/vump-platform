@@ -241,9 +241,7 @@ class CameraRecordingPipeline implements RecordingPipeline {
         orientation == DeviceOrientation.landscapeRight;
     return PreviewFrame(
       textureId: controller.cameraId,
-      aspectRatio: isLandscape
-          ? value.aspectRatio
-          : 1 / value.aspectRatio,
+      aspectRatio: isLandscape ? value.aspectRatio : 1 / value.aspectRatio,
       quarterTurns: turns[orientation] ?? 0,
     );
   }
