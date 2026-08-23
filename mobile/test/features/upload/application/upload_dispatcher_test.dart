@@ -820,6 +820,81 @@ void main() {
 
       expect(uploads.calls, greaterThan(0));
     });
+
+    // ---------------------------------------------------------------------
+    // The race Mission 8.2 found on hardware, 2026-08-23.
+    //
+    // `IsarChunkStore.watchQueue()` yields its first snapshot and only then
+    // subscribes to `watchLazy()`, which reports writes made after it
+    // attaches. Reconciliation's own write can land in that gap and produce
+    // NO emission at all — which is exactly what happened on a CPH2707: the
+    // row moved to `queued`, the UI's separate subscription read it
+    // correctly, and the dispatcher sat idle for eight minutes.
+    //
+    // WHAT THESE TESTS DO NOT COVER, stated plainly. The attach gap itself
+    // is device-verified, not unit-tested: Isar 3 needs a native core that
+    // `flutter test` does not load, so no test here drives a real
+    // `watchLazy`. What IS tested is the property that makes the gap
+    // harmless — the dispatcher reaches the right state whether or not an
+    // emission ever arrives, and stays bounded when a stale one does.
+    //
+    // The five tests above passed while this bug was live on hardware,
+    // because `_FakeQueue` emits only when a test pushes and so has no
+    // first-read-then-attach gap to lose a write in. It modelled the
+    // contract and not the concurrency — open item 141.
+    // ---------------------------------------------------------------------
+
+    test('the dispatcher wakes itself when the write emits nothing', () async {
+      queue.snapshot = <QueuedChunk>[stranded('chunk-0')];
+      // The write becomes visible to the next READ, and emits nothing —
+      // `push` is deliberately never called. This is the real defect.
+      source.onReleaseStranded = (String id, int attempts) {
+        queue.snapshot = <QueuedChunk>[
+          chunk('chunk-0', ChunkUploadStatus.queued),
+        ];
+      };
+      final UploadDispatcher dispatcher = build();
+
+      dispatcher.start();
+      await pumpEventQueue();
+
+      expect(source.stranded, <String>['chunk-0']);
+      // Before the fix this was 0: `_launch` was called while `_sawQueued`
+      // was still false, and no emission ever arrived to correct it.
+      expect(uploads.calls, greaterThan(0));
+    });
+
+    test('a stale emission after the wake cannot exceed the bound', () async {
+      // The subscription may still deliver the snapshot it read BEFORE the
+      // write. It must not push the dispatcher past Ch. 5.11 §3's limit, and
+      // it must not produce a second runner for one slot.
+      queue.snapshot = <QueuedChunk>[stranded('chunk-0')];
+      source.onReleaseStranded = (String id, int attempts) {
+        queue.snapshot = <QueuedChunk>[
+          chunk('chunk-0', ChunkUploadStatus.queued),
+        ];
+      };
+      final UploadDispatcher dispatcher = build(concurrency: 1);
+
+      dispatcher.start();
+      await pumpEventQueue();
+      expect(uploads.calls, 1);
+
+      // Stale: still says `uploading`, read before the write landed.
+      queue.push(<QueuedChunk>[stranded('chunk-0')]);
+      await pumpEventQueue();
+
+      // Fresh: the row as it actually is now.
+      queue.push(<QueuedChunk>[chunk('chunk-0', ChunkUploadStatus.queued)]);
+      await pumpEventQueue();
+
+      // The runner from the wake still holds the only slot, so neither
+      // emission launched another. `_launch` is bounded by `_inFlight <
+      // _concurrency` and runs without an await, which is what makes two
+      // triggers safe rather than merely unlikely.
+      expect(uploads.calls, 1);
+      expect(dispatcher.inFlight, lessThanOrEqualTo(1));
+    });
   });
 }
 
@@ -837,6 +912,11 @@ class _FakeQueue implements ChunkQueueSource {
   bool cancelled = false;
 
   void push(List<QueuedChunk> rows) {
+    // An emission from the real store is a fresh read of the same rows, so a
+    // read taken after it returns the same thing. Keeping these in step is
+    // what stops the fake from inventing a disagreement `IsarChunkStore`
+    // cannot produce — the two used to drift, which is open item 141's shape.
+    snapshot = rows;
     if (!_controller.isClosed) {
       _controller.add(rows);
     }
@@ -994,6 +1074,10 @@ class _FakeUploadSource implements ChunkUploadSource {
   @override
   Future<void> release(String chunkId) async {}
 
+  /// Lets a test make the write visible to the queue's next read, which is
+  /// what a real Isar write does, without emitting anything.
+  void Function(String chunkId, int attemptCount)? onReleaseStranded;
+
   @override
   Future<void> releaseStranded({
     required String chunkId,
@@ -1001,6 +1085,7 @@ class _FakeUploadSource implements ChunkUploadSource {
   }) async {
     stranded.add(chunkId);
     strandedAttempts.add(attemptCount);
+    onReleaseStranded?.call(chunkId, attemptCount);
   }
 
   @override
