@@ -110,3 +110,54 @@ Reconciliation is safe **because it runs once per process, before any claim, in 
 **Two documented statements become wrong and must be corrected in the same change**, or the code and its comments will disagree: `ChunkQueueSource`'s *"no re-queue step at launch and no separate recovery pass"*, and `UploadDispatcher.start`'s *"there is no recovery pass here and none is needed"*. Chapter 5.9 §3 itself is a Volume statement and is corrected by amendment, not edited.
 
 **Startup does one more write.** A single indexed read of rows at `uploading`, and a write only for rows found — normally none. It runs before the first claim, so it cannot race one.
+
+## Correction, 2026-08-23 — the wake mechanism, not the decision
+
+**The decision above stands unchanged.** Reconciliation at dispatcher start, one attempt spent per process death, the budget applied inside the reconciliation, `claimNext` and `requeue` untouched — all of that was verified on hardware and all of it holds. What was defective was the part this ADR never wrote down: **how the running dispatcher finds out.**
+
+### What shipped, and what it did on a device
+
+The implementation set `_reconciled` and called `_launch()`, which is gated on `_sawQueued`. That flag is set only by `_onQueueChanged`, which is fed by the queue subscription. And `IsarChunkStore.watchQueue()` is:
+
+```dart
+Stream<List<QueuedChunk>> watchQueue() async* {
+  yield await currentQueue();                                  // first read
+  await for (final void _ in _isar.localChunks.watchLazy()) {   // attaches here
+    yield await currentQueue();
+  }
+}
+```
+
+`watchLazy()` reports writes made **after** it attaches. **Reconciliation's own write can land between the first read and that attach, and then no emission is ever produced for it.** Nothing else calls `_launch()` — only `_onQueueChanged` and a connectivity change — so the dispatcher holds its first read's state for the life of the process.
+
+Mission 8.2 reproduced it on a CPH2707 on 2026-08-23, on a build made from this ADR's own implementation. A 369,099,659-byte chunk was force-stopped 4.7 s into its transfer. On relaunch the reconciliation fired correctly and logged *"Returned to the queue as attempt 1 of 6"* at 21:54:47.328 — and then the app said nothing for **eight and a half minutes**, across twelve monitor samples, with zero PUTs.
+
+**The project owner's screen read "Queued"** the whole time, which is what made the diagnosis findable: the UI subscribes to `watchQueue()` **separately**, and its first read happened after the write. Two streams over the same rows, two first-read timings, two different answers. The database was right, the UI was right, and only the dispatcher was stale.
+
+A confirming experiment settled it without a code change: recording an unrelated 15-second clip produced a write, the write produced an emission, and the dispatcher immediately claimed **both** chunks. The stranded one uploaded and verified at 22:05:21. **Nothing was ever lost** — the chunk was recoverable for the entire window and simply had nothing to wake its dispatcher.
+
+### The correction
+
+`_reconcileStranded` now reads the queue itself and feeds `_onQueueChanged` directly, rather than depending on an emission that may never come. `_onQueueChanged` is reused rather than reimplemented, because it recomputes both flags from a whole snapshot and folds the batch, and a second copy would be a second place for the rule to drift.
+
+**Reordering to subscribe-before-reconcile was considered and rejected.** It narrows the window without removing the dependency on timing; the same race returns on a slower device or a slower Isar open. Reconciliation's write must be self-sufficient in waking the dispatcher.
+
+### Why two triggers calling `_launch()` is safe by construction
+
+`_launch()` is now reachable from the wake and from the subscription. That is provably bounded rather than probably fine:
+
+- **`_launch()` is bounded, not merely idempotent.** It is synchronous with no `await`, so Dart completes it without interleaving and `_inFlight` cannot be read between the check and the increment. `while (_inFlight < _concurrency)` means extra calls cannot exceed Chapter 5.11 §3's limit.
+- **`claimNext` is atomic**, so a duplicate runner cannot claim a row twice — the property the concurrency design already rests on.
+- **`UploadBatchProgress.observe(n)` is idempotent.** With `done = total − remaining`, `observe(n)` gives `total' = max(total, n + done)`; applying it again gives `max(total', n + total' − n) = total'`.
+- **`_syncService` is serialised** through its own future chain.
+- **There is precedent in the same class.** `_runOne` already calls `_launch()` directly rather than waiting for the emission its own status write will produce, for this exact reason, and says so in a comment.
+
+### The residual, stated rather than glossed
+
+A **stale** first emission — read before the write — can still arrive after the wake and reset `_sawQueued` to false. The consequence is bounded: the wake has already run `_launch()`, so a claim attempt is in flight; `_inFlight > 0` keeps the service alive; and a successful claim writes a status, which produces a genuinely fresh emission. If the claim finds nothing, `false` was the correct answer anyway. This is a transient wrong flag that self-corrects on the next write, against a pre-fix state in which **no claim was attempted at all**.
+
+### What the tests do and do not cover
+
+Two tests were added and **verified to fail against the pre-fix dispatcher** — the first with *"Expected: a value greater than `<0>`, Actual: `<0>`"*, which is the device symptom exactly.
+
+**The attach gap itself remains device-verified, not unit-tested.** Isar 3 needs a native core `flutter test` does not load, so no test here drives a real `watchLazy`. What is tested is the property that makes the gap harmless: the dispatcher reaches the right state whether or not an emission arrives. That is a stronger claim than modelling the gap, because it does not depend on the model being right — and this ADR's original five tests are the standing argument for that distinction. They passed while the code was broken on hardware, because `_FakeQueue` had no first-read-then-attach gap to lose a write in. **Open item 141** records that blind spot and recommends an audit of the other port fakes.
