@@ -6,6 +6,8 @@ import 'package:mobile/features/recording/domain/entities/recording_session.dart
 import 'package:mobile/features/recording/domain/entities/recording_state.dart';
 import 'package:mobile/features/recording/presentation/recording_screen.dart';
 
+import '../fakes/checklist_fakes.dart';
+
 /// C-09's Stop control, and Chapter 2.10 §4's announcement rule.
 ///
 /// > *"The Recording Screen's Stop control announces its state changes
@@ -38,6 +40,12 @@ void main() {
     return ProviderScope(
       overrides: <Override>[
         recordingNotifierProvider.overrideWith(() => _FixedNotifier(state)),
+        // ADR-053: the screen now draws CameraPreviewSurface, which reads the
+        // pipeline for a texture id. FakePipeline reports no preview, so the
+        // surface renders black — which is what this screen showed before the
+        // preview existed, leaving these tests about the indicator and the
+        // Stop control exactly as they were.
+        recordingPipelineProvider.overrideWithValue(FakePipeline()),
       ],
       child: const MaterialApp(home: RecordingScreen(sessionId: 's1')),
     );

@@ -9,6 +9,7 @@ import 'package:mobile/core/errors/failure.dart';
 import 'package:mobile/features/recording/application/recording_notifier.dart';
 import 'package:mobile/features/recording/domain/entities/recording_state.dart';
 import 'package:mobile/features/recording/presentation/recording_error_copy.dart';
+import 'package:mobile/features/recording/presentation/widgets/camera_preview_surface.dart';
 
 /// Volume 2 Chapter 2.7's C-09 — the chrome-free capture surface.
 ///
@@ -50,14 +51,20 @@ import 'package:mobile/features/recording/presentation/recording_error_copy.dart
 ///    navigation gestures, and asks that it be stated explicitly rather than
 ///    discovered later as a bug. This paragraph is that statement.
 ///
-/// ## The preview is not rendered from a controller here
+/// ## The preview is rendered, and still not from a controller
 ///
 /// `CameraRecordingPipeline` owns the `CameraController` and does not expose
 /// it — deliberately, because handing a controller to a widget would let the
 /// UI start and stop capture behind the state machine's back. FR-REC-03 asks
-/// for a full-screen live preview and this shows a live capture surface
-/// without one, which is a real gap and is recorded in A-064 rather than
-/// closed by breaking that boundary.
+/// for a full-screen live preview, and until ADR-053 this screen showed a
+/// black surface instead; A-064 §5 recorded that gap rather than closing it by
+/// breaking the boundary.
+///
+/// **ADR-053 closes it without spending the boundary.** The pipeline publishes
+/// a texture id, a display aspect ratio and a rotation — three numbers, no
+/// capability — and `CameraPreviewSurface` draws them. This screen still holds
+/// nothing it could start or stop capture with, so Chapter 2.4 §2's *"only
+/// Stop is reachable"* is as true as it was when the surface was black.
 class RecordingScreen extends ConsumerWidget {
   /// Creates the capture surface for [sessionId].
   const RecordingScreen({required this.sessionId, super.key});
@@ -87,7 +94,11 @@ class RecordingScreen extends ConsumerWidget {
         body: SafeArea(
           child: Stack(
             children: <Widget>[
-              const Positioned.fill(child: ColoredBox(color: Colors.black)),
+              // FR-REC-03, closed by ADR-053. Was a black ColoredBox; the
+              // pipeline now publishes a texture id, an aspect ratio and a
+              // rotation, and this draws them. It still cannot start or stop
+              // capture — there is no controller here to do it with.
+              const Positioned.fill(child: CameraPreviewSurface()),
               Align(
                 alignment: Alignment.topCenter,
                 child: Padding(
