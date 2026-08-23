@@ -77,6 +77,35 @@ The decision above says presentation "builds the preview from the id" as though 
 
 **Option A is the named fallback** — promote `camera_platform_interface` and call `CameraPlatform.instance.buildPreview(id)`, which renders identically to `CameraPreview` by construction. It is **not** an automatic fallback: it changes the dependency graph and is a decision to be taken explicitly, not executed silently because a preview looked crooked.
 
+### Amendment, 2026-08-24 (second) — Option B failed the device gate, and it was impossible rather than imperfect
+
+The amendment above named the device test as the correctness gate and Option A as the fallback. **The gate failed.** On a CPH2707 the preview rendered sideways — the project owner confirmed by photo — and no adjustment to `quarterTurns` could have fixed it.
+
+**The reason is structural.** `RotatedPreviewDelegate` does not pass the texture through; it always wraps it, in `SurfaceTextureRotatedPreview` or `ImageReaderRotatedPreview`, and the latter computes:
+
+```dart
+(sensorOrientationDegrees - currentDefaultDisplayRotationDegrees * sign + 360) % 360
+```
+
+`sensorOrientationDegrees` is reachable — `CameraDescription` carries it. **`currentDefaultDisplayRotationDegrees` is not.** It comes from the platform's `deviceOrientationManager` over a native call, and Flutter exposes portrait-versus-landscape but never the raw 0/90/180/270 display rotation. `SurfaceTextureRotatedPreview` likewise takes a `rotationCorrection` the platform supplies.
+
+So a `PreviewFrame` cannot carry the value the formula needs. **Any constant would be correct in one device orientation and wrong in another** — which is precisely the symptom observed. Option B was not a worse approximation; it was unachievable with the inputs available.
+
+**Option A is adopted.** `camera_platform_interface` is promoted from transitive to a direct dependency and `CameraPlatform.instance.buildPreview(id)` renders the preview — the same code path `CameraPreview` uses, so the output matches an ordinary camera app by construction rather than by tuning.
+
+**The admission checklist was run before adding it**, per Volume 3 §3.8 §4:
+
+1. **No approved package solves it** — `camera` is admitted but exports ten types and `CameraPlatform` is not among them.
+2. **Windows build** — `flutter analyze` and the full suite verified locally, which is the only place this can be checked since CI runs Linux.
+3. **Maintained, and supports the pinned SDK** — first-party `flutter/packages`, 2.13.1, requiring Dart `^3.10.0` and Flutter `>=3.38.0` against this project's 3.44.9.
+4. **Licence** — BSD-3-Clause, pre-approved.
+5. **Its own ADR?** No — it is the platform interface of an already-admitted package, reached for one call. Recorded here instead, which is this section.
+6. **Explicit constraint** — `^2.13.1`, never bare.
+
+**And the confinement obligation is met rather than assumed.** The existing `camera` check greps `'package:camera[/']`, which does not match `camera_platform_interface`, so the new package would have been unconfined and nothing would have said so. The `Architecture boundaries` job now confines it to **one named file**, `camera_preview_surface.dart`, rather than to a directory — the ADR-039 convention where the filename carries the permission and a neighbour cannot acquire it by being added nearby.
+
+**What this costs, stated plainly.** The presentation layer now imports a camera package, which the first amendment counted as a benefit of Option B. That benefit is gone. What is kept is the one that mattered: the pipeline still refuses the controller, and this widget still holds an `int` it cannot start or stop anything with.
+
 ### What the pipeline still refuses, unchanged
 
 - **the `CameraController` itself**

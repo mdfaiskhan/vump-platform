@@ -1,3 +1,4 @@
+import 'package:camera_platform_interface/camera_platform_interface.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mobile/features/recording/application/recording_notifier.dart';
@@ -11,23 +12,28 @@ import 'package:mobile/features/recording/domain/repositories/recording_pipeline
 /// camera sees and cannot start or stop it. That is Mission 3.3's boundary
 /// held by type rather than by discipline: there is no method here to misuse.
 ///
-/// ## Why `Texture` and not `CameraPreview`
+/// ## Why this reproduces `CameraPreview` rather than being it
 ///
-/// `CameraPreview` needs the controller, which is the whole thing being
-/// withheld. Its internals are `CameraPlatform.instance.buildPreview(id)`
-/// under an `AspectRatio` and a `RotatedBox`, and `CameraPlatform` is not
-/// exported by `package:camera` — it lives in `camera_platform_interface`,
-/// which is transitive and which ADR-030 does not permit depending on without
-/// an admission process.
+/// `CameraPreview` takes the controller, which is the whole thing being
+/// withheld. So its body is reproduced here from the id instead: the same
+/// `AspectRatio`, the same `RotatedBox`, the same
+/// `CameraPlatform.instance.buildPreview(id)` underneath. Same pixels, no
+/// capability.
 ///
-/// So this reproduces the shape with Flutter's own `Texture`, and the
-/// presentation layer stays free of the camera plugin entirely.
+/// **A raw `Texture` was tried first and failed on hardware.** On Android
+/// CameraX `buildPreview` wraps the texture in a `RotatedPreviewDelegate`
+/// which computes rotation as
+/// `(sensorOrientationDegrees - displayRotationDegrees * sign + 360) % 360`.
+/// The display rotation is a native value Flutter does not expose, so no
+/// [PreviewFrame.quarterTurns] can stand in for it — the preview came out
+/// sideways, and no constant would be right in every orientation. ADR-053's
+/// amendment records why that made the approach impossible rather than merely
+/// imperfect.
 ///
-/// **What that trades away is recorded in ADR-053's amendment**: on Android
-/// CameraX, `buildPreview` wraps the texture in a `RotatedPreviewDelegate`
-/// that owns crop and rotation. Skipping it puts that job on
-/// [PreviewFrame.quarterTurns], and the device test — not this comment — is
-/// what establishes whether that is right.
+/// `camera_platform_interface` is therefore a direct dependency, admitted
+/// under ADR-030's checklist, and the `Architecture boundaries` job confines
+/// it to **this one file** — the filename announces the permission, per the
+/// ADR-039 convention.
 ///
 /// ## Black is a real state, not a fallback
 ///
@@ -63,7 +69,7 @@ class CameraPreviewSurface extends ConsumerWidget {
               aspectRatio: frame.aspectRatio,
               child: RotatedBox(
                 quarterTurns: frame.quarterTurns,
-                child: Texture(textureId: frame.textureId),
+                child: CameraPlatform.instance.buildPreview(frame.textureId),
               ),
             ),
           ),

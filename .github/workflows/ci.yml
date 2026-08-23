@@ -376,6 +376,11 @@ jobs:
           check firebase_auth          lib/features/auth/data/
           check google_sign_in         lib/features/auth/data/
           check camera                 lib/features/recording/data/
+          # ADR-053. Confined to ONE FILE, not a directory: this is the
+          # renderer for FR-REC-03's preview and nothing else should reach
+          # the platform interface. The filename announces the permission,
+          # per the ADR-039 convention the comments above describe.
+          check camera_platform_interface 'lib/features/recording/presentation/widgets/camera_preview_surface\.dart'
           # main_cleanup_probe.dart joins main.dart as an owner for the same
           # A-067 reason, not a weaker one: it is a second composition root.
           # It builds its own ProviderContainer and binds recordingOverrides,

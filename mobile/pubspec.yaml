@@ -72,6 +72,11 @@ dependencies:
   # A-057 records that the risk is now confirmed and Android-only.
   # Confined to `features/recording/data/`.
   camera: ^0.12.0+2
+  # ADR-053. Promoted from transitive to direct because CameraPlatform is
+  # the only correct renderer for a preview built from a texture id, and
+  # package:camera does not export it. Confined to one named file by the
+  # Architecture boundaries job.
+  camera_platform_interface: ^2.13.1
 
   # Caches the per-device wide-angle eligibility verdict (Volume 5.2 §2:
   # "a fixed per-device-model decision made once at first launch and cached").
