@@ -19,6 +19,7 @@ import 'package:mobile/features/recording/domain/entities/chunk_processing_job.d
 import 'package:mobile/features/recording/domain/entities/cleanable_chunk.dart';
 import 'package:mobile/features/recording/domain/entities/device_fingerprint.dart';
 import 'package:mobile/features/recording/domain/entities/network_type.dart';
+import 'package:mobile/features/recording/domain/entities/preview_frame.dart';
 import 'package:mobile/features/recording/domain/entities/recording_session.dart';
 import 'package:mobile/features/recording/domain/entities/wide_angle_tier.dart';
 import 'package:mobile/features/recording/domain/repositories/battery_reader.dart';
@@ -102,6 +103,25 @@ class FakeProbe implements CameraCapabilityProbe {
 /// Records the order the pipeline is driven in.
 class FakePipeline implements RecordingPipeline {
   FakePipeline({this.failStartChunk = false});
+
+  /// ADR-053's seam. Tests that care drive it with [emitPreview]; the rest
+  /// never look, and a null preview is the honest default for a fake that
+  /// owns no camera.
+  final StreamController<PreviewFrame?> previewController =
+      StreamController<PreviewFrame?>.broadcast();
+  PreviewFrame? preview;
+
+  @override
+  Stream<PreviewFrame?> get previewChanges => previewController.stream;
+
+  @override
+  PreviewFrame? get currentPreview => preview;
+
+  /// Publishes a frame and records it as current, as the real pipeline does.
+  void emitPreview(PreviewFrame? frame) {
+    preview = frame;
+    previewController.add(frame);
+  }
 
   final bool failStartChunk;
   final List<String> calls = <String>[];

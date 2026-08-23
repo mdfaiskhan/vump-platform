@@ -1,4 +1,5 @@
 import 'package:camera/camera.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mobile/core/errors/error_codes.dart';
 import 'package:mobile/core/errors/exceptions/device_exception.dart';
@@ -194,6 +195,31 @@ class _FakeController implements CameraController {
 
   @override
   Future<void> dispose() async => disposed += 1;
+
+  // ADR-053's seam. `openSession` now listens to the controller and reads its
+  // value to publish a PreviewFrame, so those members are reachable and must
+  // be faked. `value` reports uninitialized, which makes `_frameOf` return
+  // null — correct for a fake with no camera behind it, and it keeps these
+  // tests about capture rather than about preview.
+  final List<VoidCallback> listeners = <VoidCallback>[];
+
+  @override
+  int get cameraId => 7;
+
+  @override
+  CameraValue get value => const CameraValue.uninitialized(
+    CameraDescription(
+      name: 'fake',
+      lensDirection: CameraLensDirection.back,
+      sensorOrientation: 0,
+    ),
+  );
+
+  @override
+  void addListener(VoidCallback listener) => listeners.add(listener);
+
+  @override
+  void removeListener(VoidCallback listener) => listeners.remove(listener);
 
   // The controller surface is large and this pipeline touches five methods.
   // Implementing the rest would be noise; anything unexpected being called is

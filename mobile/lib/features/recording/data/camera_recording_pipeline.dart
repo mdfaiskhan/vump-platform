@@ -1,7 +1,11 @@
+import 'dart:async';
+
 import 'package:camera/camera.dart';
+import 'package:flutter/services.dart' show DeviceOrientation;
 
 import 'package:mobile/features/recording/data/camera_error_mapper.dart';
 import 'package:mobile/features/recording/domain/entities/camera_specification.dart';
+import 'package:mobile/features/recording/domain/entities/preview_frame.dart';
 import 'package:mobile/features/recording/domain/repositories/recording_pipeline.dart';
 
 /// Opens a camera. Injected so the pipeline is testable without hardware.
@@ -61,8 +65,20 @@ class CameraRecordingPipeline implements RecordingPipeline {
 
   CameraController? _controller;
 
+  /// ADR-053. Broadcast so more than one widget may watch; never closed while
+  /// the pipeline lives, because a session can be reopened.
+  final StreamController<PreviewFrame?> _previewChanges =
+      StreamController<PreviewFrame?>.broadcast();
+  PreviewFrame? _currentPreview;
+
   @override
   String? get outputDirectory => _controller == null ? null : _outputDirectory;
+
+  @override
+  Stream<PreviewFrame?> get previewChanges => _previewChanges.stream;
+
+  @override
+  PreviewFrame? get currentPreview => _currentPreview;
 
   @override
   Future<void> openSession({required double zoomFactor}) async {
@@ -86,6 +102,12 @@ class CameraRecordingPipeline implements RecordingPipeline {
       final CameraController controller = await _openCamera(rear.first);
       _controller = controller;
       await _applyZoomOnce(controller, zoomFactor);
+      // ADR-053. The controller is a ValueNotifier<CameraValue>; listening is
+      // how orientation and readiness changes reach the screen. The listener
+      // is the only thing outside this class that learns anything about the
+      // controller, and what it learns is three numbers.
+      controller.addListener(_onCameraValueChanged);
+      _publish(_frameOf(controller));
     } on CameraException catch (error, stackTrace) {
       throw CameraErrorMapper.toDeviceException(
         error,
@@ -165,7 +187,63 @@ class CameraRecordingPipeline implements RecordingPipeline {
   Future<void> closeSession() async {
     final CameraController? controller = _controller;
     _controller = null;
+    controller?.removeListener(_onCameraValueChanged);
+    // Before dispose, so nothing is drawing a texture that is about to go.
+    _publish(null);
     await controller?.dispose();
+  }
+
+  void _onCameraValueChanged() {
+    final CameraController? controller = _controller;
+    _publish(controller == null ? null : _frameOf(controller));
+  }
+
+  /// Publishes only on a real change.
+  ///
+  /// `CameraValue` notifies for things a preview does not care about — a
+  /// recording flag flipping, an exposure point moving. [PreviewFrame] has
+  /// value equality, so filtering here keeps a listening widget from
+  /// rebuilding on every notification during a 25-minute session.
+  void _publish(PreviewFrame? frame) {
+    if (frame == _currentPreview) {
+      return;
+    }
+    _currentPreview = frame;
+    if (!_previewChanges.isClosed) {
+      _previewChanges.add(frame);
+    }
+  }
+
+  /// Reads a [PreviewFrame] out of the controller's current value.
+  ///
+  /// Reproduces what `CameraPreview` does internally, because that widget
+  /// cannot be used without handing it the controller. The aspect ratio is
+  /// flipped for portrait exactly as it flips it, and the orientation-to-turns
+  /// mapping is its table.
+  static PreviewFrame? _frameOf(CameraController controller) {
+    final CameraValue value = controller.value;
+    if (!value.isInitialized) {
+      return null;
+    }
+    final DeviceOrientation orientation = value.isRecordingVideo
+        ? (value.recordingOrientation ?? value.deviceOrientation)
+        : (value.previewPauseOrientation ??
+              value.lockedCaptureOrientation ??
+              value.deviceOrientation);
+    const Map<DeviceOrientation, int> turns = <DeviceOrientation, int>{
+      DeviceOrientation.portraitUp: 0,
+      DeviceOrientation.landscapeRight: 1,
+      DeviceOrientation.portraitDown: 2,
+      DeviceOrientation.landscapeLeft: 3,
+    };
+    final bool isLandscape =
+        orientation == DeviceOrientation.landscapeLeft ||
+        orientation == DeviceOrientation.landscapeRight;
+    return PreviewFrame(
+      textureId: controller.cameraId,
+      aspectRatio: isLandscape ? value.aspectRatio : 1 / value.aspectRatio,
+      quarterTurns: turns[orientation] ?? 0,
+    );
   }
 
   CameraController _requireOpenSession(String action) {
