@@ -65,6 +65,18 @@ So the getter carries the current value and the stream carries subsequent ones. 
 
 The presentation layer subscribes, builds the preview from the id, and applies the aspect ratio and rotation. `recording_screen.dart` renders it in place of the black `ColoredBox` while a session is open.
 
+### Amendment, 2026-08-24 — rendering was assumed trivial and is not
+
+The decision above says presentation "builds the preview from the id" as though that were a detail. **It is the part that isn't.** Recorded here rather than discovered by whoever maintains this next.
+
+**`CameraPlatform` is not reachable.** `package:camera/camera.dart` exports only `CameraDescription`, `CameraException`, `CameraLensDirection`, `ExposureMode`, `FlashMode`, `FocusMode`, `ImageFormatGroup`, `ResolutionPreset`, `VideoStabilizationMode` and `XFile`. `CameraPlatform` lives in `camera_platform_interface`, which is **transitive** and absent from `pubspec.yaml`. ADR-030 has a section headed *"Transitive dependencies are resolved and audited, never constrained"*, so reaching it means promoting a platform-interface package to a direct application dependency through the admission process.
+
+**And a raw `Texture` is not obviously equivalent.** On Android CameraX, `buildPreview` returns `Texture(textureId: cameraId)` wrapped in a `RotatedPreviewDelegate`, which owns crop and rotation and behaves differently depending on `handlesCropAndRotation`. Skipping that wrapper moves that responsibility onto this project's `quarterTurns`.
+
+**Option B is chosen: Flutter's built-in `Texture`, wrapped in our own `AspectRatio` and `RotatedBox`.** No new dependency, and presentation stays free of the camera plugin entirely — a property worth having on its own. **The device test is the correctness gate, not a formality**: if rotation or crop is visibly wrong on a CPH2707 against what an ordinary camera app shows for the same framing, B has failed and `PreviewFrame.quarterTurns` is the knob that either corrects it or proves it cannot.
+
+**Option A is the named fallback** — promote `camera_platform_interface` and call `CameraPlatform.instance.buildPreview(id)`, which renders identically to `CameraPreview` by construction. It is **not** an automatic fallback: it changes the dependency graph and is a decision to be taken explicitly, not executed silently because a preview looked crooked.
+
 ### What the pipeline still refuses, unchanged
 
 - **the `CameraController` itself**
