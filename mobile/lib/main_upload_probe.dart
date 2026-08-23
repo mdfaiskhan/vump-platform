@@ -335,6 +335,12 @@ class _ProbeQueue implements ChunkQueueSource, ChunkUploadSource {
       _settle(chunkId, ChunkUploadStatus.queued);
 
   @override
+  Future<void> releaseStranded({
+    required String chunkId,
+    required int attemptCount,
+  }) => _settle(chunkId, ChunkUploadStatus.queued);
+
+  @override
   Future<void> recordObjectKey({
     required String chunkId,
     required String s3ObjectKey,

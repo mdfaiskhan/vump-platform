@@ -147,6 +147,32 @@ abstract interface class ChunkUploadSource {
   /// Ignores a chunk that is not currently `uploading`.
   Future<void> release(String chunkId);
 
+  /// Returns a chunk stranded at `uploading` by a process death, spending one
+  /// of Chapter 5.13 §2's attempts.
+  ///
+  /// **ADR-052.** This is deliberately not [release], which exists for an
+  /// attempt *abandoned* — a cancellation or a pause — and must not consume an
+  /// attempt. A process that died mid-transfer did not abandon anything: the
+  /// attempt was made and lost, counting it is the honest accounting, and it
+  /// is what bounds the loop. An app that dies during upload repeatedly walks
+  /// the chunk through the budget and lands it at `failed`, a visible state
+  /// with a working manual remedy, instead of retrying forever in silence.
+  ///
+  /// [attemptCount] is the number of attempts made **including** the one the
+  /// death consumed, matching [deferAttempt]'s counting exactly.
+  ///
+  /// Clears `nextAttemptAt` rather than setting a backoff deadline. A relaunch
+  /// is already a rate limiter, and the budget now binds on this path, so a
+  /// delay would postpone the recovery without preventing anything.
+  ///
+  /// Ignores a chunk that is not currently `uploading`.
+  ///
+  /// Throws a `StorageException` if the write fails.
+  Future<void> releaseStranded({
+    required String chunkId,
+    required int attemptCount,
+  });
+
   /// Moves a chunk to `failed`.
   ///
   /// Chapter 5.13 §1's two terminal classes, and a transient failure whose

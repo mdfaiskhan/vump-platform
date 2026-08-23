@@ -607,6 +607,28 @@ class IsarChunkStore
   );
 
   @override
+  Future<void> releaseStranded({
+    required String chunkId,
+    required int attemptCount,
+  }) => _write(chunkId, 'The stranded chunk could not be requeued.', (
+    LocalChunk row,
+  ) {
+    // Same precondition as every other transition out of `uploading`: only a
+    // claimed row can be released. A row that is already `queued` was
+    // reconciled by an earlier pass, and spending a second attempt on it
+    // would punish one death twice.
+    if (row.status != ChunkUploadStatus.uploading.wireName) {
+      return;
+    }
+    row.status = ChunkUploadStatus.queued.wireName;
+    row.uploadAttemptCount = attemptCount;
+    // ADR-052: eligible immediately. `deferAttempt` sets a deadline because a
+    // transient failure should back off; a process death should not, and the
+    // attempt budget is what bounds this path instead.
+    row.nextAttemptAt = null;
+  });
+
+  @override
   Future<void> markFailed(String chunkId) => _transition(
     chunkId,
     to: ChunkUploadStatus.failed,

@@ -130,6 +130,15 @@ class UploadDispatcher {
   int _inFlight = 0;
   bool _shutDown = false;
 
+  /// Whether ADR-052's startup reconciliation has finished.
+  ///
+  /// [_launch] holds off while this is false. The ordering is load-bearing:
+  /// reconciliation reads one snapshot of the queue, and a chunk this process
+  /// claimed before that read would appear in it as `uploading` and be
+  /// requeued underneath a transfer that is genuinely running — the double
+  /// upload `claimNext` calls unrecoverable.
+  bool _reconciled = false;
+
   UploadBatchProgress _batch = UploadBatchProgress.idle;
   bool _sawQueued = false;
   bool _sawUploading = false;
@@ -147,16 +156,25 @@ class UploadDispatcher {
   /// How many uploads are running right now.
   int get inFlight => _inFlight;
 
-  /// Subscribes to the queue and begins claiming work.
+  /// Subscribes to the queue, reconciles stranded rows, then claims work.
   ///
   /// Chapter 5.9 §3 makes the queue *"a live view … over
-  /// `local_chunks.status`"* whose rows survive an app kill, so there is no
-  /// recovery pass here and none is needed: the rows already say `queued`, and
-  /// a new subscription reads them. Calling this twice is a no-op.
+  /// `local_chunks.status`"* whose rows survive an app kill, and this method
+  /// used to conclude there was *"no recovery pass here and none is needed"*.
+  /// **ADR-052 corrects that.** The rows survive; a row reading `uploading`
+  /// after a process death is still not resumable, because `claimNext` selects
+  /// only `queued` and everything that could move it died with its pipeline.
+  ///
+  /// So [_reconcileStranded] runs here and [_launch] waits for it. Calling
+  /// this twice is a no-op.
   void start() {
     if (_subscription != null || _shutDown) {
       return;
     }
+
+    // ADR-052. Started before the subscription so its snapshot cannot contain
+    // a row this process itself claimed; `_launch` waits on it regardless.
+    unawaited(_reconcileStranded());
     _subscription = _queue.watchQueue().listen(
       _onQueueChanged,
       onError: (Object error, StackTrace stackTrace) {
@@ -298,6 +316,66 @@ class UploadDispatcher {
     unawaited(_syncService());
   }
 
+  /// ADR-052's startup reconciliation — returns stranded rows to the queue.
+  ///
+  /// A row still reading `uploading` when this process starts was claimed by a
+  /// process that is gone. That inference is sound here and nowhere else: the
+  /// Android foreground service declares no `android:process` and runs in the
+  /// main process, and Android does not run two instances of one app process,
+  /// so a freshly launched process cannot hold a transfer.
+  ///
+  /// **A death spends an attempt.** Chapter 5.13 §2's budget is applied here
+  /// rather than left to [_settleTransient], which never sees this case — it
+  /// needs an `UploadOutcome`, and a killed process produces none. Without the
+  /// check the counter would climb past six forever, because `claimNext`
+  /// filters on status and the deadline and never reads it.
+  ///
+  /// A failure is logged and swallowed. Reconciliation that could not run must
+  /// not stop everything else from uploading, and the rows it did not reach
+  /// are no worse off than before — they are retried on the next launch.
+  Future<void> _reconcileStranded() async {
+    try {
+      final List<QueuedChunk> rows = await _queue.currentQueue();
+      for (final QueuedChunk row in rows) {
+        if (row.status != ChunkUploadStatus.uploading) {
+          continue;
+        }
+        final int attempts = row.attemptCount + 1;
+        if (_schedule.hasAttemptsLeft(attempts)) {
+          await _source.releaseStranded(
+            chunkId: row.chunkId,
+            attemptCount: attempts,
+          );
+          _logger.warning(
+            'Chunk ${row.chunkId} was left uploading by a process that did '
+            'not finish. Returned to the queue as attempt $attempts of '
+            '${RetrySchedule.maxAttempts}.',
+          );
+        } else {
+          await _source.markFailed(row.chunkId);
+          _logger.warning(
+            'Chunk ${row.chunkId} was left uploading and has spent all '
+            '${RetrySchedule.maxAttempts} attempts. It now waits for a '
+            'manual retry.',
+          );
+        }
+      }
+    } on Object catch (error, stackTrace) {
+      _logger.error(
+        'Stranded chunks could not be reconciled. Uploads continue, and any '
+        'row still left at uploading is reconciled on the next launch.',
+        error: error,
+        stackTrace: stackTrace,
+      );
+    } finally {
+      // Set even on failure: leaving it false would block every upload for
+      // the life of the process, which is a far worse outcome than a chunk
+      // staying stranded one launch longer.
+      _reconciled = true;
+      _launch();
+    }
+  }
+
   /// Fills the free concurrency slots, synchronously.
   ///
   /// This method does not await, and that is what makes it safe. Dart runs it
@@ -310,7 +388,7 @@ class UploadDispatcher {
   /// is cheaper than trying to reconcile a stale count — `claimNext` is
   /// atomic, so a wasted call cannot claim a chunk twice.
   void _launch() {
-    if (_shutDown || !_sawQueued) {
+    if (_shutDown || !_reconciled || !_sawQueued) {
       return;
     }
     while (_inFlight < _concurrency) {

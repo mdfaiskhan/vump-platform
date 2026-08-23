@@ -717,6 +717,110 @@ void main() {
       expect(halted, 0);
     });
   });
+
+  group('startup reconciliation — ADR-052', () {
+    QueuedChunk stranded(String id, {int attempts = 0}) => QueuedChunk(
+      chunkId: id,
+      sessionId: 'session-1',
+      sequenceIndex: 0,
+      sessionStartedAt: startedAt,
+      status: ChunkUploadStatus.uploading,
+      fileSizeBytes: 1000,
+      attemptCount: attempts,
+    );
+
+    test('a chunk left uploading returns to the queue, one attempt spent',
+        () async {
+      // Open item 137's defect, from the other side: before ADR-052 this row
+      // was invisible to `claimNext` forever, because that query selects only
+      // `queued` and everything that could move it died with its pipeline.
+      queue.snapshot = <QueuedChunk>[stranded('chunk-0')];
+      final UploadDispatcher dispatcher = build();
+
+      dispatcher.start();
+      await pumpEventQueue();
+
+      expect(source.stranded, <String>['chunk-0']);
+      expect(source.strandedAttempts, <int>[1]);
+      expect(source.failed, isEmpty);
+    });
+
+    test('the death is counted, so the budget converges on failed', () async {
+      // Ch. 5.13 §2 gives six attempts. A process death spends one, and the
+      // check lives here rather than in `_settleTransient`, which never runs
+      // for this case — it needs an UploadOutcome and a killed process
+      // produces none. Without it the counter would climb past six forever.
+      for (int spent = 0; spent < RetrySchedule.maxAttempts - 1; spent++) {
+        queue = _FakeQueue();
+        source = _FakeUploadSource();
+        queue.snapshot = <QueuedChunk>[stranded('chunk-0', attempts: spent)];
+        build().start();
+        await pumpEventQueue();
+
+        expect(source.strandedAttempts, <int>[spent + 1]);
+        expect(source.failed, isEmpty, reason: 'attempts remain at $spent');
+      }
+
+      // The sixth death exhausts it.
+      queue = _FakeQueue();
+      source = _FakeUploadSource();
+      queue.snapshot = <QueuedChunk>[
+        stranded('chunk-0', attempts: RetrySchedule.maxAttempts - 1),
+      ];
+      build().start();
+      await pumpEventQueue();
+
+      expect(source.failed, <String>['chunk-0']);
+      expect(source.stranded, isEmpty);
+    });
+
+    test('nothing is claimed until reconciliation has finished', () async {
+      // The ordering ADR-052 calls load-bearing. Reconciliation reads one
+      // snapshot; a chunk claimed before that read would appear in it as
+      // `uploading` and be requeued underneath a live transfer — the double
+      // upload `claimNext`'s own comment calls unrecoverable.
+      queue.holdSnapshot = Completer<void>();
+      final UploadDispatcher dispatcher = build();
+
+      dispatcher.start();
+      queue.push(queued(3));
+      await pumpEventQueue();
+
+      expect(uploads.calls, 0, reason: 'reconciliation has not finished');
+
+      queue.holdSnapshot!.complete();
+      await pumpEventQueue();
+
+      expect(uploads.calls, greaterThan(0));
+    });
+
+    test('a row that is not uploading is left alone', () async {
+      queue.snapshot = <QueuedChunk>[
+        chunk('chunk-0', ChunkUploadStatus.queued),
+        chunk('chunk-1', ChunkUploadStatus.failed),
+        chunk('chunk-2', ChunkUploadStatus.complete),
+      ];
+      build().start();
+      await pumpEventQueue();
+
+      expect(source.stranded, isEmpty);
+      expect(source.failed, isEmpty);
+    });
+
+    test('a reconciliation that fails does not strand the dispatcher',
+        () async {
+      // Leaving the gate closed would block every upload for the life of the
+      // process — worse than a chunk staying stranded one launch longer.
+      queue.failSnapshot = true;
+      final UploadDispatcher dispatcher = build();
+
+      dispatcher.start();
+      queue.push(queued(2));
+      await pumpEventQueue();
+
+      expect(uploads.calls, greaterThan(0));
+    });
+  });
 }
 
 /// A queue whose emissions the test drives.
@@ -751,8 +855,27 @@ class _FakeQueue implements ChunkQueueSource {
     return _controller.stream;
   }
 
+  /// What ADR-052's reconciliation reads at startup.
+  List<QueuedChunk> snapshot = <QueuedChunk>[];
+
+  /// Holds the snapshot open, so a test can observe the window before
+  /// reconciliation finishes.
+  Completer<void>? holdSnapshot;
+
+  /// Makes the snapshot throw, for the degraded path.
+  bool failSnapshot = false;
+
   @override
-  Future<List<QueuedChunk>> currentQueue() async => <QueuedChunk>[];
+  Future<List<QueuedChunk>> currentQueue() async {
+    if (failSnapshot) {
+      throw StateError('scripted');
+    }
+    final Completer<void>? hold = holdSnapshot;
+    if (hold != null) {
+      await hold.future;
+    }
+    return snapshot;
+  }
 
   @override
   Future<void> requeue(String chunkId) async {}
@@ -837,6 +960,8 @@ class _FakeUploadSource implements ChunkUploadSource {
   final List<int> deferredAttempts = <int>[];
   final List<DateTime> deadlines = <DateTime>[];
   final List<String> failed = <String>[];
+  final List<String> stranded = <String>[];
+  final List<int> strandedAttempts = <int>[];
   int clearBackoffCalls = 0;
   bool throwOnDefer = false;
 
@@ -868,6 +993,15 @@ class _FakeUploadSource implements ChunkUploadSource {
 
   @override
   Future<void> release(String chunkId) async {}
+
+  @override
+  Future<void> releaseStranded({
+    required String chunkId,
+    required int attemptCount,
+  }) async {
+    stranded.add(chunkId);
+    strandedAttempts.add(attemptCount);
+  }
 
   @override
   Future<void> recordObjectKey({

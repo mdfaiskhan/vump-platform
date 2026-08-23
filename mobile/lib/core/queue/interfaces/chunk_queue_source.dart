@@ -25,8 +25,18 @@ import 'package:mobile/core/queue/queued_chunk.dart';
 /// because the queue's actual state was never only in memory to begin with.
 /// On relaunch, the queue simply resumes reading the same rows."*
 ///
-/// So there is no re-queue step at launch and no separate recovery pass. The
-/// rows already say what they are; a new subscription reads them.
+/// That reasoning used to end here, with *"no re-queue step at launch and no
+/// separate recovery pass — the rows already say what they are"*. **ADR-052
+/// corrects it.** The rows do survive, but surviving is not resuming: a row
+/// left at `uploading` by a process death describes a transfer that no longer
+/// exists, `claimNext` selects only `queued`, and every transition out of
+/// `uploading` is made by the pipeline that died with the process. Such a row
+/// is stranded permanently — open item 137, and NFR-REL-04 violated in exactly
+/// the scenario Chapter 5.9 §3 cites it to protect.
+///
+/// So `UploadDispatcher` does run a recovery pass at startup. It is safe there
+/// and nowhere else: a freshly launched process cannot hold a transfer, so no
+/// row it finds at `uploading` can be live.
 ///
 /// ## What this contract deliberately does not expose
 ///

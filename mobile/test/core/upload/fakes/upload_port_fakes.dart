@@ -99,6 +99,12 @@ class FakeChunkUploadSource implements ChunkUploadSource {
       transitions.add('released:$chunkId');
 
   @override
+  Future<void> releaseStranded({
+    required String chunkId,
+    required int attemptCount,
+  }) async => transitions.add('stranded:$chunkId@$attemptCount');
+
+  @override
   Future<void> markFailed(String chunkId) async =>
       transitions.add('failed:$chunkId');
 

@@ -1,0 +1,112 @@
+# ADR-052 — The Dispatcher Reconciles Stranded `uploading` Rows at Startup
+
+- **Status:** Proposed
+- **Date:** 2026-08-23
+- **Supersedes:** none. Reverses a documented design position stated in `ChunkQueueSource`'s interface comment and repeated in `UploadDispatcher.start`, and corrects the premise Volume 5 Chapter 5.9 §3 rests it on. Closes the mechanism half of open item 137.
+
+## Context
+
+A chunk interrupted mid-upload is stranded at `uploading` permanently. It never retries, never fails, never recovers, and the UI reports it as still uploading. Open item 137 records the field evidence; this ADR records why the code does it and what changes.
+
+### The four states, and the three ways out of `uploading`
+
+`ChunkUploadStatus` defines exactly four states — `queued`, `uploading`, `failed`, `complete`. `IsarChunkStore` writes a status in five places, and only three of them leave `uploading`:
+
+- `deferAttempt` — `uploading` → `queued` behind a backoff deadline
+- `_transition` — `uploading` → `failed` or `complete`
+- `claimNext` — `queued` → `uploading`
+- `requeue` — `failed` → `queued`
+
+**All three exits from `uploading` are in-process calls made by the running pipeline.** When the process dies mid-transfer, none of them ever runs. The row keeps the value `claimNext` wrote and nothing is left alive to change it.
+
+### And nothing selects that row again
+
+`claimNext` filters `statusEqualTo(ChunkUploadStatus.queued.wireName)`. A row at `uploading` is not a candidate. So the stranded row is invisible to the only mechanism that could move it.
+
+The manual escape is closed too. `requeue` opens with:
+
+```dart
+if (row == null || row.status != ChunkUploadStatus.failed.wireName) {
+  return;
+}
+```
+
+and the interface states that as deliberate — *"Ignores a chunk that is not currently `failed`. A retry racing the dispatcher must not drag an `uploading` chunk backwards."* Chapter 2.7's C-11 gates its Retry Chunk button on `failed` for the same reason, so the button never renders for a stranded chunk. **There is no path back from `uploading`, by construction.**
+
+### The premise this rests on is false
+
+`ChunkQueueSource`'s interface comment states the position outright:
+
+> *"So there is no re-queue step at launch and no separate recovery pass. The rows already say what they are; a new subscription reads them."*
+
+`UploadDispatcher.start` repeats it, citing Chapter 5.9 §3:
+
+> *"the queue's actual state was never only in memory to begin with. On relaunch, the queue simply resumes reading the same rows."*
+
+**Half of that is true and the half that is false is the defect.** The rows do survive the kill — Isar persisted them, and nothing was lost. But *surviving* is not *resumable*. A row reading `uploading` describes a transfer that no longer exists, and "the rows already say what they are" is exactly wrong for the one row the kill touched: it says `uploading`, and that is untrue the instant the process dies.
+
+Chapter 5.9 §3 offers this reasoning as what *"satisfies NFR-REL-04 directly: an app kill loses nothing"*. **NFR-REL-04 is therefore violated in precisely the scenario it names**, and the reasoning that was supposed to guarantee it is what prevents the recovery.
+
+`shutDown` names the same failure from the other side, and treats it as a hazard to avoid:
+
+> *"Chunks already in flight are left to finish — they hold claimed rows, and abandoning them here would strand those rows in `uploading` with nothing left to release them."*
+
+The code already knew what stranding meant. What it did not have was anything to clear a row that got stranded anyway.
+
+### Why this is safe to fix at startup and nowhere else
+
+Deciding whether a row at `uploading` is genuinely transferring is impossible from inside a running app. Live transfer progress lives in `UploadProgressNotifier`, which is in-memory only and `build()`s empty; and `ChunkUploadProgressSnapshot.fraction` is null both when no transfer exists and when Dio reports `totalBytes` as `-1` for a stream it cannot measure. Neither signal distinguishes stalled from healthy.
+
+**At process launch the question does not arise.** The Android foreground service declares no `android:process`, so it runs in the main process; the only isolate in the codebase hashes video for recording. Android will not run two instances of one app process, and a force-stop takes the service down with everything else. **A freshly launched process therefore has no in-flight transfer, and no row at `uploading` can be live.**
+
+That safety is conditional on *when* reconciliation runs, and the condition currently holds: `start()` is called exactly once, from `main.dart`'s `_startUploadDispatcher`, and is idempotent (`if (_subscription != null || _shutDown) return`), with `_shutDown` a one-way latch that no code clears.
+
+## Decision
+
+**When the dispatcher starts, every row at `uploading` is reconciled before any claim.**
+
+Each such row has its `uploadAttemptCount` incremented, then:
+
+- if attempts remain under Chapter 5.13 §2's budget, it becomes `queued` with `nextAttemptAt` cleared, so it is eligible immediately
+- if the budget is exhausted, it becomes `failed`, where C-11's existing Retry Chunk button applies
+
+### The attempt counter is incremented, not preserved
+
+A process death mid-upload is a real event and consuming an attempt is the honest accounting of it. It also bounds the loop: an app that dies during upload repeatedly walks the chunk through the budget and lands it at `failed`, a visible state with a working manual remedy. Preserving the counter would reset the same chunk into the same crash indefinitely, silently — an unbounded retry loop is a worse failure than a chunk that stops and says so.
+
+### Reconciliation applies the budget itself, and that is load-bearing
+
+Today the six-attempt cap is enforced in exactly one place: `UploadDispatcher._settleTransient`, which reads `RetrySchedule.hasAttemptsLeft(outcome.attemptCount)` and calls `markFailed`. **It needs an `UploadOutcome`, and a killed process produces none.**
+
+So incrementing the counter is not by itself sufficient to bound anything — `claimNext` filters on status and `nextAttemptAt` and never consults `uploadAttemptCount`. A reconciliation that only moved rows to `queued` would raise the counter past six forever and never reach `failed`. **The budget check therefore belongs inside the reconciliation**, using the same `RetrySchedule.maxAttempts` so one rule is not spelled twice.
+
+### `nextAttemptAt` is cleared rather than set to a backoff delay
+
+A relaunch is already a natural rate limiter, and the six-attempt budget now binds on this path, so the worst case is a small bounded number of immediate attempts before the chunk rests at `failed`. Making the Collector wait 5, 10 or 20 seconds after a relaunch would delay the recovery without preventing anything the budget does not already stop.
+
+### What does not change
+
+- **`claimNext`'s `queued`-only filter stays.** Its transaction is what makes a claim atomic, and its own comment gives the reason: *"a chunk claimed twice would be uploaded twice — the one duplication S3's same-key semantics cannot undo, because both attempts would be legitimate."* Reconciliation runs before claiming and never concurrently with it.
+- **`requeue`'s `failed`-only gate stays.** For the *manual* path that guard remains correct: in a live app a row at `uploading` may well be transferring, and letting the Collector re-queue it is the double-upload this ADR exists to avoid. FR-UPL-07 is unchanged.
+- **C-11's Retry Chunk button stays gated on `failed`.** With reconciliation in place a stranded chunk reaches `queued` or `failed` on its own, so the button is needed only where it already renders.
+- **No new state, no new column, no schema change.** Reconciliation writes fields that already exist.
+
+### The invariant a future mission must not break
+
+Reconciliation is safe **because it runs once per process, before any claim, in a process with no in-flight transfer.** If a later mission ever restarts a dispatcher inside a live process — a restart-after-halt, or a second instance built from a rebuilt provider — reconciliation would then run while the previous instance's uploads are still going, and `shutDown`'s comment describes exactly those rows: claimed, in flight, deliberately left to finish. Re-queueing them would produce the duplicate `claimNext` guards against.
+
+**Restarting a dispatcher in a live process is therefore forbidden while this reconciliation exists**, unless reconciliation is moved behind a check that no transfer is in flight. This constraint is stated here because nothing in the code enforces it today; it holds only because `main.dart` calls `start()` once and `_shutDown` never clears.
+
+## Consequences
+
+**Item 137's mechanism moves from hypothesis to confirmed.** It was recorded as UNCONFIRMED pending a read of the chunk rows, which open item 139's credential gap blocks. That read is no longer required: the absence of any transition out of `uploading` outside the running pipeline, and `claimNext`'s `queued`-only filter, are visible in the source. Item 139 stays open on its own merits and is no longer 137's blocker.
+
+**A chunk that would have been lost is uploaded instead.** The 520,658,550-byte chunk stranded during Chapter 9.8 scenario 2 would have been re-queued on the next launch and uploaded. Nothing else about that scenario changes; the failure was never in capture, storage, or S3.
+
+**The Collector sees a state that is true.** A stranded chunk currently reads "Uploading" with an animating indeterminate bar and no available action. After this it reads Queued and uploads, or reads Failed and offers Retry Chunk. Chapter 2.9 §2's *"should never have to wonder if it worked"* is served either way.
+
+**A chunk can now reach `failed` without a network failure.** Six kills during upload will do it. This is intended and visible, but it means `failed` no longer implies the backend or the network refused anything — and C-11 still cannot name a cause (open item 53), so a Collector sees "Failed" without learning it was the app dying. That gap widens slightly here and is not closed by this ADR.
+
+**Two documented statements become wrong and must be corrected in the same change**, or the code and its comments will disagree: `ChunkQueueSource`'s *"no re-queue step at launch and no separate recovery pass"*, and `UploadDispatcher.start`'s *"there is no recovery pass here and none is needed"*. Chapter 5.9 §3 itself is a Volume statement and is corrected by amendment, not edited.
+
+**Startup does one more write.** A single indexed read of rows at `uploading`, and a write only for rows found — normally none. It runs before the first claim, so it cannot race one.
