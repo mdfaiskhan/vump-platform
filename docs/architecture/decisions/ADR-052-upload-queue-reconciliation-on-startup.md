@@ -1,6 +1,6 @@
 # ADR-052 — The Dispatcher Reconciles Stranded `uploading` Rows at Startup
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-08-23
 - **Supersedes:** none. Reverses a documented design position stated in `ChunkQueueSource`'s interface comment and repeated in `UploadDispatcher.start`, and corrects the premise Volume 5 Chapter 5.9 §3 rests it on. Closes the mechanism half of open item 137.
 
