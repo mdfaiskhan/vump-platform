@@ -63,6 +63,24 @@ afterEach(async () => {
  * edited migration and two databases that ran different SQL under one id, a
  * divergence nothing downstream could detect.
  */
+
+/**
+ * Narrows a value TypeScript cannot prove is present, and fails loudly.
+ *
+ * `noUncheckedIndexedAccess` makes every index access `T | undefined`, and
+ * `@typescript-eslint/no-non-null-assertion` forbids `!`. Optional chaining
+ * covers most sites here because the expected value is a literal, so an
+ * absent value fails the assertion anyway. It does NOT cover comparing two
+ * possibly-absent values — `expect(a?.x).toBe(b?.x)` passes when both are
+ * undefined, which would quietly weaken the test. This throws instead.
+ */
+function defined<T>(value: T | undefined, what: string): T {
+  if (value === undefined) {
+    throw new Error(`expected ${what} to be defined`);
+  }
+  return value;
+}
+
 describe('loadMigrations', () => {
   it('loads .sql files in ordinal order and hashes their contents', async () => {
     await migration('0002_second.sql', 'SELECT 2;');
@@ -75,10 +93,10 @@ describe('loadMigrations', () => {
     // sha256 of "SELECT 1;", pinned as a literal. Recomputing it here with
     // createHash would assert the module agrees with itself — open item 129's
     // exact shape, and the reason `pagination.test.ts` was fixed at 7.10.
-    expect(loaded[0].checksum).toBe(
+    expect(loaded[0]?.checksum).toBe(
       '17db4fd369edb9244b9f91d9aeed145c3d04ad8ba6e95d06247f07a63527d11a',
     );
-    expect(loaded[0].checksum).not.toBe(loaded[1].checksum);
+    expect(loaded[0]?.checksum).not.toBe(loaded[1]?.checksum);
   });
 
   it('ignores files that are not .sql', async () => {
@@ -124,8 +142,8 @@ describe('loadMigrations', () => {
 
     const [a, b, c] = await loadMigrations(dir);
 
-    expect(a.checksum).toBe(b.checksum);
-    expect(c.checksum).not.toBe(a.checksum);
+    expect(defined(a, 'migration a').checksum).toBe(defined(b, 'migration b').checksum);
+    expect(c?.checksum).not.toBe(a?.checksum);
   });
 });
 
@@ -133,7 +151,7 @@ describe('ensureTrackingTable', () => {
   it('creates the table only if it is absent', async () => {
     await ensureTrackingTable(TARGET);
 
-    const [sql, options] = execute.mock.calls[0];
+    const [sql, options] = defined(execute.mock.calls[0], 'the first execute call');
     expect(sql).toContain('CREATE TABLE IF NOT EXISTS');
     expect(options).toEqual({ target: TARGET });
   });
@@ -211,7 +229,7 @@ describe('runMigrations', () => {
   it('skips a migration already applied with the same checksum', async () => {
     await migration('0001_users.sql', 'SELECT 1;');
     const [loaded] = await loadMigrations(dir);
-    trackingHolds([appliedRow('0001', 'users', loaded.checksum)]);
+    trackingHolds([appliedRow('0001', 'users', defined(loaded, 'the loaded migration').checksum)]);
 
     const onSkip = vi.fn();
     const result = await runMigrations(dir, TARGET, { onSkip });

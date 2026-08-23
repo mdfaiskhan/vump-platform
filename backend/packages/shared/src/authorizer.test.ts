@@ -118,7 +118,7 @@ describe('authorize — the Deny path', () => {
 
     const result = await authorize(event({ authorization: 'Bearer stale' }));
 
-    expect(result.policyDocument.Statement[0].Effect).toBe('Deny');
+    expect(result.policyDocument.Statement[0]?.Effect).toBe('Deny');
     expect(result.principalId).toBe('unauthorized');
   });
 
@@ -129,7 +129,7 @@ describe('authorize — the Deny path', () => {
 
     const result = await authorize(event({ authorization: 'Bearer orphan' }));
 
-    expect(result.policyDocument.Statement[0].Effect).toBe('Deny');
+    expect(result.policyDocument.Statement[0]?.Effect).toBe('Deny');
   });
 
   it('denies when the Authorization header is absent entirely', async () => {
@@ -137,7 +137,7 @@ describe('authorize — the Deny path', () => {
 
     const result = await authorize(event({}));
 
-    expect(result.policyDocument.Statement[0].Effect).toBe('Deny');
+    expect(result.policyDocument.Statement[0]?.Effect).toBe('Deny');
   });
 
   it('attaches no context to a Deny', async () => {

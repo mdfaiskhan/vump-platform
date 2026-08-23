@@ -45,8 +45,27 @@ function client(overrides: Record<string, unknown> = {}) {
 }
 
 /** The credential object `firebaseApp()` handed to `initializeApp`. */
+/**
+ * Narrows a value TypeScript cannot prove is present, and fails loudly.
+ *
+ * `noUncheckedIndexedAccess` makes every index access `T | undefined`, and
+ * `@typescript-eslint/no-non-null-assertion` forbids `!`. Optional chaining
+ * covers most sites here because the expected value is a literal, so an
+ * absent value fails the assertion anyway. It does NOT cover comparing two
+ * possibly-absent values — `expect(a?.x).toBe(b?.x)` passes when both are
+ * undefined, which would quietly weaken the test. This throws instead.
+ */
+function defined<T>(value: T | undefined, what: string): T {
+  if (value === undefined) {
+    throw new Error(`expected ${what} to be defined`);
+  }
+  return value;
+}
+
 function capturedCredential(): Credential {
-  return (initializeApp.mock.calls[0][0] as { credential: Credential }).credential;
+  return (defined(initializeApp.mock.calls[0], 'the initializeApp call')[0] as {
+    credential: Credential;
+  }).credential;
 }
 
 beforeEach(() => {
@@ -88,8 +107,8 @@ describe('federatedAuth — the app', () => {
     federatedAuth();
 
     expect(initializeApp).toHaveBeenCalledTimes(1);
-    expect(initializeApp.mock.calls[0][1]).toBe('redeem');
-    expect(initializeApp.mock.calls[0][0]).toMatchObject({
+    expect(initializeApp.mock.calls[0]?.[1]).toBe('redeem');
+    expect(initializeApp.mock.calls[0]?.[0]).toMatchObject({
       projectId: 'vump-platform-f86af',
     });
   });
