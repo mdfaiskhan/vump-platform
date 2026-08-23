@@ -159,6 +159,17 @@ void main() {
   String locationOf(GoRouter router) =>
       router.routerDelegate.currentConfiguration.uri.toString();
 
+  /// The route actually on top, which is not always the URI.
+  ///
+  /// `context.push` appends an imperative match and deliberately leaves
+  /// `currentConfiguration.uri` at the last declarative location — the same
+  /// reason a push does not change the browser URL on web. Since open item
+  /// 144's fix, Task Detail pushes the checklist, so the base URI stays on
+  /// Task Detail while the checklist is the page on screen. Assertions about
+  /// *which screen opened* have to read the top of the stack to stay true.
+  String topLocationOf(GoRouter router) =>
+      router.routerDelegate.currentConfiguration.last.matchedLocation;
+
   Future<void> walkToTaskDetail(WidgetTester tester, GoRouter router) async {
     router.go('/collector/projects');
     await tester.pumpAndSettle();
@@ -181,9 +192,10 @@ void main() {
     await tester.tap(find.text('Start Recording'));
     await tester.pumpAndSettle();
 
-    // The id in the URL is the one tapped two screens earlier, not a stub and
-    // not a default.
-    expect(locationOf(router), '/checklist/$taskId');
+    // The id in the route is the one tapped two screens earlier, not a stub
+    // and not a default. Read from the top of the stack rather than the URI,
+    // because the checklist is now pushed — the asserted value is unchanged.
+    expect(topLocationOf(router), '/checklist/$taskId');
   });
 
   testWidgets('choosing the Task records BOTH ids, not just the one in the '
@@ -223,5 +235,40 @@ void main() {
 
     expect(locationOf(router), startsWith('/recording/'));
     expect(locationOf(router), isNot('/checklist/$taskId'));
+  });
+
+  // Open item 144, found on a device by a TalkBack sweep and fixed here.
+  //
+  // `/checklist/:taskId` is declared top-level, outside the shell. Entering it
+  // with `go` replaced the stack with a single page, and three things followed
+  // at once: `canPop` was false so the AppBar rendered no back button, the tab
+  // bar went with the shell, and system back backgrounded the whole app rather
+  // than returning. A Collector whose checklist FAILED — Start Recording is
+  // disabled until every row passes — had no forward path and no back path.
+  //
+  // This asserts the stack shape rather than the button, because the button is
+  // a consequence: `automaticallyImplyLeading` renders one exactly when the
+  // route can pop. Against the `go` this replaced, it fails.
+  testWidgets('the checklist is pushed, so Task Detail is still beneath it', (
+    WidgetTester tester,
+  ) async {
+    final (_, GoRouter router) = await boot(tester);
+
+    await walkToTaskDetail(tester, router);
+    await tester.tap(find.text('Start Recording'));
+    await tester.pumpAndSettle();
+
+    expect(topLocationOf(router), '/checklist/$taskId');
+    expect(router.canPop(), isTrue);
+
+    router.pop();
+    await tester.pumpAndSettle();
+
+    // Back to the Task Detail that pushed it, not to a root the Collector
+    // never chose.
+    expect(
+      topLocationOf(router),
+      '/collector/projects/$projectId/tasks/$taskId',
+    );
   });
 }

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -138,7 +140,23 @@ class CollectorTaskDetailScreen extends ConsumerWidget {
                               taskId: task.id,
                             ),
                           );
-                      context.go('/checklist/$taskId');
+                      // `push`, not `go`. `/checklist/:taskId` is a
+                      // top-level route outside the shell, so a `go`
+                      // replaces the stack with one page: `canPop` is
+                      // then false, the AppBar renders no back button,
+                      // the tab bar is gone with the shell, and system
+                      // back backgrounds the app instead of returning
+                      // here. Open item 144, found on a device.
+                      //
+                      // Pushing puts the checklist on the root
+                      // navigator ABOVE the shell, which keeps it the
+                      // full-screen modal Chapter 2.3 §5 intends —
+                      // still no tab bar — while leaving a page beneath
+                      // it to pop back to.
+                      // `push` returns a Future that completes when the
+                      // pushed route pops. Nothing here needs that
+                      // result, and `go` returned void.
+                      unawaited(context.push('/checklist/$taskId'));
                     },
                     child: const Text('Start Recording'),
                   ),

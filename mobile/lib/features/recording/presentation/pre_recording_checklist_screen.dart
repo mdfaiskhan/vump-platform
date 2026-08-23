@@ -5,6 +5,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:mobile/app/theme/app_spacing.dart';
 import 'package:mobile/core/errors/failure.dart';
+import 'package:mobile/core/identity/providers/identity_ports.dart';
+import 'package:mobile/core/identity/selected_task.dart';
 import 'package:mobile/features/recording/application/checklist_notifier.dart';
 import 'package:mobile/features/recording/application/recording_notifier.dart';
 import 'package:mobile/features/recording/domain/entities/checklist_check.dart';
@@ -67,12 +69,66 @@ class _PreRecordingChecklistScreenState
     });
   }
 
+  /// Leaves the checklist, by whichever route is actually available.
+  ///
+  /// Three cases, in descending order of fidelity to where the Collector
+  /// came from:
+  ///
+  /// 1. **Pop**, when Task Detail pushed this screen — the ordinary path,
+  ///    and the only one that returns to the exact page beneath.
+  /// 2. **Task Detail rebuilt from [selectedTaskProvider]**, which holds
+  ///    both ids because C-06 sets them in the same handler that
+  ///    navigates here. The route carries only `taskId`, so the provider
+  ///    is the only place `projectId` survives.
+  /// 3. **The Collector root**, when neither holds — a deep link into
+  ///    this route on a cold start has no page beneath it and no
+  ///    selection behind it. The literal mirrors `AuthGuard.collectorRoot`
+  ///    rather than importing it: no feature imports a guard, and every
+  ///    feature already writes route paths as literals.
+  ///
+  /// Case 3 is why this is not simply `Navigator.pop`. Open item 144.
+  void _close() {
+    if (context.canPop()) {
+      context.pop();
+      return;
+    }
+    final SelectedTask? selected = ref.read(selectedTaskProvider);
+    if (selected != null) {
+      context.go(
+        '/collector/projects/${selected.projectId}/tasks/${selected.taskId}',
+      );
+      return;
+    }
+    context.go('/collector/dashboard');
+  }
+
   @override
   Widget build(BuildContext context) {
     final ChecklistOutcome outcome = ref.watch(checklistNotifierProvider);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Before you record')),
+      appBar: AppBar(
+        title: const Text('Before you record'),
+        // Open item 144: this screen had no way out. The AppBar's
+        // automatic back button only appears when the route can pop, and
+        // arriving by `go` left nothing to pop — so a Collector whose
+        // checklist FAILED was on the one screen with no forward path and
+        // no back path, which is precisely when they need to leave and go
+        // fix a permission or free some storage.
+        //
+        // Task Detail now pushes, which restores the automatic button and
+        // the back gesture. This is here as well rather than instead,
+        // because a push only fixes the path a push took: a deep link, a
+        // restored route, or a `go('/checklist/…')` written later all
+        // produce a one-page stack again. An explicit action is also the
+        // discoverable one — the defect was found by a screen reader
+        // user, and `tooltip` is what TalkBack reads.
+        leading: IconButton(
+          icon: const Icon(Icons.close),
+          tooltip: 'Close',
+          onPressed: _close,
+        ),
+      ),
       body: SafeArea(
         child: ListView(
           padding: const EdgeInsets.all(AppSpacing.lg),

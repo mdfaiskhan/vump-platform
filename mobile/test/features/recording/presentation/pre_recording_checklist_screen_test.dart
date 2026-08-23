@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
+import 'package:mobile/core/identity/providers/identity_ports.dart';
+import 'package:mobile/core/identity/selected_task.dart';
 import 'package:mobile/features/recording/application/checklist_notifier.dart';
 import 'package:mobile/features/recording/application/recording_notifier.dart';
 import 'package:mobile/features/recording/domain/entities/recording_state.dart';
@@ -44,6 +46,20 @@ void main() {
           path: '/recording/:sessionId',
           builder: (BuildContext context, GoRouterState state) =>
               const Scaffold(body: Text('recording-screen')),
+        ),
+        // Item 144's two fallback destinations. `initialLocation` above makes
+        // this a one-page stack, which is exactly the state the defect left a
+        // Collector in — so these tests run against the case `push` alone
+        // cannot fix.
+        GoRoute(
+          path: '/collector/projects/:projectId/tasks/:taskId',
+          builder: (BuildContext context, GoRouterState state) =>
+              const Scaffold(body: Text('task-detail')),
+        ),
+        GoRoute(
+          path: '/collector/dashboard',
+          builder: (BuildContext context, GoRouterState state) =>
+              const Scaffold(body: Text('collector-dashboard')),
         ),
       ],
     );
@@ -223,5 +239,58 @@ void main() {
     gate.complete();
     await settleChecklist(tester);
     expect(tester.widget<FilledButton>(button).onPressed, isNotNull);
+  });
+
+  group('leaving the checklist — open item 144', () {
+    // The screen had no way out at all: no AppBar back button, no tab bar, and
+    // a system back that backgrounded the app. Found on a CPH2707 by a
+    // TalkBack sweep, and it was never an accessibility defect — every user
+    // was equally stuck. `tooltip` is what a screen reader reads, which is why
+    // it is asserted rather than the icon alone.
+    testWidgets('offers a labelled close action', (WidgetTester tester) async {
+      final ProviderContainer container = build();
+      addTearDown(container.dispose);
+      await tester.pumpWidget(harness(container));
+      await tester.pumpAndSettle();
+
+      expect(find.byTooltip('Close'), findsOneWidget);
+    });
+
+    testWidgets('returns to Task Detail when the selection is known', (
+      WidgetTester tester,
+    ) async {
+      final ProviderContainer container = build();
+      addTearDown(container.dispose);
+      // C-06 sets this in the same handler that navigates here, and the route
+      // carries only `taskId` — so this provider is the only place `projectId`
+      // survives the hop.
+      container
+          .read(selectedTaskProvider.notifier)
+          .select(const SelectedTask(projectId: 'p-1', taskId: 'task-1'));
+      await tester.pumpWidget(harness(container));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byTooltip('Close'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('task-detail'), findsOneWidget);
+    });
+
+    testWidgets('falls back to the Collector root when nothing is selected', (
+      WidgetTester tester,
+    ) async {
+      // The deep-link case: a cold start straight into this route has no page
+      // beneath it and no selection behind it. Without this branch the close
+      // button would be as dead as the back button was.
+      final ProviderContainer container = build();
+      addTearDown(container.dispose);
+      await tester.pumpWidget(harness(container));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byTooltip('Close'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('collector-dashboard'), findsOneWidget);
+    });
   });
 }
