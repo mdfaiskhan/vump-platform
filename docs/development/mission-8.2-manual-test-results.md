@@ -7,7 +7,7 @@ Volume 9 Chapter 9.8's scenarios and Chapter 9.4's performance targets, executed
 
 ---
 
-## Chapter 9.8 — 4 of 5 closed
+## Chapter 9.8 — 5 of 5 closed
 
 | # | Scenario | Status |
 |---|---|---|
@@ -15,7 +15,7 @@ Volume 9 Chapter 9.8's scenarios and Chapter 9.4's performance targets, executed
 | 2 | Background upload survives app kill | **PASS** (build `e1b53d4`) |
 | 3 | Sustained recording, thermal and battery | **PASS**, one human sub-check unassessed |
 | 4 | Real offline field conditions | **PASS** |
-| 5 | Accessibility pass | **PARTIAL** |
+| 5 | Accessibility pass | **PASS** |
 
 ### 1 — PASS
 
@@ -93,11 +93,17 @@ Recording started on normal signal, continued into the low-signal area, and was 
 
 **One behaviour recorded but not counted against the scenario:** the in-flight transfer did not benefit from Wi-Fi becoming available. That is open item 142, filed as tracked behaviour rather than a defect, with its own honest statement of what the 42.6-second observation window does and does not prove.
 
-### 5 — PARTIAL
+### 5 — PASS
 
 **Automated semantics tree: PASS.** All five tabs are real touch targets at **62x69 dp**, clearing the 48x48 minimum. Every element is labelled, tabs announce their position, and session cards carry composed labels. The three small nodes are labels rather than clickable targets, so the 48 dp rule does not apply — checked rather than assumed.
 
-**Manual: PARTIAL.** One session card was confirmed to read sensibly aloud. **Not done:** the full tab-by-tab TalkBack sweep, a second card, contrast in direct sunlight, and physical touch-target feel.
+**TalkBack sweep, all five tabs: PASS.** Driven by the project owner on the device, not inferred from the tree. The Dashboard reads its composed status labels correctly (*"waiting to upload 0, uploading 0, uploaded…"*), and every tab announces its position — *"Projects tab 2 of 5, button"* and so on. Drilling Projects to a Project to a Task read the task name, the instructions, and — worth noting — **the empty state aloud**: *"this task has no reference examples"*, spoken rather than silently skipped. **No blank elements, no raw ids, nothing visible that TalkBack skipped.**
+
+**Contrast in direct sunlight: PASS.** Checked outdoors in bright light. Nothing washed out, and **the status colours and the checklist's pass/fail icons stayed distinguishable** — the specific risk, since a hue that separates cleanly indoors can collapse in sunlight and Collectors work outdoors.
+
+**Touch-target feel: PASS.** Normal use across tabs, cards and the re-run buttons. No missed taps and nothing fiddly, including the elements the automated sweep could not judge because they sit inside cards and rows.
+
+**This scenario found the mission's most severe defect.** The TalkBack sweep is what surfaced open item 144 — the Pre-Recording Checklist had no way out at all. It was never an accessibility defect; every user was equally stuck, and a screen reader is simply what made it visible. Fixed and device-verified within this mission.
 
 ---
 
@@ -141,19 +147,28 @@ Chapter 9.4 asks for no OOM kill across a full multi-chunk session. Scenario 3's
 
 | Item | State |
 |---|---|
-| 137 — interrupted upload strands its chunk at `uploading` | **CLOSED** — fixed by ADR-052, hardware-verified |
-| 138 — Dart engine restarts mid-upload | Open; mechanism UNDETERMINED, size correlation refuted |
+| 137 — an interrupted upload strands its chunk at `uploading` | **CLOSED** — fixed by ADR-052, hardware-verified |
+| 138 — the Dart engine restarts mid-upload | Open; mechanism UNDETERMINED, size correlation refuted |
 | 139 — no usable credential reads Aurora or Secrets Manager | Open; never blocked 137, corrected |
 | 140 — a session directory outlives a recording with no chunk | Open; accumulation not proven |
 | 141 — port fakes model the contract but not the concurrency | Open; recommends an audit |
 | 142 — an in-flight transfer does not migrate to a better network | Open; tracked behaviour, not a defect |
+| 143 — a closing sweep narrower than the one CI enforces | Open as a habit; this instance fixed |
+| 144 — the Pre-Recording Checklist has no way back | **CLOSED** — fixed and device-verified |
+| 145 — the Admin creation routes may share 144's shape | Open; **a suspicion, not a finding** — untraced |
 
-ADR-052 was written, accepted, shipped broken, corrected, and verified within this mission. Its `Correction, 2026-08-23` section records the defect its own first build carried.
+Items 135 and 136 were raised at Mission 8.1 and remain open; neither was touched here.
+
+**Two fixes shipped.** **ADR-052** — startup reconciliation for chunks stranded at `uploading` — was written, accepted, **shipped broken**, corrected, and verified inside this mission; its `Correction, 2026-08-23` section records the defect its own first build carried. **Item 144's fix** gave the checklist a way out, by pushing rather than going *and* adding an explicit close, because the device proved neither alone was sufficient.
 
 ---
 
 ## What remains
 
-- **Scenario 5's manual half** — TalkBack sweep, second card, sunlight contrast, touch feel. Needs no recording.
-- **Chapter 9.4 targets 1 and 4** — target 1 needs instrumentation, which is a production change; target 4 needs a profile build and is deferred to 8.3.
-- **Chapter 9.9's cross-device matrix** — 8.3's, and the reason every result above is labelled single-device.
+Nothing in Chapter 9.8 or Chapter 9.4 is outstanding within this mission's scope. What carries forward:
+
+- **Chapter 9.4 targets 1 and 4.** Target 1 needs a `Stopwatch` around metadata generation, which is a production change. Target 4 needs a profile build, which `flutter build apk --profile` has never produced here (ADR-031 names that gap). Both are Mission 8.3's.
+- **Chapter 9.9's cross-device matrix.** **Every result in this document is a single-device baseline** on one CPH2707. Nothing here establishes behaviour on the reference low-end device, which is why target 6 is recorded as scoped rather than claimed.
+- **Item 145** — whether the Admin creation routes repeat item 144's shape. Read from the route table, never opened on a device.
+- **Item 130 / A-218's F4** — whether the foreground service survives a genuine, timestamped screen-off window. **Untouched by this mission**, and explicitly not evidenced by scenario 2: the screen was on and the app foregrounded throughout, so none of that work says anything about it.
+- **Items 135, 136, 138, 140, 141, 142, 143** — carried, each with its own next step recorded in the register.
