@@ -63,9 +63,11 @@ function defined<T>(value: T | undefined, what: string): T {
 }
 
 function capturedCredential(): Credential {
-  return (defined(initializeApp.mock.calls[0], 'the initializeApp call')[0] as {
-    credential: Credential;
-  }).credential;
+  return (
+    defined(initializeApp.mock.calls[0], 'the initializeApp call')[0] as {
+      credential: Credential;
+    }
+  ).credential;
 }
 
 beforeEach(() => {
