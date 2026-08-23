@@ -729,21 +729,23 @@ void main() {
       attemptCount: attempts,
     );
 
-    test('a chunk left uploading returns to the queue, one attempt spent',
-        () async {
-      // Open item 137's defect, from the other side: before ADR-052 this row
-      // was invisible to `claimNext` forever, because that query selects only
-      // `queued` and everything that could move it died with its pipeline.
-      queue.snapshot = <QueuedChunk>[stranded('chunk-0')];
-      final UploadDispatcher dispatcher = build();
+    test(
+      'a chunk left uploading returns to the queue, one attempt spent',
+      () async {
+        // Open item 137's defect, from the other side: before ADR-052 this row
+        // was invisible to `claimNext` forever, because that query selects only
+        // `queued` and everything that could move it died with its pipeline.
+        queue.snapshot = <QueuedChunk>[stranded('chunk-0')];
+        final UploadDispatcher dispatcher = build();
 
-      dispatcher.start();
-      await pumpEventQueue();
+        dispatcher.start();
+        await pumpEventQueue();
 
-      expect(source.stranded, <String>['chunk-0']);
-      expect(source.strandedAttempts, <int>[1]);
-      expect(source.failed, isEmpty);
-    });
+        expect(source.stranded, <String>['chunk-0']);
+        expect(source.strandedAttempts, <int>[1]);
+        expect(source.failed, isEmpty);
+      },
+    );
 
     test('the death is counted, so the budget converges on failed', () async {
       // Ch. 5.13 §2 gives six attempts. A process death spends one, and the
@@ -807,19 +809,21 @@ void main() {
       expect(source.failed, isEmpty);
     });
 
-    test('a reconciliation that fails does not strand the dispatcher',
-        () async {
-      // Leaving the gate closed would block every upload for the life of the
-      // process — worse than a chunk staying stranded one launch longer.
-      queue.failSnapshot = true;
-      final UploadDispatcher dispatcher = build();
+    test(
+      'a reconciliation that fails does not strand the dispatcher',
+      () async {
+        // Leaving the gate closed would block every upload for the life of the
+        // process — worse than a chunk staying stranded one launch longer.
+        queue.failSnapshot = true;
+        final UploadDispatcher dispatcher = build();
 
-      dispatcher.start();
-      queue.push(queued(2));
-      await pumpEventQueue();
+        dispatcher.start();
+        queue.push(queued(2));
+        await pumpEventQueue();
 
-      expect(uploads.calls, greaterThan(0));
-    });
+        expect(uploads.calls, greaterThan(0));
+      },
+    );
 
     // ---------------------------------------------------------------------
     // The race Mission 8.2 found on hardware, 2026-08-23.
