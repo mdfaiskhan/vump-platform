@@ -1,6 +1,6 @@
 # ADR-053 — The Preview Seam Carries Primitives, Not a Camera Controller
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-08-24
 - **Supersedes:** none. Closes the gap A-064 §5 records, and takes the design decision that amendment explicitly declined to take from the UI side.
 
