@@ -55,7 +55,10 @@ class ChunkRow extends StatelessWidget {
     final AppStatusColors palette = Theme.of(
       context,
     ).extension<AppStatusColors>()!;
-    final bool isFailed = chunk.status == ChunkUploadStatus.failed;
+    // `isRetryable` rather than a comparison against `failed`. The rule that
+    // Chapter 5.9 §1's Retry Chunk action belongs to exactly one state lives
+    // on the enum, and spelling it a second time here is how the two drift.
+    final bool isRetryable = chunk.status.isRetryable;
     final bool isUploading = chunk.status == ChunkUploadStatus.uploading;
     final bool awaitingRetry = chunk.isAwaitingRetry(now);
 
@@ -65,8 +68,9 @@ class ChunkRow extends StatelessWidget {
         borderRadius: const BorderRadius.all(Radius.circular(AppRadius.md)),
         // Chapter 2.7: a failed row "gets a critical-colored border". Only a
         // failed row does — a border on every row would make the failure
-        // ordinary.
-        border: isFailed
+        // ordinary. The same state the retry action applies to, which is why
+        // one value answers both.
+        border: isRetryable
             ? Border.all(color: palette.critical, width: 1.5)
             : null,
       ),
@@ -121,7 +125,7 @@ class ChunkRow extends StatelessWidget {
                 ),
               ),
             ],
-            if (isFailed) ...<Widget>[
+            if (isRetryable) ...<Widget>[
               const SizedBox(height: AppSpacing.sm),
               Align(
                 alignment: Alignment.centerLeft,
