@@ -1,3 +1,5 @@
+import 'package:mobile/features/recording/domain/entities/preview_frame.dart';
+
 /// Opens the capture pipeline for a session, and drives one chunk at a time.
 ///
 /// Volume 5 Chapter 5.4 §1's stages — encoder, muxer, buffered writer,
@@ -39,4 +41,30 @@ abstract interface class RecordingPipeline {
   /// Null before [openSession]. Free space is a property of a volume, and this
   /// is the volume that matters.
   String? get outputDirectory;
+
+  /// ADR-053's preview seam — enough to draw the camera, no way to drive it.
+  ///
+  /// Emits on every change, and emits **null when a session closes** so a
+  /// screen knows to stop drawing rather than holding a dead texture.
+  ///
+  /// **Broadcast.** More than one widget may legitimately observe a preview,
+  /// and a second `listen` on a single-subscription stream throws.
+  ///
+  /// What this deliberately is not: a `CameraController`, a `Widget`, or a
+  /// frame stream. Mission 3.3 kept the controller private so the UI could not
+  /// start or stop capture behind the state machine, and A-064 §5 recorded
+  /// that closing FR-REC-03's gap needed a seam rather than a hole. A
+  /// [PreviewFrame] is three numbers with no method to call.
+  Stream<PreviewFrame?> get previewChanges;
+
+  /// The frame as it stands now, or null when no session is open.
+  ///
+  /// **The stream alone would be a defect, not merely awkward.** A widget that
+  /// subscribes after the last emission renders nothing until the next one —
+  /// and a preview changes rarely, so "the next one" can be the rest of the
+  /// session. That is a black screen during recording, which is the exact
+  /// symptom ADR-053 exists to remove, returning on every rebuild or
+  /// renavigation. A consumer seeds its builder from this and the gap does not
+  /// exist.
+  PreviewFrame? get currentPreview;
 }

@@ -11,6 +11,7 @@ import 'package:mobile/features/recording/application/recording_notifier.dart';
 import 'package:mobile/features/recording/domain/entities/chunk_metadata.dart';
 import 'package:mobile/features/recording/domain/entities/chunk_processing_job.dart';
 import 'package:mobile/features/recording/domain/entities/cleanable_chunk.dart';
+import 'package:mobile/features/recording/domain/entities/preview_frame.dart';
 import 'package:mobile/features/recording/domain/entities/recording_session.dart';
 import 'package:mobile/features/recording/domain/entities/recording_state.dart';
 import 'package:mobile/features/recording/domain/recording_lifecycle.dart';
@@ -666,7 +667,27 @@ class _FakeStore implements ChunkStore {
 
 /// Stands in for the capture pipeline; only its output directory is read here.
 class _FakePipeline implements RecordingPipeline {
+
   _FakePipeline(this._outputDirectory);
+
+  /// ADR-053's seam. Tests that care drive it with [emitPreview]; the rest
+  /// never look, and a null preview is the honest default for a fake that
+  /// owns no camera.
+  final StreamController<PreviewFrame?> previewController =
+      StreamController<PreviewFrame?>.broadcast();
+  PreviewFrame? preview;
+
+  @override
+  Stream<PreviewFrame?> get previewChanges => previewController.stream;
+
+  @override
+  PreviewFrame? get currentPreview => preview;
+
+  /// Publishes a frame and records it as current, as the real pipeline does.
+  void emitPreview(PreviewFrame? frame) {
+    preview = frame;
+    previewController.add(frame);
+  }
 
   final String? _outputDirectory;
 
