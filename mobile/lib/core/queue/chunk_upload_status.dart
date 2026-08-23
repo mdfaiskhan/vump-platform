@@ -31,14 +31,35 @@ enum ChunkUploadStatus {
   /// Actively transferring.
   ///
   /// Entered when Chapter 5.11's Background Upload has claimed the chunk and
-  /// Chapter 5.10's pipeline is running. **Nothing writes this yet** — no
-  /// upload path exists.
+  /// Chapter 5.10's pipeline is running. `IsarChunkStore.claimNext` writes it,
+  /// atomically, as the claim itself.
+  ///
+  /// The doc here used to read *"nothing writes this yet — no upload path
+  /// exists"*, which stopped being true when the pipeline shipped and was
+  /// never revised. Mission 8.2 found it while tracing open item 137.
+  ///
+  /// **A row can outlive the process that claimed it.** Every exit from this
+  /// state — `deferAttempt`, `markFailed`, `markComplete` — is written by the
+  /// pipeline, so a process death mid-transfer leaves the row saying
+  /// `uploading` with nothing left to correct it, and `claimNext` selects only
+  /// [queued]. ADR-052 is the recovery pass that answers it.
   uploading('uploading'),
 
   /// Attempts exhausted for now.
   ///
   /// Chapter 5.13's retry strategy gives up on the current attempt and C-11
-  /// surfaces the Retry Chunk action. **Nothing writes this yet.**
+  /// surfaces the Retry Chunk action.
+  ///
+  /// Written by `markFailed`, from three places: Chapter 5.13 §1's terminal
+  /// classifications in `ChunkUploadPipeline`, `UploadDispatcher` once §2's
+  /// six attempts are spent, and ADR-052's startup reconciliation when a chunk
+  /// has been stranded by that many process deaths.
+  ///
+  /// The doc here used to read *"nothing writes this yet"*, which the upload
+  /// pipeline made false and which was never revised — corrected at Mission
+  /// 8.2. **The row still carries no failure cause**, so C-11 shows "Failed"
+  /// without saying why; open item 53, and ADR-052 widens it slightly by
+  /// making a process death one more way to arrive here.
   failed('failed'),
 
   /// Backend-confirmed.
@@ -69,8 +90,13 @@ enum ChunkUploadStatus {
   /// local copy on the strength of it, which A-086 records as the assumption
   /// future backend work must honour.
   ///
-  /// **No chunk has reached this state on a device.** `SessionRegistrar` has
-  /// no implementation (open item 36), so the pipeline cannot run at all.
+  /// ## Reached on real hardware, and this paragraph used to deny it
+  ///
+  /// This read *"no chunk has reached this state on a device"*, because
+  /// `SessionRegistrar` had no implementation and open item 36 blocked it.
+  /// Item 36 was closed at Mission 7.12: `SessionRegistrarImpl` posts to a
+  /// deployed route, and chunks recorded on a CPH2707 have reached real S3 and
+  /// real Aurora and been marked complete. Corrected at Mission 8.2.
   complete('complete');
 
   const ChunkUploadStatus(this.wireName);
