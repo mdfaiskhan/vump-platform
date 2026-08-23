@@ -367,11 +367,61 @@ class UploadDispatcher {
         error: error,
         stackTrace: stackTrace,
       );
-    } finally {
-      // Set even on failure: leaving it false would block every upload for
-      // the life of the process, which is a far worse outcome than a chunk
-      // staying stranded one launch longer.
-      _reconciled = true;
+    }
+
+    // Set even on failure: leaving it false would block every upload for the
+    // life of the process, which is a far worse outcome than a chunk staying
+    // stranded one launch longer. Deliberately not in a `finally`, so a throw
+    // from the wake below cannot mask the reconciliation error above it.
+    _reconciled = true;
+
+    // Not via the subscription: reconciliation's own write can land before
+    // watchQueue()'s generator attaches its watchLazy listener, and no
+    // emission is ever produced for it. Verified on a CPH2707, 2026-08-23.
+    await _wakeFromQueue();
+  }
+
+  /// Brings this dispatcher's own view up to date from a fresh read.
+  ///
+  /// `watchQueue()` yields its first snapshot and only then subscribes to
+  /// `watchLazy()`, which reports writes made *after* it attaches. A write
+  /// landing in that gap produces no emission at all — so a dispatcher that
+  /// waited for one would hold whatever state its first read gave it, forever.
+  /// Only `_onQueueChanged` and a connectivity change ever call [_launch],
+  /// and neither would fire again.
+  ///
+  /// **That is not hypothetical.** Mission 8.2 reproduced it on a CPH2707:
+  /// reconciliation moved a 369 MB chunk from `uploading` to `queued`, the UI
+  /// read the row correctly through its own separate subscription, and this
+  /// dispatcher sat idle for eight minutes believing a transfer was still
+  /// running. The chunk uploaded the moment an unrelated write finally
+  /// produced an emission.
+  ///
+  /// So the reconciliation wakes the dispatcher itself. [_onQueueChanged] is
+  /// reused rather than reimplemented: it recomputes both flags from a whole
+  /// snapshot and folds the batch, and a second copy of that would be a second
+  /// place for the rule to drift.
+  ///
+  /// **Safe against the subscription also delivering an event.** [_launch] is
+  /// bounded by `_inFlight < _concurrency` and runs without an await, so extra
+  /// calls cannot exceed Chapter 5.11 §3's limit; `claimNext` is atomic, so a
+  /// duplicate runner cannot claim a row twice; `UploadBatchProgress.observe`
+  /// is idempotent for a repeated count; and `_syncService` is serialised.
+  /// `_runOne` already calls [_launch] directly for the same reason.
+  ///
+  /// A read that fails falls back to a bare [_launch], which leaves the
+  /// dispatcher exactly where it stood before rather than worse.
+  Future<void> _wakeFromQueue() async {
+    try {
+      _onQueueChanged(await _queue.currentQueue());
+    } on Object catch (error, stackTrace) {
+      _logger.error(
+        'The queue could not be read after reconciliation. Any chunk it '
+        'returned to the queue waits for the next queue event or the next '
+        'launch.',
+        error: error,
+        stackTrace: stackTrace,
+      );
       _launch();
     }
   }
