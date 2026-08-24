@@ -116,14 +116,21 @@ async function assertProjectVisible(
           parameters: [uuidParam('projectId', projectId), uuidParam('orgId', caller.orgId)],
         })
       : await run(
+          // TEMPORARY, migration 0014. This gate is why a shared Task needs
+          // three changes rather than two: without it a Collector could not
+          // open the Project that holds the Task they can now see, and would
+          // get a 404 from a list they were just shown. Same org check, same
+          // supersession by items 89/92.
           `SELECT 1
              FROM projects p
-             JOIN tasks t             ON t.project_id = p.id
-             JOIN task_assignments ta ON ta.task_id   = t.id
+             JOIN tasks t ON t.project_id = p.id
+             LEFT JOIN task_assignments ta
+                    ON ta.task_id    = t.id
+                   AND ta.user_id    = :userId
+                   AND ta.removed_at IS NULL
             WHERE p.id = :projectId
               AND p.org_id = :orgId
-              AND ta.user_id = :userId
-              AND ta.removed_at IS NULL
+              AND (ta.user_id IS NOT NULL OR t.shared_with_org)
             LIMIT 1`,
           {
             parameters: [
@@ -198,12 +205,18 @@ const listTasks = withEnvelope('GET /v1/projects/{projectId}/tasks', async (even
           { parameters: shared },
         )
       : await execute(
+          // TEMPORARY, migration 0014. The comment above still holds: being
+          // assigned to one Task does not reveal its siblings, and a shared
+          // Task does not reveal them either — only the row carrying the flag
+          // is added. Items 89/92 supersede this.
           `SELECT DISTINCT ${COLUMNS}
              FROM tasks t
-             JOIN task_assignments ta ON ta.task_id = t.id
+             LEFT JOIN task_assignments ta
+                    ON ta.task_id    = t.id
+                   AND ta.user_id    = :userId
+                   AND ta.removed_at IS NULL
             WHERE t.project_id = :projectId
-              AND ta.user_id = :userId
-              AND ta.removed_at IS NULL
+              AND (ta.user_id IS NOT NULL OR t.shared_with_org)
               ${keyset}
             ORDER BY t.created_at DESC, t.id DESC
             LIMIT ${String(limit)}`,
