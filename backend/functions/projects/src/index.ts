@@ -159,12 +159,25 @@ const listProjects = withEnvelope('GET /v1/projects', async (event, caller) => {
           { parameters: shared },
         )
       : await execute(
+          // TEMPORARY, migration 0014: `OR t.shared_with_org`. BR-19 scopes
+          // a Collector to assigned Tasks, which leaves a Collector with no
+          // assignment looking at an empty list and no way out — the only
+          // route that creates one is Admin-only. Open items 89/92 supersede
+          // this; when they ship, delete the LEFT JOIN's return to an inner
+          // JOIN, this clause, and the column.
+          //
+          // The join became LEFT so an unassigned-but-shared Task still
+          // produces a row; `ta.user_id IS NOT NULL` is what the inner join
+          // used to say. **`p.org_id = :orgId` is untouched**, so a flag set
+          // in one organisation cannot be seen from another.
           `SELECT DISTINCT ${COLUMNS}
              FROM projects p
-             JOIN tasks t             ON t.project_id = p.id
-             JOIN task_assignments ta ON ta.task_id   = t.id
-            WHERE ta.user_id = :userId
-              AND ta.removed_at IS NULL
+             JOIN tasks t ON t.project_id = p.id
+             LEFT JOIN task_assignments ta
+                    ON ta.task_id    = t.id
+                   AND ta.user_id    = :userId
+                   AND ta.removed_at IS NULL
+            WHERE (ta.user_id IS NOT NULL OR t.shared_with_org)
               AND p.org_id = :orgId
               AND p.archived_at IS NULL
               ${keyset}

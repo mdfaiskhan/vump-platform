@@ -154,6 +154,64 @@ describe('GET /v1/projects/{projectId}/tasks', () => {
     expect(listSql).toContain('ta.removed_at IS NULL');
   });
 
+  // ---- TEMPORARY, migration 0014 ---------------------------------------
+  // Removed with the column and the OR clauses when items 89/92 ship.
+
+  it('shares a task through BOTH the project gate and the list — 0014', async () => {
+    rds.on(ExecuteStatementCommand).resolves(visible);
+
+    await handler(
+      event('GET', '/v1/projects/{projectId}/tasks', {
+        role: 'collector',
+        path: { projectId: PROJECT },
+      }),
+    );
+
+    // Two statements, and both need the clause. Relaxing only the list would
+    // show a Collector a task and then 404 the project holding it; relaxing
+    // only the gate would open a project whose tasks are all still hidden.
+    const [gateSql = '', listSql = ''] = statements();
+    expect(gateSql).toContain('OR t.shared_with_org');
+    expect(listSql).toContain('OR t.shared_with_org');
+    // The gate keeps its org check. The list has none and never did — it is
+    // reached only through the gate, which is why the gate's matters.
+    expect(gateSql).toContain('p.org_id = :orgId');
+  });
+
+  it('does not let a shared task reveal its siblings — 0014', async () => {
+    rds.on(ExecuteStatementCommand).resolves(visible);
+
+    await handler(
+      event('GET', '/v1/projects/{projectId}/tasks', {
+        role: 'collector',
+        path: { projectId: PROJECT },
+      }),
+    );
+
+    // The list still filters by project and still joins assignments per row,
+    // so only the flagged row is added. A relaxation that dropped the join
+    // would turn "one shared task" into "every task in the project".
+    const listSql = statements()[1] ?? '';
+    expect(listSql).toContain('t.project_id = :projectId');
+    expect(listSql).toContain('LEFT JOIN task_assignments ta');
+    expect(listSql).toContain('ta.removed_at IS NULL');
+  });
+
+  it('leaves both Admin branches untouched by the shared flag — 0014', async () => {
+    rds.on(ExecuteStatementCommand).resolves(visible);
+
+    await handler(
+      event('GET', '/v1/projects/{projectId}/tasks', {
+        role: 'admin',
+        path: { projectId: PROJECT },
+      }),
+    );
+
+    for (const sql of statements()) {
+      expect(sql).not.toContain('shared_with_org');
+    }
+  });
+
   it('does not consult assignments for an Admin', async () => {
     rds.on(ExecuteStatementCommand).resolves(visible);
 

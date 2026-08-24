@@ -146,6 +146,62 @@ describe('GET /v1/projects — the A-119 scope split', () => {
     expect(sql).toContain('DISTINCT');
   });
 
+  // ---- TEMPORARY, migration 0014 ---------------------------------------
+  // These four go when open items 89/92 ship, along with the column and the
+  // OR clause. They exist so the relaxation is described somewhere a reader
+  // will actually look, and so its two dangerous failure modes are pinned:
+  // leaking across organisations, and quietly becoming "show everything".
+
+  it('lets a shared task widen a Collector without widening the org — 0014', async () => {
+    rds.on(ExecuteStatementCommand).resolves({ records: [projectRecord()] });
+
+    await handler(event('GET', '/v1/projects', { role: 'collector' }));
+
+    const sql = statements()[0] ?? '';
+    expect(sql).toContain('OR t.shared_with_org');
+    // BR-20 is the property worth guarding here. A flag set on a task in one
+    // organisation must stay invisible from every other, and the org clause is
+    // the only thing that says so.
+    expect(sql).toContain('p.org_id = :orgId');
+  });
+
+  it('keeps the assignment predicate in the ON clause, not the WHERE — 0014', async () => {
+    rds.on(ExecuteStatementCommand).resolves({ records: [projectRecord()] });
+
+    await handler(event('GET', '/v1/projects', { role: 'collector' }));
+
+    // This is the difference between a working relaxation and a broken one.
+    // `ta.user_id = :userId` in the WHERE would discard every row the LEFT
+    // JOIN produced a NULL for — which is exactly the shared-task rows — so
+    // the clause would compile, read correctly, and do nothing.
+    expect(statements()[0] ?? '').toContain(
+      'LEFT JOIN task_assignments ta ON ta.task_id = t.id ' +
+        'AND ta.user_id = :userId AND ta.removed_at IS NULL',
+    );
+  });
+
+  it('still excludes removed assignments once shared tasks exist — BR-19, 0014', async () => {
+    rds.on(ExecuteStatementCommand).resolves({ records: [projectRecord()] });
+
+    await handler(event('GET', '/v1/projects', { role: 'collector' }));
+
+    // Chapter 4.8 §3's "immediately excludes that Task from all future
+    // queries" must survive the relaxation: a removed assignment is not a
+    // shared task, and moving the predicate into the ON clause is where that
+    // could have been lost.
+    expect(statements()[0] ?? '').toContain('ta.removed_at IS NULL');
+  });
+
+  it('leaves the Admin branch untouched by the shared flag — 0014', async () => {
+    rds.on(ExecuteStatementCommand).resolves({ records: [projectRecord()] });
+
+    await handler(event('GET', '/v1/projects', { role: 'admin' }));
+
+    const sql = statements()[0] ?? '';
+    expect(sql).not.toContain('shared_with_org');
+    expect(sql).not.toContain('task_assignments');
+  });
+
   it('binds the COLLECTOR from the authorizer context, never from the request', async () => {
     rds.on(ExecuteStatementCommand).resolves({ records: [] });
 
