@@ -141,3 +141,17 @@ Exposing `Stream<CameraImage>` via `startImageStream` was considered and rejecte
 **This makes Chapter 9.4 target 4 more important, not less.** Target 4 — 60 fps sustained, zero jank — is deferred to Mission 8.3 because it needs a profile build, which ADR-031 records has never been produced here. A live preview compositing every frame is precisely the workload that target exists to measure, so 8.3's profile-build work should follow this change rather than precede it.
 
 **One rendering behaviour moves into this project's code.** `CameraPreview`'s orientation logic — about twenty-five lines mapping four orientation fields to quarter-turns — is reimplemented behind the seam instead of being inherited from the plugin's widget. That is a maintenance cost and a place a future plugin change could silently diverge, and it is the price of not putting a `Widget` in `domain/`.
+
+### Amendment, 2026-08-25 (third) — capture orientation and display orientation were one field, and ADR-054 separates them
+
+**ADR-054 locks capture orientation to landscape. `PreviewFrame`'s three numbers were display values that only happened to equal capture values, and under that lock they stop being equal.**
+
+ADR-053 derives `quarterTurns` and `aspectRatio` from a chain preferring `recordingOrientation` and `lockedCaptureOrientation` over `deviceOrientation`. That was correct while nothing locked capture orientation: the two were always the same value, so which one the chain returned never mattered.
+
+ADR-054 locks capture orientation to landscape. **Both preferred branches then become constants, and the preview freezes** — the seam would stop reporting how to draw and start reporting what was captured, which is not what a preview is for.
+
+The correction is that `PreviewFrame` describes **display only**, and both fields derive from `value.deviceOrientation`. Capture orientation is not exposed through the seam, because nothing that draws needs it.
+
+**What this does not change.** The seam still carries three primitives and no capability: no `Widget`, no `Listenable`, no `CameraValue`, no `CameraController`. Mission 3.3's boundary holds by type exactly as before. `CameraPreviewSurface` still cannot start or stop capture.
+
+**What it costs to have got this wrong the first time: nothing yet, and that is luck rather than judgement.** The conflation was invisible because no feature had ever asked the two values to differ. It is recorded here rather than quietly fixed so the next person to widen this seam knows the two concepts were once one field.
