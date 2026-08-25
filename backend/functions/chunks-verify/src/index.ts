@@ -102,48 +102,65 @@ interface ChunkContext {
 /**
  * Resolves the chunk and confirms the caller owns it.
  *
- * `chunks ⋈ sessions` for ownership and `task_assignments` for BR-19 — both
- * grants added by migration `0010`, without which this role could transition
- * the status of any chunk id it was handed.
+ * `chunks ⋈ sessions` for ownership. **Nothing else, and the narrowness is
+ * forced by this role's grants rather than chosen here.**
+ *
+ * ## Why the BR-19 re-check is gone
+ *
+ * `vump_chunks_verify` may SELECT on `chunks`, `chunk_metadata`, `sessions`
+ * and `task_assignments` — verified live, not read off a migration:
+ *
+ * ```
+ * has_table_privilege('vump_chunks_verify','tasks',   'SELECT')  ->  false
+ * has_table_privilege('vump_chunks_verify','projects','SELECT')  ->  false
+ * ```
+ *
+ * `shared_with_org` is a column on `tasks`. **This role cannot read it, so the
+ * shared-task relaxation is not expressible here at all** — and an unrelaxed
+ * assignment join refuses every chunk of a shared task, which is exactly what
+ * it did: `PATCH /status` returned 500 for every upload until this was
+ * reverted, because the joins added to reach `t.shared_with_org` touched two
+ * tables the role has no grant on.
+ *
+ * So the check that remains is ownership: the caller must own the session.
+ * **Legitimacy was already established when the session was created** —
+ * `sessions/assertAssigned` gates that, and it CAN see `tasks`, so it enforces
+ * assignment-or-shared correctly. Re-asking the question here was a second gate
+ * on a decision already made, and it is the gate that could not be made
+ * shared-aware.
+ *
+ * ## What that costs, stated rather than buried
+ *
+ * Chapter 4.8 §3 says a removed assignment *"immediately excludes that Task
+ * from all future queries"*. **A Collector whose assignment is revoked
+ * mid-session can now still transition the status of chunks in a session they
+ * already own.** Bounded — they reach only their own sessions, created while
+ * they were legitimately entitled, for bytes already in S3 — but it is a real
+ * narrowing of §3's word "all", and open item 156 records it rather than
+ * leaving it to be discovered.
+ *
+ * ## BR-20 is back to where it was, deliberately
+ *
+ * Org isolation here is transitive through `s.collector_id = :callerId`: a
+ * caller reaches only sessions they own, and a session belongs to one org.
+ * An earlier change added an explicit `p.org_id` check believing the absence
+ * was an oversight. **It was not** — it was a consequence of this role's
+ * minimal grant, and the "strengthening" is what broke the route. Open item
+ * 155 records that misdiagnosis so it is not re-attempted.
  */
-async function resolveChunk(
-  chunkId: string,
-  callerId: string,
-  orgId: string,
-): Promise<ChunkContext> {
+async function resolveChunk(chunkId: string, callerId: string): Promise<ChunkContext> {
   const found = await execute(
-    // TEMPORARY, migration 0014 and open item 148: `OR t.shared_with_org`.
-    // As in chunks-upload, the assignment join asks about the session's OWNER;
-    // `s.collector_id = :callerId` is the ownership check and is untouched.
-    //
-    // **`p.org_id = :orgId` is NEW here, and this site is being strengthened
-    // rather than only widened.** This query never joined `projects` at all, so
-    // BR-20 rested entirely on `s.collector_id = :callerId` — true, but
-    // transitive, and it would have become the ONLY org defence once the
-    // assignment join stopped being an inner one. Stating it explicitly keeps
-    // BR-20 asserted where it holds rather than inferred, which is the same
-    // defence-in-depth the projects list already applies.
+    // Only `chunks` and `sessions` — the two tables this role can actually
+    // read that answer "does the caller own this chunk". `tasks` and
+    // `projects` are absent from its grants, so any join to them fails with
+    // 42501 and surfaces as a 500.
     `SELECT c.id, c.session_id, c.s3_object_key, c.checksum_sha256, c.status, c.upload_id
        FROM chunks c
        JOIN sessions s ON s.id = c.session_id
-       JOIN tasks t    ON t.id = s.task_id
-       JOIN projects p ON p.id = t.project_id
-       LEFT JOIN task_assignments ta
-              ON ta.task_id    = s.task_id
-             AND ta.user_id    = s.collector_id
-             AND ta.removed_at IS NULL
       WHERE c.id = :chunkId
         AND s.collector_id = :callerId
-        AND (ta.user_id IS NOT NULL OR t.shared_with_org)
-        AND p.org_id = :orgId
       LIMIT 1`,
-    {
-      parameters: [
-        uuidParam('chunkId', chunkId),
-        uuidParam('callerId', callerId),
-        uuidParam('orgId', orgId),
-      ],
-    },
+    { parameters: [uuidParam('chunkId', chunkId), uuidParam('callerId', callerId)] },
   );
 
   const row = found.records?.[0];
@@ -244,7 +261,7 @@ const patchStatus = withEnvelope<StatusResult>(
       throw ApiError.invalidRequest("status must be one of 'uploading', 'failed' or 'complete'.");
     }
 
-    const chunk = await resolveChunk(chunkId, caller.userId, caller.orgId);
+    const chunk = await resolveChunk(chunkId, caller.userId);
 
     if (status !== 'complete') {
       // The column-level UPDATE (status) grant. This role cannot touch
