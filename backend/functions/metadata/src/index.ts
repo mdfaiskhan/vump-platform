@@ -131,12 +131,14 @@ const writeMetadata = withEnvelope('POST /v1/chunks/{chunkId}/metadata', async (
         chunk_id, captured_start_at, captured_end_at,
         resolution, frame_rate, bitrate_kbps, codec, zoom_factor, camera,
         device_model, os_version, app_version, device_id,
-        gps_lat, gps_lng, battery_pct, network_type, notes_tags)
+        gps_lat, gps_lng, battery_pct, network_type, notes_tags,
+        capture_orientation, thermal_state)
      VALUES (
         :chunkId, :startedAt::timestamptz, :endedAt::timestamptz,
         :resolution, :frameRate, :bitrate, :codec, :zoom, :camera,
         :deviceModel, :osVersion, :appVersion, :deviceId,
-        :gpsLat, :gpsLng, :batteryPct, :networkType, :notesTags)
+        :gpsLat, :gpsLng, :batteryPct, :networkType, :notesTags,
+        :captureOrientation, :thermalState)
      ON CONFLICT (chunk_id) DO NOTHING`,
     {
       parameters: [
@@ -158,6 +160,8 @@ const writeMetadata = withEnvelope('POST /v1/chunks/{chunkId}/metadata', async (
         nullableLong('batteryPct', document.capture_conditions.battery_pct),
         nullableText('networkType', document.capture_conditions.network_type),
         jsonParam('notesTags', authored === null ? undefined : [JSON.stringify(authored)]),
+        nullableText('captureOrientation', document.capture.orientation),
+        nullableLong('thermalState', document.capture_conditions.thermal_state),
       ],
     },
   );

@@ -74,6 +74,14 @@ export const MetadataDocument = v.object({
     codec: v.pipe(v.string(), v.minLength(1), v.maxLength(50)),
     zoom_factor: v.pipe(v.number(), v.minValue(0)),
     camera: v.pipe(v.string(), v.minLength(1), v.maxLength(50)),
+    // ADR-054 section 6. Nullish rather than required, and the reason is not
+    // client convenience: a build older than migration 0017 does not send it,
+    // and refusing those requests would drop metadata for footage that is
+    // otherwise perfectly valid. The column is nullable for the same reason.
+    //
+    // A wire spelling, not a platform enum -- `landscape-left`, `portrait-up`
+    // -- following `codec`'s precedent of storing what crosses the wire.
+    orientation: v.nullish(v.pipe(v.string(), v.minLength(1), v.maxLength(50))),
   }),
 
   device_context: v.object({
@@ -108,6 +116,12 @@ export const MetadataDocument = v.object({
     // violation surfacing as INTERNAL_ERROR.
     battery_pct: v.nullish(v.pipe(v.number(), v.integer(), v.minValue(0), v.maxValue(100))),
     network_type: v.nullish(v.pipe(v.string(), v.maxLength(50))),
+    // Android's PowerManager.getCurrentThermalStatus(), 0 (NONE) to 6
+    // (SHUTDOWN). Range-checked here as well as by
+    // `chunk_metadata_thermal_state_range`, for the same reason `battery_pct`
+    // is: a bad value should be REQUEST_INVALID rather than a constraint
+    // violation surfacing as INTERNAL_ERROR.
+    thermal_state: v.nullish(v.pipe(v.number(), v.integer(), v.minValue(0), v.maxValue(6))),
   }),
 
   integrity: v.object({
