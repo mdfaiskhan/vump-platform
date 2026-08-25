@@ -62,11 +62,30 @@ class CameraPreviewSurface extends ConsumerWidget {
         if (frame == null) {
           return const ColoredBox(color: Colors.black);
         }
+        // The flip lives here, not in the pipeline. `aspectRatio` answers
+        // "what shape should this box be", which is a fact about the window —
+        // and `MediaQuery` is the authority on that, updating on every
+        // configuration change with no sensor involved.
+        //
+        // The pipeline used to flip it from `deviceOrientation`, which the
+        // platform updates ONLY when the accelerometer fires. A window rotated
+        // by `SystemChrome` on a still handset left it portrait while the
+        // window was landscape, and a 16:9 texture was squeezed into a 9:16
+        // box. ADR-053's fourth amendment records the regression.
+        //
+        // `quarterTurns` deliberately still comes from `deviceOrientation`:
+        // the plugin subtracts exactly that quantity, so it is the one number
+        // that must NOT follow the window.
+        final bool isLandscape =
+            MediaQuery.orientationOf(context) == Orientation.landscape;
+
         return ColoredBox(
           color: Colors.black,
           child: Center(
             child: AspectRatio(
-              aspectRatio: frame.aspectRatio,
+              aspectRatio: isLandscape
+                  ? frame.aspectRatio
+                  : 1 / frame.aspectRatio,
               child: RotatedBox(
                 quarterTurns: frame.quarterTurns,
                 child: CameraPlatform.instance.buildPreview(frame.textureId),

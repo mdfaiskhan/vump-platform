@@ -280,12 +280,23 @@ class CameraRecordingPipeline implements RecordingPipeline {
       DeviceOrientation.portraitDown: 2,
       DeviceOrientation.landscapeLeft: 3,
     };
-    final bool isLandscape =
-        orientation == DeviceOrientation.landscapeLeft ||
-        orientation == DeviceOrientation.landscapeRight;
     return PreviewFrame(
       textureId: controller.cameraId,
-      aspectRatio: isLandscape ? value.aspectRatio : 1 / value.aspectRatio,
+      // **The camera's native ratio, with no orientation applied.**
+      //
+      // This used to be flipped here, which put a layout decision in a class
+      // that cannot make one: the pipeline has no `BuildContext` and therefore
+      // no way to know the window's orientation. It flipped on
+      // `deviceOrientation` instead, and that value updates **only when the
+      // accelerometer fires** — `DeviceOrientationManager.start()` registers
+      // an `OrientationEventListener` and nothing else, so a window rotated by
+      // `SystemChrome` while the handset is still leaves it stale. A phone on a
+      // desk or a mount then got a portrait ratio in a landscape window and the
+      // preview stretched. ADR-053's fourth amendment records it.
+      //
+      // `CameraPreviewSurface` flips it from `MediaQuery`, which is the
+      // authority on window orientation and needs no sensor.
+      aspectRatio: value.aspectRatio,
       quarterTurns: turns[orientation] ?? 0,
     );
   }
