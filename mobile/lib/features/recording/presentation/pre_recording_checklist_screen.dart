@@ -1,5 +1,4 @@
 import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -14,6 +13,7 @@ import 'package:mobile/features/recording/domain/entities/checklist_outcome.dart
 import 'package:mobile/features/recording/domain/entities/recording_state.dart';
 import 'package:mobile/features/recording/presentation/checklist_copy.dart';
 import 'package:mobile/features/recording/presentation/recording_error_copy.dart';
+import 'package:mobile/features/recording/presentation/recording_orientation_lock.dart';
 
 /// Volume 2 Chapter 2.7's C-07 and C-08, in one screen.
 ///
@@ -60,6 +60,11 @@ class _PreRecordingChecklistScreenState
   @override
   void initState() {
     super.initState();
+    // ADR-054's third amendment. Acquired HERE rather than on the Recording
+    // screen, and the timing is the entire point: Start calls `openSession`,
+    // which creates the camera, and the plugin bakes the display rotation in
+    // at creation. The window has to be landscape before that happens.
+    unawaited(RecordingOrientationLock.acquire());
     // Runs after the first frame rather than during it: `runAll` writes
     // provider state, and mutating a provider inside `build`/`initState` while
     // the tree is being constructed is the Riverpod misuse that surfaces as a
@@ -67,6 +72,14 @@ class _PreRecordingChecklistScreenState
     WidgetsBinding.instance.addPostFrameCallback((_) {
       unawaited(ref.read(checklistNotifierProvider.notifier).runAll());
     });
+  }
+
+  @override
+  void dispose() {
+    // Released, not restored-to-portrait: the Recording screen has already
+    // acquired by the time this runs, so the counter keeps landscape held.
+    unawaited(RecordingOrientationLock.release());
+    super.dispose();
   }
 
   /// Leaves the checklist, by whichever route is actually available.

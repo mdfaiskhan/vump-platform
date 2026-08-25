@@ -77,6 +77,11 @@ function body(response: { body: string }): Record<string, unknown> {
   return JSON.parse(response.body) as Record<string, unknown>;
 }
 
+function paramsOf(index: number): Record<string, unknown> {
+  const list = rds.commandCalls(ExecuteStatementCommand)[index]?.args[0].input.parameters ?? [];
+  return Object.fromEntries(list.map((p) => [p.name ?? '', p.value]));
+}
+
 function statements(): string[] {
   return rds
     .commandCalls(ExecuteStatementCommand)
@@ -142,6 +147,64 @@ describe('PATCH — the non-completing transitions', () => {
     rds.on(ExecuteStatementCommand).resolves({ records: [] });
     const response = await handler(event('uploading'));
     expect(response.statusCode).toBe(404);
+  });
+});
+
+describe('PATCH — the shared-task write path, migration 0014 / item 148', () => {
+  // chunks-verify was one of the three WRITE sites item 148 missed. Until this
+  // landed, a chunk recorded against a shared-but-unassigned task could not be
+  // verified even after it uploaded.
+  it('resolves a chunk whose task is shared rather than assigned', async () => {
+    // The LEFT JOIN matches on t.shared_with_org; the row comes back either
+    // way, which is the relaxation working.
+    rds.on(ExecuteStatementCommand).resolvesOnce(chunkRow()).resolves({ records: [] });
+
+    const response = await handler(event('failed'));
+
+    expect(response.statusCode).toBe(200);
+  });
+
+  it('still 404s a chunk that is neither owned, assigned nor shared', async () => {
+    rds.on(ExecuteStatementCommand).resolves({ records: [] });
+
+    const response = await handler(event('uploading'));
+
+    expect(response.statusCode).toBe(404);
+  });
+
+  it('ADDS an explicit org check — BR-20 no longer rests on ownership alone', async () => {
+    // This query never joined `projects`, so org isolation was transitive
+    // through `s.collector_id = :callerId`. Once the assignment join stopped
+    // being an inner one that would have been the ONLY org defence left, so
+    // the clause is stated rather than inferred. This site is STRENGTHENED by
+    // the same change that widens it.
+    rds.on(ExecuteStatementCommand).resolvesOnce(chunkRow()).resolves({ records: [] });
+
+    await handler(event('failed'));
+
+    const resolve = (statements()[0] ?? '').replace(/\s+/g, ' ');
+    expect(resolve).toContain('JOIN projects p');
+    expect(resolve).toContain('p.org_id = :orgId');
+    expect(paramsOf(0).orgId).toEqual({ stringValue: ORG });
+  });
+
+  it('keeps caller ownership untouched while widening the assignment gate', async () => {
+    rds.on(ExecuteStatementCommand).resolvesOnce(chunkRow()).resolves({ records: [] });
+
+    await handler(event('failed'));
+
+    const resolve = (statements()[0] ?? '').replace(/\s+/g, ' ');
+    // The ownership check — NOT relaxed, and not the same question as the
+    // assignment join, which is about the session's owner.
+    expect(resolve).toContain('s.collector_id = :callerId');
+
+    const onClause = resolve.slice(
+      resolve.indexOf('LEFT JOIN task_assignments'),
+      resolve.indexOf('WHERE'),
+    );
+    expect(onClause).toContain('ta.user_id = s.collector_id');
+    expect(onClause).toContain('ta.removed_at IS NULL');
+    expect(resolve.slice(resolve.indexOf('WHERE'))).toContain('OR t.shared_with_org');
   });
 });
 

@@ -220,3 +220,52 @@ The failure was concrete: `deviceOrientation` updates only when the acceleromete
 **What the previous code was accidentally doing right.** The chain decision 2 replaced preferred `lockedCaptureOrientation`, which — once decision 1 landed — would have given the correct *landscape* ratio no matter what the sensor reported. Decision 2 removed the thing that was protecting the ratio while fixing the thing that was breaking the rotation. **A change that is right about one field and wrong about another in the same expression is exactly the shape of defect a seam with three primitives from one source invites**, and the seam now sources them separately.
 
 `aspectRatio` is now the camera's native ratio and `CameraPreviewSurface` flips it from `MediaQuery`. Decisions 1, 3, 4 and 5 are unaffected.
+
+### Amendment, 2026-08-25 (third) — the lock's TIMING is load-bearing, not only its value
+
+**The landscape lock moves to the Checklist screen. It has to be applied before the camera is created, not after.**
+
+Decision 4 acquired it in `RecordingScreen.initState`. That is too late, and the reason is in the plugin rather than in this project.
+
+#### What the plugin bakes in, and when
+
+`camera_android_camerax` reads the display rotation **once, at camera creation**:
+
+```dart
+// android_camera_camerax.dart:433, inside createCamera
+_initialDefaultDisplayRotation = await deviceOrientationManager.getDefaultDisplayRotation();
+```
+
+It hands that value to the preview delegate as `initialDefaultDisplayRotation`, and the delegate refreshes it only inside `deviceOrientationStream.listen(...)`. Per this record's second amendment, that stream is fed by an `OrientationEventListener` and nothing else — **`DeviceOrientationManager.start()` registers no broadcast receiver**, so a window rotated by `SystemChrome` while the handset lies still refreshes nothing.
+
+#### The sequence that produced the defect
+
+`openSession` runs from the Checklist's Start action, **before** `RecordingScreen` mounts. So:
+
+1. the camera is created while the window is still portrait → the plugin bakes in *portrait*
+2. `RecordingScreen.initState` fires `SystemChrome` → the window rotates to landscape
+3. no sensor event fires → neither the plugin's display rotation nor this project's `quarterTurns` updates
+4. the preview renders for a portrait window inside a landscape one until the Collector **physically moves the phone**
+
+The project owner reported it as *"the first 1–5 seconds"*. **It is not a timeout.** It lasts exactly as long as the handset stays still, which for a body-worn or mounted recorder is indefinitely.
+
+#### Why the fix is timing rather than arithmetic
+
+Correcting `quarterTurns` cannot work. That term must pair with the plugin's *internal* pre-applied subtraction, which cannot be read or refreshed from Dart. Rebuilding the preview widget cannot work either — line 433 shows the value is captured at camera creation, so a rebuild re-reads the same stale field.
+
+**Putting the window in its final orientation before the camera exists removes the stale seed entirely.** Every subsequent change then requires physically turning the phone, which fires the sensor and refreshes both terms together. The broken path is never entered.
+
+#### Why a reference count, and not set-on-enter / restore-on-exit
+
+**Flutter builds the incoming route before disposing the outgoing one.** A Checklist that restored portrait in `dispose` would undo the landscape the Recording screen had already requested, reintroducing the same stale window one screen later.
+
+`RecordingOrientationLock` counts holders instead, so the order stops mattering: acquire (0→1, landscape), acquire (1→2), late release (2→1, still landscape), and portrait returns only when the last holder lets go. A test pins that exact ordering.
+
+#### What this costs, stated rather than discovered later
+
+**The Checklist screen is now landscape.** Its body is a `ListView`, so it reflows rather than breaking, and every existing test still passes. But it was designed and reviewed in portrait, and a five-row checklist plus a Start button in a short landscape viewport means more scrolling to reach the action. **That is a mechanical flip, not a design pass**, and it is recorded here as owed work rather than presented as finished.
+
+#### Video data was never affected
+
+Measured before any of this was changed, on three chunks pulled byte-exact from the device: `tkhd` matrix `(1, 0, 0, 1)` — the identity, no rotation — with coded `avc1` **1920×1080**, constant across every file. An MP4 track carries one rotation matrix, so a mid-file orientation change is not a state the container can represent. **The defect was always cosmetic**, and confirming that before touching anything is what kept it from being treated as a data emergency.
+

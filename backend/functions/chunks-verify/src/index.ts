@@ -106,17 +106,44 @@ interface ChunkContext {
  * grants added by migration `0010`, without which this role could transition
  * the status of any chunk id it was handed.
  */
-async function resolveChunk(chunkId: string, callerId: string): Promise<ChunkContext> {
+async function resolveChunk(
+  chunkId: string,
+  callerId: string,
+  orgId: string,
+): Promise<ChunkContext> {
   const found = await execute(
+    // TEMPORARY, migration 0014 and open item 148: `OR t.shared_with_org`.
+    // As in chunks-upload, the assignment join asks about the session's OWNER;
+    // `s.collector_id = :callerId` is the ownership check and is untouched.
+    //
+    // **`p.org_id = :orgId` is NEW here, and this site is being strengthened
+    // rather than only widened.** This query never joined `projects` at all, so
+    // BR-20 rested entirely on `s.collector_id = :callerId` — true, but
+    // transitive, and it would have become the ONLY org defence once the
+    // assignment join stopped being an inner one. Stating it explicitly keeps
+    // BR-20 asserted where it holds rather than inferred, which is the same
+    // defence-in-depth the projects list already applies.
     `SELECT c.id, c.session_id, c.s3_object_key, c.checksum_sha256, c.status, c.upload_id
        FROM chunks c
-       JOIN sessions s          ON s.id = c.session_id
-       JOIN task_assignments ta ON ta.task_id = s.task_id AND ta.user_id = s.collector_id
+       JOIN sessions s ON s.id = c.session_id
+       JOIN tasks t    ON t.id = s.task_id
+       JOIN projects p ON p.id = t.project_id
+       LEFT JOIN task_assignments ta
+              ON ta.task_id    = s.task_id
+             AND ta.user_id    = s.collector_id
+             AND ta.removed_at IS NULL
       WHERE c.id = :chunkId
         AND s.collector_id = :callerId
-        AND ta.removed_at IS NULL
+        AND (ta.user_id IS NOT NULL OR t.shared_with_org)
+        AND p.org_id = :orgId
       LIMIT 1`,
-    { parameters: [uuidParam('chunkId', chunkId), uuidParam('callerId', callerId)] },
+    {
+      parameters: [
+        uuidParam('chunkId', chunkId),
+        uuidParam('callerId', callerId),
+        uuidParam('orgId', orgId),
+      ],
+    },
   );
 
   const row = found.records?.[0];
@@ -217,7 +244,7 @@ const patchStatus = withEnvelope<StatusResult>(
       throw ApiError.invalidRequest("status must be one of 'uploading', 'failed' or 'complete'.");
     }
 
-    const chunk = await resolveChunk(chunkId, caller.userId);
+    const chunk = await resolveChunk(chunkId, caller.userId, caller.orgId);
 
     if (status !== 'complete') {
       // The column-level UPDATE (status) grant. This role cannot touch

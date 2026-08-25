@@ -124,13 +124,27 @@ function render(row: SessionRow): SessionDto {
  */
 async function assertAssigned(caller: Caller, taskId: string): Promise<void> {
   const found = await execute(
+    // TEMPORARY, migration 0014 and open item 148: `OR t.shared_with_org`.
+    //
+    // This is the WRITE half of that relaxation, and it was missed when the
+    // read half shipped. Item 148 said "all THREE queries" and meant the three
+    // that LIST things; the three that write — here, chunks-upload and
+    // chunks-verify — were left demanding a hard assignment. The result was a
+    // Collector who could see a shared task, record against it, and then have
+    // every chunk refused with RESOURCE_NOT_FOUND.
+    //
+    // The predicates move INTO the ON clause. Left in the WHERE they would
+    // discard exactly the NULL rows the LEFT JOIN produces for a shared task —
+    // it would compile, read correctly, and do nothing.
     `SELECT 1
-       FROM task_assignments ta
-       JOIN tasks t    ON t.id = ta.task_id
+       FROM tasks t
        JOIN projects p ON p.id = t.project_id
-      WHERE ta.task_id = :taskId
-        AND ta.user_id = :userId
-        AND ta.removed_at IS NULL
+       LEFT JOIN task_assignments ta
+              ON ta.task_id    = t.id
+             AND ta.user_id    = :userId
+             AND ta.removed_at IS NULL
+      WHERE t.id = :taskId
+        AND (ta.user_id IS NOT NULL OR t.shared_with_org)
         AND p.org_id = :orgId
       LIMIT 1`,
     {
