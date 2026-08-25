@@ -51,7 +51,10 @@ class _FakePipeline implements RecordingPipeline {
   Future<void> closeSession() async {}
 }
 
-Future<AspectRatio?> _pumpAndReadRatio(
+/// The preview's display ratio, read off the `SizedBox` that `FittedBox`
+/// scales. There is no `AspectRatio` any more: Chapter 5.1 §1 wants full-bleed,
+/// so the box is covered and clipped rather than contained.
+Future<double?> _pumpAndReadRatio(
   WidgetTester tester, {
   required Size window,
   required PreviewFrame frame,
@@ -72,10 +75,19 @@ Future<AspectRatio?> _pumpAndReadRatio(
   );
   await tester.pump();
 
-  final Iterable<AspectRatio> found = tester.widgetList<AspectRatio>(
-    find.byType(AspectRatio),
+  final Iterable<SizedBox> found = tester.widgetList<SizedBox>(
+    find.descendant(
+      of: find.byType(FittedBox),
+      matching: find.byType(SizedBox),
+    ),
   );
-  return found.isEmpty ? null : found.first;
+  if (found.isEmpty) {
+    return null;
+  }
+  final SizedBox box = found.first;
+  final double? w = box.width;
+  final double? h = box.height;
+  return (w == null || h == null || h == 0) ? null : w / h;
 }
 
 void main() {
@@ -91,25 +103,25 @@ void main() {
     testWidgets('a landscape window gets the native ratio', (
       WidgetTester tester,
     ) async {
-      final AspectRatio? built = await _pumpAndReadRatio(
+      final double? built = await _pumpAndReadRatio(
         tester,
         window: const Size(793, 360),
         frame: native,
       );
 
-      expect(built?.aspectRatio, closeTo(16 / 9, 0.0001));
+      expect(built, closeTo(16 / 9, 0.0001));
     });
 
     testWidgets('a portrait window gets the inverted ratio', (
       WidgetTester tester,
     ) async {
-      final AspectRatio? built = await _pumpAndReadRatio(
+      final double? built = await _pumpAndReadRatio(
         tester,
         window: const Size(360, 793),
         frame: native,
       );
 
-      expect(built?.aspectRatio, closeTo(9 / 16, 0.0001));
+      expect(built, closeTo(9 / 16, 0.0001));
     });
 
     testWidgets(
@@ -125,15 +137,62 @@ void main() {
           quarterTurns: 0,
         );
 
-        final AspectRatio? built = await _pumpAndReadRatio(
+        final double? built = await _pumpAndReadRatio(
           tester,
           window: const Size(793, 360),
           frame: stale,
         );
 
-        expect(built?.aspectRatio, closeTo(16 / 9, 0.0001));
+        expect(built, closeTo(16 / 9, 0.0001));
       },
     );
+  });
+
+  group('the preview is framed like the handset s own camera app', () {
+    testWidgets('it CONTAINS — true ratio, bars on the long edges', (
+      WidgetTester tester,
+    ) async {
+      // Matching the device camera app: the picture fills the full height and
+      // keeps its ratio, with black to the left and right. `cover` was tried
+      // and rejected — filling every edge crops away field of view the
+      // Collector is about to record.
+      await _pumpAndReadRatio(
+        tester,
+        window: const Size(793, 360),
+        frame: native,
+      );
+
+      final FittedBox box = tester.widget<FittedBox>(find.byType(FittedBox));
+      expect(box.fit, BoxFit.contain);
+    });
+
+    testWidgets('it is clipped to its box regardless', (
+      WidgetTester tester,
+    ) async {
+      // Cheap insurance: nothing should ever paint outside the preview box,
+      // whichever fit is in force.
+      await _pumpAndReadRatio(
+        tester,
+        window: const Size(793, 360),
+        frame: native,
+      );
+
+      expect(find.byType(ClipRect), findsWidgets);
+      final FittedBox box = tester.widget<FittedBox>(find.byType(FittedBox));
+      expect(box.clipBehavior, Clip.hardEdge);
+    });
+
+    testWidgets('the ratio comes from a sized box, not an AspectRatio', (
+      WidgetTester tester,
+    ) async {
+      await _pumpAndReadRatio(
+        tester,
+        window: const Size(793, 360),
+        frame: native,
+      );
+
+      expect(find.byType(AspectRatio), findsNothing);
+    });
   });
 
   group('the seam still reports black for no session', () {
@@ -156,7 +215,7 @@ void main() {
       );
       await tester.pump();
 
-      expect(find.byType(AspectRatio), findsNothing);
+      expect(find.byType(FittedBox), findsNothing);
     });
   });
 }

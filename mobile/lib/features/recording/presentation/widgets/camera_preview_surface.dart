@@ -35,12 +35,28 @@ import 'package:mobile/features/recording/domain/repositories/recording_pipeline
 /// it to **this one file** — the filename announces the permission, per the
 /// ADR-039 convention.
 ///
+/// ## Cropping the PREVIEW does not crop the RECORDING
+///
+/// `BoxFit.cover` clips pixels on the way to the screen and nothing else.
+/// `buildPreview` is a display widget over a texture id; the file is written by
+/// CameraX's `Recorder` from a separate stream, and this widget holds no
+/// `CameraController` with which to influence it — ADR-053's whole point.
+///
+/// So the recorded chunk keeps its full native field of view and its own
+/// dimensions. **What the Collector sees is now a crop of what is being
+/// recorded**, which is how every camera app behaves, and the metadata
+/// `capture.resolution` continues to describe the file rather than the screen.
+///
 /// ## Black is a real state, not a fallback
 ///
 /// A null frame means no session is open, which is exactly what the screen
 /// should show before `openSession` and after `closeSession`. The pipeline
 /// emits null on close deliberately, so nothing draws a texture that is about
 /// to be disposed.
+/// Nominal height the preview box is measured at before `FittedBox` scales
+/// it. Only the ratio it forms with the width is meaningful.
+const double _ratioUnit = 1000;
+
 class CameraPreviewSurface extends ConsumerWidget {
   /// Creates the preview surface.
   const CameraPreviewSurface({super.key});
@@ -79,16 +95,44 @@ class CameraPreviewSurface extends ConsumerWidget {
         final bool isLandscape =
             MediaQuery.orientationOf(context) == Orientation.landscape;
 
-        return ColoredBox(
-          color: Colors.black,
-          child: Center(
-            child: AspectRatio(
-              aspectRatio: isLandscape
-                  ? frame.aspectRatio
-                  : 1 / frame.aspectRatio,
-              child: RotatedBox(
-                quarterTurns: frame.quarterTurns,
-                child: CameraPlatform.instance.buildPreview(frame.textureId),
+        // Chapter 5.1 §1: *"Render the live preview shown full-bleed on the
+        // Recording Screen"*. Until now this letterboxed instead — the ratio
+        // was correct and the picture sat in the middle with black bars, which
+        // is `contain`, not full-bleed. A camera app covers.
+        //
+        // **Only the FIT changes.** The subtree below `SizedBox` is byte-for-
+        // byte what it was: the same `quarterTurns`, the same
+        // `buildPreview`, and a box of the same display ratio. That
+        // composition is the one confirmed correct on a CPH2707, so the crop
+        // is layered on top of known-good geometry rather than replacing it.
+        final double displayRatio = isLandscape
+            ? frame.aspectRatio
+            : 1 / frame.aspectRatio;
+
+        return ClipRect(
+          child: ColoredBox(
+            color: Colors.black,
+            child: FittedBox(
+              // `contain`, matching how the handset's own camera app frames
+              // its preview: the picture keeps its true ratio and fills the
+              // full HEIGHT, with black bars on the left and right where a
+              // camera app puts its controls.
+              //
+              // `cover` was tried and rejected — it fills every edge by
+              // cropping the top and bottom away, which throws out field of
+              // view the Collector is about to record.
+              fit: BoxFit.contain,
+              clipBehavior: Clip.hardEdge,
+              child: SizedBox(
+                // Arbitrary units: `FittedBox` scales this to the slot, so only
+                // the RATIO matters. A thousand rather than a one keeps the
+                // texture off sub-pixel logical sizes while it is measured.
+                width: displayRatio * _ratioUnit,
+                height: _ratioUnit,
+                child: RotatedBox(
+                  quarterTurns: frame.quarterTurns,
+                  child: CameraPlatform.instance.buildPreview(frame.textureId),
+                ),
               ),
             ),
           ),
