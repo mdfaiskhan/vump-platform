@@ -6,6 +6,7 @@ import 'dart:io';
 // and the lint can no longer both hold.
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mobile/app/app.dart';
 import 'package:mobile/app/config/app_config.dart';
@@ -63,6 +64,22 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // ADR-054 decision 4. Every route is portrait; `/recording/:sessionId`
+  // releases this on entry and restores it on exit.
+  //
+  // **Nothing locked orientation before this**, so the whole application
+  // rotated freely in all four orientations wherever the handset's auto-rotate
+  // was on — including twelve screens whose layouts have only ever been seen
+  // in portrait.
+  //
+  // `portraitUp` alone rather than both portrait values: Flutter maps a single
+  // orientation to `SCREEN_ORIENTATION_PORTRAIT`, which holds regardless of the
+  // handset's auto-rotate setting, and upside-down portrait is not a way anyone
+  // holds a phone deliberately.
+  await SystemChrome.setPreferredOrientations(<DeviceOrientation>[
+    DeviceOrientation.portraitUp,
+  ]);
 
   // Resolved before the container so the database directory override can be
   // supplied at construction. ADR-009 Caveat 2 makes this the composition

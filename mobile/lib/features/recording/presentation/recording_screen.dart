@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:mobile/app/theme/app_radius.dart';
@@ -65,7 +66,16 @@ import 'package:mobile/features/recording/presentation/widgets/camera_preview_su
 /// capability — and `CameraPreviewSurface` draws them. This screen still holds
 /// nothing it could start or stop capture with, so Chapter 2.4 §2's *"only
 /// Stop is reachable"* is as true as it was when the surface was black.
-class RecordingScreen extends ConsumerWidget {
+/// ## Why this is stateful, against the project's default
+///
+/// ADR-054 decision 4 makes this the one route that rotates, and the lock has
+/// to be released on entry and restored on exit. `dispose` is the only correct
+/// place for the restore: a lock left released leaks landscape into the tab
+/// shell, whose twelve screens have only ever been seen in portrait.
+///
+/// The ADR records this exception rather than leaving it as an unexplained
+/// deviation from *"stateless widgets by default"*.
+class RecordingScreen extends ConsumerStatefulWidget {
   /// Creates the capture surface for [sessionId].
   const RecordingScreen({required this.sessionId, super.key});
 
@@ -73,7 +83,46 @@ class RecordingScreen extends ConsumerWidget {
   final String sessionId;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<RecordingScreen> createState() => _RecordingScreenState();
+}
+
+class _RecordingScreenState extends ConsumerState<RecordingScreen> {
+  @override
+  void initState() {
+    super.initState();
+    // ADR-054 decision 4, as amended. **The two landscape orientations only** —
+    // the screen turns the way a video player turns and never into portrait,
+    // because the footage is landscape and a portrait recording UI would frame
+    // a landscape capture inside a tall window.
+    //
+    // The pair matters for a second reason. Flutter maps all four orientations
+    // to `SCREEN_ORIENTATION_FULL_USER`, which **respects the handset's
+    // auto-rotate setting** — so on a device with auto-rotate off, permitting
+    // all four would lock every other route to portrait and then fail to
+    // rotate the one route meant to rotate. These two map to
+    // `SCREEN_ORIENTATION_USER_LANDSCAPE`, which forces landscape regardless.
+    unawaited(
+      SystemChrome.setPreferredOrientations(<DeviceOrientation>[
+        DeviceOrientation.landscapeLeft,
+        DeviceOrientation.landscapeRight,
+      ]),
+    );
+  }
+
+  @override
+  void dispose() {
+    // The load-bearing half. Restoring is what keeps landscape from leaking
+    // into the rest of the application.
+    unawaited(
+      SystemChrome.setPreferredOrientations(<DeviceOrientation>[
+        DeviceOrientation.portraitUp,
+      ]),
+    );
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final RecordingState state = ref.watch(recordingNotifierProvider);
 
     // Draining, or done — C-10 owns the screen from here. Chapter 5.3 puts
@@ -83,7 +132,7 @@ class RecordingScreen extends ConsumerWidget {
       RecordingState next,
     ) {
       if (next is RecordingStateFinalizing || next is RecordingStateIdle) {
-        context.go('/processing/$sessionId');
+        context.go('/processing/${widget.sessionId}');
       }
     });
 
@@ -99,17 +148,21 @@ class RecordingScreen extends ConsumerWidget {
               // rotation, and this draws them. It still cannot start or stop
               // capture — there is no controller here to do it with.
               const Positioned.fill(child: CameraPreviewSurface()),
+              // Landscape places these on the short edges, where
+              // top-centre/bottom-centre put Stop out of thumb reach. The
+              // indicator moves to the leading edge and Stop to the trailing
+              // one, which is where a hand already is on a phone held sideways.
               Align(
-                alignment: Alignment.topCenter,
+                alignment: Alignment.topLeft,
                 child: Padding(
-                  padding: const EdgeInsets.only(top: AppSpacing.xl),
+                  padding: const EdgeInsets.all(AppSpacing.lg),
                   child: _RecordingIndicator(state: state),
                 ),
               ),
               Align(
-                alignment: Alignment.bottomCenter,
+                alignment: Alignment.centerRight,
                 child: Padding(
-                  padding: const EdgeInsets.only(bottom: AppSpacing.xxxl),
+                  padding: const EdgeInsets.only(right: AppSpacing.xl),
                   child: _StopControl(
                     enabled: state.isCapturing,
                     onStop: () => unawaited(_stop(context, ref)),
