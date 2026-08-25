@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:mobile/app/theme/app_radius.dart';
@@ -10,6 +9,7 @@ import 'package:mobile/core/errors/failure.dart';
 import 'package:mobile/features/recording/application/recording_notifier.dart';
 import 'package:mobile/features/recording/domain/entities/recording_state.dart';
 import 'package:mobile/features/recording/presentation/recording_error_copy.dart';
+import 'package:mobile/features/recording/presentation/recording_orientation_lock.dart';
 import 'package:mobile/features/recording/presentation/widgets/camera_preview_surface.dart';
 
 /// Volume 2 Chapter 2.7's C-09 — the chrome-free capture surface.
@@ -101,23 +101,14 @@ class _RecordingScreenState extends ConsumerState<RecordingScreen> {
     // all four would lock every other route to portrait and then fail to
     // rotate the one route meant to rotate. These two map to
     // `SCREEN_ORIENTATION_USER_LANDSCAPE`, which forces landscape regardless.
-    unawaited(
-      SystemChrome.setPreferredOrientations(<DeviceOrientation>[
-        DeviceOrientation.landscapeLeft,
-        DeviceOrientation.landscapeRight,
-      ]),
-    );
+    unawaited(RecordingOrientationLock.acquire());
   }
 
   @override
   void dispose() {
-    // The load-bearing half. Restoring is what keeps landscape from leaking
-    // into the rest of the application.
-    unawaited(
-      SystemChrome.setPreferredOrientations(<DeviceOrientation>[
-        DeviceOrientation.portraitUp,
-      ]),
-    );
+    // The load-bearing half. Releasing the last holder is what keeps
+    // landscape from leaking into the rest of the application.
+    unawaited(RecordingOrientationLock.release());
     super.dispose();
   }
 
