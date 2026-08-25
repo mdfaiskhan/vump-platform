@@ -62,11 +62,13 @@ void main() {
       );
     });
 
-    test('the battery minimum is the 20% the volumes state', () {
-      // Volume 1's UC-05 remedy and Volume 2 Ch. 2.7 C-08 / Ch. 2.9 §3 all
-      // say "at least 20%". FR-CHK-03 names a threshold without a number;
-      // this is that number, and it was not chosen here.
-      expect(ChecklistOutcome.minimumBatteryPercent, 20);
+    test('the battery minimum is 5%, lowered from the volumes 20%', () {
+      // Pinned deliberately. FR-CHK-03 names a "configured minimum threshold"
+      // with no number, so 5 is a configuration decision — but Volume 1's
+      // UC-05 remedy and Volume 2 Ch. 2.7 C-08 / Ch. 2.9 §3 all say 20, and
+      // this assertion is what makes a silent drift back to that number, or
+      // onward to another, fail loudly. Open item 154 carries the reasoning.
+      expect(ChecklistOutcome.minimumBatteryPercent, 5);
     });
 
     test('free space exactly one chunk passes', () {
@@ -157,7 +159,10 @@ void main() {
   group('failures name every failing row, not just the first', () {
     test('two bad rows both appear — FR-CHK-05 names the specific check', () {
       final ChecklistOutcome outcome = allPassing().copyWith(
-        batteryPercent: 5,
+        // Relative to the constant, not a literal. A literal 5 meant "a
+        // failing battery" until the threshold moved to 5 and it silently
+        // became a passing one.
+        batteryPercent: ChecklistOutcome.minimumBatteryPercent - 1,
         permissionsGranted: false,
       );
 

@@ -62,13 +62,25 @@ class ChecklistOutcome with _$ChecklistOutcome {
   /// The battery percentage FR-CHK-03's *"configured minimum threshold"*
   /// resolves to.
   ///
-  /// **20, taken from the volumes rather than chosen here.** FR-CHK-03 names a
-  /// threshold without a number, and 20 % is the value every worked example
-  /// uses: Volume 1's UC-05 remedy — *"Charge your device to at least 20%
-  /// before recording"* — and Volume 2 Chapter 2.7's C-08 and Chapter 2.9 §3
-  /// both repeat it. Three independent statements of the same number are a
-  /// specification in everything but placement.
-  static const int minimumBatteryPercent = 20;
+  /// **5 since 2026-08-25, lowered from 20 by the project owner.**
+  ///
+  /// FR-CHK-03 names a *"configured minimum threshold"* and gives no number,
+  /// so this value is a configuration decision rather than a requirement being
+  /// contradicted. What it does contradict is three worked examples that all
+  /// said 20: Volume 1's UC-05 remedy — *"Charge your device to at least 20%
+  /// before recording"* — and Volume 2 Chapter 2.7's C-08 and Chapter 2.9 §3.
+  /// Open item 154 records the change against them.
+  ///
+  /// **The cost is real and is not hidden here.** A 10-minute 1080p encode
+  /// started at 6 % will not finish on most handsets. BR-08 keeps the chunk
+  /// file until its upload is confirmed and Chapter 5.3's crash recovery either
+  /// completes a partial chunk or discards it, so the failure is bounded — but
+  /// "bounded" still means a Collector can lose the tail of a session that 20 %
+  /// would have prevented them from starting.
+  ///
+  /// Nothing else needs editing when this moves: the Checklist copy
+  /// interpolates it, and every test but one asserts against the symbol.
+  static const int minimumBatteryPercent = 5;
 
   /// The free space FR-CHK-02's *"at least one full chunk"* resolves to.
   ///
