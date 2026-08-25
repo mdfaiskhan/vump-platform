@@ -6,6 +6,7 @@ import 'dart:io';
 // and the lint can no longer both hold.
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mobile/app/app.dart';
 import 'package:mobile/app/config/app_config.dart';
@@ -51,7 +52,8 @@ import 'package:mobile/features/recording/data/platform_device_context.dart';
 import 'package:mobile/features/recording/data/platform_task_context.dart';
 import 'package:mobile/features/recording/data/random_uuid_generator.dart';
 import 'package:mobile/features/recording/data/shared_preferences_wide_angle_eligibility_cache.dart';
-import 'package:mobile/features/recording/data/unavailable_capture_conditions_reader.dart';
+import 'package:mobile/features/recording/data/thermal_capture_conditions_reader.dart';
+import 'package:mobile/features/recording/data/thermal_channel.dart';
 import 'package:mobile/features/recording/domain/entities/metadata_identity.dart';
 import 'package:mobile/features/upload/application/upload_dispatcher.dart';
 import 'package:mobile/features/upload/application/upload_dispatcher_status_notifier.dart';
@@ -62,6 +64,22 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // ADR-054 decision 4. Every route is portrait; `/recording/:sessionId`
+  // releases this on entry and restores it on exit.
+  //
+  // **Nothing locked orientation before this**, so the whole application
+  // rotated freely in all four orientations wherever the handset's auto-rotate
+  // was on — including twelve screens whose layouts have only ever been seen
+  // in portrait.
+  //
+  // `portraitUp` alone rather than both portrait values: Flutter maps a single
+  // orientation to `SCREEN_ORIENTATION_PORTRAIT`, which holds regardless of the
+  // handset's auto-rotate setting, and upside-down portrait is not a way anyone
+  // holds a phone deliberately.
+  await SystemChrome.setPreferredOrientations(<DeviceOrientation>[
+    DeviceOrientation.portraitUp,
+  ]);
 
   // Resolved before the container so the database directory override can be
   // supplied at construction. ADR-009 Caveat 2 makes this the composition
@@ -381,7 +399,11 @@ List<Override> recordingOverrides(
           // Mission 7.4 step 1 moved both contracts to `core/identity/`.
           taskContext: ref.watch(taskContextProvider),
           deviceContext: ref.watch(deviceContextProvider),
-          conditionsReader: const UnavailableCaptureConditionsReader(),
+          // Migration 0017. Thermal only — GPS stays blocked on A-062's spec
+          // conflict, and battery/network are flagged in the reader's own file.
+          conditionsReader: const ThermalCaptureConditionsReader(
+            thermalReader: ThermalChannel(),
+          ),
         ),
         chunkStore: ref.watch(chunkStoreProvider),
       ),

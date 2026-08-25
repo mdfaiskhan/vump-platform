@@ -44,6 +44,8 @@ ChunkMetadataDocument completeIdentityDocument({String chunkId = 'chk_1'}) =>
         codec: 'h264',
         zoomFactor: 0.6,
         camera: 'rear-wide',
+        // Migration 0017. ADR-054's device-verified constant.
+        orientation: 'landscape-left',
       ),
       deviceContext: const MetadataDeviceContextDocument(
         deviceModel: 'Pixel 6a',

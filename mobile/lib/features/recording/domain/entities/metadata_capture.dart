@@ -36,5 +36,23 @@ class MetadataCapture with _$MetadataCapture {
     /// `"rear-wide"`. BR-01 fixes the camera and BR-02 the field of view, so
     /// this is constant for every chunk this application will ever produce.
     required String camera,
+
+    /// The orientation the chunk was actually captured at, as a wire spelling
+    /// — `"landscape-left"`, `"portrait-up"`. Migration 0017, ADR-054 §6.
+    ///
+    /// **Read from the pipeline, not from a constant.** ADR-054 locks capture
+    /// orientation to landscape, but this field records what the device did
+    /// rather than what the build intends, so a build without the lock reports
+    /// the handset's own orientation honestly instead of claiming the value it
+    /// would have preferred.
+    ///
+    /// That is the whole point of the field. §6: *"a dataset that changes a
+    /// capture parameter without recording it loses the ability to tell its own
+    /// footage apart"* — a field that always said `landscape-left` could not
+    /// tell them apart either.
+    ///
+    /// Nullable because a pipeline that never opened a session has nothing to
+    /// report, and because every chunk recorded before 0017 has no value.
+    String? orientation,
   }) = _MetadataCapture;
 }

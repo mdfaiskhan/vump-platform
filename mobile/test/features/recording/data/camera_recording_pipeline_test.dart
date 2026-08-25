@@ -1,5 +1,6 @@
 import 'package:camera/camera.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart' show DeviceOrientation;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mobile/core/errors/error_codes.dart';
 import 'package:mobile/core/errors/exceptions/device_exception.dart';
@@ -94,6 +95,40 @@ void main() {
     });
   });
 
+  group('ADR-054 — capture orientation is locked once, to landscapeLeft', () {
+    test(
+      'the lock is landscapeLeft, the constant the device verified',
+      () async {
+        // Not interchangeable with landscapeRight. Locked to that one on a
+        // CPH2707, every clip came back with a 180-degree tkhd rotation —
+        // upside-down — at display rotations 0, 1 and 3. This pins the half of
+        // ADR-054 that measurement decided rather than reasoning.
+        final _FakeController controller = _FakeController();
+        final CameraRecordingPipeline pipeline = build(controller: controller);
+
+        await pipeline.openSession(zoomFactor: 0.6);
+
+        expect(controller.lockCalls, <DeviceOrientation>[
+          DeviceOrientation.landscapeLeft,
+        ]);
+      },
+    );
+
+    test('it is locked once per session, not again per chunk', () async {
+      // Chapter 5.2 §1's treatment of the zoom factor, extended: "fixed for
+      // the whole session, never changed mid-recording".
+      final _FakeController controller = _FakeController();
+      final CameraRecordingPipeline pipeline = build(controller: controller);
+
+      await pipeline.openSession(zoomFactor: 0.6);
+      await pipeline.startChunk();
+      await pipeline.stopChunk();
+      await pipeline.startChunk();
+
+      expect(controller.lockCalls, hasLength(1));
+    });
+  });
+
   group('chunk capture', () {
     test('start and stop drive the controller and return its path', () async {
       final _FakeController controller = _FakeController();
@@ -180,6 +215,18 @@ class _FakeController implements CameraController {
 
   @override
   Future<void> setZoomLevel(double zoom) async => zoomCalls.add(zoom);
+
+  /// ADR-054 decision 1. Recorded rather than swallowed, so a test can assert
+  /// WHICH constant was locked — the value a CPH2707 proved matters, since
+  /// `landscapeRight` produced upside-down footage.
+  final List<DeviceOrientation> lockCalls = <DeviceOrientation>[];
+
+  @override
+  Future<void> lockCaptureOrientation([DeviceOrientation? orientation]) async {
+    if (orientation != null) {
+      lockCalls.add(orientation);
+    }
+  }
 
   @override
   Future<void> startVideoRecording({

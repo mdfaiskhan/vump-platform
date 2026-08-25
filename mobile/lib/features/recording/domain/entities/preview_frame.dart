@@ -24,12 +24,26 @@
 /// preview `Widget` from the port would have been far less code and would have
 /// spent it.
 ///
-/// ## [aspectRatio] is already orientation-corrected
+/// ## [aspectRatio] is the camera's NATIVE ratio; the flip belongs elsewhere
 ///
-/// `CameraPreview` flips the controller's raw ratio for portrait. That flip
-/// needs `DeviceOrientation`, a plugin type, so it happens in `data/` where
-/// that type already lives and this carries the finished number. A consumer
-/// applies it directly and never learns which way up the device is.
+/// It was orientation-corrected here until 2026-08-25. `CameraPreview` flips
+/// the controller's raw ratio for portrait, and reproducing that flip in
+/// `data/` looked like the tidy choice — the plugin type it needs already
+/// lives there, and a consumer could apply the finished number without
+/// learning which way up the device is.
+///
+/// **It was the wrong place, and ADR-053's fourth amendment records why.**
+/// The flip answers *"what shape should this box be"*, which is a fact about
+/// the **window**, and the pipeline has no `BuildContext` with which to know
+/// one. It flipped on `deviceOrientation` instead — a value the platform
+/// updates **only when the accelerometer fires** — so a window rotated by
+/// `SystemChrome` while the handset lay still kept a portrait ratio in a
+/// landscape window, and the preview stretched.
+///
+/// The consumer now flips it from `MediaQuery`, which is the authority on
+/// window orientation and needs no sensor. The seam still carries three
+/// primitives and no capability; one of them simply describes the camera now
+/// rather than the layout.
 final class PreviewFrame {
   /// Creates a frame description.
   const PreviewFrame({
@@ -41,7 +55,8 @@ final class PreviewFrame {
   /// The platform texture the preview draws, from `CameraController.cameraId`.
   final int textureId;
 
-  /// Width over height **as it should be displayed**, orientation applied.
+  /// Width over height of the camera's **native** output — orientation NOT
+  /// applied, and deliberately so.
   final double aspectRatio;
 
   /// Clockwise quarter-turns to rotate the texture by, 0–3.

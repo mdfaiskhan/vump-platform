@@ -33,6 +33,14 @@ mixin _$RecordingSession {
   /// The wide-angle factor for every chunk in this session — 0.5 or 0.6.
   double get zoomFactor => throw _privateConstructorUsedError;
 
+  /// The wire spelling of the orientation this session captures at, read
+  /// from the pipeline once the camera is open. Migration 0017.
+  ///
+  /// Sits beside [zoomFactor] because it is the same kind of value: a
+  /// property the device resolved at session start and holds for the whole
+  /// session. Null when the pipeline could not report one.
+  String? get captureOrientation => throw _privateConstructorUsedError;
+
   /// When the Collector tapped Start.
   DateTime get startedAt => throw _privateConstructorUsedError;
 
@@ -52,6 +60,7 @@ abstract class $RecordingSessionCopyWith<$Res> {
       String? taskId,
       String? projectId,
       double zoomFactor,
+      String? captureOrientation,
       DateTime startedAt});
 }
 
@@ -72,6 +81,7 @@ class _$RecordingSessionCopyWithImpl<$Res, $Val extends RecordingSession>
     Object? taskId = freezed,
     Object? projectId = freezed,
     Object? zoomFactor = null,
+    Object? captureOrientation = freezed,
     Object? startedAt = null,
   }) {
     return _then(_value.copyWith(
@@ -91,6 +101,10 @@ class _$RecordingSessionCopyWithImpl<$Res, $Val extends RecordingSession>
           ? _value.zoomFactor
           : zoomFactor // ignore: cast_nullable_to_non_nullable
               as double,
+      captureOrientation: freezed == captureOrientation
+          ? _value.captureOrientation
+          : captureOrientation // ignore: cast_nullable_to_non_nullable
+              as String?,
       startedAt: null == startedAt
           ? _value.startedAt
           : startedAt // ignore: cast_nullable_to_non_nullable
@@ -112,6 +126,7 @@ abstract class _$$RecordingSessionImplCopyWith<$Res>
       String? taskId,
       String? projectId,
       double zoomFactor,
+      String? captureOrientation,
       DateTime startedAt});
 }
 
@@ -130,6 +145,7 @@ class __$$RecordingSessionImplCopyWithImpl<$Res>
     Object? taskId = freezed,
     Object? projectId = freezed,
     Object? zoomFactor = null,
+    Object? captureOrientation = freezed,
     Object? startedAt = null,
   }) {
     return _then(_$RecordingSessionImpl(
@@ -149,6 +165,10 @@ class __$$RecordingSessionImplCopyWithImpl<$Res>
           ? _value.zoomFactor
           : zoomFactor // ignore: cast_nullable_to_non_nullable
               as double,
+      captureOrientation: freezed == captureOrientation
+          ? _value.captureOrientation
+          : captureOrientation // ignore: cast_nullable_to_non_nullable
+              as String?,
       startedAt: null == startedAt
           ? _value.startedAt
           : startedAt // ignore: cast_nullable_to_non_nullable
@@ -165,6 +185,7 @@ class _$RecordingSessionImpl implements _RecordingSession {
       this.taskId,
       this.projectId,
       required this.zoomFactor,
+      this.captureOrientation,
       required this.startedAt});
 
   /// The UUID generated once at session start (Chapter 5.14 §3).
@@ -188,13 +209,22 @@ class _$RecordingSessionImpl implements _RecordingSession {
   @override
   final double zoomFactor;
 
+  /// The wire spelling of the orientation this session captures at, read
+  /// from the pipeline once the camera is open. Migration 0017.
+  ///
+  /// Sits beside [zoomFactor] because it is the same kind of value: a
+  /// property the device resolved at session start and holds for the whole
+  /// session. Null when the pipeline could not report one.
+  @override
+  final String? captureOrientation;
+
   /// When the Collector tapped Start.
   @override
   final DateTime startedAt;
 
   @override
   String toString() {
-    return 'RecordingSession(sessionId: $sessionId, taskId: $taskId, projectId: $projectId, zoomFactor: $zoomFactor, startedAt: $startedAt)';
+    return 'RecordingSession(sessionId: $sessionId, taskId: $taskId, projectId: $projectId, zoomFactor: $zoomFactor, captureOrientation: $captureOrientation, startedAt: $startedAt)';
   }
 
   @override
@@ -209,13 +239,15 @@ class _$RecordingSessionImpl implements _RecordingSession {
                 other.projectId == projectId) &&
             (identical(other.zoomFactor, zoomFactor) ||
                 other.zoomFactor == zoomFactor) &&
+            (identical(other.captureOrientation, captureOrientation) ||
+                other.captureOrientation == captureOrientation) &&
             (identical(other.startedAt, startedAt) ||
                 other.startedAt == startedAt));
   }
 
   @override
-  int get hashCode => Object.hash(
-      runtimeType, sessionId, taskId, projectId, zoomFactor, startedAt);
+  int get hashCode => Object.hash(runtimeType, sessionId, taskId, projectId,
+      zoomFactor, captureOrientation, startedAt);
 
   @JsonKey(ignore: true)
   @override
@@ -231,6 +263,7 @@ abstract class _RecordingSession implements RecordingSession {
       final String? taskId,
       final String? projectId,
       required final double zoomFactor,
+      final String? captureOrientation,
       required final DateTime startedAt}) = _$RecordingSessionImpl;
 
   @override
@@ -254,6 +287,15 @@ abstract class _RecordingSession implements RecordingSession {
 
   /// The wide-angle factor for every chunk in this session — 0.5 or 0.6.
   double get zoomFactor;
+  @override
+
+  /// The wire spelling of the orientation this session captures at, read
+  /// from the pipeline once the camera is open. Migration 0017.
+  ///
+  /// Sits beside [zoomFactor] because it is the same kind of value: a
+  /// property the device resolved at session start and holds for the whole
+  /// session. Null when the pipeline could not report one.
+  String? get captureOrientation;
   @override
 
   /// When the Collector tapped Start.

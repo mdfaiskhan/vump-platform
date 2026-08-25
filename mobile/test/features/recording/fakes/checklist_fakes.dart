@@ -129,6 +129,12 @@ class FakePipeline implements RecordingPipeline {
   @override
   String? get outputDirectory => null;
 
+  /// Migration 0017. Null: this fake owns no camera, so it has no orientation
+  /// to report, and saying otherwise would make the fake claim more than the
+  /// thing it stands in for.
+  @override
+  String? get captureOrientation => null;
+
   @override
   Future<void> openSession({required double zoomFactor}) async {
     calls.add('openSession');

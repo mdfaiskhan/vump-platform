@@ -174,6 +174,29 @@ describe('POST — valibot validates Chapter 4.5 §2s shape', () => {
         integrity: { ...document.integrity, checksum_sha256: 'short' },
       },
     ],
+    // 0017. Range-checked here so a bad value is REQUEST_INVALID rather than a
+    // constraint violation surfacing as INTERNAL_ERROR.
+    [
+      'a thermal state above the platform range',
+      {
+        ...document,
+        capture_conditions: { ...document.capture_conditions, thermal_state: 7 },
+      },
+    ],
+    [
+      'a thermal state below the platform range',
+      {
+        ...document,
+        capture_conditions: { ...document.capture_conditions, thermal_state: -1 },
+      },
+    ],
+    [
+      'a non-integer thermal state',
+      {
+        ...document,
+        capture_conditions: { ...document.capture_conditions, thermal_state: 2.5 },
+      },
+    ],
   ])('rejects %s before any query', async (_label, payload) => {
     const response = await handler(event('POST', { body: payload }));
 
@@ -305,6 +328,91 @@ describe('POST — valibot validates Chapter 4.5 §2s shape', () => {
     );
 
     expect(response.statusCode).toBe(400);
+  });
+});
+
+describe('POST — migration 0017s two capture fields', () => {
+  it('stores the capture orientation and the thermal state when sent', async () => {
+    rds.on(ExecuteStatementCommand).resolvesOnce(identityRow()).resolves({ records: [] });
+
+    const response = await handler(
+      event('POST', {
+        body: {
+          ...document,
+          capture: { ...document.capture, orientation: 'landscape-left' },
+          capture_conditions: { ...document.capture_conditions, thermal_state: 3 },
+        },
+      }),
+    );
+
+    expect(response.statusCode).toBe(201);
+    const insert = statements()[1] ?? '';
+    expect(insert).toContain('capture_orientation');
+    expect(insert).toContain('thermal_state');
+  });
+
+  // Both columns are nullable and both fields are nullish, so a build older
+  // than 0017 keeps working. Refusing those requests would drop metadata for
+  // footage that is otherwise perfectly valid.
+  it('accepts a document from a build that sends neither', async () => {
+    rds.on(ExecuteStatementCommand).resolvesOnce(identityRow()).resolves({ records: [] });
+
+    const response = await handler(event('POST', { body: document }));
+
+    expect(response.statusCode).toBe(201);
+  });
+
+  it('accepts both explicitly null', async () => {
+    rds.on(ExecuteStatementCommand).resolvesOnce(identityRow()).resolves({ records: [] });
+
+    const response = await handler(
+      event('POST', {
+        body: {
+          ...document,
+          capture: { ...document.capture, orientation: null },
+          capture_conditions: { ...document.capture_conditions, thermal_state: null },
+        },
+      }),
+    );
+
+    expect(response.statusCode).toBe(201);
+  });
+
+  // 0 is THERMAL_STATUS_NONE, a real reading meaning "cool". A schema that
+  // treated it as absent would erase the difference between a device that
+  // reported nothing and one that reported it was fine.
+  it('treats a thermal state of 0 as a value, not as absence', async () => {
+    rds.on(ExecuteStatementCommand).resolvesOnce(identityRow()).resolves({ records: [] });
+
+    const response = await handler(
+      event('POST', {
+        body: {
+          ...document,
+          capture_conditions: { ...document.capture_conditions, thermal_state: 0 },
+        },
+      }),
+    );
+
+    expect(response.statusCode).toBe(201);
+    // Compared whole rather than by property: `paramsOf` returns
+    // Record<string, unknown>, so reaching into `.value` does not
+    // type-check. Matches how the A-212 assertions above read it.
+    expect(paramsOf(1).thermalState).toEqual({ value: { longValue: 0 } });
+  });
+
+  it('accepts the top of the platform range', async () => {
+    rds.on(ExecuteStatementCommand).resolvesOnce(identityRow()).resolves({ records: [] });
+
+    const response = await handler(
+      event('POST', {
+        body: {
+          ...document,
+          capture_conditions: { ...document.capture_conditions, thermal_state: 6 },
+        },
+      }),
+    );
+
+    expect(response.statusCode).toBe(201);
   });
 });
 

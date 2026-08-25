@@ -155,3 +155,38 @@ The correction is that `PreviewFrame` describes **display only**, and both field
 **What this does not change.** The seam still carries three primitives and no capability: no `Widget`, no `Listenable`, no `CameraValue`, no `CameraController`. Mission 3.3's boundary holds by type exactly as before. `CameraPreviewSurface` still cannot start or stop capture.
 
 **What it costs to have got this wrong the first time: nothing yet, and that is luck rather than judgement.** The conflation was invisible because no feature had ever asked the two values to differ. It is recorded here rather than quietly fixed so the next person to widen this seam knows the two concepts were once one field.
+
+### Amendment, 2026-08-25 (fourth) — `aspectRatio` describes the camera, not the layout
+
+**`PreviewFrame.aspectRatio` stops being orientation-corrected.** It now carries the camera's native ratio — 1.7778 on a 1920x1080 preview — and `CameraPreviewSurface` flips it for portrait using `MediaQuery.orientationOf(context)`.
+
+#### What this record originally said, and why it was wrong
+
+> *"`CameraPreview` flips the controller's raw ratio for portrait. That flip needs `DeviceOrientation`, a plugin type, so it happens in `data/` where that type already lives and this carries the finished number."*
+
+The reasoning was about **where the plugin type lives**, and it should have been about **what the number means**. `aspectRatio` answers *"what shape should this box be"* — a fact about the **window**. The pipeline has no `BuildContext` and therefore no way to know one, so any value it produces is a guess about layout.
+
+#### The guess it made, and what it cost
+
+It flipped on `deviceOrientation`. That value is fed by `onDeviceOrientationChanged`, and `DeviceOrientationManager.start()` in `camera_android_camerax` registers **an `OrientationEventListener` and nothing else** — the `orientationIntentFilter` for `ACTION_CONFIGURATION_CHANGED` is declared at line 28 and `registerReceiver` appears nowhere in the file.
+
+**So `deviceOrientation` updates only when the accelerometer fires.** ADR-054 made the recording screen force landscape through `SystemChrome`; a handset that had not physically moved since the screen opened kept reporting `portraitUp`, and the seam handed a 9:16 ratio to a 16:9 window. Measured on a CPH2707:
+
+```
+win=793x360                    <- window IS landscape
+deviceOrientation=portraitUp   <- but this says portrait
+previewSize=1920x1080  value.aspectRatio=1.7778
+FRAME aspectRatio=0.5625  quarterTurns=0
+```
+
+`AspectRatio` fitted a 0.5625 box inside 793x360 — roughly a 202x360 column — and squeezed a 16:9 texture into it. **The preview stretched.** A phone on a desk, on a mount, or body-worn is the ordinary case for this product, not an edge case.
+
+#### `quarterTurns` is untouched, and the asymmetry is the point
+
+It still comes from `deviceOrientation`, because the plugin subtracts exactly `getPreAppliedQuarterTurnsRotationFromDeviceOrientation(deviceOrientation)` from its own rotation and expects the widget to add it back. **It is the one number that must not follow the window.**
+
+So the seam's three primitives no longer share a source, and that is correct rather than untidy: two describe the camera, one describes the handset, and the consumer supplies the window. **Nothing about the boundary changes** — no `Widget`, no `Listenable`, no `CameraValue`, no `CameraController`, and `CameraPreviewSurface` still cannot start or stop capture.
+
+#### What it took to find, which is the part worth remembering
+
+**No test asserted `aspectRatio` anywhere.** The regression travelled from a code change, through a full green suite, through a device build, to a person looking at a stretched picture. `camera_preview_surface_test.dart` now pins the window-driven ratio, including the exact stale-`quarterTurns` case, so the next version of this mistake fails in CI rather than on a handset.

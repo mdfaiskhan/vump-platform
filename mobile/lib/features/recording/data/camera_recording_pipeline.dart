@@ -4,6 +4,7 @@ import 'package:camera/camera.dart';
 import 'package:flutter/services.dart' show DeviceOrientation;
 
 import 'package:mobile/features/recording/data/camera_error_mapper.dart';
+import 'package:mobile/features/recording/data/capture_orientation_wire_name.dart';
 import 'package:mobile/features/recording/domain/entities/camera_specification.dart';
 import 'package:mobile/features/recording/domain/entities/preview_frame.dart';
 import 'package:mobile/features/recording/domain/repositories/recording_pipeline.dart';
@@ -75,6 +76,23 @@ class CameraRecordingPipeline implements RecordingPipeline {
   String? get outputDirectory => _controller == null ? null : _outputDirectory;
 
   @override
+  String? get captureOrientation {
+    final CameraController? controller = _controller;
+    if (controller == null || !controller.value.isInitialized) {
+      return null;
+    }
+    // `lockedCaptureOrientation` first, because that is what a locked session
+    // will actually encode at. Falling through to `deviceOrientation` is not a
+    // fallback for a missing value — on a build without ADR-054's lock it is
+    // the whole answer, and reporting it honestly is what lets a chunk say
+    // which régime it was recorded under.
+    return CaptureOrientationWireName.of(
+      controller.value.lockedCaptureOrientation ??
+          controller.value.deviceOrientation,
+    );
+  }
+
+  @override
   Stream<PreviewFrame?> get previewChanges => _previewChanges.stream;
 
   @override
@@ -102,6 +120,7 @@ class CameraRecordingPipeline implements RecordingPipeline {
       final CameraController controller = await _openCamera(rear.first);
       _controller = controller;
       await _applyZoomOnce(controller, zoomFactor);
+      await _lockCaptureOrientationOnce(controller);
       // ADR-053. The controller is a ValueNotifier<CameraValue>; listening is
       // how orientation and readiness changes reach the screen. The listener
       // is the only thing outside this class that learns anything about the
@@ -152,6 +171,22 @@ class CameraRecordingPipeline implements RecordingPipeline {
         ? verdictFactor
         : platformMinimum;
     await controller.setZoomLevel(toApply);
+  }
+
+  /// ADR-054 decision 1. Locks capture to landscape for the whole session.
+  ///
+  /// **`landscapeLeft` is device-verified, not inferred.** Locked to
+  /// `landscapeRight` on a CPH2707, every clip came back with a 180-degree
+  /// `tkhd` rotation — upside-down — at display rotations 0, 1 and 3;
+  /// `landscapeLeft` gives 0 degrees at all three. ADR-054's amendment carries
+  /// the measurements, and the record's first draft named the wrong one.
+  ///
+  /// Once, at session open, never unlocked. This is the same treatment
+  /// Chapter 5.2 §1 already gives the zoom factor — *"fixed for the whole
+  /// session, never changed mid-recording"* — extended to the one capture
+  /// parameter that was left to the handset's auto-rotate setting.
+  Future<void> _lockCaptureOrientationOnce(CameraController controller) {
+    return controller.lockCaptureOrientation(DeviceOrientation.landscapeLeft);
   }
 
   @override
@@ -225,23 +260,43 @@ class CameraRecordingPipeline implements RecordingPipeline {
     if (!value.isInitialized) {
       return null;
     }
-    final DeviceOrientation orientation = value.isRecordingVideo
-        ? (value.recordingOrientation ?? value.deviceOrientation)
-        : (value.previewPauseOrientation ??
-              value.lockedCaptureOrientation ??
-              value.deviceOrientation);
+    // ADR-054 decision 2. **Display only.** The chain this replaced preferred
+    // `recordingOrientation` and `lockedCaptureOrientation`, which was correct
+    // only while nothing locked capture orientation — the two were always the
+    // same value. Decision 1 locks it, and both preferred branches become
+    // constants, so the preview would freeze exactly when it should rotate.
+    //
+    // It must be `deviceOrientation` specifically, not merely something that
+    // moves: `camera_android_camerax` subtracts
+    // `getPreAppliedQuarterTurnsRotationFromDeviceOrientation` of
+    // `deviceOrientation` from its own rotation, expecting `CameraPreview` to
+    // add it back. Any
+    // other value here leaves that subtraction uncompensated and the preview
+    // lands a quarter turn out.
+    final DeviceOrientation orientation = value.deviceOrientation;
     const Map<DeviceOrientation, int> turns = <DeviceOrientation, int>{
       DeviceOrientation.portraitUp: 0,
       DeviceOrientation.landscapeRight: 1,
       DeviceOrientation.portraitDown: 2,
       DeviceOrientation.landscapeLeft: 3,
     };
-    final bool isLandscape =
-        orientation == DeviceOrientation.landscapeLeft ||
-        orientation == DeviceOrientation.landscapeRight;
     return PreviewFrame(
       textureId: controller.cameraId,
-      aspectRatio: isLandscape ? value.aspectRatio : 1 / value.aspectRatio,
+      // **The camera's native ratio, with no orientation applied.**
+      //
+      // This used to be flipped here, which put a layout decision in a class
+      // that cannot make one: the pipeline has no `BuildContext` and therefore
+      // no way to know the window's orientation. It flipped on
+      // `deviceOrientation` instead, and that value updates **only when the
+      // accelerometer fires** — `DeviceOrientationManager.start()` registers
+      // an `OrientationEventListener` and nothing else, so a window rotated by
+      // `SystemChrome` while the handset is still leaves it stale. A phone on a
+      // desk or a mount then got a portrait ratio in a landscape window and the
+      // preview stretched. ADR-053's fourth amendment records it.
+      //
+      // `CameraPreviewSurface` flips it from `MediaQuery`, which is the
+      // authority on window orientation and needs no sensor.
+      aspectRatio: value.aspectRatio,
       quarterTurns: turns[orientation] ?? 0,
     );
   }

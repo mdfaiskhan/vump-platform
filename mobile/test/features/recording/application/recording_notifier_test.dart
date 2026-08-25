@@ -693,6 +693,14 @@ class _FakePipeline implements RecordingPipeline {
   @override
   String? get outputDirectory => _outputDirectory;
 
+  /// Migration 0017. Settable so a test can assert the notifier folds it into
+  /// the session; null by default, which is what a fake owning no camera
+  /// honestly reports.
+  String? captureOrientationValue;
+
+  @override
+  String? get captureOrientation => captureOrientationValue;
+
   @override
   Future<void> openSession({required double zoomFactor}) async {}
 

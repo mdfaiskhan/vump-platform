@@ -248,7 +248,23 @@ class RecordingNotifier extends Notifier<RecordingState> {
     } on AppException catch (exception) {
       return Failure.fromException(exception);
     }
-    state = next;
+
+    // Migration 0017. The orientation is only knowable once the camera is
+    // open, which is after the session was constructed — so it is folded in
+    // here rather than passed to the constructor.
+    //
+    // Matched rather than assumed: `onChecklistPassed` returns `ready` today,
+    // and a `switch` that names it makes a future state a compile error
+    // instead of a silently dropped field.
+    state = switch (next) {
+      RecordingStateReady(:final RecordingSession session) =>
+        RecordingState.ready(
+          session: session.copyWith(
+            captureOrientation: _pipeline.captureOrientation,
+          ),
+        ),
+      _ => next,
+    };
     return null;
   }
 

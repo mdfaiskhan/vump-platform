@@ -206,3 +206,17 @@ The two landscape orientations map to `0x0a`, `SCREEN_ORIENTATION_USER_LANDSCAPE
 #### One anomaly, recorded rather than tidied away
 
 The `landscapeRight` sweep also covered display rotation 2 (reverse portrait), and that run produced a **0-byte file**. It did not recur in the `landscapeLeft` sweep, which did not cover rotation 2. **It is one observation with no second data point, and it is not diagnosed.** Reverse portrait is now out of scope for the recording screen, so it blocks nothing — but a `stopChunk` that returns a path to an empty file would matter anywhere else, and it is written down here rather than forgotten because the scope changed.
+
+### Amendment, 2026-08-25 (second) — decision 2 over-applied `deviceOrientation`
+
+**Decision 2 moved both `quarterTurns` and `aspectRatio` onto `deviceOrientation`. Only `quarterTurns` belonged there.**
+
+The decision's reasoning was correct and correctly bounded: once decision 1 locks capture orientation, a display value derived from `lockedCaptureOrientation` freezes, so the preview must follow something that moves. §3 then proved `deviceOrientation` specifically, because the plugin subtracts exactly that quantity.
+
+**That argument is about rotation. It was applied to shape as well, and shape is not a sensor fact.** `aspectRatio` answers *"what shape should this box be"*, which the window decides — and the pipeline has no `BuildContext` with which to ask.
+
+The failure was concrete: `deviceOrientation` updates only when the accelerometer fires, so a handset held still while `SystemChrome` rotated the window kept a portrait ratio in a landscape window and the preview stretched. ADR-053's fourth amendment carries the measurements and the plugin source that explains why.
+
+**What the previous code was accidentally doing right.** The chain decision 2 replaced preferred `lockedCaptureOrientation`, which — once decision 1 landed — would have given the correct *landscape* ratio no matter what the sensor reported. Decision 2 removed the thing that was protecting the ratio while fixing the thing that was breaking the rotation. **A change that is right about one field and wrong about another in the same expression is exactly the shape of defect a seam with three primitives from one source invites**, and the seam now sources them separately.
+
+`aspectRatio` is now the camera's native ratio and `CameraPreviewSurface` flips it from `MediaQuery`. Decisions 1, 3, 4 and 5 are unaffected.

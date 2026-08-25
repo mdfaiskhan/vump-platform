@@ -44,6 +44,14 @@ class RecordingSession with _$RecordingSession {
     /// The wide-angle factor for every chunk in this session — 0.5 or 0.6.
     required double zoomFactor,
 
+    /// The wire spelling of the orientation this session captures at, read
+    /// from the pipeline once the camera is open. Migration 0017.
+    ///
+    /// Sits beside [zoomFactor] because it is the same kind of value: a
+    /// property the device resolved at session start and holds for the whole
+    /// session. Null when the pipeline could not report one.
+    String? captureOrientation,
+
     /// When the Collector tapped Start.
     required DateTime startedAt,
   }) = _RecordingSession;

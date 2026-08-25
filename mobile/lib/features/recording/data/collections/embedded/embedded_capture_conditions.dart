@@ -22,4 +22,7 @@ class EmbeddedCaptureConditions {
 
   /// `wifi`, `cellular` or `none`, or null when unavailable.
   String? networkType;
+
+  /// Migration 0017. Android PowerManager thermal status, 0–6.
+  int? thermalState;
 }
