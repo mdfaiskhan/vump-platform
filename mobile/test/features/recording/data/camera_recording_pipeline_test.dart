@@ -1,3 +1,5 @@
+import 'dart:ui' show Size;
+
 import 'package:camera/camera.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart' show DeviceOrientation;
@@ -5,6 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mobile/core/errors/error_codes.dart';
 import 'package:mobile/core/errors/exceptions/device_exception.dart';
 import 'package:mobile/features/recording/data/camera_recording_pipeline.dart';
+import 'package:mobile/features/recording/domain/entities/preview_frame.dart';
 
 /// The pipeline's own responsibilities: opening once, locking the zoom once,
 /// and converting failures.
@@ -93,6 +96,79 @@ void main() {
 
       expect(controller.zoomCalls, hasLength(1));
     });
+  });
+
+  group('quarterTurns follows deviceOrientation, and MUST keep doing so', () {
+    // **This is a pinned invariant, not a preference. Read item 157 before
+    // changing it.**
+    //
+    // `camera_android_camerax`'s preview delegate subtracts
+    // getPreAppliedQuarterTurnsRotationFromDeviceOrientation(deviceOrientation)
+    // from its own rotation, expecting the widget to add exactly that back.
+    // Both sides read the SAME platform stream — camera_controller.dart:338 and
+    // android_camera_camerax.dart:1006 — so the two terms cancel and the net
+    // rotation is the delegate's display rotation, whether or not
+    // `deviceOrientation` is stale.
+    //
+    // Sourcing this from the window instead breaks the cancellation and lands
+    // the preview a quarter turn out. That has been proposed twice and is wrong
+    // both times.
+    Future<PreviewFrame?> frameFor(DeviceOrientation orientation) async {
+      final _FakeController controller = _FakeController()
+        ..initialised = true
+        ..deviceOrientation = orientation;
+      final CameraRecordingPipeline pipeline = build(controller: controller);
+      await pipeline.openSession(zoomFactor: 0.6);
+      return pipeline.currentPreview;
+    }
+
+    test('each orientation maps to the plugin s own turn table', () async {
+      // Identical to getPreAppliedQuarterTurnsRotationFromDeviceOrientation.
+      expect((await frameFor(DeviceOrientation.portraitUp))?.quarterTurns, 0);
+      expect(
+        (await frameFor(DeviceOrientation.landscapeRight))?.quarterTurns,
+        1,
+      );
+      expect((await frameFor(DeviceOrientation.portraitDown))?.quarterTurns, 2);
+      expect(
+        (await frameFor(DeviceOrientation.landscapeLeft))?.quarterTurns,
+        3,
+      );
+    });
+
+    test('the LOCKED capture orientation does not move it', () async {
+      // ADR-054 locks capture to landscapeLeft. If quarterTurns followed the
+      // lock it would be a constant 3 and the preview would never rotate —
+      // the freeze ADR-054 decision 2 exists to prevent.
+      final _FakeController controller = _FakeController()
+        ..initialised = true
+        ..deviceOrientation = DeviceOrientation.portraitUp
+        ..lockedCaptureOrientation = DeviceOrientation.landscapeLeft;
+      final CameraRecordingPipeline pipeline = build(controller: controller);
+
+      await pipeline.openSession(zoomFactor: 0.6);
+
+      // portraitUp's turn, not landscapeLeft's.
+      expect(pipeline.currentPreview?.quarterTurns, 0);
+    });
+
+    test(
+      'a STALE deviceOrientation is reported faithfully, not corrected',
+      () async {
+        // The exact configuration measured on a CPH2707: window landscape,
+        // handset still, so the sensor never fired and deviceOrientation is
+        // portraitUp. The frame must report 0 — the plugin subtracts 0 too, and
+        // the pair cancels. "Correcting" this to match the window is the bug.
+        final PreviewFrame? frame = await frameFor(
+          DeviceOrientation.portraitUp,
+        );
+
+        expect(frame?.quarterTurns, 0);
+        // And the ratio stays the camera's native one; the window flip lives in
+        // CameraPreviewSurface, not here.
+        expect(frame?.aspectRatio, closeTo(16 / 9, 0.0001));
+      },
+    );
   });
 
   group('ADR-054 — capture orientation is locked once, to landscapeLeft', () {
@@ -254,13 +330,49 @@ class _FakeController implements CameraController {
   int get cameraId => 7;
 
   @override
-  CameraValue get value => const CameraValue.uninitialized(
-    CameraDescription(
-      name: 'fake',
-      lensDirection: CameraLensDirection.back,
-      sensorOrientation: 0,
-    ),
-  );
+  CameraValue get value {
+    if (!initialised) {
+      return const CameraValue.uninitialized(
+        CameraDescription(
+          name: 'fake',
+          lensDirection: CameraLensDirection.back,
+          sensorOrientation: 0,
+        ),
+      );
+    }
+    return CameraValue(
+      isInitialized: true,
+      previewSize: const Size(1920, 1080),
+      isRecordingVideo: false,
+      isTakingPicture: false,
+      isStreamingImages: false,
+      isRecordingPaused: false,
+      flashMode: FlashMode.off,
+      exposureMode: ExposureMode.auto,
+      focusMode: FocusMode.auto,
+      exposurePointSupported: false,
+      focusPointSupported: false,
+      deviceOrientation: deviceOrientation,
+      lockedCaptureOrientation: lockedCaptureOrientation,
+      description: const CameraDescription(
+        name: 'fake',
+        lensDirection: CameraLensDirection.back,
+        sensorOrientation: 0,
+      ),
+    );
+  }
+
+  /// Set by the invariant tests so `_frameOf` produces a real frame.
+  bool initialised = false;
+
+  /// What the platform's orientation stream last reported. **This is the value
+  /// the plugin's own preview delegate subtracts**, which is why the frame must
+  /// follow it and nothing else.
+  DeviceOrientation deviceOrientation = DeviceOrientation.portraitUp;
+
+  /// Non-null once ADR-054's lock is applied. Deliberately NOT what the frame
+  /// follows.
+  DeviceOrientation? lockedCaptureOrientation;
 
   @override
   void addListener(VoidCallback listener) => listeners.add(listener);
