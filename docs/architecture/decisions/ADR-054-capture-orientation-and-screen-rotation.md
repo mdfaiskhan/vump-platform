@@ -63,11 +63,7 @@ The consequence is that **output orientation is a property of the device's setti
 
 This mirrors how Chapter 5.2 §1 already treats the zoom factor — *"fixed for the whole session, never changed mid-recording"* — and extends the same reasoning to the one capture parameter that was left to the handset.
 
-⚠️ **Which landscape constant is UNVERIFIED, and this record is Accepted anyway.**
-
-`landscapeRight` is the value to try first, on the reasoning that Android's `ORIENTATION_LANDSCAPE` with `Surface.ROTATION_90` maps to `LANDSCAPE_LEFT` in `DeviceOrientationManager.getUiOrientation()`, so the opposite constant corresponds to the more common clockwise turn. **That is an inference from source, not an observation, and it is recorded as unverified rather than presented as decided.**
-
-It is Accepted with the value open because the *design* does not depend on which of two constants is right — the seam, the lock's placement and the display split are all identical either way. What remains is a value to confirm on a CPH2707, and if it is upside-down the correction is the other constant: one token, no redesign. **Implementation of decisions 1 and 2 should not be considered fully safe to build against until that check clears.**
+✅ **The constant is `DeviceOrientation.landscapeLeft`, device-verified on a CPH2707 (Android 16) on 2026-08-25.** See the amendment at the foot of this record for the measurements and for the inference that was wrong.
 
 ⚠️ **This is not a repeat of ADR-053's Option B failure, and the difference matters.** There, no constant could have been right, because the rotation depended on a native display-rotation value that changes as the handset turns. Here the capture orientation is *being pinned* rather than tracked, so exactly one of two constants is correct in every orientation, permanently. If the first is upside-down the fix is the other one — a one-token change, not a redesign.
 
@@ -157,7 +153,7 @@ Chunks recorded before and after this change are otherwise indistinguishable, be
 - Footage recorded before this change is landscape-tagged-portrait; after, landscape. The metadata field is what makes the two separable.
 - `RecordingScreen` becomes stateful, and the reason is recorded rather than left as an unexplained deviation.
 - ADR-053's seam survives with two of its three numbers re-sourced. That it absorbs a feature it was not designed for is weak evidence the boundary was cut in the right place — weak, because this is one data point.
-- **One device gate stands between this record and Accepted: which landscape constant is upright.** The rotation question that was the second gate was answered from the plugin's source (§3) and needed no handset.
+- **Both device gates are closed.** The rotation question was answered from the plugin's source (§3); the landscape constant was measured on hardware and is `landscapeLeft` (amendment below).
 
 ## Related Missions
 
@@ -166,6 +162,47 @@ Chunks recorded before and after this change are otherwise indistinguishable, be
 
 ## Implementation Status
 
-**Not implemented. Design accepted; no code written.**
+**Not implemented. Design accepted and fully verified; no code written.**
 
-Accepting this record approves the design. It is **not** a go-ahead to write the implementation — that needs its own approval once the landscape constant is confirmed on hardware.
+Accepting this record approves the design. It is **not** a go-ahead to write the implementation — that needs its own approval. Nothing further is owed to verification: the constant is measured and the rotation question is settled.
+
+---
+
+### Amendment, 2026-08-25 — the constant was measured, the inference was wrong, and the screen rotates landscape-only
+
+**Ran on the CPH2707 (Android 16) with a throwaway probe entrypoint that drove the real `CameraRecordingPipeline` and the real `CameraPreviewSurface`.** The probe and the temporary lock were reverted after measuring; neither is in the tree.
+
+#### `landscapeRight` was wrong
+
+Decision 1 named `landscapeRight` as the value to try first, reasoning from `DeviceOrientationManager.getUiOrientation()`'s mapping. **The reasoning did not survive contact with the device.** Each row is a 2-second clip recorded with capture orientation locked, read back from the `tkhd` matrix:
+
+| lock constant | display rotation 0 | 1 | 3 | verdict |
+|---|---|---|---|---|
+| `landscapeRight` | 180° | 180° | 180° | **upside-down** |
+| `landscapeLeft` | **0°** | **0°** | **0°** | **upright** |
+
+All six clips coded `avc1` **1920×1080**. **`DeviceOrientation.landscapeLeft` is the constant.**
+
+**Both rows also prove the lock itself works**, which is the result decision 1 actually rests on: the tag is *constant across display rotations* where an unlocked build's varies with the handset. Before the lock, the same code produced 90°.
+
+**The inference was reasonable and still wrong, which is the point of the gate.** Decision 1 predicted that if the first constant were upside-down the fix would be one token and not a redesign. That prediction held exactly — but it was the prediction that was worth having, not the constant.
+
+#### The Context section's central claim, confirmed on hardware
+
+The handset reported `accelerometer_rotation = 0` — **auto-rotate off**. That is precisely why this project's recordings are portrait: `Configuration.orientation` never leaves portrait, so `deviceOrientation` never does either. **The chain this record traced through source was observed end to end on the device it was traced for.**
+
+#### Decision 4 is revised: the recording screen rotates between the two landscapes only
+
+Ruled 2026-08-25. The original text permitted all four orientations on `/recording/:sessionId`. **It now permits `landscapeLeft` and `landscapeRight` only** — the screen turns the way a video player turns, never into portrait.
+
+The reasoning is the product's own: the footage is landscape, so a portrait recording UI would frame a landscape capture inside a tall window and show the Collector something the recording is not.
+
+⚠️ **The revision also repairs a defect the original would have shipped.** Flutter's `PlatformChannel.decodeOrientations` maps all four orientations to `0x0f`, which is `ActivityInfo.SCREEN_ORIENTATION_FULL_USER` — and `FULL_USER` **respects the handset's auto-rotate setting**. On this CPH2707, with auto-rotate off, the original decision 4 would have locked every other route to portrait and then **failed to rotate the one route that was supposed to rotate.** The feature would have been invisible on the device it was built for.
+
+The two landscape orientations map to `0x0a`, `SCREEN_ORIENTATION_USER_LANDSCAPE`, which **forces landscape regardless of the auto-rotate setting**. So the narrower request is also the one that works.
+
+**Decision 5 shrinks accordingly.** The recording screen needs one landscape layout, not four orientations' worth. `Alignment.topCenter` and `Alignment.bottomCenter` still move, but only once.
+
+#### One anomaly, recorded rather than tidied away
+
+The `landscapeRight` sweep also covered display rotation 2 (reverse portrait), and that run produced a **0-byte file**. It did not recur in the `landscapeLeft` sweep, which did not cover rotation 2. **It is one observation with no second data point, and it is not diagnosed.** Reverse portrait is now out of scope for the recording screen, so it blocks nothing — but a `stopChunk` that returns a path to an empty file would matter anywhere else, and it is written down here rather than forgotten because the scope changed.
