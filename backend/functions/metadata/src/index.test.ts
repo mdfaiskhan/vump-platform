@@ -394,7 +394,10 @@ describe('POST — migration 0017s two capture fields', () => {
     );
 
     expect(response.statusCode).toBe(201);
-    expect(paramsOf(1).thermalState?.value).toEqual({ longValue: 0 });
+    // Compared whole rather than by property: `paramsOf` returns
+    // Record<string, unknown>, so reaching into `.value` does not
+    // type-check. Matches how the A-212 assertions above read it.
+    expect(paramsOf(1).thermalState).toEqual({ value: { longValue: 0 } });
   });
 
   it('accepts the top of the platform range', async () => {
