@@ -150,13 +150,15 @@ describe('PATCH — the non-completing transitions', () => {
   });
 });
 
-describe('PATCH — the shared-task write path, migration 0014 / item 148', () => {
-  // chunks-verify was one of the three WRITE sites item 148 missed. Until this
-  // landed, a chunk recorded against a shared-but-unassigned task could not be
-  // verified even after it uploaded.
-  it('resolves a chunk whose task is shared rather than assigned', async () => {
-    // The LEFT JOIN matches on t.shared_with_org; the row comes back either
-    // way, which is the relaxation working.
+describe('PATCH — what this role can actually check, item 155 / item 156', () => {
+  // `vump_chunks_verify` may SELECT on chunks, chunk_metadata, sessions and
+  // task_assignments. NOT on tasks or projects — verified live:
+  //   has_table_privilege('vump_chunks_verify','tasks','SELECT') -> false
+  // `shared_with_org` is a column on `tasks`, so the shared-task relaxation is
+  // not expressible here. Joins added to reach it made every PATCH 500.
+  it('resolves a chunk the caller owns, whatever the task is', async () => {
+    // Assigned or shared makes no difference: this query does not ask.
+    // Legitimacy was settled when the session was created.
     rds.on(ExecuteStatementCommand).resolvesOnce(chunkRow()).resolves({ records: [] });
 
     const response = await handler(event('failed'));
@@ -164,7 +166,7 @@ describe('PATCH — the shared-task write path, migration 0014 / item 148', () =
     expect(response.statusCode).toBe(200);
   });
 
-  it('still 404s a chunk that is neither owned, assigned nor shared', async () => {
+  it('404s a chunk the caller does not own', async () => {
     rds.on(ExecuteStatementCommand).resolves({ records: [] });
 
     const response = await handler(event('uploading'));
@@ -172,39 +174,36 @@ describe('PATCH — the shared-task write path, migration 0014 / item 148', () =
     expect(response.statusCode).toBe(404);
   });
 
-  it('ADDS an explicit org check — BR-20 no longer rests on ownership alone', async () => {
-    // This query never joined `projects`, so org isolation was transitive
-    // through `s.collector_id = :callerId`. Once the assignment join stopped
-    // being an inner one that would have been the ONLY org defence left, so
-    // the clause is stated rather than inferred. This site is STRENGTHENED by
-    // the same change that widens it.
+  it('touches ONLY chunks and sessions — the tables it has grants on', async () => {
+    // The assertion that would have caught the 500 before it deployed. A join
+    // to tasks or projects fails with 42501 for this role, and the handler
+    // surfaces that as an unhandled 500 rather than a refusal.
     rds.on(ExecuteStatementCommand).resolvesOnce(chunkRow()).resolves({ records: [] });
 
     await handler(event('failed'));
 
     const resolve = (statements()[0] ?? '').replace(/\s+/g, ' ');
-    expect(resolve).toContain('JOIN projects p');
-    expect(resolve).toContain('p.org_id = :orgId');
-    expect(paramsOf(0).orgId).toEqual({ stringValue: ORG });
+    expect(resolve).toContain('FROM chunks c');
+    expect(resolve).toContain('JOIN sessions s');
+    expect(resolve).not.toContain('JOIN tasks');
+    expect(resolve).not.toContain('JOIN projects');
+    expect(resolve).not.toContain('task_assignments');
+    expect(resolve).not.toContain('shared_with_org');
   });
 
-  it('keeps caller ownership untouched while widening the assignment gate', async () => {
+  it('carries org isolation transitively, through session ownership', async () => {
+    // BR-20 holds because a caller reaches only sessions they own and a session
+    // belongs to one org. There is deliberately NO p.org_id clause: this role
+    // cannot read `projects`, and an earlier attempt to add one is what broke
+    // the route. Item 155 records that misdiagnosis.
     rds.on(ExecuteStatementCommand).resolvesOnce(chunkRow()).resolves({ records: [] });
 
     await handler(event('failed'));
 
     const resolve = (statements()[0] ?? '').replace(/\s+/g, ' ');
-    // The ownership check — NOT relaxed, and not the same question as the
-    // assignment join, which is about the session's owner.
     expect(resolve).toContain('s.collector_id = :callerId');
-
-    const onClause = resolve.slice(
-      resolve.indexOf('LEFT JOIN task_assignments'),
-      resolve.indexOf('WHERE'),
-    );
-    expect(onClause).toContain('ta.user_id = s.collector_id');
-    expect(onClause).toContain('ta.removed_at IS NULL');
-    expect(resolve.slice(resolve.indexOf('WHERE'))).toContain('OR t.shared_with_org');
+    expect(resolve).not.toContain('p.org_id');
+    expect(paramsOf(0).callerId).toEqual({ stringValue: COLLECTOR });
   });
 });
 
