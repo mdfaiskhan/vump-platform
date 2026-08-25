@@ -171,6 +171,53 @@ describe('POST /v1/sessions/{sessionId}/chunks — the key', () => {
   });
 });
 
+describe('POST — the shared-task write path, migration 0014 / item 148', () => {
+  // The second of the three WRITE sites item 148 missed. Without this, a
+  // Collector reaching a task through t.shared_with_org could register a
+  // session and then be refused the presigned URLs for every chunk of it.
+  it('issues upload URLs when the task is shared rather than assigned', async () => {
+    rds.on(ExecuteStatementCommand).resolvesOnce(sessionRow).resolves({ records: [] });
+
+    const response = await handler(event(validBody));
+
+    expect(response.statusCode).toBe(201);
+  });
+
+  it('still 404s a session that is neither owned, assigned nor shared', async () => {
+    rds.on(ExecuteStatementCommand).resolves({ records: [] });
+
+    const response = await handler(event(validBody));
+
+    expect(response.statusCode).toBe(404);
+    expect(s3.commandCalls(CreateMultipartUploadCommand)).toHaveLength(0);
+  });
+
+  it('relaxes the assignment gate without touching caller ownership', async () => {
+    // Two different questions live in this query and only one is widened:
+    //   s.collector_id = :callerId  -> does the CALLER own the session?
+    //   ta.user_id = s.collector_id -> does the session OWNER still have access?
+    rds.on(ExecuteStatementCommand).resolvesOnce(sessionRow).resolves({ records: [] });
+
+    await handler(event(validBody));
+
+    const resolve = (statements()[0] ?? '').replace(/\s+/g, ' ');
+    expect(resolve).toContain('s.collector_id = :callerId');
+
+    const onClause = resolve.slice(
+      resolve.indexOf('LEFT JOIN task_assignments'),
+      resolve.indexOf('WHERE'),
+    );
+    // In the ON clause, never the WHERE — the trap item 148 documents.
+    expect(onClause).toContain('ta.user_id = s.collector_id');
+    expect(onClause).toContain('ta.removed_at IS NULL');
+
+    const whereClause = resolve.slice(resolve.indexOf('WHERE'));
+    expect(whereClause).toContain('OR t.shared_with_org');
+    expect(whereClause).toContain('p.org_id = :orgId');
+    expect(whereClause).not.toContain('ta.removed_at');
+  });
+});
+
 describe('POST — retry is idempotent, per A-190', () => {
   it('succeeds on a matching repeat and returns fresh URLs against the stored upload', async () => {
     rds.on(ExecuteStatementCommand).resolvesOnce(sessionRow).resolves(chunkRow());

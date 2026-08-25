@@ -132,14 +132,31 @@ async function resolveSession(
   orgId: string,
 ): Promise<SessionContext> {
   const found = await execute(
+    // TEMPORARY, migration 0014 and open item 148: `OR t.shared_with_org`.
+    //
+    // **Two different questions are being asked here, and only one of them is
+    // being relaxed.**
+    //
+    //   s.collector_id = :callerId   — does the CALLER own this session?
+    //   ta.user_id = s.collector_id  — does the session's OWNER still have
+    //                                  access to the task?
+    //
+    // The first is the ownership check and is untouched. The second is BR-19's
+    // assignment gate, and it is what a shared task legitimately satisfies
+    // another way. Note the join is on `s.collector_id`, NOT on the caller —
+    // relaxing it says nothing about who may call, only about what the session
+    // owner may still reach.
     `SELECT s.id, t.id AS task_id, p.id AS project_id, p.org_id
        FROM sessions s
-       JOIN tasks t             ON t.id = s.task_id
-       JOIN projects p          ON p.id = t.project_id
-       JOIN task_assignments ta ON ta.task_id = t.id AND ta.user_id = s.collector_id
+       JOIN tasks t    ON t.id = s.task_id
+       JOIN projects p ON p.id = t.project_id
+       LEFT JOIN task_assignments ta
+              ON ta.task_id    = t.id
+             AND ta.user_id    = s.collector_id
+             AND ta.removed_at IS NULL
       WHERE s.id = :sessionId
         AND s.collector_id = :callerId
-        AND ta.removed_at IS NULL
+        AND (ta.user_id IS NOT NULL OR t.shared_with_org)
         AND p.org_id = :orgId
       LIMIT 1`,
     {

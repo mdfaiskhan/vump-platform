@@ -159,6 +159,81 @@ describe('POST /v1/tasks/{taskId}/sessions — BR-19', () => {
   });
 });
 
+describe('POST — the shared-task write path, migration 0014 / item 148', () => {
+  // The defect this block exists for: a Collector with no assignment could SEE
+  // a shared task, record against it, and then have every chunk refused with
+  // RESOURCE_NOT_FOUND, because the three READ queries were relaxed and the
+  // three WRITE ones were not.
+  it('lets a shared-but-unassigned Collector register a session', async () => {
+    // `assigned` here is the LEFT JOIN matching on t.shared_with_org rather
+    // than on a task_assignments row — the query returns 1 either way, which
+    // is precisely the point of the relaxation.
+    rds
+      .on(ExecuteStatementCommand)
+      .resolvesOnce(assigned)
+      .resolves({ records: [sessionRecord()] });
+
+    const response = await handler(
+      event('POST', '/v1/tasks/{taskId}/sessions', {
+        path: { taskId: TASK },
+        body: { client_session_id: CLIENT_SESSION },
+      }),
+    );
+
+    expect(response.statusCode).toBe(201);
+  });
+
+  it('still refuses a task that is neither assigned nor shared', async () => {
+    // The negative half. Widening must not become "show everything": a row
+    // that satisfies neither branch still yields no records, and the route
+    // still 404s without inserting.
+    rds.on(ExecuteStatementCommand).resolves(notAssigned);
+
+    const response = await handler(
+      event('POST', '/v1/tasks/{taskId}/sessions', {
+        path: { taskId: TASK },
+        body: { client_session_id: CLIENT_SESSION },
+      }),
+    );
+
+    expect(response.statusCode).toBe(404);
+    expect(statements().some((s) => s.includes('INSERT INTO sessions'))).toBe(false);
+  });
+
+  it('puts the assignment predicates in the ON clause, not the WHERE', async () => {
+    // The trap item 148 documents. Left in the WHERE, `ta.user_id = :userId`
+    // discards exactly the NULL rows the LEFT JOIN produces for a shared task:
+    // the query would compile, read correctly, and do nothing.
+    rds
+      .on(ExecuteStatementCommand)
+      .resolvesOnce(assigned)
+      .resolves({ records: [sessionRecord()] });
+
+    await handler(
+      event('POST', '/v1/tasks/{taskId}/sessions', {
+        path: { taskId: TASK },
+        body: { client_session_id: CLIENT_SESSION },
+      }),
+    );
+
+    const check = (statements()[0] ?? '').replace(/\s+/g, ' ');
+    expect(check).toContain('LEFT JOIN task_assignments');
+    const onClause = check.slice(
+      check.indexOf('LEFT JOIN task_assignments'),
+      check.indexOf('WHERE'),
+    );
+    expect(onClause).toContain('ta.user_id = :userId');
+    expect(onClause).toContain('ta.removed_at IS NULL');
+
+    const whereClause = check.slice(check.indexOf('WHERE'));
+    expect(whereClause).toContain('OR t.shared_with_org');
+    // BR-20 survives the widening.
+    expect(whereClause).toContain('p.org_id = :orgId');
+    // and the gate is not silently satisfied by the join alone
+    expect(whereClause).toContain('ta.user_id IS NOT NULL');
+  });
+});
+
 describe('POST — idempotent registration', () => {
   it('inserts with DO NOTHING, never DO UPDATE — the role has no UPDATE grant', async () => {
     rds
