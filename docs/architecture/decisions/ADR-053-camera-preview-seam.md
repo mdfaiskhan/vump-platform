@@ -190,3 +190,16 @@ So the seam's three primitives no longer share a source, and that is correct rat
 #### What it took to find, which is the part worth remembering
 
 **No test asserted `aspectRatio` anywhere.** The regression travelled from a code change, through a full green suite, through a device build, to a person looking at a stretched picture. `camera_preview_surface_test.dart` now pins the window-driven ratio, including the exact stale-`quarterTurns` case, so the next version of this mistake fails in CI rather than on a handset.
+
+### Amendment, 2026-08-26 (fifth) — the preview is contained, not full-bleed, and the chapter is wrong
+
+**Chapter 5.1 §1 requires the preview *"shown full-bleed on the Recording Screen"*. It is not, by decision.** Open item 158 records the departure; this note exists so a reader of the seam is not left believing the chapter is satisfied.
+
+`BoxFit.cover` was implemented and rejected on sight. Filling every edge of a 2.2:1 screen with a 16:9 camera crops the top and bottom away, and **the field of view pushed off the screen is field of view the Collector is about to record**. For a product whose output is the footage, a preview that hides part of the frame is worse than one with bars. The handset's own camera app contains for the same reason.
+
+**What this changes about the seam: nothing.** The three primitives are unchanged, `quarterTurns` still comes from `deviceOrientation` per item 157, and `aspectRatio` is still the camera's native ratio per the fourth amendment. Only the widget's *fit* moved — from `Center` + `AspectRatio` to `FittedBox(fit: BoxFit.contain)` over a `SizedBox` of the same display ratio, which is the same geometry expressed so the fit is a named, testable property rather than an emergent one.
+
+**The separate half worth recording.** `SafeArea` had been wrapping the preview, giving it a **753×320 box inside a 793×360 window** — 40 logical points on each axis for the status bar, navigation bar and cutout. That produced bars on all four sides, and **no fit setting could have fixed it**, because the slot was never the screen. `SafeArea` now wraps only the controls. The height is genuinely full for the first time, and the remaining bars are the aspect ratio's alone.
+
+**Capture is untouched, verified rather than argued.** A clip pulled byte-exact from the handset after this change: coded `avc1` 1920×1080, `tkhd` matrix `(1, 0, 0, 1)`, rotation 0°. `buildPreview` is a display widget over a texture id and this widget holds no `CameraController`, so the seam makes influencing capture structurally impossible rather than merely unlikely — which is the property that let this be changed with confidence at all.
+

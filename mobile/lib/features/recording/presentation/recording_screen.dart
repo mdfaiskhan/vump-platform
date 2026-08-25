@@ -131,37 +131,55 @@ class _RecordingScreenState extends ConsumerState<RecordingScreen> {
       canPop: false,
       child: Scaffold(
         backgroundColor: Colors.black,
-        body: SafeArea(
-          child: Stack(
-            children: <Widget>[
-              // FR-REC-03, closed by ADR-053. Was a black ColoredBox; the
-              // pipeline now publishes a texture id, an aspect ratio and a
-              // rotation, and this draws them. It still cannot start or stop
-              // capture — there is no controller here to do it with.
-              const Positioned.fill(child: CameraPreviewSurface()),
-              // Landscape places these on the short edges, where
-              // top-centre/bottom-centre put Stop out of thumb reach. The
-              // indicator moves to the leading edge and Stop to the trailing
-              // one, which is where a hand already is on a phone held sideways.
-              Align(
-                alignment: Alignment.topLeft,
-                child: Padding(
-                  padding: const EdgeInsets.all(AppSpacing.lg),
-                  child: _RecordingIndicator(state: state),
-                ),
-              ),
-              Align(
-                alignment: Alignment.centerRight,
-                child: Padding(
-                  padding: const EdgeInsets.only(right: AppSpacing.xl),
-                  child: _StopControl(
-                    enabled: state.isCapturing,
-                    onStop: () => unawaited(_stop(context, ref)),
+        // **No `SafeArea` around the preview**, and that is the whole of
+        // Chapter 5.1 §1's *"full-bleed"*.
+        //
+        // It used to wrap this entire `Stack`. Measured on a CPH2707, that
+        // left the preview a slot of **753x320 inside a 793x360 window** — 40
+        // logical points removed on each axis for the status bar, the
+        // navigation bar and the display cutout. `BoxFit.cover` fills its slot
+        // completely and always did; the slot simply never reached the screen
+        // edges, so black showed on every side and no fit setting could have
+        // helped.
+        //
+        // The controls keep their `SafeArea`. They are the things that must not
+        // sit under a notch or a gesture bar; the picture behind them is
+        // exactly what should.
+        body: Stack(
+          children: <Widget>[
+            // FR-REC-03, closed by ADR-053. Was a black ColoredBox; the
+            // pipeline now publishes a texture id, an aspect ratio and a
+            // rotation, and this draws them. It still cannot start or stop
+            // capture — there is no controller here to do it with.
+            const Positioned.fill(child: CameraPreviewSurface()),
+            // Landscape places these on the short edges, where
+            // top-centre/bottom-centre put Stop out of thumb reach. The
+            // indicator moves to the leading edge and Stop to the trailing
+            // one, which is where a hand already is on a phone held sideways.
+            SafeArea(
+              child: Stack(
+                children: <Widget>[
+                  Align(
+                    alignment: Alignment.topLeft,
+                    child: Padding(
+                      padding: const EdgeInsets.all(AppSpacing.lg),
+                      child: _RecordingIndicator(state: state),
+                    ),
                   ),
-                ),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: Padding(
+                      padding: const EdgeInsets.only(right: AppSpacing.xl),
+                      child: _StopControl(
+                        enabled: state.isCapturing,
+                        onStop: () => unawaited(_stop(context, ref)),
+                      ),
+                    ),
+                  ),
+                ],
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
