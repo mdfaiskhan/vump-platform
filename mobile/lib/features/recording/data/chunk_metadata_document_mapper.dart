@@ -95,6 +95,7 @@ abstract final class ChunkMetadataDocumentMapper {
         codec: group?.codec,
         zoomFactor: group?.zoomFactor,
         camera: group?.camera,
+        orientation: group?.orientation,
       );
 
   static MetadataDeviceContextDocument _deviceContext(
@@ -120,6 +121,7 @@ abstract final class ChunkMetadataDocumentMapper {
       longitude: fix?.longitude,
       batteryPercent: group?.batteryPercent,
       networkType: group?.networkType,
+      thermalState: group?.thermalState,
     );
   }
 

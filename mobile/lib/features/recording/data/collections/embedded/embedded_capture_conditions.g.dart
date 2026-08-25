@@ -28,6 +28,11 @@ const EmbeddedCaptureConditionsSchema = Schema(
       id: 2,
       name: r'networkType',
       type: IsarType.string,
+    ),
+    r'thermalState': PropertySchema(
+      id: 3,
+      name: r'thermalState',
+      type: IsarType.long,
     )
   },
   estimateSize: _embeddedCaptureConditionsEstimateSize,
@@ -73,6 +78,7 @@ void _embeddedCaptureConditionsSerialize(
     object.gps,
   );
   writer.writeString(offsets[2], object.networkType);
+  writer.writeLong(offsets[3], object.thermalState);
 }
 
 EmbeddedCaptureConditions _embeddedCaptureConditionsDeserialize(
@@ -89,6 +95,7 @@ EmbeddedCaptureConditions _embeddedCaptureConditionsDeserialize(
     allOffsets,
   );
   object.networkType = reader.readStringOrNull(offsets[2]);
+  object.thermalState = reader.readLongOrNull(offsets[3]);
   return object;
 }
 
@@ -109,6 +116,8 @@ P _embeddedCaptureConditionsDeserializeProp<P>(
       )) as P;
     case 2:
       return (reader.readStringOrNull(offset)) as P;
+    case 3:
+      return (reader.readLongOrNull(offset)) as P;
     default:
       throw IsarError('Unknown property with id $propertyId');
   }
@@ -360,6 +369,80 @@ extension EmbeddedCaptureConditionsQueryFilter on QueryBuilder<
       return query.addFilterCondition(FilterCondition.greaterThan(
         property: r'networkType',
         value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<EmbeddedCaptureConditions, EmbeddedCaptureConditions,
+      QAfterFilterCondition> thermalStateIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNull(
+        property: r'thermalState',
+      ));
+    });
+  }
+
+  QueryBuilder<EmbeddedCaptureConditions, EmbeddedCaptureConditions,
+      QAfterFilterCondition> thermalStateIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNotNull(
+        property: r'thermalState',
+      ));
+    });
+  }
+
+  QueryBuilder<EmbeddedCaptureConditions, EmbeddedCaptureConditions,
+      QAfterFilterCondition> thermalStateEqualTo(int? value) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'thermalState',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<EmbeddedCaptureConditions, EmbeddedCaptureConditions,
+      QAfterFilterCondition> thermalStateGreaterThan(
+    int? value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'thermalState',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<EmbeddedCaptureConditions, EmbeddedCaptureConditions,
+      QAfterFilterCondition> thermalStateLessThan(
+    int? value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'thermalState',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<EmbeddedCaptureConditions, EmbeddedCaptureConditions,
+      QAfterFilterCondition> thermalStateBetween(
+    int? lower,
+    int? upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'thermalState',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
       ));
     });
   }

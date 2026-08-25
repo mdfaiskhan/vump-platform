@@ -4,6 +4,7 @@ import 'package:camera/camera.dart';
 import 'package:flutter/services.dart' show DeviceOrientation;
 
 import 'package:mobile/features/recording/data/camera_error_mapper.dart';
+import 'package:mobile/features/recording/data/capture_orientation_wire_name.dart';
 import 'package:mobile/features/recording/domain/entities/camera_specification.dart';
 import 'package:mobile/features/recording/domain/entities/preview_frame.dart';
 import 'package:mobile/features/recording/domain/repositories/recording_pipeline.dart';
@@ -73,6 +74,23 @@ class CameraRecordingPipeline implements RecordingPipeline {
 
   @override
   String? get outputDirectory => _controller == null ? null : _outputDirectory;
+
+  @override
+  String? get captureOrientation {
+    final CameraController? controller = _controller;
+    if (controller == null || !controller.value.isInitialized) {
+      return null;
+    }
+    // `lockedCaptureOrientation` first, because that is what a locked session
+    // will actually encode at. Falling through to `deviceOrientation` is not a
+    // fallback for a missing value — on a build without ADR-054's lock it is
+    // the whole answer, and reporting it honestly is what lets a chunk say
+    // which régime it was recorded under.
+    return CaptureOrientationWireName.of(
+      controller.value.lockedCaptureOrientation ??
+          controller.value.deviceOrientation,
+    );
+  }
 
   @override
   Stream<PreviewFrame?> get previewChanges => _previewChanges.stream;

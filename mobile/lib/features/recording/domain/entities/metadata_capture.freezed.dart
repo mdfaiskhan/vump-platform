@@ -37,6 +37,24 @@ mixin _$MetadataCapture {
   /// this is constant for every chunk this application will ever produce.
   String get camera => throw _privateConstructorUsedError;
 
+  /// The orientation the chunk was actually captured at, as a wire spelling
+  /// — `"landscape-left"`, `"portrait-up"`. Migration 0017, ADR-054 §6.
+  ///
+  /// **Read from the pipeline, not from a constant.** ADR-054 locks capture
+  /// orientation to landscape, but this field records what the device did
+  /// rather than what the build intends, so a build without the lock reports
+  /// the handset's own orientation honestly instead of claiming the value it
+  /// would have preferred.
+  ///
+  /// That is the whole point of the field. §6: *"a dataset that changes a
+  /// capture parameter without recording it loses the ability to tell its own
+  /// footage apart"* — a field that always said `landscape-left` could not
+  /// tell them apart either.
+  ///
+  /// Nullable because a pipeline that never opened a session has nothing to
+  /// report, and because every chunk recorded before 0017 has no value.
+  String? get orientation => throw _privateConstructorUsedError;
+
   @JsonKey(ignore: true)
   $MetadataCaptureCopyWith<MetadataCapture> get copyWith =>
       throw _privateConstructorUsedError;
@@ -54,7 +72,8 @@ abstract class $MetadataCaptureCopyWith<$Res> {
       int bitrateKbps,
       String codec,
       double zoomFactor,
-      String camera});
+      String camera,
+      String? orientation});
 }
 
 /// @nodoc
@@ -76,6 +95,7 @@ class _$MetadataCaptureCopyWithImpl<$Res, $Val extends MetadataCapture>
     Object? codec = null,
     Object? zoomFactor = null,
     Object? camera = null,
+    Object? orientation = freezed,
   }) {
     return _then(_value.copyWith(
       resolution: null == resolution
@@ -102,6 +122,10 @@ class _$MetadataCaptureCopyWithImpl<$Res, $Val extends MetadataCapture>
           ? _value.camera
           : camera // ignore: cast_nullable_to_non_nullable
               as String,
+      orientation: freezed == orientation
+          ? _value.orientation
+          : orientation // ignore: cast_nullable_to_non_nullable
+              as String?,
     ) as $Val);
   }
 }
@@ -120,7 +144,8 @@ abstract class _$$MetadataCaptureImplCopyWith<$Res>
       int bitrateKbps,
       String codec,
       double zoomFactor,
-      String camera});
+      String camera,
+      String? orientation});
 }
 
 /// @nodoc
@@ -140,6 +165,7 @@ class __$$MetadataCaptureImplCopyWithImpl<$Res>
     Object? codec = null,
     Object? zoomFactor = null,
     Object? camera = null,
+    Object? orientation = freezed,
   }) {
     return _then(_$MetadataCaptureImpl(
       resolution: null == resolution
@@ -166,6 +192,10 @@ class __$$MetadataCaptureImplCopyWithImpl<$Res>
           ? _value.camera
           : camera // ignore: cast_nullable_to_non_nullable
               as String,
+      orientation: freezed == orientation
+          ? _value.orientation
+          : orientation // ignore: cast_nullable_to_non_nullable
+              as String?,
     ));
   }
 }
@@ -179,7 +209,8 @@ class _$MetadataCaptureImpl implements _MetadataCapture {
       required this.bitrateKbps,
       required this.codec,
       required this.zoomFactor,
-      required this.camera});
+      required this.camera,
+      this.orientation});
 
   /// `"1920x1080"` — formatted from `CameraSpecification`'s two constants
   /// rather than written as a literal, so it cannot drift from them.
@@ -208,9 +239,28 @@ class _$MetadataCaptureImpl implements _MetadataCapture {
   @override
   final String camera;
 
+  /// The orientation the chunk was actually captured at, as a wire spelling
+  /// — `"landscape-left"`, `"portrait-up"`. Migration 0017, ADR-054 §6.
+  ///
+  /// **Read from the pipeline, not from a constant.** ADR-054 locks capture
+  /// orientation to landscape, but this field records what the device did
+  /// rather than what the build intends, so a build without the lock reports
+  /// the handset's own orientation honestly instead of claiming the value it
+  /// would have preferred.
+  ///
+  /// That is the whole point of the field. §6: *"a dataset that changes a
+  /// capture parameter without recording it loses the ability to tell its own
+  /// footage apart"* — a field that always said `landscape-left` could not
+  /// tell them apart either.
+  ///
+  /// Nullable because a pipeline that never opened a session has nothing to
+  /// report, and because every chunk recorded before 0017 has no value.
+  @override
+  final String? orientation;
+
   @override
   String toString() {
-    return 'MetadataCapture(resolution: $resolution, frameRate: $frameRate, bitrateKbps: $bitrateKbps, codec: $codec, zoomFactor: $zoomFactor, camera: $camera)';
+    return 'MetadataCapture(resolution: $resolution, frameRate: $frameRate, bitrateKbps: $bitrateKbps, codec: $codec, zoomFactor: $zoomFactor, camera: $camera, orientation: $orientation)';
   }
 
   @override
@@ -227,12 +277,14 @@ class _$MetadataCaptureImpl implements _MetadataCapture {
             (identical(other.codec, codec) || other.codec == codec) &&
             (identical(other.zoomFactor, zoomFactor) ||
                 other.zoomFactor == zoomFactor) &&
-            (identical(other.camera, camera) || other.camera == camera));
+            (identical(other.camera, camera) || other.camera == camera) &&
+            (identical(other.orientation, orientation) ||
+                other.orientation == orientation));
   }
 
   @override
   int get hashCode => Object.hash(runtimeType, resolution, frameRate,
-      bitrateKbps, codec, zoomFactor, camera);
+      bitrateKbps, codec, zoomFactor, camera, orientation);
 
   @JsonKey(ignore: true)
   @override
@@ -249,7 +301,8 @@ abstract class _MetadataCapture implements MetadataCapture {
       required final int bitrateKbps,
       required final String codec,
       required final double zoomFactor,
-      required final String camera}) = _$MetadataCaptureImpl;
+      required final String camera,
+      final String? orientation}) = _$MetadataCaptureImpl;
 
   @override
 
@@ -278,6 +331,25 @@ abstract class _MetadataCapture implements MetadataCapture {
   /// `"rear-wide"`. BR-01 fixes the camera and BR-02 the field of view, so
   /// this is constant for every chunk this application will ever produce.
   String get camera;
+  @override
+
+  /// The orientation the chunk was actually captured at, as a wire spelling
+  /// — `"landscape-left"`, `"portrait-up"`. Migration 0017, ADR-054 §6.
+  ///
+  /// **Read from the pipeline, not from a constant.** ADR-054 locks capture
+  /// orientation to landscape, but this field records what the device did
+  /// rather than what the build intends, so a build without the lock reports
+  /// the handset's own orientation honestly instead of claiming the value it
+  /// would have preferred.
+  ///
+  /// That is the whole point of the field. §6: *"a dataset that changes a
+  /// capture parameter without recording it loses the ability to tell its own
+  /// footage apart"* — a field that always said `landscape-left` could not
+  /// tell them apart either.
+  ///
+  /// Nullable because a pipeline that never opened a session has nothing to
+  /// report, and because every chunk recorded before 0017 has no value.
+  String? get orientation;
   @override
   @JsonKey(ignore: true)
   _$$MetadataCaptureImplCopyWith<_$MetadataCaptureImpl> get copyWith =>

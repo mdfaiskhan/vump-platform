@@ -43,6 +43,12 @@ void main() {
         'duration_seconds': 600,
       });
 
+      // `orientation` is migration 0017's, and is deliberately BEYOND the
+      // chapter rather than a correction to it. Chapter 4.5 §2 lists six
+      // capture fields; ADR-054 §6 adds a seventh because a capture parameter
+      // that changed without being recorded leaves footage from before and
+      // after indistinguishable. The backend accepts it as nullish, so a build
+      // that predates 0017 still validates.
       expect(json['capture'], <String, Object?>{
         'resolution': '1920x1080',
         'frame_rate': 30,
@@ -50,6 +56,7 @@ void main() {
         'codec': 'h264',
         'zoom_factor': 0.6,
         'camera': 'rear-wide',
+        'orientation': 'landscape-left',
       });
 
       expect(json['device_context'], <String, Object?>{
@@ -84,6 +91,10 @@ void main() {
         'gps': <String, Object?>{'lat': 12.5, 'lng': -3.25},
         'battery_pct': 82,
         'network_type': 'wifi',
+        // Migration 0017, and beyond the chapter for the same reason
+        // `capture.orientation` is. Null here because this fixture does not
+        // set it, which is also the honest value on a platform below API 29.
+        'thermal_state': null,
       });
     });
 

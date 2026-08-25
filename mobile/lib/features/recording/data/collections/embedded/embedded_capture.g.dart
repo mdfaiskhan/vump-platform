@@ -33,13 +33,18 @@ const EmbeddedCaptureSchema = Schema(
       name: r'frameRate',
       type: IsarType.long,
     ),
-    r'resolution': PropertySchema(
+    r'orientation': PropertySchema(
       id: 4,
+      name: r'orientation',
+      type: IsarType.string,
+    ),
+    r'resolution': PropertySchema(
+      id: 5,
       name: r'resolution',
       type: IsarType.string,
     ),
     r'zoomFactor': PropertySchema(
-      id: 5,
+      id: 6,
       name: r'zoomFactor',
       type: IsarType.double,
     )
@@ -69,6 +74,12 @@ int _embeddedCaptureEstimateSize(
     }
   }
   {
+    final value = object.orientation;
+    if (value != null) {
+      bytesCount += 3 + value.length * 3;
+    }
+  }
+  {
     final value = object.resolution;
     if (value != null) {
       bytesCount += 3 + value.length * 3;
@@ -87,8 +98,9 @@ void _embeddedCaptureSerialize(
   writer.writeString(offsets[1], object.camera);
   writer.writeString(offsets[2], object.codec);
   writer.writeLong(offsets[3], object.frameRate);
-  writer.writeString(offsets[4], object.resolution);
-  writer.writeDouble(offsets[5], object.zoomFactor);
+  writer.writeString(offsets[4], object.orientation);
+  writer.writeString(offsets[5], object.resolution);
+  writer.writeDouble(offsets[6], object.zoomFactor);
 }
 
 EmbeddedCapture _embeddedCaptureDeserialize(
@@ -102,8 +114,9 @@ EmbeddedCapture _embeddedCaptureDeserialize(
   object.camera = reader.readStringOrNull(offsets[1]);
   object.codec = reader.readStringOrNull(offsets[2]);
   object.frameRate = reader.readLongOrNull(offsets[3]);
-  object.resolution = reader.readStringOrNull(offsets[4]);
-  object.zoomFactor = reader.readDoubleOrNull(offsets[5]);
+  object.orientation = reader.readStringOrNull(offsets[4]);
+  object.resolution = reader.readStringOrNull(offsets[5]);
+  object.zoomFactor = reader.readDoubleOrNull(offsets[6]);
   return object;
 }
 
@@ -125,6 +138,8 @@ P _embeddedCaptureDeserializeProp<P>(
     case 4:
       return (reader.readStringOrNull(offset)) as P;
     case 5:
+      return (reader.readStringOrNull(offset)) as P;
+    case 6:
       return (reader.readDoubleOrNull(offset)) as P;
     default:
       throw IsarError('Unknown property with id $propertyId');
@@ -585,6 +600,160 @@ extension EmbeddedCaptureQueryFilter
         includeLower: includeLower,
         upper: upper,
         includeUpper: includeUpper,
+      ));
+    });
+  }
+
+  QueryBuilder<EmbeddedCapture, EmbeddedCapture, QAfterFilterCondition>
+      orientationIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNull(
+        property: r'orientation',
+      ));
+    });
+  }
+
+  QueryBuilder<EmbeddedCapture, EmbeddedCapture, QAfterFilterCondition>
+      orientationIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNotNull(
+        property: r'orientation',
+      ));
+    });
+  }
+
+  QueryBuilder<EmbeddedCapture, EmbeddedCapture, QAfterFilterCondition>
+      orientationEqualTo(
+    String? value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'orientation',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<EmbeddedCapture, EmbeddedCapture, QAfterFilterCondition>
+      orientationGreaterThan(
+    String? value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'orientation',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<EmbeddedCapture, EmbeddedCapture, QAfterFilterCondition>
+      orientationLessThan(
+    String? value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'orientation',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<EmbeddedCapture, EmbeddedCapture, QAfterFilterCondition>
+      orientationBetween(
+    String? lower,
+    String? upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'orientation',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<EmbeddedCapture, EmbeddedCapture, QAfterFilterCondition>
+      orientationStartsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.startsWith(
+        property: r'orientation',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<EmbeddedCapture, EmbeddedCapture, QAfterFilterCondition>
+      orientationEndsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.endsWith(
+        property: r'orientation',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<EmbeddedCapture, EmbeddedCapture, QAfterFilterCondition>
+      orientationContains(String value, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.contains(
+        property: r'orientation',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<EmbeddedCapture, EmbeddedCapture, QAfterFilterCondition>
+      orientationMatches(String pattern, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.matches(
+        property: r'orientation',
+        wildcard: pattern,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<EmbeddedCapture, EmbeddedCapture, QAfterFilterCondition>
+      orientationIsEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'orientation',
+        value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<EmbeddedCapture, EmbeddedCapture, QAfterFilterCondition>
+      orientationIsNotEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        property: r'orientation',
+        value: '',
       ));
     });
   }

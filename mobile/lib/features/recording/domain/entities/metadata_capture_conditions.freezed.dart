@@ -26,6 +26,13 @@ mixin _$MetadataCaptureConditions {
   /// `"wifi"`, `"cellular"`, `"none"`. Null when unavailable.
   String? get networkType => throw _privateConstructorUsedError;
 
+  /// Android `PowerManager` thermal status, 0–6. Migration 0017.
+  ///
+  /// **Zero is a reading, not absence** — `THERMAL_STATUS_NONE` means the
+  /// device is cool. Null means nothing was read, which is what a platform
+  /// below API 29 reports.
+  int? get thermalState => throw _privateConstructorUsedError;
+
   @JsonKey(ignore: true)
   $MetadataCaptureConditionsCopyWith<MetadataCaptureConditions> get copyWith =>
       throw _privateConstructorUsedError;
@@ -37,7 +44,11 @@ abstract class $MetadataCaptureConditionsCopyWith<$Res> {
           $Res Function(MetadataCaptureConditions) then) =
       _$MetadataCaptureConditionsCopyWithImpl<$Res, MetadataCaptureConditions>;
   @useResult
-  $Res call({GpsFix? gps, int? batteryPercent, String? networkType});
+  $Res call(
+      {GpsFix? gps,
+      int? batteryPercent,
+      String? networkType,
+      int? thermalState});
 
   $GpsFixCopyWith<$Res>? get gps;
 }
@@ -59,6 +70,7 @@ class _$MetadataCaptureConditionsCopyWithImpl<$Res,
     Object? gps = freezed,
     Object? batteryPercent = freezed,
     Object? networkType = freezed,
+    Object? thermalState = freezed,
   }) {
     return _then(_value.copyWith(
       gps: freezed == gps
@@ -73,6 +85,10 @@ class _$MetadataCaptureConditionsCopyWithImpl<$Res,
           ? _value.networkType
           : networkType // ignore: cast_nullable_to_non_nullable
               as String?,
+      thermalState: freezed == thermalState
+          ? _value.thermalState
+          : thermalState // ignore: cast_nullable_to_non_nullable
+              as int?,
     ) as $Val);
   }
 
@@ -98,7 +114,11 @@ abstract class _$$MetadataCaptureConditionsImplCopyWith<$Res>
       __$$MetadataCaptureConditionsImplCopyWithImpl<$Res>;
   @override
   @useResult
-  $Res call({GpsFix? gps, int? batteryPercent, String? networkType});
+  $Res call(
+      {GpsFix? gps,
+      int? batteryPercent,
+      String? networkType,
+      int? thermalState});
 
   @override
   $GpsFixCopyWith<$Res>? get gps;
@@ -120,6 +140,7 @@ class __$$MetadataCaptureConditionsImplCopyWithImpl<$Res>
     Object? gps = freezed,
     Object? batteryPercent = freezed,
     Object? networkType = freezed,
+    Object? thermalState = freezed,
   }) {
     return _then(_$MetadataCaptureConditionsImpl(
       gps: freezed == gps
@@ -134,6 +155,10 @@ class __$$MetadataCaptureConditionsImplCopyWithImpl<$Res>
           ? _value.networkType
           : networkType // ignore: cast_nullable_to_non_nullable
               as String?,
+      thermalState: freezed == thermalState
+          ? _value.thermalState
+          : thermalState // ignore: cast_nullable_to_non_nullable
+              as int?,
     ));
   }
 }
@@ -142,7 +167,7 @@ class __$$MetadataCaptureConditionsImplCopyWithImpl<$Res>
 
 class _$MetadataCaptureConditionsImpl extends _MetadataCaptureConditions {
   const _$MetadataCaptureConditionsImpl(
-      {this.gps, this.batteryPercent, this.networkType})
+      {this.gps, this.batteryPercent, this.networkType, this.thermalState})
       : super._();
 
   /// Null when location permission was refused, or — today — when nothing
@@ -158,9 +183,17 @@ class _$MetadataCaptureConditionsImpl extends _MetadataCaptureConditions {
   @override
   final String? networkType;
 
+  /// Android `PowerManager` thermal status, 0–6. Migration 0017.
+  ///
+  /// **Zero is a reading, not absence** — `THERMAL_STATUS_NONE` means the
+  /// device is cool. Null means nothing was read, which is what a platform
+  /// below API 29 reports.
+  @override
+  final int? thermalState;
+
   @override
   String toString() {
-    return 'MetadataCaptureConditions(gps: $gps, batteryPercent: $batteryPercent, networkType: $networkType)';
+    return 'MetadataCaptureConditions(gps: $gps, batteryPercent: $batteryPercent, networkType: $networkType, thermalState: $thermalState)';
   }
 
   @override
@@ -172,12 +205,14 @@ class _$MetadataCaptureConditionsImpl extends _MetadataCaptureConditions {
             (identical(other.batteryPercent, batteryPercent) ||
                 other.batteryPercent == batteryPercent) &&
             (identical(other.networkType, networkType) ||
-                other.networkType == networkType));
+                other.networkType == networkType) &&
+            (identical(other.thermalState, thermalState) ||
+                other.thermalState == thermalState));
   }
 
   @override
   int get hashCode =>
-      Object.hash(runtimeType, gps, batteryPercent, networkType);
+      Object.hash(runtimeType, gps, batteryPercent, networkType, thermalState);
 
   @JsonKey(ignore: true)
   @override
@@ -191,7 +226,8 @@ abstract class _MetadataCaptureConditions extends MetadataCaptureConditions {
   const factory _MetadataCaptureConditions(
       {final GpsFix? gps,
       final int? batteryPercent,
-      final String? networkType}) = _$MetadataCaptureConditionsImpl;
+      final String? networkType,
+      final int? thermalState}) = _$MetadataCaptureConditionsImpl;
   const _MetadataCaptureConditions._() : super._();
 
   @override
@@ -207,6 +243,14 @@ abstract class _MetadataCaptureConditions extends MetadataCaptureConditions {
 
   /// `"wifi"`, `"cellular"`, `"none"`. Null when unavailable.
   String? get networkType;
+  @override
+
+  /// Android `PowerManager` thermal status, 0–6. Migration 0017.
+  ///
+  /// **Zero is a reading, not absence** — `THERMAL_STATUS_NONE` means the
+  /// device is cool. Null means nothing was read, which is what a platform
+  /// below API 29 reports.
+  int? get thermalState;
   @override
   @JsonKey(ignore: true)
   _$$MetadataCaptureConditionsImplCopyWith<_$MetadataCaptureConditionsImpl>

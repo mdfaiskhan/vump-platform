@@ -51,7 +51,8 @@ import 'package:mobile/features/recording/data/platform_device_context.dart';
 import 'package:mobile/features/recording/data/platform_task_context.dart';
 import 'package:mobile/features/recording/data/random_uuid_generator.dart';
 import 'package:mobile/features/recording/data/shared_preferences_wide_angle_eligibility_cache.dart';
-import 'package:mobile/features/recording/data/unavailable_capture_conditions_reader.dart';
+import 'package:mobile/features/recording/data/thermal_capture_conditions_reader.dart';
+import 'package:mobile/features/recording/data/thermal_channel.dart';
 import 'package:mobile/features/recording/domain/entities/metadata_identity.dart';
 import 'package:mobile/features/upload/application/upload_dispatcher.dart';
 import 'package:mobile/features/upload/application/upload_dispatcher_status_notifier.dart';
@@ -381,7 +382,11 @@ List<Override> recordingOverrides(
           // Mission 7.4 step 1 moved both contracts to `core/identity/`.
           taskContext: ref.watch(taskContextProvider),
           deviceContext: ref.watch(deviceContextProvider),
-          conditionsReader: const UnavailableCaptureConditionsReader(),
+          // Migration 0017. Thermal only — GPS stays blocked on A-062's spec
+          // conflict, and battery/network are flagged in the reader's own file.
+          conditionsReader: const ThermalCaptureConditionsReader(
+            thermalReader: ThermalChannel(),
+          ),
         ),
         chunkStore: ref.watch(chunkStoreProvider),
       ),

@@ -42,6 +42,20 @@ abstract interface class RecordingPipeline {
   /// is the volume that matters.
   String? get outputDirectory;
 
+  /// The wire spelling of the orientation the open session captures at, or
+  /// null when no session is open. Migration 0017, ADR-054 §6.
+  ///
+  /// **A data getter, not a capability.** It reports a fact about the session
+  /// and grants nothing — the same shape as [outputDirectory], which is why
+  /// this belongs on the port rather than forcing metadata to reach for the
+  /// `CameraController` ADR-053 withholds.
+  ///
+  /// It reports what the pipeline is *actually* capturing at. On a build with
+  /// ADR-054's lock that is a constant; on a build without it, it is whatever
+  /// the handset decided, which is exactly what makes the recorded field able
+  /// to tell the two apart.
+  String? get captureOrientation;
+
   /// ADR-053's preview seam — enough to draw the camera, no way to drive it.
   ///
   /// Emits on every change, and emits **null when a session closes** so a

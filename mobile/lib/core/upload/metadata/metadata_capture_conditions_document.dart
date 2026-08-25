@@ -16,6 +16,7 @@ class MetadataCaptureConditionsDocument {
     this.longitude,
     this.batteryPercent,
     this.networkType,
+    this.thermalState,
   });
 
   /// `capture_conditions.gps.lat`.
@@ -32,6 +33,9 @@ class MetadataCaptureConditionsDocument {
 
   /// `capture_conditions.network_type`, e.g. `wifi`.
   final String? networkType;
+
+  /// Migration 0017. Android PowerManager thermal status, 0–6.
+  final int? thermalState;
 
   /// Whether a fix was actually taken.
   ///
@@ -51,5 +55,6 @@ class MetadataCaptureConditionsDocument {
     'gps': <String, Object?>{'lat': latitude, 'lng': longitude},
     'battery_pct': batteryPercent,
     'network_type': networkType,
+    'thermal_state': thermalState,
   };
 }

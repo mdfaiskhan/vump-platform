@@ -181,7 +181,8 @@ abstract final class ChunkRecordMapper {
       ..bitrateKbps = metadata.capture.bitrateKbps
       ..codec = metadata.capture.codec
       ..zoomFactor = metadata.capture.zoomFactor
-      ..camera = metadata.capture.camera;
+      ..camera = metadata.capture.camera
+      ..orientation = metadata.capture.orientation;
   }
 
   static EmbeddedDeviceContext _deviceContext(ChunkMetadata metadata) {
@@ -205,7 +206,8 @@ abstract final class ChunkRecordMapper {
         ..latitude = fix?.latitude
         ..longitude = fix?.longitude)
       ..batteryPercent = metadata.captureConditions.batteryPercent
-      ..networkType = metadata.captureConditions.networkType;
+      ..networkType = metadata.captureConditions.networkType
+      ..thermalState = metadata.captureConditions.thermalState;
   }
 
   static EmbeddedIntegrity _integrity(ChunkMetadata metadata) {

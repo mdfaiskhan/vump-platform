@@ -37,10 +37,12 @@ import 'package:mobile/features/recording/domain/repositories/metadata_generator
 /// capture.codec               CodecWireName, H.264 -> h264        3.6
 /// capture.zoom_factor         RecordingSession.zoomFactor         3.1/3.2
 /// capture.camera              rear-wide, from BR-01 and BR-02
+/// capture.orientation         RecordingSession.captureOrientation  0017
 /// device_context.device_model DeviceContext                       port
 /// device_context.os_version   Platform.operatingSystemVersion
 /// device_context.app_version  DeviceContext, AppInfo inverted     port
 /// capture_conditions.*        CaptureConditionsReader             port
+/// capture_conditions.thermal  ThermalStateReader, via that port    0017
 /// integrity.*                 ChunkIntegrity                      3.4
 /// collector_authored          empty, per Ch. 5.7 §2
 /// ```
@@ -103,6 +105,9 @@ class ChunkMetadataAssembler implements MetadataGenerator {
         codec: CodecWireName.forSpecification(CameraSpecification.videoCodec),
         zoomFactor: session.zoomFactor,
         camera: cameraDescriptor,
+        // Migration 0017. Resolved at session open from the pipeline, so this
+        // is what the device captured at rather than what the build prefers.
+        orientation: session.captureOrientation,
       ),
       deviceContext: MetadataDeviceContext(
         deviceModel: _device.deviceModel,

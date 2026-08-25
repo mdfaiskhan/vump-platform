@@ -12,6 +12,7 @@ class MetadataCaptureDocument {
     this.codec,
     this.zoomFactor,
     this.camera,
+    this.orientation,
   });
 
   /// `capture.resolution`, e.g. `1920x1080`.
@@ -36,6 +37,10 @@ class MetadataCaptureDocument {
   /// `capture.camera`, e.g. `rear-wide`.
   final String? camera;
 
+  /// Migration 0017. Absent on builds older than it, which the backend
+  /// accepts as nullish rather than refusing.
+  final String? orientation;
+
   /// Chapter 4.5 §2's `capture` object.
   Map<String, Object?> toJson() => <String, Object?>{
     'resolution': resolution,
@@ -44,5 +49,6 @@ class MetadataCaptureDocument {
     'codec': codec,
     'zoom_factor': zoomFactor,
     'camera': camera,
+    'orientation': orientation,
   };
 }

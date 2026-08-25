@@ -29,4 +29,7 @@ class EmbeddedCapture {
 
   /// `rear-wide`, fixed by BR-01 and BR-02.
   String? camera;
+
+  /// Migration 0017. Wire spelling, e.g. `landscape-left`.
+  String? orientation;
 }
