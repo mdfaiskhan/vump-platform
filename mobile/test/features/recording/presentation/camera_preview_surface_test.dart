@@ -18,8 +18,8 @@ import 'package:mobile/features/recording/presentation/widgets/camera_preview_su
 ///
 /// `CameraPreviewSurface` cannot be pumped with a real texture in a unit test:
 /// `CameraPlatform.instance.buildPreview` needs a registered platform. So these
-/// read the `AspectRatio` the widget builds rather than what it renders, which
-/// is the value that was wrong.
+/// read the box the widget builds rather than what it renders, which is where
+/// the value was wrong.
 class _FakePipeline implements RecordingPipeline {
   _FakePipeline(this.frame);
 
@@ -52,8 +52,10 @@ class _FakePipeline implements RecordingPipeline {
 }
 
 /// The preview's display ratio, read off the `SizedBox` that `FittedBox`
-/// scales. There is no `AspectRatio` any more: Chapter 5.1 §1 wants full-bleed,
-/// so the box is covered and clipped rather than contained.
+/// scales. There is no `AspectRatio` any more — the same geometry is expressed
+/// as a sized box under a `FittedBox`, so the fit is a named, assertable
+/// property rather than an emergent one. Open item 158 records why that fit is
+/// `contain` and not the `full-bleed` Chapter 5.1 §1 asks for.
 Future<double?> _pumpAndReadRatio(
   WidgetTester tester, {
   required Size window,
